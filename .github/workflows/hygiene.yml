@@ -58,7 +58,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install ruff
+      # PINNED. An unpinned linter makes this job's meaning change on the
+      # linter's release schedule instead of on a commit, and it did: the first
+      # run resolved a newer ruff whose default rule set had widened and
+      # reported 655 errors against a tree that was clean. The ruleset is now
+      # declared in `[tool.ruff.lint] select`, and the version is pinned so a
+      # rule that fires here is one this repository chose.
+      - run: pip install ruff==0.16.4
       # Keep this list in step with `[tool.ruff] include` in pyproject.toml so
       # every published Python tree is checked.
       - run: ruff check arena agents console tools adk npc worlds

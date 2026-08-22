@@ -96,3 +96,18 @@ include = [
     "npc/**/*.py",
     "worlds/**/*.py",
 ]
+
+[tool.ruff.lint]
+# DECLARED, not inherited. With no `select` a project silently adopts whatever
+# the installed ruff defaults to, so the lint contract changes on the linter's
+# release schedule rather than on a commit here. That is not hypothetical: the
+# first CI run reported 655 errors against a tree that was clean locally,
+# because CI's `pip install ruff` resolved a newer version whose defaults had
+# widened to include isort, pyupgrade, flake8-bugbear and tryceratops rules.
+# The same tree passes under that newer ruff once the set below is stated.
+#
+# These four are pyflakes plus the pycodestyle subsets that catch real defects
+# rather than formatting: E4 imports, E7 statements, E9 syntax/IO errors, F the
+# pyflakes checks. Widening this is a deliberate change with a diff to match,
+# which is the point.
+select = ["E4", "E7", "E9", "F"]
