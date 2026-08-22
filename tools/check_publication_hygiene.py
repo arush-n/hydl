@@ -166,17 +166,32 @@ IMPORT_ROOTS = ("", "HytaleRL/hytalegym/")
 
 
 def _published_paths() -> set[str]:
-    """Every path git would add right now, tracked or newly trackable."""
+    """Every path a clone would have: tracked, plus newly trackable.
 
-    result = subprocess.run(
-        ["git", "status", "--porcelain", "--untracked-files=all"],
-        cwd=REPO_ROOT, capture_output=True, text=True,
-    )
-    return {
-        line[3:].strip().strip('"')
-        for line in result.stdout.splitlines()
-        if line[3:].strip()
-    }
+    NOT `git status --porcelain`. That lists what has CHANGED -- modified and
+    untracked files -- so it described the publish set only while the repository
+    was still uncommitted and every file was untracked. Once the tree was
+    committed it returned a handful of dirty paths, which broke this check in
+    both directions at once: locally it called `console/server.py` unimportable
+    because the committed `console/api/routes.py` was no longer in the set, and
+    on a clean CI checkout it returned NOTHING, so `unimportable()` iterated an
+    empty set and passed without examining a single module.
+
+    A gate that grades nothing is the failure this file exists to prevent, so
+    the two halves are asked for explicitly.
+    """
+
+    def _git(*args: str) -> set[str]:
+        result = subprocess.run(
+            ["git", *args], cwd=REPO_ROOT, capture_output=True, text=True,
+        )
+        return {
+            line.strip().strip('"')
+            for line in result.stdout.splitlines()
+            if line.strip()
+        }
+
+    return _git("ls-files") | _git("ls-files", "--others", "--exclude-standard")
 
 
 def _module_state(module: str, published: set[str]) -> bool | None:
