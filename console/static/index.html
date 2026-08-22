@@ -1,0 +1,980 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HytaleRL console</title>
+<link rel="stylesheet" href="/static/css/tokens.css">
+<link rel="stylesheet" href="/static/css/console.css">
+</head>
+<body>
+
+<!-- ── CHROME ───────────────────────────────────────────────────────────────
+     Eight workspaces, one job each. The old page put all of this in one scroll
+     with six collapsed <details> at the bottom, so inspecting a rollout,
+     watching training and checking the server all competed for the same space.
+-->
+<header class="chrome">
+  <div class="brand"><span class="dot" id="health"></span>HytaleRL<b>console</b></div>
+
+  <label class="chrome-profile">
+    <span>agent</span>
+    <select id="profilePick" title="Apply a saved setup from agents/profiles/"></select>
+  </label>
+
+  <nav class="tabs" id="tabs" role="tablist">
+    <button role="tab" data-tab="status" aria-selected="true">Status</button>
+    <button role="tab" data-tab="evidence" aria-selected="false">Evidence</button>
+    <button role="tab" data-tab="run"    aria-selected="false">Run</button>
+    <button role="tab" data-tab="custom" aria-selected="false">Custom</button>
+    <button role="tab" data-tab="train"  aria-selected="false">Train</button>
+    <button role="tab" data-tab="archive" aria-selected="false">Archive</button>
+    <button role="tab" data-tab="compute" aria-selected="false">Compute</button>
+    <button role="tab" data-tab="java"   aria-selected="false">Java</button>
+  </nav>
+
+  <div class="chrome-end">
+    <span class="live" id="status">idle</span>
+    <button type="button" id="theme" class="icon" title="Toggle light / dark">◐</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ── STATUS ───────────────────────────────────────────────────────────────
+     What is running, and whether the contracts still hold. This opens first
+     because it is the question you have when you come back to the tab, not
+     "what did that rollout do".
+-->
+<section class="panel" data-panel="status">
+  <div class="lede">
+    <h1>Status</h1>
+    <p>Training in flight, and whether the contracts a result depends on still hold.</p>
+  </div>
+
+  <section class="card" id="trainingNow">
+    <h2>Training</h2>
+    <div id="trainingNowBody" class="empty">No training job has run in this process.</div>
+  </section>
+
+  <section class="card serverConsole" id="logsCard">
+    <div class="chead"><h2>Logs</h2><div class="spacer"></div>
+      <span class="serverConsoleState" id="logState">idle</span>
+      <span class="count" id="logCount">0 lines</span></div>
+    <p class="note">Read from the files themselves while they are still being
+      written. Sources are discovered, so a new log appears here without any
+      list being edited.</p>
+    <div class="trainrow serverCommandRow">
+      <label>source <select id="logSource"></select></label>
+      <label>lines <input type="number" id="logLines" value="200" min="20"
+                          max="5000" step="20"></label>
+    </div>
+    <div class="serverConsoleMeta">
+      <code id="logPath">No log selected.</code>
+      <label class="c mini"><input type="checkbox" id="logFollow" checked><span>follow output</span></label>
+    </div>
+    <pre class="log serverLog" id="logBody" tabindex="0"
+         aria-label="Selected log output">Select a source.</pre>
+    <div class="serverConsoleFoot" id="logMeta"></div>
+  </section>
+
+  <section class="card">
+    <h2>Contract health</h2>
+    <p class="note">These are the values that silently move and void a result.
+      A checkpoint is only loadable into a scene whose contract matches the one
+      it trained against.</p>
+    <div class="facts" id="contractFacts"></div>
+  </section>
+
+  <section class="card">
+    <div class="chead"><h2>Live server</h2><div class="spacer"></div>
+      <span class="count" id="policyAgentCount">in-server</span></div>
+    <p class="note">The policy running inside HytaleServer publishes counters to
+      a file every 5&nbsp;s. <b>stale</b> is a real state, not an error — the last
+      values before a server went down are usually the ones worth reading.</p>
+    <div id="policyAgentPanel"></div>
+  </section>
+</section>
+
+<!-- ── EVIDENCE ────────────────────────────────────────────────────────────
+     Cross-lane declared claims. The cards themselves are Python frames, so a
+     lane publishes evidence by writing its artifact contract rather than by
+     teaching this page what that lane means.
+-->
+<section class="panel" data-panel="evidence" hidden>
+  <div class="lede">
+    <h1>Evidence</h1>
+    <p>See what a training job produced, what its reports claim, and whether
+      their checks passed. Job details cover one training job; Artifact reports
+      organize files produced across agents and experiments.</p>
+  </div>
+
+  <section class="card">
+    <div class="chead"><h2>Job tracker</h2><div class="spacer"></div>
+      <span class="count" id="evidenceJobCount">no jobs</span></div>
+    <p class="note">Choose a job to inspect its configuration, timestamps,
+      metrics, checkpoint, and latest replay.</p>
+    <div class="rows" id="evidenceJobRows"></div>
+    <details class="jobEvidence" id="evidenceJobDetails">
+      <summary><h3>Job details and graphs</h3><span class="count" id="evidenceMetricCount"></span></summary>
+      <div class="jobEvidenceBody">
+        <div class="liveFacts" id="evidenceJobFacts"></div>
+        <div class="charts trainCharts">
+          <figure><figcaption>behavior <i class="k a">recurrent</i> <i class="k t">memory reset</i></figcaption><canvas class="chart" id="evidenceBehaviorChart"></canvas></figure>
+          <figure><figcaption>distance &amp; aim</figcaption><canvas class="chart" id="evidenceGeometryChart"></canvas></figure>
+          <figure><figcaption>optimizer &amp; throughput</figcaption><canvas class="chart" id="evidenceOptimizerChart"></canvas></figure>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <section class="card">
+    <div class="chead"><h2>World library</h2><div class="spacer"></div>
+      <select id="worldLibrary" class="mini"></select>
+      <select id="worldSplit" class="mini"></select>
+      <input id="worldFilter" class="mini" type="search" placeholder="seed, hash or state"
+        aria-label="filter worlds by seed, hash prefix or keep/deprecate state">
+      <span class="count" id="worldCount">no worlds</span></div>
+    <p class="note">Every world in the shared library, grouped by whether a run
+      is using it now, has ever used it, or never has. Deprecating one removes
+      it from future working sets; the library file and its semantic hash are
+      never edited, so results already recorded against it stay valid.</p>
+    <p class="note" id="worldSpread"></p>
+    <p class="note" id="worldDirectory"></p>
+    <div id="worldSections"></div>
+  </section>
+</section>
+
+<!-- ── RUN ──────────────────────────────────────────────────────────────────-->
+<section class="panel" data-panel="run" hidden>
+
+  <form id="form" class="launch card">
+    <label class="f"><span>loadout</span><select name="loadout" id="loadout"></select></label>
+    <label class="f"><span>opponent</span><select name="opponent" id="opponent"></select></label>
+    <label class="f"><span>policy</span><select name="policy" id="policy"></select></label>
+    <label class="f"><span>opponent AI</span><select name="opponent_policy" id="opponentPolicy"></select></label>
+    <label class="f"><span>task</span><select name="task" id="task"></select></label>
+    <label class="f"><span>world</span><select name="world" id="world"></select></label>
+    <label class="f wide" id="zoneField" hidden><span>zone</span><select name="zone" id="zone"></select></label>
+    <label class="f n"><span>ticks</span><input type="number" name="ticks" id="ticks" value="256" min="1" max="2048"></label>
+    <label class="f n" title="Cap on one episode in engine ticks (30 = 1s; 900 = 30s). The world otherwise only ends an episode when someone dies. 0 removes the cap."><span>episode ticks</span>
+      <input type="number" name="episode_ticks" id="episodeTicks" value="900" min="0" max="100000" step="30"></label>
+    <label class="f n"><span>seed</span><input type="number" name="seed" value="0" min="0"></label>
+    <div class="launch-end">
+      <button type="button" id="more" class="ghost" aria-expanded="false"
+              aria-controls="drawer">Settings</button>
+      <button type="submit" id="go">Run</button>
+    </div>
+    <p class="note span-all" id="worldNote"></p>
+  </form>
+
+  <details class="card profileDetail" id="agentCard" hidden></details>
+
+  <section class="drawer card" id="drawer" role="region"
+           aria-label="Additional run settings" hidden>
+    <div class="grid4">
+      <label class="f n"><span>ability slot</span><input type="number" name="slot" value="1" min="0" max="16"></label>
+      <label class="f n"><span>request period</span><input type="number" name="period" value="12" min="1" max="512"><em id="periodMs"></em></label>
+      <label class="f n"><span>decision period</span><input type="number" name="decision_period" id="dp" value="1" min="1" max="128"><em id="dpMs"></em></label>
+      <label class="f n"><span>agent max hp</span><input type="number" name="agent_max_health" value="105"></label>
+      <label class="f n"><span>target max hp</span><input type="number" name="target_max_health" value="61"></label>
+      <label class="f c"><input type="checkbox" name="armed" checked><span>opponent fights back</span></label>
+      <label class="f c"><input type="checkbox" name="perceive" checked><span>agent can perceive</span></label>
+      <label class="f c"><input type="checkbox" name="target_active" checked><span>target active</span></label>
+      <label class="f"><span>minigame</span><select name="minigame" id="minigame"></select></label>
+      <label class="f n"><span>minigame weight</span><input type="number" name="minigame_weight" id="minigameWeight" value="1" step="0.1" min="0"></label>
+    </div>
+    <p class="note" id="dpHint"></p>
+    <p class="note" id="minigameHint"></p>
+
+    <p class="note">These four numbers are the environment's <b>native combat</b>
+      reward, and a named task above is a preset over exactly them — change one
+      here and it overrides the task; leave them alone to keep the task's own
+      weights.
+      <b>They are not always the whole reward.</b> A minigame adds a shaped term
+      on top of them, and a training contract on the Train tab (pursuit, evader
+      duel) replaces them outright with its own terms — nothing on this panel is
+      in force for those runs.</p>
+    <div id="rewardTerms"></div>
+    <p class="note" id="rewardScopeHint"></p>
+  </section>
+
+  <section class="verdict card" id="verdictBlock">
+    <span class="badge" id="verdictBadge">no run yet</span>
+    <span class="vsub" id="verdictSub">configure above and press Run</span>
+    <div class="flags" id="warnings"></div>
+    <div id="runCost"></div>
+  </section>
+
+  <div class="stage">
+    <section class="card map">
+      <div class="chead">
+        <h2>Map</h2>
+        <div class="spacer"></div>
+        <div class="seg" id="viewMode" role="group" aria-label="view mode">
+          <button type="button" data-mode="3d" aria-pressed="true">3D</button>
+          <button type="button" data-mode="2d" aria-pressed="false">2D</button>
+        </div>
+        <label class="c mini"><input type="checkbox" id="terrainOn" checked><span>terrain</span></label>
+        <label class="c mini"><input type="checkbox" id="trails" checked><span>trails</span></label>
+        <label class="c mini"><input type="checkbox" id="showGrid" checked><span>grid</span></label>
+        <button type="button" class="ghost mini" id="terrainSeed" hidden></button>
+      </div>
+      <div class="scene">
+        <canvas id="view"></canvas>
+        <div class="camhint" id="camhint">click map · WASD pan · shift+WASD precision · drag orbit · right drag pan · wheel zoom</div>
+        <div class="hud" id="hud"></div>
+        <div class="terrainNote" id="terrainNote" hidden></div>
+      </div>
+      <div class="transport">
+        <button id="play" type="button" class="ghost">▶</button>
+        <input type="range" id="scrub" min="0" max="0" value="0" aria-label="timestep">
+        <span class="mono" id="stepn">—</span>
+      </div>
+      <canvas id="timeline" height="52"></canvas>
+    </section>
+
+    <section class="card side">
+      <div class="chead"><h2>What happened</h2><div class="spacer"></div>
+        <span class="count" id="eventCount"></span></div>
+      <div class="filters" id="eventFilters"></div>
+      <ol class="events" id="events"></ol>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="chead"><h2>Signals</h2><div class="spacer"></div><span class="count">this run</span></div>
+    <div class="charts">
+      <figure><figcaption>cumulative reward</figcaption><canvas class="chart" id="chReward"></canvas></figure>
+      <figure><figcaption>health <i class="k a" id="legendLearner">agent</i> <i class="k t" id="legendOpponent">target</i></figcaption><canvas class="chart" id="chHealth"></canvas></figure>
+      <figure><figcaption>separation <i class="k m">true</i> <i class="k g">observed</i></figcaption><canvas class="chart" id="chDist"></canvas></figure>
+      <figure><figcaption>3D aim <i class="k a">combined</i> <i class="k m">yaw</i> <i class="k g">pitch</i></figcaption><canvas class="chart" id="chAim"></canvas></figure>
+      <figure><figcaption>stamina</figcaption><canvas class="chart" id="chStamina"></canvas></figure>
+    </div>
+  </section>
+
+  <details class="card det">
+    <summary><h2>Per-step detail</h2><span class="count">action heads &amp; observation</span></summary>
+    <div class="readouts" id="readouts"></div>
+    <div class="heads" id="heads"></div>
+  </details>
+</section>
+
+<!-- CUSTOM ----------------------------------------------------------------
+     World and minigame authoring without claiming a preview is native output.
+     The exact Region capture remains an explicit boundary before a game runs.
+-->
+<section class="panel worldgen-panel" data-panel="custom" hidden>
+  <div class="lede worldgen-lede">
+    <div>
+      <h1>Custom Studio</h1>
+      <p>Design a unique world, pair it with a validated Arena goal, then carry
+        the manifest through native WorldGen V2 authoring and Region-to-JAX capture.</p>
+    </div>
+    <div class="worldgen-state">
+      <span class="badge" id="wgQuality">loading</span>
+      <span class="count" id="wgDigest">no preview</span>
+    </div>
+  </div>
+
+  <div class="worldgen-studio">
+    <aside class="card worldgen-controls">
+      <div class="chead">
+        <h2>Environment design</h2>
+        <div class="spacer"></div>
+        <span class="count" id="wgRequestState">loading controls</span>
+      </div>
+
+      <label class="f">
+        <span>optional starting recipe</span>
+        <select id="wgPreset" aria-label="World generation preset"></select>
+      </label>
+      <p class="note" id="wgPresetNote"></p>
+
+      <div id="wgControls" class="wg-control-groups"></div>
+
+      <div class="wg-actions">
+        <button type="button" id="wgGenerate">Generate preview</button>
+        <button type="button" id="wgRandomWorld" class="ghost">New hyperparam world</button>
+        <button type="button" id="wgNewSeed" class="ghost">New seed</button>
+        <button type="button" id="wgSave" class="ghost">Save design</button>
+        <button type="button" id="wgDownload" class="ghost">Download JSON</button>
+      </div>
+      <p class="note" id="wgSaveState">A saved design is a portable authoring
+        manifest. It does not silently publish or repin a JAX corpus.</p>
+    </aside>
+
+    <section class="card worldgen-view-card">
+      <div class="chead wg-view-head">
+        <h2>Semantic preview</h2>
+        <div class="spacer"></div>
+        <div class="seg" id="wgViewMode" role="group" aria-label="World preview view mode">
+          <button type="button" data-mode="3d" aria-pressed="true">3D</button>
+          <button type="button" data-mode="top" aria-pressed="false">Top</button>
+        </div>
+        <div class="seg" id="wgRenderStyle" role="group" aria-label="Terrain rendering style">
+          <button type="button" data-render="voxels" aria-pressed="true">Voxels</button>
+          <button type="button" data-render="surface" aria-pressed="false">Surface</button>
+        </div>
+        <button type="button" id="wgResetCamera" class="ghost mini">Reset camera</button>
+      </div>
+
+      <div class="wg-layer-row" role="group" aria-label="Preview layers">
+        <label class="f c"><input type="checkbox" id="wgWater" checked><span>water</span></label>
+        <label class="f c"><input type="checkbox" id="wgTrees" checked><span>trees</span></label>
+        <label class="f c"><input type="checkbox" id="wgStructures" checked><span>structures</span></label>
+        <label class="f c"><input type="checkbox" id="wgCaves"><span>caves / cutaway</span></label>
+        <label class="f wg-cut-axis"><span>cut axis</span><select id="wgCutAxis" disabled>
+          <option value="z">Z</option><option value="x">X</option><option value="y">Y</option>
+        </select></label>
+        <label class="wg-cut-depth"><span>cut depth</span>
+          <input type="range" id="wgCutDepth" min="0" max="90" step="1" value="48" disabled>
+          <output id="wgCutDepthValue">48%</output>
+        </label>
+        <label class="f c"><input type="checkbox" id="wgGrid"><span>grid</span></label>
+        <label class="wg-exaggeration"><span>height</span>
+          <input type="range" id="wgExaggeration" min="0.35" max="1.8" step="0.05" value="1">
+          <output id="wgExaggerationValue">1.00×</output>
+        </label>
+      </div>
+
+      <div class="scene worldgen-scene">
+        <canvas id="wgVoxelView" aria-label="Interactive volumetric voxel environment preview"></canvas>
+        <canvas id="wgView" aria-label="Interactive semantic surface environment preview" hidden></canvas>
+        <div class="hud" id="wgHud"></div>
+        <div class="wg-volume-stats" id="wgVolumeStats"></div>
+        <div class="wg-legend" id="wgLegend"></div>
+        <div class="camhint" id="wgCamHint">drag orbit · scroll zoom</div>
+        <div class="wg-loading" id="wgLoading" hidden>building terrain…</div>
+      </div>
+
+      <div class="facts wg-metrics" id="wgMetrics"></div>
+    </section>
+  </div>
+
+  <div class="worldgen-lower">
+    <section class="card">
+      <div class="chead"><h2>Design checks</h2><div class="spacer"></div>
+        <span class="count" id="wgCheckCount">not generated</span></div>
+      <div class="flags" id="wgWarnings"></div>
+      <div class="facts" id="wgSpawnFacts"></div>
+    </section>
+
+    <section class="card">
+      <div class="chead"><h2>Native → JAX boundary</h2><div class="spacer"></div>
+        <span class="count">explicit handoff</span></div>
+      <div class="wg-pipeline" id="wgPipeline"></div>
+      <p class="note" id="wgBoundary"></p>
+    </section>
+  </div>
+
+  <section class="card custom-game-card">
+    <div class="chead"><h2>Custom minigame</h2><div class="spacer"></div>
+      <span class="count" id="cmSavedCount">0 drafts</span></div>
+    <p class="note">Create a concise Arena task and a bounded seed pool from the
+      current design. Goal and reward paths must both compile in JAX. A draft
+      becomes runnable only after every planned Region is captured and the full
+      fused rollout compiles.</p>
+    <form id="cmForm" class="cm-form">
+      <label class="f"><span>name</span><input id="cmName" type="text" maxlength="64"
+        value="my-minigame" spellcheck="false" required></label>
+      <label class="f cm-description"><span>description</span><input id="cmDescription"
+        type="text" maxlength="240" placeholder="What must the policy learn?"></label>
+      <label class="f"><span>Arena goal</span><select id="cmGoal"></select></label>
+      <div id="cmGoalFields" class="cm-goal-fields"></div>
+      <label class="f"><span>agent loadout</span><select id="cmLoadout"></select></label>
+      <label class="f"><span>opponent loadout</span><select id="cmOpponent"></select></label>
+      <label class="f c cm-armed"><input id="cmArmed" type="checkbox">
+        <span>opponent fights back</span></label>
+      <div class="cm-section-title">Reward contract</div>
+      <p class="note">Potential uses γΦ(next)−Φ(now) and shares γ with PPO.
+        State, event, and step terms intentionally change the objective.</p>
+      <label class="f"><span>preset</span><select id="cmRewardPreset"></select></label>
+      <label class="f"><span>native reward scale</span><input id="cmNativeScale" type="number" min="0" max="100" step="0.05"></label>
+      <label class="f"><span>potential scale</span><input id="cmProgressScale" type="number" min="0" max="100" step="0.05"></label>
+      <label class="f"><span>discount γ</span><input id="cmRewardDiscount" type="number" min="0" max="1" step="0.001"></label>
+      <label class="f"><span>state scale</span><input id="cmStateScale" type="number" min="0" max="100" step="0.001"></label>
+      <label class="f"><span>event scale</span><input id="cmEventScale" type="number" min="0" max="100" step="0.05"></label>
+      <label class="f"><span>completion bonus</span><input id="cmCompletionBonus" type="number" min="0" max="100" step="0.05"></label>
+      <label class="f"><span>failure penalty</span><input id="cmFailurePenalty" type="number" min="0" max="100" step="0.05"></label>
+      <label class="f"><span>step penalty</span><input id="cmStepPenalty" type="number" min="0" max="100" step="0.001"></label>
+      <label class="f"><span>reward clip</span><input id="cmRewardClip" type="number" min="0.001" max="1000" step="0.1"></label>
+      <label class="f c cm-armed"><input id="cmClipEnabled" type="checkbox">
+        <span>clip rewards</span></label>
+      <div class="cm-section-title">Scene</div>
+      <label class="f"><span>agent max health</span><input id="cmAgentHealth" type="number" min="1" max="10000" step="1"></label>
+      <label class="f"><span>target max health</span><input id="cmTargetHealth" type="number" min="1" max="10000" step="1"></label>
+      <label class="f"><span>sensor range</span><input id="cmSensorRange" type="number" min="1" max="128" step="1"></label>
+      <label class="f"><span>microticks</span><input id="cmMicroticks" type="number" min="1" max="16" step="1"></label>
+      <label class="f c cm-armed"><input id="cmTargetActive" type="checkbox">
+        <span>target active</span></label>
+      <div class="cm-section-title">World pool</div>
+      <label class="f"><span>seed count</span><input id="cmPoolCount" type="number" min="1" max="4" step="1"></label>
+      <label class="f"><span>seed stride</span><input id="cmPoolStride" type="number" min="1" max="1000000" step="1"></label>
+      <label class="f"><span>assignment key</span><input id="cmAssignmentKey" type="number" min="-2147483648" max="2147483647" step="1"></label>
+      <button type="submit" id="cmCreate">Create minigame draft</button>
+    </form>
+    <p class="note" id="cmGoalNote"></p>
+    <div class="flag sev-warn" id="cmWorld">Generate a world preview before creating a minigame.</div>
+    <p class="note" id="cmState">No custom minigame created in this session.</p>
+    <div class="rows" id="cmGames"><div class="empty">No saved custom minigames.</div></div>
+  </section>
+
+  <div class="worldgen-lower wg-generation-tools">
+    <section class="card">
+      <div class="chead"><h2>Seed corpus</h2><div class="spacer"></div>
+        <span class="count" id="wgBatchState">not generated</span></div>
+      <p class="note">Generate hundreds of compact deterministic previews. Hyperparameter
+        worlds sample coherent macro-regions, routes, caves, and structures without selecting
+        named presets. One seeded graph is intended to serve the corpus; native graph translation
+        remains an explicit gate.</p>
+      <div class="wg-batch-controls">
+        <label class="f"><span>strategy</span><select id="wgBatchStrategy"></select></label>
+        <label class="f"><span>start seed</span><input id="wgBatchStart" type="number" min="0" max="2147483647" value="20260810"></label>
+        <label class="f"><span>seed count</span><input id="wgBatchCount" type="number" min="1" max="512" value="100"></label>
+        <label class="f"><span>stride</span><input id="wgBatchStride" type="number" min="1" max="1000000" value="1"></label>
+        <label class="f"><span>preview detail</span><select id="wgBatchResolution"></select></label>
+        <label class="f"><span>variation strength</span><input id="wgBatchStrength" type="number" min="0" max="1" step="0.05" value="0.55"></label>
+      </div>
+      <div class="wg-actions wg-batch-actions">
+        <button type="button" id="wgGenerateBatch">Generate seed batch</button>
+        <button type="button" id="wgDownloadBatch" class="ghost" disabled>Download plan</button>
+      </div>
+      <div class="facts" id="wgBatchFacts"></div>
+      <div class="rows wg-batch-rows" id="wgBatchRows"><div class="empty">No seed batch yet.</div></div>
+    </section>
+
+    <section class="card">
+      <div class="chead"><h2>Native V2 compiler</h2><div class="spacer"></div>
+        <span class="count" id="wgCompileState">local compiler</span></div>
+      <p class="note">Compile this recipe into a pinned local WorldGen V2 asset pack.
+        Procedural graphs have a pinned live 0.5.7 reference; every new pack still needs
+        its own native generation and Region capture. Compilation does not deploy Hytale
+        or change the legacy world identity.</p>
+      <div class="wg-actions">
+        <button type="button" id="wgCompile">Compile local asset pack</button>
+        <button type="button" id="wgRefreshBuilds" class="ghost">Refresh builds</button>
+      </div>
+      <div class="flags" id="wgCompileFacts"></div>
+      <div class="rows" id="wgBuilds"><div class="empty">No local Studio packs.</div></div>
+    </section>
+
+    <section class="card">
+      <div class="chead"><h2>Captured one-world voxels</h2><div class="spacer"></div>
+        <span class="count" id="wgCaptureState">scanning</span></div>
+      <p class="note">Open a published composite Region capture in the same 3D
+        viewer. A 96-column view is native-cell exact for one Region; larger
+        worlds use a declared display LOD while their JAX artifacts stay exact.</p>
+      <div class="wg-capture-controls">
+        <label class="f grow"><span>captured environment</span>
+          <select id="wgCaptureSelect"><option value="">No captured worlds found</option></select>
+        </label>
+        <label class="f"><span>voxel detail</span><select id="wgCaptureDetail">
+          <option value="64">64 columns · fast</option>
+          <option value="96" selected>96 columns · Region exact</option>
+          <option value="128">128 columns · detailed</option>
+          <option value="192">192 columns · maximum</option>
+        </select></label>
+      </div>
+      <div class="wg-actions">
+        <button type="button" id="wgLoadCapture" disabled>Open exact capture</button>
+        <button type="button" id="wgRefreshCaptures" class="ghost">Refresh captures</button>
+      </div>
+      <div class="flags" id="wgCaptureFacts"></div>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="chead"><h2>Saved designs</h2><div class="spacer"></div>
+      <span class="count" id="wgSavedCount">0 local</span></div>
+    <p class="note">These are design inputs and preview receipts under the local
+      console state directory. Load one to reproduce its controls; native seed
+      evidence and captured Regions remain separate artifacts.</p>
+    <div class="rows" id="wgSaved"><div class="empty">No saved designs yet.</div></div>
+  </section>
+</section>
+
+<!-- ── TRAIN ────────────────────────────────────────────────────────────────-->
+<section class="panel" data-panel="train" hidden>
+  <div class="lede">
+    <h1>Train</h1>
+    <p>Resolve one stage contract, validate it, then keep the compiled JAX program
+      on the GPU through train → evaluate → publish. Presets choose efficient
+      shapes; advanced and custom fields remain explicit overrides.</p>
+  </div>
+
+  <section class="card launchWorkflow">
+    <div class="workflowHead">
+      <label>stage <select id="trainStage"></select></label>
+      <label>preset <select id="trainPreset"></select></label>
+      <label title="Where the run executes. WSL reaches CUDA; the Windows console process cannot — its JAX build is CPU-only, so 'local' is a slower control, not a fallback.">compute
+        <select id="trainRunner">
+        <option value="wsl">WSL CUDA (GPU)</option>
+        <option value="local">local (CPU)</option>
+      </select></label>
+      <span class="count" id="trainComputeNote"></span>
+      <div class="spacer"></div>
+      <button type="button" id="trainCancel" class="ghost mini"
+        title="Stop after the current update finishes, so the checkpoint is written. Use Stop on the run row to kill it outright.">Cancel</button>
+      <button type="button" id="trainGo">Validate &amp; launch</button>
+    </div>
+    <div class="workflowSummary" id="trainContractSummary"></div>
+
+    <h3 class="subhead">Schedule</h3>
+    <div class="trainrow">
+      <label>updates <input type="number" id="trainUpdates" value="64" min="1" max="100000"></label>
+      <label>rollout steps <input type="number" id="trainRollout" value="128" min="1" max="2048"></label>
+      <label>evaluation horizon <input type="number" id="trainEvaluationSteps" value="512" min="1" max="512"></label>
+      <label title="Environments stepped in parallel. The map draws 2; training at 2 collects 512 steps per update, which is noise.">envs
+        <input type="number" id="trainEnvs" value="128" min="1" max="512"></label>
+      <label>seed <input type="number" id="trainSeed" value="570701" min="0"></label>
+      <label>replays / milestone <input type="number" id="trainArchiveLanes" value="8" min="1" max="16"></label>
+    </div>
+
+    <details class="advanced">
+      <summary>Advanced optimizer, environment, and custom stage fields</summary>
+      <div class="advancedBody">
+    <h3 class="subhead">Hyperparameters</h3>
+    <div class="trainrow">
+      <label>update epochs <input type="number" id="trainEpochs" value="4" min="1" max="64"></label>
+      <label title="Minibatches per epoch. rollout_steps x envs must divide by this.">minibatches
+        <input type="number" id="trainMinibatches" value="8" min="1" max="64"></label>
+      <label>learning rate <input type="number" id="trainLr" value="0.0003" step="0.00001" min="0"></label>
+      <label>gamma <input type="number" id="trainGamma" value="0.99" step="0.001" min="0" max="1"></label>
+      <label>gae lambda <input type="number" id="trainLambda" value="0.95" step="0.001" min="0" max="1"></label>
+      <label>clip <input type="number" id="trainClip" value="0.2" step="0.01" min="0"></label>
+      <label title="Too low and the policy collapses to one action early; the trained checkpoint here emitted only 2 distinct actions over 900 steps.">entropy
+        <input type="number" id="trainEntropy" value="0.003" step="0.001" min="0"></label>
+      <label>value coef <input type="number" id="trainVf" value="0.5" step="0.01" min="0"></label>
+      <label title="Gradient clipping. Raising it lets a large advantage move the policy further in one update.">max grad norm
+        <input type="number" id="trainGradNorm" value="0.5" step="0.05" min="0"></label>
+      <label title="Stop after a materially oversized PPO update.">maximum KL
+        <input type="number" id="trainMaximumKl" value="0.03" step="0.005" min="0.001"></label>
+      <label title="Reject a pursuit checkpoint that does not maintain physical line of sight often enough.">minimum line of sight
+        <input type="number" id="trainMinimumVisibility" value="0.50" step="0.01" min="0" max="1"></label>
+      <label>episode ticks <input type="number" id="trainEpisodeTicks" value="512" min="1" max="512"></label>
+    </div>
+
+    <h3 class="subhead">Reward</h3>
+    <p class="note">The environment's whole reward, in four numbers. The task
+      above is a preset over these; changing one here overrides it.</p>
+    <div class="trainrow" id="trainRewardTerms"></div>
+
+    <h3 class="subhead">Network</h3>
+    <div class="trainrow">
+      <label title="Encoder width. Independent of the recurrent width — the equal-width constraint was retired.">encoder size
+        <input type="number" id="trainEncoder" value="128" min="8" max="1024"></label>
+      <label title="GRU width. A checkpoint only loads into a handle built at the widths it trained on, so changing this makes earlier checkpoints unloadable.">recurrent size
+        <input type="number" id="trainRecurrent" value="128" min="8" max="1024"></label>
+    </div>
+
+    <h3 class="subhead">Environment and goal</h3>
+    <p class="note">Training builds the <b>same scene</b> as a rollout, from the
+      same knobs — so what you set here is what the map shows when you inspect
+      the result. A different task or opponent is a different experiment, not a
+      different seed.</p>
+    <div class="trainrow">
+      <label>loadout <select id="trainLoadout"></select></label>
+      <label>opponent <select id="trainOpponent"></select></label>
+      <label>opponent AI <select id="trainOpponentPolicy"></select></label>
+      <label>world <select id="trainWorld"></select></label>
+      <!-- These two decide whether a run measures pursuit or memorisation. At
+           world_count 1 with diversity off, every environment in the batch is a
+           byte-identical copy of ONE scenario, so the policy can memorise a
+           single opening instead of learning. Neither was expressible here, so
+           a diverse run could only be launched by POSTing to the API. -->
+      <label title="How many library worlds are resident, with the batch spread across them.">
+        worlds <input type="number" id="trainWorldCount" value="1" min="1" max="64"></label>
+      <label title="Draw a separate spawn and target pair per environment inside its own world.">
+        <input type="checkbox" id="trainDiversity"> varied spawns</label>
+      <label>saved world seed <select id="trainWorldSeed">
+        <option value="">workflow default</option>
+      </select></label>
+      <label id="trainZoneField" hidden>zone <select id="trainZone"></select></label>
+      <label>task <select id="trainTask"></select></label>
+      <label>minigame <select id="trainMinigame"></select></label>
+      <label>weight <input type="number" id="trainMinigameWeight" value="1"
+                          step="0.1" min="0"></label>
+      <label title="Which side of the pursuit this run trains. 'evade' inverts what success means: the learner is paid for surviving, not for catching.">objective
+        <select id="trainObjective">
+          <option value="pursue">pursue — learner is the chaser</option>
+          <option value="evade">evade — learner is the evader</option>
+        </select></label>
+      <label title="What the OTHER actor is. A scripted controller is a fixed curriculum you can read; a frozen policy is agent vs agent and is what makes the recursive loop turn.">opponent type
+        <select id="trainTargetController">
+        <option value="scripted_flee_weave">retreat + weave (skill row, fixed run speed)</option>
+        <option value="scripted_flee_adaptive">adaptive gait (walk/run/sprint mix)</option>
+        <option value="scripted_flee_mixed">mixed lanes (weave vs adaptive)</option>
+        <option value="scripted_flee_standoff">standoff (holds range, circles)</option>
+        <option value="scripted_flee_standoff_mixed">mixed lanes (adaptive vs standoff)</option>
+        <option value="frozen_source_policy">frozen source policy</option>
+      </select></label>
+      <label id="trainOpponentField" title="The frozen policy the learner trains against. Leave as 'copy of source policy' for a single-policy run; pick a different one for agent-vs-agent, which is what makes the recursive loop turn.">opponent policy
+        <select id="trainOpponentCheckpoint">
+          <option value="">copy of source policy</option>
+        </select></label>
+      <p class="note" id="trainObjectiveNote"></p>
+      <label>spawn distance min <input type="number" id="trainSeparationMin" value="10" min="1" step="1"></label>
+      <label>spawn distance max <input type="number" id="trainSeparationMax" value="14" min="2" step="1"></label>
+    </div>
+
+    <!-- A design trains without any Region artifact, so there is no multi-minute
+         scene build. Identity is the design's seed-independent recipe digest,
+         which is why re-previewing at a new seed cannot reach unauthored
+         terrain. Leave the world empty to use the captured Region library. -->
+    <div class="grid" id="trainDesignRow">
+      <label>design world <select id="trainWorldDesign">
+        <option value="">— captured Region library —</option>
+      </select></label>
+      <label>arena radius <input type="number" id="trainArenaRadius" value="48" min="4" step="1"></label>
+      <label>evader walk <input type="number" id="trainEvaderWalk" value="0.1" min="0" max="1" step="0.05"></label>
+      <label>evader run <input type="number" id="trainEvaderRun" value="0.6" min="0" max="1" step="0.05"></label>
+      <label>evader sprint <input type="number" id="trainEvaderSprint" value="0.3" min="0" max="1" step="0.05"></label>
+      <label>gait period <input type="number" id="trainEvaderPeriod" value="20" min="1" step="1"></label>
+      <label>standoff inner <input type="number" id="trainStandoffInner" value="6" min="1" step="1"></label>
+      <label>standoff outer <input type="number" id="trainStandoffOuter" value="14" min="2" step="1"></label>
+      <label>standoff turn <input type="number" id="trainStandoffTicks" value="40" min="1" step="1"></label>
+    </div>
+    <p class="note" id="trainEvaderNote"></p>
+
+    <h3 class="subhead">Reward and shaping terms</h3>
+    <!-- Built from the selected stage contract's own dataclass defaults, so
+         this list cannot go stale when the contract moves. Only terms you
+         actually change are sent; the JSON field below remains for anything
+         the contract does not publish as a scalar. -->
+    <div class="trainrow" id="trainStageOptionFields"></div>
+
+    <div class="customFields">
+      <label>stage options (JSON)<textarea id="trainStageOptions" rows="3">{}</textarea></label>
+      <label>opponent motion options (JSON)<textarea id="trainTargetOptions" rows="3">{}</textarea></label>
+    </div>
+      </div>
+    </details>
+    <p class="note" id="trainStatus">Ready. Validation resolves the exact contract and cache identity before launch.</p>
+  </section>
+
+  <section class="card" id="ladderCard">
+    <div class="chead"><h2>Curriculum ladder</h2><div class="spacer"></div>
+      <span class="count" id="ladderNote">reading curriculum</span></div>
+    <p class="note">Read from <code>arena.curriculum.pursuit</code>, never restated
+      here. Running the ladder launches <b>one</b> rung, grades it on the success
+      rate its own selection reported, and lets the gate below choose what runs
+      next &mdash; promote, hold the same rung, or demote. Queueing all the rungs
+      up front is what made the thresholds decoration: two of the three outcomes
+      are not &ldquo;the next rung&rdquo;.</p>
+    <div class="flags" id="ladderState"></div>
+
+    <div class="ladderGrid">
+      <div class="ladderCol">
+        <h3>Reward rungs</h3>
+        <div class="rows" id="ladderObjectives"><div class="empty">&mdash;</div></div>
+      </div>
+      <div class="ladderCol">
+        <h3>World rungs</h3>
+        <div class="rows" id="ladderWorlds"><div class="empty">&mdash;</div></div>
+      </div>
+    </div>
+
+    <div class="flags" id="ladderGate"></div>
+
+    <div class="wg-actions">
+      <label class="f n"><span>updates per rung</span>
+        <input type="number" id="ladderUpdates" value="64" min="1" max="4096"></label>
+      <button type="button" id="ladderQueue">Run ladder</button>
+      <button type="button" id="ladderStop" class="ghost"
+        title="Stop advancing. A run already on the device keeps going.">Stop ladder</button>
+      <button type="button" id="ladderQueueRecursive" class="ghost"
+        title="Queue only the self-play rung. Both halves are the same policy, so it needs a trained checkpoint rather than a scripted target.">Queue recursive only</button>
+      <button type="button" id="ladderRefresh" class="ghost">Refresh</button>
+    </div>
+
+    <div class="chead"><h2>Queue</h2><div class="spacer"></div>
+      <span class="count" id="queueNote">empty</span></div>
+    <div class="rows" id="queueRows"><div class="empty">Nothing queued.</div></div>
+  </section>
+
+  <section class="card liveTraining">
+    <div class="chead"><h2>Live training</h2><div class="spacer"></div><span class="count" id="jobNote"></span></div>
+    <div class="liveFacts" id="trainLiveFacts"></div>
+    <div class="charts trainCharts" id="trainCharts">
+      <figure><figcaption>behavior <i class="k a">recurrent</i> <i class="k t">memory reset</i></figcaption><canvas class="chart" id="trainBehaviorChart"></canvas></figure>
+      <figure><figcaption>distance &amp; aim</figcaption><canvas class="chart" id="trainGeometryChart"></canvas></figure>
+      <figure><figcaption>optimizer &amp; throughput</figcaption><canvas class="chart" id="trainOptimizerChart"></canvas></figure>
+    </div>
+    <details class="trainReplay" open>
+      <summary><h3>Latest evaluation replay</h3><span class="count" id="trainReplayNote">waiting for a milestone</span></summary>
+      <div class="trainReplayBody">
+        <div class="scene"><canvas id="trainReplayView" aria-label="Latest training evaluation replay"></canvas></div>
+        <div class="transport">
+          <input type="range" id="trainReplayScrub" min="0" max="0" value="0" aria-label="training replay timestep">
+          <span class="mono" id="trainReplayStep">â€”</span>
+          <button type="button" class="ghost mini" id="trainReplayOpen">Open on Run map</button>
+        </div>
+      </div>
+    </details>
+    <h3 class="subhead">Run timeline</h3>
+    <div class="rows" id="jobRows"></div>
+  </section>
+</section>
+
+<!-- ── RUNS ─────────────────────────────────────────────────────────────────-->
+<section class="panel" data-panel="archive" hidden>
+  <div class="lede">
+    <h1>Replay Archive</h1>
+    <p>Stored replays and training receipts, grouped by shared agent ownership.
+      Basic, PPO, and Dawn live under their own <code>artifacts/console/shared/&lt;agent&gt;/</code>
+      namespaces. Every entry
+      retains timestamps, contract hashes, observation width, and Gym source identity.
+      Selecting an agent profile
+      filters out artifacts owned by other agents. Tick two to ask whether they are
+      comparable at all — a difference in any of those makes the numbers
+      incomparable no matter how similar they look.</p>
+  </div>
+
+  <section class="card">
+    <div class="chead"><h2>Stored</h2><div class="spacer"></div><span class="count" id="storedNote"></span></div>
+    <div class="rows archiveRows" id="storedRuns"></div>
+    <button type="button" id="loadMoreRuns" class="ghost mini" hidden>load 200 more</button>
+    <div id="compareVerdict"></div>
+  </section>
+
+  <section class="card">
+    <div class="chead"><h2>This session</h2><div class="spacer"></div>
+      <span class="count" id="histNote"></span>
+      <button type="button" id="clearHist" class="ghost mini">clear</button></div>
+    <div class="charts">
+      <figure><figcaption>reward total</figcaption><canvas class="chart" id="hReward"></canvas></figure>
+      <figure><figcaption>landed hits</figcaption><canvas class="chart" id="hLanded"></canvas></figure>
+      <figure><figcaption>damage <i class="k g">dealt</i> <i class="k c">taken</i></figcaption><canvas class="chart" id="hDamage"></canvas></figure>
+    </div>
+    <div class="rows" id="histrows"></div>
+  </section>
+
+  <details class="card det">
+    <summary><h2>ADK surface</h2><span class="count">scenes, observation, actions</span></summary>
+    <div id="adkPanel"></div>
+  </details>
+</section>
+
+<!-- ── COMPUTE ──────────────────────────────────────────────────────────────
+     Devices, what each run costs, and reloading code without a restart.
+-->
+<section class="panel" data-panel="compute" hidden>
+  <div class="lede">
+    <h1>Compute</h1>
+    <p>Compose the static JAX program before launch, see which optimizations it
+      will use, and reuse saved worlds, CUDA state, and executable identities.</p>
+  </div>
+
+  <section class="card launchWorkflow">
+    <div class="chead"><h2>Training composition</h2><div class="spacer"></div>
+      <span class="count" id="computeContract"></span></div>
+    <p class="note">Presets are starting shapes. Explicit environment count,
+      rollout length, saved-world seed, and controller choices override them.
+      Apply sends this exact composition to Train; it does not launch a job.</p>
+    <div class="workflowHead">
+      <label>stage <select id="computeStage"></select></label>
+      <label>preset <select id="computePreset"></select></label>
+      <div class="spacer"></div>
+      <button type="button" id="computeApply">Apply in Train</button>
+    </div>
+    <div class="trainrow">
+      <label>parallel envs <input type="number" id="computeEnvs" min="1" max="512"></label>
+      <label>ticks / update <input type="number" id="computeRollout" min="1" max="2048"></label>
+      <label>saved world seed <select id="computeWorldSeed"></select></label>
+      <label>opponent controller <select id="computeController"></select></label>
+    </div>
+    <div class="workflowSummary" id="computeSummary"></div>
+    <div class="rows" id="computeFeatures"></div>
+    <p class="note" id="computeStatus"></p>
+  </section>
+
+  <section class="card">
+    <div class="chead"><h2>GPU execution</h2><div class="spacer"></div>
+      <span class="count" id="computeRuntimeState"></span></div>
+    <div class="facts" id="computeRuntimeFacts"></div>
+    <p class="note">The allocator is recomputed at launch. Saved Region
+      artifacts are materialized once before JIT; generated WorldGen designs
+      must first be published to that immutable form. Generation never runs
+      inside an environment tick.</p>
+  </section>
+
+  <section class="card">
+    <div class="chead"><h2>Devices</h2><div class="spacer"></div>
+      <span class="count" id="deviceBackend"></span></div>
+    <div class="facts" id="deviceFacts"></div>
+    <p class="note" id="deviceNote"></p>
+  </section>
+
+  <section class="card">
+    <div class="chead"><h2>Scene cache</h2><div class="spacer"></div>
+      <button type="button" id="clearCache" class="ghost mini">drop cached scenes</button></div>
+    <p class="note">A built handle is reused when the whole scene identity
+      matches, which skips both the scene build and the collector compile.
+      Dropping them frees device buffers and makes the next run cold.</p>
+    <div class="rows" id="cacheRows"></div>
+  </section>
+
+  <section class="card">
+    <div class="chead"><h2>Reload code</h2><div class="spacer"></div>
+      <span class="count">no restart</span></div>
+    <p class="note">Re-imports console modules in place. Panels and profiles
+      already rescan per request; this is for the engine — runner, store,
+      terrain — so an edit takes effect without losing cached scenes or the
+      job registry. A module that fails to re-import is reported and the old
+      one stays loaded.</p>
+    <div class="trainrow">
+      <label>module <input type="text" id="hotModule" value="console.core.terrain" size="34"></label>
+      <button type="button" id="hotGo">Reload</button>
+    </div>
+    <div id="hotResult"></div>
+  </section>
+</section>
+
+<section class="panel" data-panel="java" hidden>
+  <div class="lede">
+    <h1>Hytale server</h1>
+    <p>The live stdin and stdout of the real <code>HytaleServer.jar</code>
+      process managed by this Console. Startup output, loaded plugins, errors,
+      and every command sent below share one chronological transcript.</p>
+  </div>
+
+  <section class="card serverConsole">
+    <div class="chead"><h2>Hytale server console</h2><div class="spacer"></div>
+      <span class="serverConsoleState" id="javaConsoleState">stopped</span>
+      <span class="count" id="javaLogCount">0 lines</span></div>
+    <p class="note">This is the managed server process itself, not a copied or
+      synthetic log. Commands appear as <code>[CONSOLE] &gt;</code> immediately
+      before the server's response and are also written to the session log.</p>
+    <div class="trainrow serverCommandRow">
+      <label>command
+        <input type="text" id="javaCmd" size="72"
+               placeholder="help · auth login device · a leading / is optional"></label>
+      <button type="button" id="javaSend">Send</button>
+    </div>
+    <div id="javaSpawnHint" class="note"></div>
+    <div class="serverConsoleMeta">
+      <code id="javaLogPath">No server session has been started.</code>
+      <label class="c mini"><input type="checkbox" id="javaFollow" checked><span>follow output</span></label>
+    </div>
+    <pre class="log serverLog" id="javaLog" tabindex="0" aria-label="Hytale server output">Waiting for a server session.</pre>
+    <div class="serverConsoleFoot" id="javaTranscriptState"></div>
+  </section>
+
+  <details class="card det javaReference">
+    <summary><h2>Install</h2><div class="spacer"></div>
+      <span class="count" id="javaReady"></span></summary>
+    <div class="javaDetailBody">
+      <div class="facts" id="javaInstall"></div>
+      <p class="note">Assets are passed explicitly because
+        <code>Options.ASSET_DIRECTORY</code> defaults to
+        <code>../HytaleAssets</code> while a real install ships
+        <code>Assets.zip</code> beside <code>Server/</code>. Without
+        <code>--assets</code> the server exits 7 on
+        <code>missingAssets.failedToLoad</code>.</p>
+    </div>
+  </details>
+
+  <section class="card">
+    <div class="chead"><h2>Server</h2><div class="spacer"></div>
+      <span class="count" id="javaState">stopped</span></div>
+    <div class="trainrow">
+      <label>mode
+        <select id="javaMode">
+          <option value="client">client-facing (a game client can connect)</option>
+          <option value="headless">headless (bridge only)</option>
+        </select>
+      </label>
+      <label>port <input type="number" id="javaPort" value="25565" min="1" max="65535"></label>
+      <label>auth
+        <select id="javaAuth">
+          <option value="">default for mode</option>
+          <option value="authenticated">authenticated</option>
+          <option value="offline">offline</option>
+          <option value="insecure">insecure</option>
+        </select>
+      </label>
+      <label>owner <input type="text" id="javaOwner" size="12" placeholder="optional"></label>
+    </div>
+    <div class="trainrow">
+      <label>boot commands
+        <input type="text" id="javaBoot" size="46"
+               placeholder="one per line in the box below, or leave empty"></label>
+      <button type="button" id="javaLaunch">Launch</button>
+      <button type="button" id="javaStop" class="ghost">Stop</button>
+    </div>
+    <details class="javaNotes">
+      <summary>Connection and authentication notes</summary>
+      <div class="javaNotesBody">
+    <p class="note">Mode is not a server flag — no such switch exists.
+      <em>Client-facing</em> binds <code>0.0.0.0</code>, passes
+      <code>--allow-op</code> so a connecting player can op themselves (which
+      <code>/npc</code> requires — it is gated on
+      <code>hytale:WorldEditor</code>), and turns on LAN discovery at boot.
+      That last one matters: discovery is per-process and does <em>not</em>
+      survive a restart, so a relaunched server silently vanishes from the
+      client's <em>Local</em> list with no error anywhere.
+      <em>Headless</em> binds loopback only. A launched server writes its
+      universe under <code>artifacts/console-hytale/</code>, never into the
+      install.</p>
+    <p class="note"><strong>Auth mode is the thing most likely to stop a real
+      client joining, and the other two values fail differently.</strong>
+      <code>offline</code> never gets off the ground — <code>InitialPacketHandler</code>
+      (<code>:209-227</code>) requires <code>Constants.SINGLEPLAYER</code>
+      <em>and</em> that the connecting UUID owns the world, disconnecting with
+      <code>offlineModeSingleplayerOnly</code> / <code>offlineModeOwnerOnly</code>.
+      <code>insecure</code> gets much further and still fails: the server
+      completes its development flow all the way into
+      <code>setup:assets-request</code>, then the client hangs up with
+      <em>“server requires development mode which is not supported in build”</em>.
+      So client-facing defaults to <code>authenticated</code>, which needs the
+      server to hold its own tokens — run <code>auth login device</code> in the
+      console above and complete the code prompt.</p>
+      </div>
+    </details>
+    <div class="facts" id="javaReached"></div>
+    <p class="note">Latched from the server's own log as it boots, not probed
+      afterwards. The game port is <strong>QUIC over UDP</strong>, so it never
+      appears in a <code>netstat</code> filter on <code>LISTENING</code> — that
+      is a TCP state. Checking that way reports a healthy client-facing server
+      as having no game port.</p>
+    <pre class="cmd" id="javaCommand"></pre>
+  </section>
+
+  <details class="card det javaReference">
+    <summary><h2>Command limitations</h2><div class="spacer"></div>
+      <span class="count" id="javaNeedsPlayer"></span></summary>
+    <div class="javaDetailBody">
+    <p class="note"><strong>No console command can spawn an NPC, and no
+      setting changes that.</strong> The interactive console runs commands as
+      <code>ConsoleSender.INSTANCE</code>
+      (<code>ConsoleModule.java:113</code>) and so does
+      <code>--boot-command</code> (<code>HytaleServer.java:447</code>) — the
+      same senderless identity. <code>ConsoleSender.hasPermission()</code>
+      returns <code>true</code> unconditionally, so permission is not the
+      blocker. But <code>NPCSpawnCommand extends AbstractPlayerCommand</code>,
+      which fetches <code>senderAsPlayerRef()</code> and, when it is null,
+      replies <code>errors.playerOrArg</code> and returns without executing
+      (<code>AbstractPlayerCommand.java:33-38</code>). The NPC spawns at the
+      <em>sender's</em> position, and the console has no body.</p>
+    <p class="note"><strong>The refusal message sends you down a dead end.</strong>
+      It reads <em>“Sender must be a player or provide the --player option!”</em>,
+      but that option does not exist on this command — passing it gets
+      <em>“Could not find an optional argument with the name … 'player'”</em>.
+      Both base classes share one translation string and only
+      <code>AbstractTargetPlayerCommand</code> declares the argument. Measured
+      against a live server, not inferred.</p>
+    <p class="note">So there are exactly two ways to get an agent NPC into a
+      world: connect a real client and run <code>/npc spawn &lt;role&gt;</code>
+      in chat, or let the bridge mod create the entity programmatically, which
+      is what the RL system already does and why it never needed a client.</p>
+    <div class="rows" id="javaCommands"></div>
+    </div>
+  </details>
+</section>
+
+</main>
+
+<script type="module" src="/static/js/main.js"></script>
+</body>
+</html>

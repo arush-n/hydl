@@ -1,0 +1,179 @@
+# Java
+hytale-plugin/build/
+hytale-plugin/.gradle/
+*.class
+*.jar
+!hytale-plugin/gradle/wrapper/gradle-wrapper.jar
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.python-version
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.hypothesis/
+.mypy_cache/
+.pyright/
+.tox/
+.nox/
+.ipynb_checkpoints/
+
+# Tests and generated test support
+# Existing tracked tests remain tracked; these rules prevent new local test
+# files and test-output trees from being added accidentally.
+tests/
+test/
+**/tests/
+**/test/
+test_*.py
+*_test.py
+*Test.java
+*Tests.java
+test-results/
+test-results-*/
+pytest-report*/
+junit*.xml
+
+# Test suites are developer material and are not published. Confirmed
+# 2026-08-19: the published set is code a user needs to run the project, and the
+# suites plus their fixtures were 265 files / 149,862 lines of it -- including a
+# single 77,555-line machine-written recording
+# (tests/fidelity/fixtures/world/native_crafting_catalog_recording.json).
+# The Java suite under hytale-plugin/src/test was already excluded by **/test/
+# above; these negations were the only reason the Python suites still shipped.
+#
+# Consequence to keep in mind: nothing published can run a test. Any CI job must
+# either add these back deliberately or test against a source checkout.
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.project
+.classpath
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editors, backups, and ordinary temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*.orig
+*.rej
+*.swp
+*.swo
+*~
+tmp/
+temp/
+**/tmp/
+**/temp/
+.cache/
+**/.cache/
+
+# Environment
+.env
+.venv/
+venv/
+
+# Local build tool downloads
+.tools/
+
+# Training artifacts
+*.zip
+*.pkl
+*.npz
+!artifacts/jax/*.npz
+!artifacts/worldgen/region-library-pilot-v1/artifacts/*.npz
+logs/
+tensorboard/
+wandb/
+mlruns/
+checkpoints/
+*.ckpt
+*.safetensors
+
+# Local status, handoff state, and generated audit reports
+STATUS.md
+**/STATUS.md
+status.json
+status-*.json
+*-status.json
+
+# Local agent skills and instruction bundles
+skills/
+**/skills/
+SKILL.md
+**/SKILL.md
+
+# Per-cycle agent coordination and generated validation journals
+handoffs/
+**/handoffs/
+HANDOFF*.md
+**/HANDOFF*.md
+NEXT-STEPS.md
+**/NEXT-STEPS.md
+NEXT.md
+**/NEXT.md
+TODO.md
+**/TODO.md
+GAPS.md
+**/GAPS.md
+GYM-GAPS.md
+**/GYM-GAPS.md
+*AGENT-INSTRUCTIONS*.md
+**/*AGENT-INSTRUCTIONS*.md
+PERIODIC-VALIDATION-LOG*.md
+**/PERIODIC-VALIDATION-LOG*.md
+
+# Decompiled/reverse-engineered server sources are local reference material
+decompiled/
+**/decompiled/
+decompile/
+**/decompile/
+decomp/
+**/decomp/
+
+# Local bridge/server test output
+*.stdout.log
+*.stderr.log
+
+# Agent/session scratch (never source)
+.codex-local/
+.jax-cache/
+.tmp-*/
+.pytest_cache/
+.ruff_cache/
+evaluation-pytest-tmp-legacy/
+*.deprecated/
+
+# Native/JVM diagnostics and crash output
+hs_err_pid*.log
+replay_pid*.log
+*.hprof
+*.jfr
+
+# Local process/runtime state
+*.pid
+*.lock
+*.sock
+*.log
+*.err
+*.out
+out/
+out-hook/
+**/out/
+**/out-hook/

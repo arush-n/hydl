@@ -1,0 +1,241 @@
+# Ignore rules that are always true for this project, regardless of who is
+# working on it. Anything specific to one machine, one contributor, or one
+# unpublished subproject belongs in .git/info/exclude instead, which is local
+# to a clone and never committed.
+#
+# This file must stay tracked. `tools/check_publication_hygiene.py` pins it as
+# MUST_BE_TRACKABLE: a clone that inherits no ignore rules can stage decompiled
+# sources, jars and server installs on the next `git add -A`.
+
+# --- Build output -----------------------------------------------------------
+hytale-plugin/build/
+hytale-plugin/.gradle/
+*.class
+*.jar
+!hytale-plugin/gradle/wrapper/gradle-wrapper.jar
+dist/
+build/
+out/
+out-hook/
+**/out/
+**/out-hook/
+*.egg-info/
+.eggs/
+*.egg
+
+# --- Python -----------------------------------------------------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.python-version
+
+# --- Caches -----------------------------------------------------------------
+.cache/
+**/.cache/
+.jax_cache/
+.jax-cache/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.pyright/
+.hypothesis/
+.tox/
+.nox/
+.ipynb_checkpoints/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# --- Environments -----------------------------------------------------------
+.env
+.venv/
+venv/
+.tools/
+
+# --- Editors and OS ---------------------------------------------------------
+.idea/
+.vscode/
+*.iml
+.project
+.classpath
+.settings/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# --- Temporary and backup files ---------------------------------------------
+*.tmp
+*.temp
+*.bak
+*.backup
+*.orig
+*.rej
+*.swp
+*.swo
+*~
+tmp/
+temp/
+**/tmp/
+**/temp/
+.tmp-*/
+
+# --- Logs, crash dumps, and process state -----------------------------------
+*.log
+*.err
+*.out
+*.stdout.log
+*.stderr.log
+logs/
+hs_err_pid*.log
+replay_pid*.log
+*.hprof
+*.jfr
+*.pid
+*.lock
+*.sock
+*.exit
+
+# --- Test trees -------------------------------------------------------------
+# Developer material. CI runs hygiene and lint only; see the note at the top of
+# .github/workflows/hygiene.yml before adding a test job.
+tests/
+test/
+**/tests/
+**/test/
+test_*.py
+*_test.py
+*Test.java
+*Tests.java
+test-results/
+test-results-*/
+pytest-report*/
+junit*.xml
+
+# --- Model and training output ----------------------------------------------
+*.zip
+*.pkl
+*.npz
+*.ckpt
+*.safetensors
+checkpoints/
+wandb/
+mlruns/
+tensorboard/
+
+# --- Machine-written capture and report trees -------------------------------
+# Large, regenerable, and in some cases containing a full server install.
+/artifacts/
+# Captured worlds and everything derived from them: Region snapshots, traversal
+# navigation graphs and their manifests. ALL OR NOTHING on purpose -- the
+# manifests attest to graph files by hash, so publishing a manifest without its
+# graphs would describe a library that is not there. `hytalegym.jax.world.tokens`
+# treats the whole set as absent and says so in the contract, which is what lets
+# a clone without it still import.
+HytaleRL/artifacts/
+/output/
+agents/ppo/artifacts/
+agents/basic/artifacts/
+arena/training/artifacts/
+adk/runs/
+adk/artifacts/
+experimental/worldgen-v2/evidence/
+experimental/*/evidence/
+experimental/*/*/audits/
+experimental/*/*/*/audits/
+
+# --- Reverse-engineered server sources --------------------------------------
+# Local reference material only. See LICENSE: these are not covered by it and
+# are never distributed. CI fails the build if any are committed.
+decompiled/
+**/decompiled/
+decompile/
+**/decompile/
+decomp/
+**/decomp/
+
+# --- Contributor documentation ----------------------------------------------
+# Documents about doing the work rather than about the system. Anything
+# user-facing should be a README.md instead, which publishes by default.
+#
+# `/docs/` is ANCHORED on purpose. A bare `docs/` matches at every depth and
+# would swallow nested documentation directories that must publish, which is
+# exactly the failure `tools/check_publication_hygiene.py` exists to catch.
+DEV.md
+**/DEV.md
+DESIGN.md
+**/DESIGN.md
+MIGRATION.md
+**/MIGRATION.md
+AUDIT-*.md
+**/AUDIT-*.md
+CAPTURE-VS-*.md
+**/CAPTURE-VS-*.md
+SKILL.md
+**/SKILL.md
+STATUS.md
+**/STATUS.md
+/docs/
+HytaleRL/docs/
+experimental/worldgen-v2/documentation/
+
+# --- Agent and session tooling ----------------------------------------------
+.agents/
+.claude/
+.codex/
+skills/
+**/skills/
+*AGENT-INSTRUCTIONS*.md
+
+# --- Generated session telemetry --------------------------------------------
+!/telemetry/
+/telemetry/*
+!/telemetry/README.md
+/telemetry/*.jsonl
+/telemetry/*.jsonl.gz
+
+# --- External mod configuration ---------------------------------------------
+# Nothing in the published packages reads it.
+/mods/
+
+# --- Experimental trees with no published consumer --------------------------
+# None are in `[tool.setuptools.packages.find]` or the ruff lint list, so none
+# are part of the shipped product.
+/experimental/3d_audio/
+/experimental/hierarchical_planner/
+/experimental/cnn_training/
+
+# --- Hytale server runtime state ---------------------------------------------
+# The server writes these at the repository root on first boot. They are
+# operator state for one install, and a published default would be silently
+# adopted by anyone who cloned it.
+/bans.json
+/whitelist.json
+/permissions.json
+/config.json
+
+# The plugin keeps the same local state below its own install root.
+HytaleRL/hytale-plugin/*.json
+HytaleRL/hytale-plugin/telemetry/
+HytaleRL/hytale-plugin/mods/
+
+# --- Real source rescued from the rules above ------------------------------
+# `**/skills/` targets agent skill folders, but `arena/training/skills/` is
+# training source: `arena/training/__init__.py` imports it, so excluding it
+# makes `import arena.training` fail on a fresh clone.
+!arena/training/skills/
+
+# `adk/runs/` is a run-artifact directory, but its `__init__.py` is the Run
+# logging module that `adk/tools/run_minigame.py` imports. Keep the module,
+# drop the run output.
+!adk/runs/
+adk/runs/*
+!adk/runs/__init__.py
+
+# --- Console storage root ---------------------------------------------------
+# `console/core/storage.py` consolidates every console-written artifact under
+# one root with named areas. It is entirely generated: runs, minted policies,
+# captured worlds, logs, check results, dispatch scratch and native server
+# state. None of it is source.
+/storage/

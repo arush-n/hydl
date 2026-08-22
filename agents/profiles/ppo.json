@@ -1,0 +1,11 @@
+{
+  "title": "PPO · shared training archive",
+  "agent": "ppo",
+  "architecture": "jax-ppo",
+  "contract": {
+    "archive": "artifacts/console/shared/ppo",
+    "ownership": "generic PPO training, evaluation, and replay receipts",
+    "selection": "individual checkpoints retain their own promotion status"
+  },
+  "notes": "Stable archive owner for PPO curricula and evaluations. Archived checkpoints remain candidates until their task-specific fidelity and promotion gates pass."
+}

@@ -1,0 +1,10 @@
+{
+  "title": "Combat PPO 64/128",
+  "agent": "combat",
+  "architecture": "ppo",
+  "network": {"encoder": 64, "recurrent": 128},
+  "contract": {"observation": 8271, "actions": 99, "heads": 12},
+  "hyperparameters": {"learning_rate": 0.0003, "clip": 0.2, "gamma": 0.99, "entropy": 0.01},
+  "notes": "Asymmetric encoder/recurrent widths are deliberate; the 64/128 shape is supported by the Java policy contract.",
+  "suggested_run": {"loadout": "iron_sword", "opponent": "iron_sword", "world": "region", "zone": "974971448:42", "decision_period": 6}
+}

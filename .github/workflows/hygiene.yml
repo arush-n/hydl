@@ -1,0 +1,64 @@
+name: hygiene
+
+# Deliberately narrow. This workflow verifies publication boundaries and the
+# lint contract on a clean runner.
+#
+# The test suites are contributor material and are not part of the publication
+# set, so this workflow does not claim test coverage. If the suites become part
+# of a release, add a test job that installs the declared dependencies and
+# asserts that a nonzero test set was collected.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  publication-hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Asserts that decompiled Hytale sources, plugin jars, server installs and
+      # capture trees stay unpublishable, and that real source and documentation
+      # stay trackable. Exits nonzero on either failure.
+      - name: Publication hygiene
+        run: python tools/check_publication_hygiene.py
+
+      # Defense in depth: catch a decompiled tree even if the hygiene list is
+      # incomplete.
+      - name: No decompiled sources committed
+        run: |
+          if git ls-files | grep -E '(^|/)decompiled/' ; then
+            echo "::error::decompiled Hytale sources are committed -- see LICENSE"
+            exit 1
+          fi
+          echo "ok: no decompiled sources in the index"
+
+      # The Gradle wrapper jar is the one deliberate exception: `.gitignore`
+      # un-ignores it explicitly (`!hytale-plugin/gradle/wrapper/gradle-wrapper.jar`)
+      # because `./gradlew` cannot bootstrap without it. Every other jar -- the
+      # Hytale server, plugin build output, bridge artifacts -- stays out.
+      - name: No jars committed (except the Gradle wrapper)
+        run: |
+          if git ls-files | grep -E '\.jar$' | grep -v -E '(^|/)gradle/wrapper/gradle-wrapper\.jar$' ; then
+            echo "::error::jar files are committed"
+            exit 1
+          fi
+          echo "ok: no jars in the index beyond the Gradle wrapper"
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      # Keep this list in step with `[tool.ruff] include` in pyproject.toml so
+      # every published Python tree is checked.
+      - run: ruff check arena agents console tools adk npc worlds

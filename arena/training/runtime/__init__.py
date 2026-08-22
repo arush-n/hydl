@@ -1,0 +1,118 @@
+"""Shared execution, tuning, and audit contracts for JAX training."""
+
+from arena.training.runtime.execution import (
+    REPLICATED_TRAINING_SCHEMA,
+    ReplicatedExecution,
+    make_replicated_step,
+    recommended_replicas,
+    repeated_keys,
+    split_replicas,
+    stack_replicas,
+)
+from arena.training.runtime.evaluation import (
+    ASYNC_EVALUATION_SCHEMA,
+    AsyncEvaluationQueue,
+    EvaluationTicket,
+    immutable_host_snapshot,
+)
+from arena.training.runtime.audit import (
+    AuditFlag,
+    REWARD_AUDIT_SCHEMA,
+    RewardAudit,
+    TrialResult,
+    audit_reward,
+)
+from arena.training.runtime.contracts import (
+    ENVIRONMENT_TRAINING_PROFILE_SCHEMA,
+    EnvironmentTrainingProfile,
+    MetricSpec,
+    StopLossSpec,
+    TRAINING_CONTRACT_SCHEMA,
+    TRAINING_CONTRACT_VERSION,
+    TRAINING_FEATURE_SCHEMA,
+    TrainingContract,
+    TrainingContractBuilder,
+    TrainingFeature,
+    require_supported_contract,
+)
+from arena.training.runtime.features import (
+    ComposedFeatureStep,
+    FeatureStep,
+    JAX_TRAINING_FEATURE_PROGRAM_SCHEMA,
+    JaxFeatureProgram,
+    JaxTrainingFeature,
+    compose_jax_features,
+)
+from arena.training.runtime.starter import (
+    ExecutionRequest,
+    RECURSIVE_TRAINING_SCHEMA,
+    RecursiveTrainingConfig,
+    StopPolicy,
+    TrainingAdapter,
+    train,
+)
+from arena.training.runtime.monitor import (
+    TRAINING_EVENT_SCHEMA,
+    TRAINING_STATUS_SCHEMA,
+    TrainingEvent,
+    TrainingMonitor,
+    open_training_monitor,
+)
+from arena.training.runtime.tuning import (
+    TUNING_SCHEMA,
+    TuningProposal,
+    propose_parameters,
+    trial_utility,
+)
+
+
+__all__ = [
+    "ASYNC_EVALUATION_SCHEMA",
+    "AsyncEvaluationQueue",
+    "AuditFlag",
+    "ComposedFeatureStep",
+    "ENVIRONMENT_TRAINING_PROFILE_SCHEMA",
+    "EnvironmentTrainingProfile",
+    "EvaluationTicket",
+    "ExecutionRequest",
+    "FeatureStep",
+    "JAX_TRAINING_FEATURE_PROGRAM_SCHEMA",
+    "JaxFeatureProgram",
+    "JaxTrainingFeature",
+    "MetricSpec",
+    "RECURSIVE_TRAINING_SCHEMA",
+    "REPLICATED_TRAINING_SCHEMA",
+    "REWARD_AUDIT_SCHEMA",
+    "ReplicatedExecution",
+    "RecursiveTrainingConfig",
+    "RewardAudit",
+    "StopPolicy",
+    "StopLossSpec",
+    "TRAINING_CONTRACT_SCHEMA",
+    "TRAINING_CONTRACT_VERSION",
+    "TRAINING_FEATURE_SCHEMA",
+    "TRAINING_EVENT_SCHEMA",
+    "TRAINING_STATUS_SCHEMA",
+    "TUNING_SCHEMA",
+    "TrainingAdapter",
+    "TrainingContract",
+    "TrainingContractBuilder",
+    "TrainingEvent",
+    "TrainingMonitor",
+    "TrialResult",
+    "TrainingFeature",
+    "TuningProposal",
+    "audit_reward",
+    "compose_jax_features",
+    "immutable_host_snapshot",
+    "make_replicated_step",
+    "open_training_monitor",
+    "propose_parameters",
+    "recommended_replicas",
+    "repeated_keys",
+    "require_supported_contract",
+    "split_replicas",
+    "stack_replicas",
+    "train",
+    "trial_utility",
+]

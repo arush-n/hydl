@@ -1,0 +1,10 @@
+{
+  "title": "Basic \u00b7 recurrent pursuit",
+  "agent": "basic",
+  "architecture": "hytalegym-jax-recurrent-factored-policy",
+  "contract": {
+    "ownership": "Basic movement, tracking, pursuit training, and replay receipts",
+    "selection": "candidate checkpoints require task-specific fidelity and promotion gates"
+  },
+  "notes": "Foundation agent for later JAX combat and self-play curricula."
+}

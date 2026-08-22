@@ -1,0 +1,7 @@
+{
+  "title": "PPO",
+  "architecture": "JAX PPO",
+  "summary": "Worldgen and combat policy experiments whose summaries declare runtime and contract evidence.",
+  "metrics": ["total_loss", "policy_loss", "value_loss", "entropy"],
+  "streams": ["ppo-*"]
+}

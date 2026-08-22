@@ -1,0 +1,1507 @@
+{
+  "schema": "hytalerl_combat_item_program_catalog_v1",
+  "version": 1,
+  "hytale_version": "0.5.7",
+  "assets_sha256": "1B8802C284C228AE4549DAC037716C175BC6B94B0FC9AAC2B7039AC6BD2FFD5D",
+  "combat_asset_catalog_sha256": "E1F71C9164ABB156FC0519F2E960ADF1CD2506CB3024462E9BB2380178B9CB57",
+  "native_evidence_schema": "hytalerl_native_item_interaction_evidence_v3",
+  "native_evidence_version": 3,
+  "semantic_sha256": "5F4F19652496CF3FC1BD54E31DEA52AE1044FC1C4F03A903C875843394211E60",
+  "program_capacity_per_ability": 1,
+  "game_modes": {
+    "any": -1,
+    "adventure": 0
+  },
+  "weapon_items": [
+    {
+      "item_asset_id": "Weapon_Axe_Adamantite",
+      "max_durability": 150.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Axe/Weapon_Axe_Adamantite.json"
+    },
+    {
+      "item_asset_id": "Weapon_Axe_Bone",
+      "max_durability": 75.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Axe/Weapon_Axe_Bone.json"
+    },
+    {
+      "item_asset_id": "Weapon_Axe_Cobalt",
+      "max_durability": 140.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Axe/Weapon_Axe_Cobalt.json"
+    },
+    {
+      "item_asset_id": "Weapon_Axe_Copper",
+      "max_durability": 90.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Axe/Weapon_Axe_Copper.json"
+    },
+    {
+      "item_asset_id": "Weapon_Axe_Doomed",
+      "max_durability": 135.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Axe/Weapon_Axe_Doomed.json"
+    },
+    {
+      "item_asset_id": "Weapon_Axe_Iron",
+      "max_durability": 120.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Axe/Weapon_Axe_Iron.json"
+    },
+    {
+      "item_asset_id": "Weapon_Axe_Iron_Rusty",
+      "max_durability": 81.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Axe/Weapon_Axe_Iron_Rusty.json"
+    },
+    {
+      "item_asset_id": "Weapon_Axe_Mithril",
+      "max_durability": 160.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Axe/Weapon_Axe_Mithril.json"
+    },
+    {
+      "item_asset_id": "Weapon_Axe_Onyxium",
+      "max_durability": 170.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Axe/Weapon_Axe_Onyxium.json"
+    },
+    {
+      "item_asset_id": "Weapon_Axe_Stone_Trork",
+      "max_durability": 45.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Axe/Weapon_Axe_Stone_Trork.json"
+    },
+    {
+      "item_asset_id": "Weapon_Axe_Thorium",
+      "max_durability": 130.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Axe/Weapon_Axe_Thorium.json"
+    },
+    {
+      "item_asset_id": "Weapon_Axe_Tribal",
+      "max_durability": 120.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Axe/Weapon_Axe_Tribal.json"
+    },
+    {
+      "item_asset_id": "Weapon_Battleaxe_Adamantite",
+      "max_durability": 180.0,
+      "durability_loss_on_hit": 0.45,
+      "source_path": "Server/Item/Items/Weapon/Battleaxe/Weapon_Battleaxe_Adamantite.json"
+    },
+    {
+      "item_asset_id": "Weapon_Battleaxe_Cobalt",
+      "max_durability": 150.0,
+      "durability_loss_on_hit": 0.45,
+      "source_path": "Server/Item/Items/Weapon/Battleaxe/Weapon_Battleaxe_Cobalt.json"
+    },
+    {
+      "item_asset_id": "Weapon_Battleaxe_Copper",
+      "max_durability": 100.0,
+      "durability_loss_on_hit": 0.45,
+      "source_path": "Server/Item/Items/Weapon/Battleaxe/Weapon_Battleaxe_Copper.json"
+    },
+    {
+      "item_asset_id": "Weapon_Battleaxe_Crude",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.45,
+      "source_path": "Server/Item/Items/Weapon/Battleaxe/Weapon_Battleaxe_Crude.json"
+    },
+    {
+      "item_asset_id": "Weapon_Battleaxe_Doomed",
+      "max_durability": 75.0,
+      "durability_loss_on_hit": 0.45,
+      "source_path": "Server/Item/Items/Weapon/Battleaxe/Weapon_Battleaxe_Doomed.json"
+    },
+    {
+      "item_asset_id": "Weapon_Battleaxe_Iron",
+      "max_durability": 120.0,
+      "durability_loss_on_hit": 0.45,
+      "source_path": "Server/Item/Items/Weapon/Battleaxe/Weapon_Battleaxe_Iron.json"
+    },
+    {
+      "item_asset_id": "Weapon_Battleaxe_Mithril",
+      "max_durability": 220.0,
+      "durability_loss_on_hit": 0.45,
+      "source_path": "Server/Item/Items/Weapon/Battleaxe/Weapon_Battleaxe_Mithril.json"
+    },
+    {
+      "item_asset_id": "Weapon_Battleaxe_Onyxium",
+      "max_durability": 220.0,
+      "durability_loss_on_hit": 0.3,
+      "source_path": "Server/Item/Items/Weapon/Battleaxe/Weapon_Battleaxe_Onyxium.json"
+    },
+    {
+      "item_asset_id": "Weapon_Battleaxe_Scarab",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.45,
+      "source_path": "Server/Item/Items/Weapon/Battleaxe/Template_Weapon_Battleaxe.json"
+    },
+    {
+      "item_asset_id": "Weapon_Battleaxe_Scythe_Void",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.45,
+      "source_path": "Server/Item/Items/Weapon/Battleaxe/Template_Weapon_Battleaxe.json"
+    },
+    {
+      "item_asset_id": "Weapon_Battleaxe_Steel_Rusty",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.45,
+      "source_path": "Server/Item/Items/Weapon/Battleaxe/Template_Weapon_Battleaxe.json"
+    },
+    {
+      "item_asset_id": "Weapon_Battleaxe_Stone_Trork",
+      "max_durability": 60.0,
+      "durability_loss_on_hit": 0.45,
+      "source_path": "Server/Item/Items/Weapon/Battleaxe/Weapon_Battleaxe_Stone_Trork.json"
+    },
+    {
+      "item_asset_id": "Weapon_Battleaxe_Thorium",
+      "max_durability": 150.0,
+      "durability_loss_on_hit": 0.45,
+      "source_path": "Server/Item/Items/Weapon/Battleaxe/Weapon_Battleaxe_Thorium.json"
+    },
+    {
+      "item_asset_id": "Weapon_Battleaxe_Tribal",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.45,
+      "source_path": "Server/Item/Items/Weapon/Battleaxe/Template_Weapon_Battleaxe.json"
+    },
+    {
+      "item_asset_id": "Weapon_Battleaxe_Wood_Fence",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.45,
+      "source_path": "Server/Item/Items/Weapon/Battleaxe/Template_Weapon_Battleaxe.json"
+    },
+    {
+      "item_asset_id": "Weapon_Blowgun_Tribal",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Template_Weapon_Sword.json"
+    },
+    {
+      "item_asset_id": "Weapon_Claws_Tribal",
+      "max_durability": 68.0,
+      "durability_loss_on_hit": 0.24,
+      "source_path": "Server/Item/Items/Weapon/Claws/Weapon_Claws_Tribal.json"
+    },
+    {
+      "item_asset_id": "Weapon_Club_Adamantite",
+      "max_durability": 150.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Club/Weapon_Club_Adamantite.json"
+    },
+    {
+      "item_asset_id": "Weapon_Club_Cobalt",
+      "max_durability": 140.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Club/Weapon_Club_Cobalt.json"
+    },
+    {
+      "item_asset_id": "Weapon_Club_Copper",
+      "max_durability": 90.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Club/Weapon_Club_Copper.json"
+    },
+    {
+      "item_asset_id": "Weapon_Club_Crude",
+      "max_durability": 60.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Club/Weapon_Club_Crude.json"
+    },
+    {
+      "item_asset_id": "Weapon_Club_Doomed",
+      "max_durability": 135.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Club/Weapon_Club_Doomed.json"
+    },
+    {
+      "item_asset_id": "Weapon_Club_Iron",
+      "max_durability": 120.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Club/Weapon_Club_Iron.json"
+    },
+    {
+      "item_asset_id": "Weapon_Club_Iron_Rusty",
+      "max_durability": 81.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Club/Weapon_Club_Iron_Rusty.json"
+    },
+    {
+      "item_asset_id": "Weapon_Club_Mithril",
+      "max_durability": 160.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Club/Weapon_Club_Mithril.json"
+    },
+    {
+      "item_asset_id": "Weapon_Club_Onyxium",
+      "max_durability": 170.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Club/Weapon_Club_Onyxium.json"
+    },
+    {
+      "item_asset_id": "Weapon_Club_Scrap",
+      "max_durability": 45.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Club/Weapon_Club_Scrap.json"
+    },
+    {
+      "item_asset_id": "Weapon_Club_Steel_Flail_Rusty",
+      "max_durability": 81.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Club/Weapon_Club_Steel_Flail_Rusty.json"
+    },
+    {
+      "item_asset_id": "Weapon_Club_Stone_Trork",
+      "max_durability": 45.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Club/Weapon_Club_Stone_Trork.json"
+    },
+    {
+      "item_asset_id": "Weapon_Club_Thorium",
+      "max_durability": 130.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Club/Weapon_Club_Thorium.json"
+    },
+    {
+      "item_asset_id": "Weapon_Club_Tribal",
+      "max_durability": 120.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Club/Weapon_Club_Tribal.json"
+    },
+    {
+      "item_asset_id": "Weapon_Club_Zombie_Arm",
+      "max_durability": 16.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Club/Weapon_Club_Zombie_Arm.json"
+    },
+    {
+      "item_asset_id": "Weapon_Club_Zombie_Burnt_Arm",
+      "max_durability": 16.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Club/Weapon_Club_Zombie_Burnt_Arm.json"
+    },
+    {
+      "item_asset_id": "Weapon_Club_Zombie_Burnt_Leg",
+      "max_durability": 16.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Club/Weapon_Club_Zombie_Burnt_Leg.json"
+    },
+    {
+      "item_asset_id": "Weapon_Club_Zombie_Frost_Arm",
+      "max_durability": 16.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Club/Weapon_Club_Zombie_Frost_Arm.json"
+    },
+    {
+      "item_asset_id": "Weapon_Club_Zombie_Frost_Leg",
+      "max_durability": 16.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Club/Weapon_Club_Zombie_Frost_Leg.json"
+    },
+    {
+      "item_asset_id": "Weapon_Club_Zombie_Leg",
+      "max_durability": 16.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Club/Weapon_Club_Zombie_Leg.json"
+    },
+    {
+      "item_asset_id": "Weapon_Club_Zombie_Sand_Arm",
+      "max_durability": 16.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Club/Weapon_Club_Zombie_Sand_Arm.json"
+    },
+    {
+      "item_asset_id": "Weapon_Club_Zombie_Sand_Leg",
+      "max_durability": 16.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Club/Weapon_Club_Zombie_Sand_Leg.json"
+    },
+    {
+      "item_asset_id": "Weapon_Crossbow_Ancient_Steel",
+      "max_durability": 180.0,
+      "durability_loss_on_hit": 0.28,
+      "source_path": "Server/Item/Items/Weapon/Crossbow/Weapon_Crossbow_Ancient_Steel.json"
+    },
+    {
+      "item_asset_id": "Weapon_Crossbow_Iron",
+      "max_durability": 120.0,
+      "durability_loss_on_hit": 0.28,
+      "source_path": "Server/Item/Items/Weapon/Crossbow/Weapon_Crossbow_Iron.json"
+    },
+    {
+      "item_asset_id": "Weapon_Daggers_Adamantite",
+      "max_durability": 180.0,
+      "durability_loss_on_hit": 0.1,
+      "source_path": "Server/Item/Items/Weapon/Daggers/Weapon_Daggers_Adamantite.json"
+    },
+    {
+      "item_asset_id": "Weapon_Daggers_Adamantite_Saurian",
+      "max_durability": 180.0,
+      "durability_loss_on_hit": 0.1,
+      "source_path": "Server/Item/Items/Weapon/Daggers/Weapon_Daggers_Adamantite_Saurian.json"
+    },
+    {
+      "item_asset_id": "Weapon_Daggers_Bone",
+      "max_durability": 75.0,
+      "durability_loss_on_hit": 0.1,
+      "source_path": "Server/Item/Items/Weapon/Daggers/Weapon_Daggers_Bone.json"
+    },
+    {
+      "item_asset_id": "Weapon_Daggers_Bronze",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.1,
+      "source_path": "Server/Item/Items/Weapon/Daggers/Template_Weapon_Daggers.json"
+    },
+    {
+      "item_asset_id": "Weapon_Daggers_Bronze_Ancient",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.1,
+      "source_path": "Server/Item/Items/Weapon/Daggers/Template_Weapon_Daggers.json"
+    },
+    {
+      "item_asset_id": "Weapon_Daggers_Claw_Bone",
+      "max_durability": 75.0,
+      "durability_loss_on_hit": 0.1,
+      "source_path": "Server/Item/Items/Weapon/Daggers/Weapon_Daggers_Claw_Bone.json"
+    },
+    {
+      "item_asset_id": "Weapon_Daggers_Cobalt",
+      "max_durability": 150.0,
+      "durability_loss_on_hit": 0.1,
+      "source_path": "Server/Item/Items/Weapon/Daggers/Weapon_Daggers_Cobalt.json"
+    },
+    {
+      "item_asset_id": "Weapon_Daggers_Copper",
+      "max_durability": 100.0,
+      "durability_loss_on_hit": 0.1,
+      "source_path": "Server/Item/Items/Weapon/Daggers/Weapon_Daggers_Copper.json"
+    },
+    {
+      "item_asset_id": "Weapon_Daggers_Crude",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.1,
+      "source_path": "Server/Item/Items/Weapon/Daggers/Weapon_Daggers_Crude.json"
+    },
+    {
+      "item_asset_id": "Weapon_Daggers_Doomed",
+      "max_durability": 75.0,
+      "durability_loss_on_hit": 0.1,
+      "source_path": "Server/Item/Items/Weapon/Daggers/Weapon_Daggers_Doomed.json"
+    },
+    {
+      "item_asset_id": "Weapon_Daggers_Fang_Doomed",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.1,
+      "source_path": "Server/Item/Items/Weapon/Daggers/Template_Weapon_Daggers.json"
+    },
+    {
+      "item_asset_id": "Weapon_Daggers_Iron",
+      "max_durability": 120.0,
+      "durability_loss_on_hit": 0.1,
+      "source_path": "Server/Item/Items/Weapon/Daggers/Weapon_Daggers_Iron.json"
+    },
+    {
+      "item_asset_id": "Weapon_Daggers_Mithril",
+      "max_durability": 220.0,
+      "durability_loss_on_hit": 0.1,
+      "source_path": "Server/Item/Items/Weapon/Daggers/Weapon_Daggers_Mithril.json"
+    },
+    {
+      "item_asset_id": "Weapon_Daggers_Onyxium",
+      "max_durability": 220.0,
+      "durability_loss_on_hit": 0.1,
+      "source_path": "Server/Item/Items/Weapon/Daggers/Weapon_Daggers_Onyxium.json"
+    },
+    {
+      "item_asset_id": "Weapon_Daggers_Stone_Trork",
+      "max_durability": 60.0,
+      "durability_loss_on_hit": 0.1,
+      "source_path": "Server/Item/Items/Weapon/Daggers/Weapon_Daggers_Stone_Trork.json"
+    },
+    {
+      "item_asset_id": "Weapon_Daggers_Thorium",
+      "max_durability": 150.0,
+      "durability_loss_on_hit": 0.1,
+      "source_path": "Server/Item/Items/Weapon/Daggers/Weapon_Daggers_Thorium.json"
+    },
+    {
+      "item_asset_id": "Weapon_Longsword_Adamantite",
+      "max_durability": 150.0,
+      "durability_loss_on_hit": 0.52,
+      "source_path": "Server/Item/Items/Weapon/Longsword/Weapon_Longsword_Adamantite.json"
+    },
+    {
+      "item_asset_id": "Weapon_Longsword_Adamantite_Saurian",
+      "max_durability": 100.0,
+      "durability_loss_on_hit": 0.52,
+      "source_path": "Server/Item/Items/Weapon/Longsword/Weapon_Longsword_Adamantite_Saurian.json"
+    },
+    {
+      "item_asset_id": "Weapon_Longsword_Cobalt",
+      "max_durability": 140.0,
+      "durability_loss_on_hit": 0.52,
+      "source_path": "Server/Item/Items/Weapon/Longsword/Weapon_Longsword_Cobalt.json"
+    },
+    {
+      "item_asset_id": "Weapon_Longsword_Copper",
+      "max_durability": 90.0,
+      "durability_loss_on_hit": 0.52,
+      "source_path": "Server/Item/Items/Weapon/Longsword/Weapon_Longsword_Copper.json"
+    },
+    {
+      "item_asset_id": "Weapon_Longsword_Crude",
+      "max_durability": 60.0,
+      "durability_loss_on_hit": 0.52,
+      "source_path": "Server/Item/Items/Weapon/Longsword/Weapon_Longsword_Crude.json"
+    },
+    {
+      "item_asset_id": "Weapon_Longsword_Iron",
+      "max_durability": 120.0,
+      "durability_loss_on_hit": 0.52,
+      "source_path": "Server/Item/Items/Weapon/Longsword/Weapon_Longsword_Iron.json"
+    },
+    {
+      "item_asset_id": "Weapon_Longsword_Katana",
+      "max_durability": 125.0,
+      "durability_loss_on_hit": 0.52,
+      "source_path": "Server/Item/Items/Weapon/Longsword/Weapon_Longsword_Katana.json"
+    },
+    {
+      "item_asset_id": "Weapon_Longsword_Mithril",
+      "max_durability": 160.0,
+      "durability_loss_on_hit": 0.52,
+      "source_path": "Server/Item/Items/Weapon/Longsword/Weapon_Longsword_Mithril.json"
+    },
+    {
+      "item_asset_id": "Weapon_Longsword_Onyxium",
+      "max_durability": 170.0,
+      "durability_loss_on_hit": 0.52,
+      "source_path": "Server/Item/Items/Weapon/Longsword/Weapon_Longsword_Onyxium.json"
+    },
+    {
+      "item_asset_id": "Weapon_Longsword_Praetorian",
+      "max_durability": 200.0,
+      "durability_loss_on_hit": 0.52,
+      "source_path": "Server/Item/Items/Weapon/Longsword/Weapon_Longsword_Praetorian.json"
+    },
+    {
+      "item_asset_id": "Weapon_Longsword_Praetorian_NPC",
+      "max_durability": 200.0,
+      "durability_loss_on_hit": 0.52,
+      "source_path": "Server/Item/Items/Weapon/Longsword/Weapon_Longsword_Praetorian.json"
+    },
+    {
+      "item_asset_id": "Weapon_Longsword_Scarab",
+      "max_durability": 100.0,
+      "durability_loss_on_hit": 0.52,
+      "source_path": "Server/Item/Items/Weapon/Longsword/Weapon_Longsword_Scarab.json"
+    },
+    {
+      "item_asset_id": "Weapon_Longsword_Spectral",
+      "max_durability": 100.0,
+      "durability_loss_on_hit": 0.52,
+      "source_path": "Server/Item/Items/Weapon/Longsword/Weapon_Longsword_Spectral.json"
+    },
+    {
+      "item_asset_id": "Weapon_Longsword_Stone_Trork",
+      "max_durability": 40.0,
+      "durability_loss_on_hit": 0.52,
+      "source_path": "Server/Item/Items/Weapon/Longsword/Weapon_Longsword_Stone_Trork.json"
+    },
+    {
+      "item_asset_id": "Weapon_Longsword_Thorium",
+      "max_durability": 130.0,
+      "durability_loss_on_hit": 0.52,
+      "source_path": "Server/Item/Items/Weapon/Longsword/Weapon_Longsword_Thorium.json"
+    },
+    {
+      "item_asset_id": "Weapon_Longsword_Tribal",
+      "max_durability": 125.0,
+      "durability_loss_on_hit": 0.52,
+      "source_path": "Server/Item/Items/Weapon/Longsword/Weapon_Longsword_Tribal.json"
+    },
+    {
+      "item_asset_id": "Weapon_Longsword_Void",
+      "max_durability": 158.0,
+      "durability_loss_on_hit": 0.42,
+      "source_path": "Server/Item/Items/Weapon/Longsword/Weapon_Longsword_Void.json"
+    },
+    {
+      "item_asset_id": "Weapon_Mace_Adamantite",
+      "max_durability": 180.0,
+      "durability_loss_on_hit": 0.5,
+      "source_path": "Server/Item/Items/Weapon/Mace/Weapon_Mace_Adamantite.json"
+    },
+    {
+      "item_asset_id": "Weapon_Mace_Cobalt",
+      "max_durability": 150.0,
+      "durability_loss_on_hit": 0.5,
+      "source_path": "Server/Item/Items/Weapon/Mace/Weapon_Mace_Cobalt.json"
+    },
+    {
+      "item_asset_id": "Weapon_Mace_Copper",
+      "max_durability": 100.0,
+      "durability_loss_on_hit": 0.5,
+      "source_path": "Server/Item/Items/Weapon/Mace/Weapon_Mace_Copper.json"
+    },
+    {
+      "item_asset_id": "Weapon_Mace_Crude",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.5,
+      "source_path": "Server/Item/Items/Weapon/Mace/Weapon_Mace_Crude.json"
+    },
+    {
+      "item_asset_id": "Weapon_Mace_Iron",
+      "max_durability": 120.0,
+      "durability_loss_on_hit": 0.5,
+      "source_path": "Server/Item/Items/Weapon/Mace/Weapon_Mace_Iron.json"
+    },
+    {
+      "item_asset_id": "Weapon_Mace_Mithril",
+      "max_durability": 220.0,
+      "durability_loss_on_hit": 0.5,
+      "source_path": "Server/Item/Items/Weapon/Mace/Weapon_Mace_Mithril.json"
+    },
+    {
+      "item_asset_id": "Weapon_Mace_Onyxium",
+      "max_durability": 220.0,
+      "durability_loss_on_hit": 0.5,
+      "source_path": "Server/Item/Items/Weapon/Mace/Weapon_Mace_Onyxium.json"
+    },
+    {
+      "item_asset_id": "Weapon_Mace_Prisma",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.5,
+      "source_path": "Server/Item/Items/Weapon/Mace/Template_Weapon_Mace.json"
+    },
+    {
+      "item_asset_id": "Weapon_Mace_Scrap",
+      "max_durability": 50.0,
+      "durability_loss_on_hit": 0.5,
+      "source_path": "Server/Item/Items/Weapon/Mace/Weapon_Mace_Scrap.json"
+    },
+    {
+      "item_asset_id": "Weapon_Mace_Scrap_NPC",
+      "max_durability": 50.0,
+      "durability_loss_on_hit": 0.5,
+      "source_path": "Server/Item/Items/Weapon/Mace/Weapon_Mace_Scrap.json"
+    },
+    {
+      "item_asset_id": "Weapon_Mace_Stone_Trork",
+      "max_durability": 60.0,
+      "durability_loss_on_hit": 0.5,
+      "source_path": "Server/Item/Items/Weapon/Mace/Weapon_Mace_Stone_Trork.json"
+    },
+    {
+      "item_asset_id": "Weapon_Mace_Thorium",
+      "max_durability": 150.0,
+      "durability_loss_on_hit": 0.5,
+      "source_path": "Server/Item/Items/Weapon/Mace/Weapon_Mace_Thorium.json"
+    },
+    {
+      "item_asset_id": "Weapon_Shortbow_Adamantite",
+      "max_durability": 180.0,
+      "durability_loss_on_hit": 0.58,
+      "source_path": "Server/Item/Items/Weapon/Shortbow/Weapon_Shortbow_Adamantite.json"
+    },
+    {
+      "item_asset_id": "Weapon_Shortbow_Bronze",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.58,
+      "source_path": "Server/Item/Items/Weapon/Shortbow/Template_Weapon_Shortbow.json"
+    },
+    {
+      "item_asset_id": "Weapon_Shortbow_Cobalt",
+      "max_durability": 150.0,
+      "durability_loss_on_hit": 0.58,
+      "source_path": "Server/Item/Items/Weapon/Shortbow/Weapon_Shortbow_Cobalt.json"
+    },
+    {
+      "item_asset_id": "Weapon_Shortbow_Copper",
+      "max_durability": 100.0,
+      "durability_loss_on_hit": 0.58,
+      "source_path": "Server/Item/Items/Weapon/Shortbow/Weapon_Shortbow_Copper.json"
+    },
+    {
+      "item_asset_id": "Weapon_Shortbow_Crude",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.58,
+      "source_path": "Server/Item/Items/Weapon/Shortbow/Weapon_Shortbow_Crude.json"
+    },
+    {
+      "item_asset_id": "Weapon_Shortbow_Doomed",
+      "max_durability": 75.0,
+      "durability_loss_on_hit": 0.58,
+      "source_path": "Server/Item/Items/Weapon/Shortbow/Weapon_Shortbow_Doomed.json"
+    },
+    {
+      "item_asset_id": "Weapon_Shortbow_Flame",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.58,
+      "source_path": "Server/Item/Items/Weapon/Shortbow/Template_Weapon_Shortbow.json"
+    },
+    {
+      "item_asset_id": "Weapon_Shortbow_Frost",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.58,
+      "source_path": "Server/Item/Items/Weapon/Shortbow/Template_Weapon_Shortbow.json"
+    },
+    {
+      "item_asset_id": "Weapon_Shortbow_Iron",
+      "max_durability": 120.0,
+      "durability_loss_on_hit": 0.58,
+      "source_path": "Server/Item/Items/Weapon/Shortbow/Weapon_Shortbow_Iron.json"
+    },
+    {
+      "item_asset_id": "Weapon_Shortbow_Iron_Rusty",
+      "max_durability": 120.0,
+      "durability_loss_on_hit": 0.58,
+      "source_path": "Server/Item/Items/Weapon/Shortbow/Weapon_Shortbow_Iron_Rusty.json"
+    },
+    {
+      "item_asset_id": "Weapon_Shortbow_Mithril",
+      "max_durability": 220.0,
+      "durability_loss_on_hit": 0.58,
+      "source_path": "Server/Item/Items/Weapon/Shortbow/Weapon_Shortbow_Mithril.json"
+    },
+    {
+      "item_asset_id": "Weapon_Shortbow_Onyxium",
+      "max_durability": 220.0,
+      "durability_loss_on_hit": 0.58,
+      "source_path": "Server/Item/Items/Weapon/Shortbow/Weapon_Shortbow_Onyxium.json"
+    },
+    {
+      "item_asset_id": "Weapon_Shortbow_Thorium",
+      "max_durability": 150.0,
+      "durability_loss_on_hit": 0.58,
+      "source_path": "Server/Item/Items/Weapon/Shortbow/Weapon_Shortbow_Thorium.json"
+    },
+    {
+      "item_asset_id": "Weapon_Spear_Adamantite",
+      "max_durability": 45.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Spear/Weapon_Spear_Adamantite.json"
+    },
+    {
+      "item_asset_id": "Weapon_Spear_Copper",
+      "max_durability": 25.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Spear/Weapon_Spear_Copper.json"
+    },
+    {
+      "item_asset_id": "Weapon_Spear_Iron",
+      "max_durability": 30.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Spear/Weapon_Spear_Iron.json"
+    },
+    {
+      "item_asset_id": "Weapon_Spear_Leaf",
+      "max_durability": 50.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Spear/Weapon_Spear_Leaf.json"
+    },
+    {
+      "item_asset_id": "Weapon_Spear_Mithril",
+      "max_durability": 50.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Spear/Weapon_Spear_Mithril.json"
+    },
+    {
+      "item_asset_id": "Weapon_Spear_Tribal",
+      "max_durability": 30.0,
+      "durability_loss_on_hit": 0.56,
+      "source_path": "Server/Item/Items/Weapon/Spear/Weapon_Spear_Tribal.json"
+    },
+    {
+      "item_asset_id": "Weapon_Staff_Bone",
+      "max_durability": 75.0,
+      "durability_loss_on_hit": 0.0,
+      "source_path": "Server/Item/Items/Weapon/Staff/Weapon_Staff_Bone.json"
+    },
+    {
+      "item_asset_id": "Weapon_Staff_Crystal_Flame",
+      "max_durability": 300.0,
+      "durability_loss_on_hit": 0.5,
+      "source_path": "Server/Item/Items/Weapon/Staff/Weapon_Staff_Crystal_Flame.json"
+    },
+    {
+      "item_asset_id": "Weapon_Staff_Crystal_Ice",
+      "max_durability": 300.0,
+      "durability_loss_on_hit": 0.5,
+      "source_path": "Server/Item/Items/Weapon/Staff/Weapon_Staff_Crystal_Ice.json"
+    },
+    {
+      "item_asset_id": "Weapon_Sword_Adamantite",
+      "max_durability": 180.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Weapon_Sword_Adamantite.json"
+    },
+    {
+      "item_asset_id": "Weapon_Sword_Bone",
+      "max_durability": 75.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Weapon_Sword_Bone.json"
+    },
+    {
+      "item_asset_id": "Weapon_Sword_Bronze",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Template_Weapon_Sword.json"
+    },
+    {
+      "item_asset_id": "Weapon_Sword_Bronze_Ancient",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Template_Weapon_Sword.json"
+    },
+    {
+      "item_asset_id": "Weapon_Sword_Cobalt",
+      "max_durability": 150.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Weapon_Sword_Cobalt.json"
+    },
+    {
+      "item_asset_id": "Weapon_Sword_Copper",
+      "max_durability": 100.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Weapon_Sword_Copper.json"
+    },
+    {
+      "item_asset_id": "Weapon_Sword_Crude",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Weapon_Sword_Crude.json"
+    },
+    {
+      "item_asset_id": "Weapon_Sword_Cutlass",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Template_Weapon_Sword.json"
+    },
+    {
+      "item_asset_id": "Weapon_Sword_Doomed",
+      "max_durability": 75.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Weapon_Sword_Doomed.json"
+    },
+    {
+      "item_asset_id": "Weapon_Sword_Frost",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Template_Weapon_Sword.json"
+    },
+    {
+      "item_asset_id": "Weapon_Sword_Iron",
+      "max_durability": 120.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Weapon_Sword_Iron.json"
+    },
+    {
+      "item_asset_id": "Weapon_Sword_Mithril",
+      "max_durability": 220.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Weapon_Sword_Mithril.json"
+    },
+    {
+      "item_asset_id": "Weapon_Sword_Nexus",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Template_Weapon_Sword.json"
+    },
+    {
+      "item_asset_id": "Weapon_Sword_Onyxium",
+      "max_durability": 220.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Weapon_Sword_Onyxium.json"
+    },
+    {
+      "item_asset_id": "Weapon_Sword_Runic",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Template_Weapon_Sword.json"
+    },
+    {
+      "item_asset_id": "Weapon_Sword_Scrap",
+      "max_durability": 50.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Weapon_Sword_Scrap.json"
+    },
+    {
+      "item_asset_id": "Weapon_Sword_Silversteel",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Template_Weapon_Sword.json"
+    },
+    {
+      "item_asset_id": "Weapon_Sword_Steel",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Template_Weapon_Sword.json"
+    },
+    {
+      "item_asset_id": "Weapon_Sword_Steel_Incandescent",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Template_Weapon_Sword.json"
+    },
+    {
+      "item_asset_id": "Weapon_Sword_Steel_Rusty",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Template_Weapon_Sword.json"
+    },
+    {
+      "item_asset_id": "Weapon_Sword_Stone_Trork",
+      "max_durability": 60.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Weapon_Sword_Stone_Trork.json"
+    },
+    {
+      "item_asset_id": "Weapon_Sword_Thorium",
+      "max_durability": 150.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Weapon_Sword_Thorium.json"
+    },
+    {
+      "item_asset_id": "Weapon_Sword_Wood",
+      "max_durability": 80.0,
+      "durability_loss_on_hit": 0.21,
+      "source_path": "Server/Item/Items/Weapon/Sword/Template_Weapon_Sword.json"
+    }
+  ],
+  "templates": [
+    {
+      "id": "shortbow_primary_arrow",
+      "supported": true,
+      "status": "supported",
+      "failure_suppresses_all_ability_events": true,
+      "time_seconds": 0.0,
+      "dispatch_flags": 0,
+      "required_game_mode": 0,
+      "remove_item_asset_id": "Weapon_Arrow_Crude",
+      "remove_quantity": 1,
+      "adjust_held_item_quantity": 0,
+      "add_item_asset_id": "",
+      "add_quantity": 0,
+      "broken_item_asset_id": "",
+      "adjust_held_item_durability": 0.0,
+      "source_paths": [
+        "Server/Item/Interactions/Weapons/Shortbow/Primary/Shoot/Weapon_Shortbow_Primary_Shoot.json"
+      ],
+      "graph_position": "successful_primary_root_before_selected_strength_child"
+    },
+    {
+      "id": "crossbow_reload_required",
+      "supported": true,
+      "status": "supported",
+      "failure_suppresses_all_ability_events": true,
+      "time_seconds": 0.8,
+      "repeat_count": 6,
+      "authored_repeat_interval_seconds": 0.3,
+      "repeat_interval_seconds": 0.3333333333333333,
+      "repeat_continuations_after_ability_events": true,
+      "failure_delay_seconds": 0.25,
+      "required_resource_below_max_id": 5,
+      "completion_resource_id": 5,
+      "completion_delay_seconds": 0.25,
+      "training_seed_quantity": 6,
+      "dispatch_flags": 0,
+      "required_game_mode": 0,
+      "remove_item_asset_id": "Weapon_Arrow_Crude",
+      "remove_quantity": 1,
+      "adjust_held_item_quantity": 0,
+      "add_item_asset_id": "",
+      "add_quantity": 0,
+      "broken_item_asset_id": "",
+      "adjust_held_item_durability": 0.0,
+      "source_paths": [
+        "Server/Item/Items/Weapon/Crossbow/Template_Weapon_Crossbow.json",
+        "Server/Item/RootInteractions/Weapons/Crossbow/Root_Weapon_Crossbow_Primary_Signature.json",
+        "Server/Item/RootInteractions/Weapons/Common/Root_Common_StatAmmoReload_Entry.json",
+        "Server/Item/Interactions/Weapons/Common/StatAmmoReload/Common_StatAmmoReload_Entry.json",
+        "Server/Item/Interactions/Weapons/Common/StatAmmoReload/Common_StatAmmoReload_ItemConsume.json",
+        "Server/Item/Interactions/Weapons/Common/StatAmmoReload/Common_StatAmmoReload_Effects.json",
+        "Server/Item/Interactions/Weapons/Common/StatAmmoReload/Common_StatAmmoReload_StatModifier.json"
+      ],
+      "graph_position": "ability3_or_empty_primary_reload_repeat_after_0_8_second_startup"
+    },
+    {
+      "id": "flame_staff_cast",
+      "supported": true,
+      "status": "supported",
+      "failure_suppresses_all_ability_events": true,
+      "time_seconds": 0.0,
+      "dispatch_flags": 0,
+      "required_game_mode": 0,
+      "remove_item_asset_id": "Ingredient_Fire_Essence",
+      "remove_quantity": 1,
+      "adjust_held_item_quantity": 0,
+      "add_item_asset_id": "",
+      "add_quantity": 0,
+      "broken_item_asset_id": "",
+      "adjust_held_item_durability": -0.5,
+      "source_paths": [
+        "Server/Item/Interactions/Weapons/Stick/Magic/Primary/Charged_Projectiles/Weapon_Stick_Fire_Projectile_Charged_0.json",
+        "Server/Item/Interactions/Weapons/Stick/Magic/Primary/Charged_Projectiles/Weapon_Stick_Fire_Projectile_Charged_1.json",
+        "Server/Item/Interactions/Weapons/Stick/Magic/Primary/Charged_Projectiles/Weapon_Stick_Fire_Projectile_Charged_2.json",
+        "Server/Item/Interactions/Weapons/Stick/Magic/Primary/Charged_Projectiles/Weapon_Stick_Fire_Projectile_Charged_3.json"
+      ],
+      "graph_position": "selected_child_root_before_parallel_stat_and_projectile"
+    },
+    {
+      "id": "ice_staff_primary",
+      "supported": true,
+      "status": "supported",
+      "failure_suppresses_all_ability_events": true,
+      "time_seconds": 0.0,
+      "dispatch_flags": 0,
+      "required_game_mode": 0,
+      "remove_item_asset_id": "Ingredient_Ice_Essence",
+      "remove_quantity": 1,
+      "adjust_held_item_quantity": 0,
+      "add_item_asset_id": "",
+      "add_quantity": 0,
+      "broken_item_asset_id": "",
+      "adjust_held_item_durability": -0.5,
+      "source_paths": [
+        "Server/Item/Interactions/Weapons/Staff/Ice/Ice_Staff_Primary_Entry.json"
+      ],
+      "graph_position": "after_stats_condition_before_parallel_stat_and_projectile"
+    },
+    {
+      "id": "ice_staff_summon_launch",
+      "supported": true,
+      "status": "supported",
+      "failure_suppresses_all_ability_events": true,
+      "time_seconds": 1.167,
+      "dispatch_flags": 0,
+      "required_game_mode": 0,
+      "remove_item_asset_id": "Ingredient_Ice_Essence",
+      "remove_quantity": 1,
+      "adjust_held_item_quantity": 0,
+      "add_item_asset_id": "",
+      "add_quantity": 0,
+      "broken_item_asset_id": "",
+      "adjust_held_item_durability": -0.5,
+      "source_paths": [
+        "Server/Item/Items/Weapon/Staff/Weapon_Staff_Crystal_Ice.json"
+      ],
+      "graph_position": "resolved_staff_cast_summon_launch_after_charge_before_parallel"
+    },
+    {
+      "id": "bomb_standard_consume",
+      "supported": true,
+      "status": "supported",
+      "failure_suppresses_all_ability_events": false,
+      "time_seconds": 0.45,
+      "dispatch_flags": 0,
+      "required_game_mode": -1,
+      "remove_item_asset_id": "Weapon_Bomb",
+      "remove_quantity": 1,
+      "adjust_held_item_quantity": 0,
+      "add_item_asset_id": "",
+      "add_quantity": 0,
+      "broken_item_asset_id": "",
+      "adjust_held_item_durability": 0.0,
+      "source_paths": [
+        "Server/Item/Interactions/Weapons/Bomb/Bomb_Throw.json"
+      ],
+      "graph_position": "serial_after_0.25_animation_projectile_and_0.2_tail"
+    },
+    {
+      "id": "bomb_popberry_consume",
+      "supported": true,
+      "status": "supported",
+      "failure_suppresses_all_ability_events": false,
+      "time_seconds": 0.45,
+      "dispatch_flags": 0,
+      "required_game_mode": -1,
+      "remove_item_asset_id": "Weapon_Bomb_Popberry",
+      "remove_quantity": 1,
+      "adjust_held_item_quantity": 0,
+      "add_item_asset_id": "",
+      "add_quantity": 0,
+      "broken_item_asset_id": "",
+      "adjust_held_item_durability": 0.0,
+      "source_paths": [
+        "Server/Item/Interactions/Weapons/Bomb/Bomb_Throw_Popberry.json"
+      ],
+      "graph_position": "serial_after_0.25_animation_projectile_and_0.2_tail"
+    },
+    {
+      "id": "potion_fast_consume",
+      "supported": true,
+      "status": "supported",
+      "failure_suppresses_all_ability_events": true,
+      "time_seconds": 1.5,
+      "dispatch_flags": 0,
+      "required_game_mode": -1,
+      "remove_item_asset_id": "",
+      "remove_quantity": 0,
+      "adjust_held_item_quantity": -1,
+      "add_item_asset_id": "",
+      "add_quantity": 0,
+      "broken_item_asset_id": "",
+      "adjust_held_item_durability": 0.0,
+      "source_paths": [
+        "Server/Item/Interactions/Consumables/Consume_Charge_Potion_Fast.json"
+      ],
+      "graph_position": "charge_completion_threshold_1.5"
+    },
+    {
+      "id": "potion_fastest_consume",
+      "supported": true,
+      "status": "supported",
+      "failure_suppresses_all_ability_events": true,
+      "time_seconds": 0.5,
+      "dispatch_flags": 0,
+      "required_game_mode": -1,
+      "remove_item_asset_id": "",
+      "remove_quantity": 0,
+      "adjust_held_item_quantity": -1,
+      "add_item_asset_id": "",
+      "add_quantity": 0,
+      "broken_item_asset_id": "",
+      "adjust_held_item_durability": 0.0,
+      "source_paths": [
+        "Server/Item/Interactions/Consumables/Consume_Charge_Potion_Fastest.json"
+      ],
+      "graph_position": "charge_completion_threshold_0.5"
+    },
+    {
+      "id": "spear_charged_throw_consume",
+      "supported": true,
+      "status": "supported",
+      "failure_suppresses_all_ability_events": false,
+      "time_seconds": 1.0,
+      "time_origin": "requested_charge",
+      "dispatch_flags": 33554432,
+      "required_game_mode": -1,
+      "remove_item_asset_id": "",
+      "remove_quantity": 0,
+      "adjust_held_item_quantity": -1,
+      "add_item_asset_id": "",
+      "add_quantity": 0,
+      "broken_item_asset_id": "",
+      "adjust_held_item_durability": 0.0,
+      "source_paths": [
+        "Server/Item/Interactions/Weapons/Spear/Attacks/Throw_Charged/Spear_Throw_Charged.json"
+      ],
+      "graph_position": "second_parallel_branch_with_projectile_launch"
+    },
+    {
+      "id": "spellbook_cast_consume",
+      "supported": true,
+      "status": "supported",
+      "failure_suppresses_all_ability_events": false,
+      "time_seconds": 1.167,
+      "time_origin": "requested_charge",
+      "dispatch_flags": 33554432,
+      "required_game_mode": -1,
+      "remove_item_asset_id": "",
+      "remove_quantity": 0,
+      "adjust_held_item_quantity": -1,
+      "add_item_asset_id": "",
+      "add_quantity": 0,
+      "broken_item_asset_id": "",
+      "adjust_held_item_durability": 0.0,
+      "source_paths": [
+        "Server/Item/Interactions/Weapons/Spellbook/Spellbook_Cast_Cost.json"
+      ],
+      "graph_position": "cast_child_after_charge_and_prepare_delay_inside_parallel_cost_branch"
+    },
+    {
+      "id": "knife_throw_consume",
+      "supported": true,
+      "status": "supported",
+      "failure_suppresses_all_ability_events": false,
+      "time_seconds": 0.5,
+      "time_origin": "requested_charge",
+      "dispatch_flags": 33554432,
+      "required_game_mode": -1,
+      "remove_item_asset_id": "",
+      "remove_quantity": 0,
+      "adjust_held_item_quantity": -1,
+      "add_item_asset_id": "",
+      "add_quantity": 0,
+      "broken_item_asset_id": "",
+      "adjust_held_item_durability": 0.0,
+      "source_paths": [
+        "Server/Item/Interactions/Weapons/Knife/Attacks/Throw/Knife_Throw_Charged.json"
+      ],
+      "graph_position": "parallel_inventory_branch_at_charged_throw_threshold"
+    },
+    {
+      "id": "prototype_bow_primary_arrow",
+      "supported": true,
+      "status": "supported",
+      "failure_suppresses_all_ability_events": true,
+      "time_seconds": "ability_charge_time",
+      "dispatch_flags": 0,
+      "required_game_mode": 0,
+      "remove_item_asset_id": "Weapon_Arrow_Crude",
+      "remove_quantity": 1,
+      "adjust_held_item_quantity": 0,
+      "add_item_asset_id": "",
+      "add_quantity": 0,
+      "broken_item_asset_id": "",
+      "adjust_held_item_durability": 0.0,
+      "source_paths": [
+        "Server/Item/Interactions/Weapons/Bow/Prototype/CombatBow/Bow_Combat_Shoot_Interval.json",
+        "Server/Item/Interactions/Weapons/Bow/Deprecated/Attacks/Shoot/Bow_Shoot_Charging.json"
+      ],
+      "graph_position": "selected_charging_child_at_its_authored_release_threshold"
+    },
+    {
+      "id": "prototype_bow_trishot_arrows",
+      "supported": true,
+      "status": "supported",
+      "failure_suppresses_all_ability_events": true,
+      "time_seconds": 1.0,
+      "dispatch_flags": 0,
+      "required_game_mode": 0,
+      "remove_item_asset_id": "Weapon_Arrow_Crude",
+      "remove_quantity": 3,
+      "adjust_held_item_quantity": 0,
+      "add_item_asset_id": "",
+      "add_quantity": 0,
+      "broken_item_asset_id": "",
+      "adjust_held_item_durability": 0.0,
+      "source_paths": [
+        "Server/Item/Interactions/Weapons/Bow/Prototype/CombatBow/Bow_Combat_Trishot.json"
+      ],
+      "graph_position": "after_signature_energy_spend_before_three_projectile_children"
+    },
+    {
+      "id": "gunpvp_primary_arrow",
+      "supported": true,
+      "status": "supported",
+      "failure_suppresses_all_ability_events": true,
+      "time_seconds": 0.0,
+      "dispatch_flags": 0,
+      "required_game_mode": 0,
+      "remove_item_asset_id": "Weapon_Arrow_Crude",
+      "remove_quantity": 1,
+      "adjust_held_item_quantity": 0,
+      "add_item_asset_id": "",
+      "add_quantity": 0,
+      "broken_item_asset_id": "",
+      "adjust_held_item_durability": 0.0,
+      "source_paths": [
+        "Server/Item/Items/Hypixel/Minigames/GunPvP/Weapon_Assault_Rifle.json",
+        "Server/Item/Items/Hypixel/Minigames/GunPvP/Weapon_Handgun.json"
+      ],
+      "graph_position": "adventure_primary_before_zero_runtime_gun_shoot_child"
+    }
+  ],
+  "bindings": [
+    {
+      "profile": "iron_shortbow",
+      "ability_asset_id": "Weapon_Shortbow_Primary_Shoot_Strength_0",
+      "template": "shortbow_primary_arrow"
+    },
+    {
+      "profile": "iron_shortbow",
+      "ability_asset_id": "Weapon_Shortbow_Primary_Shoot_Strength_1",
+      "template": "shortbow_primary_arrow"
+    },
+    {
+      "profile": "iron_shortbow",
+      "ability_asset_id": "Weapon_Shortbow_Primary_Shoot_Strength_2",
+      "template": "shortbow_primary_arrow"
+    },
+    {
+      "profile": "iron_shortbow",
+      "ability_asset_id": "Weapon_Shortbow_Primary_Shoot_Strength_3",
+      "template": "shortbow_primary_arrow"
+    },
+    {
+      "profile": "iron_shortbow",
+      "ability_asset_id": "Weapon_Shortbow_Primary_Shoot_Strength_4",
+      "template": "shortbow_primary_arrow"
+    },
+    {
+      "profile": "iron_crossbow",
+      "ability_asset_id": "Root_Common_StatAmmoReload_Entry",
+      "template": "crossbow_reload_required"
+    },
+    {
+      "profile": "flame_staff",
+      "ability_asset_id": "Weapon_Stick_Fire_Projectile_Charged_0",
+      "template": "flame_staff_cast"
+    },
+    {
+      "profile": "flame_staff",
+      "ability_asset_id": "Weapon_Stick_Fire_Projectile_Charged_1",
+      "template": "flame_staff_cast"
+    },
+    {
+      "profile": "flame_staff",
+      "ability_asset_id": "Weapon_Stick_Fire_Projectile_Charged_2",
+      "template": "flame_staff_cast"
+    },
+    {
+      "profile": "flame_staff",
+      "ability_asset_id": "Weapon_Stick_Fire_Projectile_Charged_3",
+      "template": "flame_staff_cast"
+    },
+    {
+      "profile": "ice_staff",
+      "ability_asset_id": "Ice_Staff_Primary_Entry",
+      "template": "ice_staff_primary"
+    },
+    {
+      "profile": "ice_staff",
+      "ability_asset_id": "Staff_Cast_Summon_Launch_Ice_Ball",
+      "template": "ice_staff_summon_launch"
+    },
+    {
+      "profile": "bombs",
+      "ability_asset_id": "Bomb_Throw",
+      "template": "bomb_standard_consume"
+    },
+    {
+      "profile": "bombs",
+      "ability_asset_id": "Bomb_Throw_Popberry",
+      "template": "bomb_popberry_consume"
+    },
+    {
+      "profile": "potions",
+      "ability_asset_id": "Potion_Health",
+      "template": "potion_fast_consume"
+    },
+    {
+      "profile": "potions",
+      "ability_asset_id": "Potion_Stamina",
+      "template": "potion_fastest_consume"
+    },
+    {
+      "profile": "potions",
+      "ability_asset_id": "Potion_Antidote",
+      "template": "potion_fast_consume"
+    },
+    {
+      "profile": "adamantite_spear",
+      "ability_asset_id": "Spear_Throw_Charged",
+      "template": "spear_charged_throw_consume"
+    },
+    {
+      "profile": "adamantite_saurian_spear",
+      "ability_asset_id": "Spear_Throw_Charged",
+      "template": "spear_charged_throw_consume"
+    },
+    {
+      "profile": "bone_spear",
+      "ability_asset_id": "Spear_Throw_Charged",
+      "template": "spear_charged_throw_consume"
+    },
+    {
+      "profile": "bronze_spear",
+      "ability_asset_id": "Spear_Throw_Charged",
+      "template": "spear_charged_throw_consume"
+    },
+    {
+      "profile": "cobalt_spear",
+      "ability_asset_id": "Spear_Throw_Charged",
+      "template": "spear_charged_throw_consume"
+    },
+    {
+      "profile": "copper_spear",
+      "ability_asset_id": "Spear_Throw_Charged",
+      "template": "spear_charged_throw_consume"
+    },
+    {
+      "profile": "crude_spear",
+      "ability_asset_id": "Spear_Throw_Charged",
+      "template": "spear_charged_throw_consume"
+    },
+    {
+      "profile": "fishbone_spear",
+      "ability_asset_id": "Spear_Throw_Charged",
+      "template": "spear_charged_throw_consume"
+    },
+    {
+      "profile": "iron_spear",
+      "ability_asset_id": "Spear_Throw_Charged",
+      "template": "spear_charged_throw_consume"
+    },
+    {
+      "profile": "leaf_spear",
+      "ability_asset_id": "Spear_Throw_Charged",
+      "template": "spear_charged_throw_consume"
+    },
+    {
+      "profile": "mithril_spear",
+      "ability_asset_id": "Spear_Throw_Charged",
+      "template": "spear_charged_throw_consume"
+    },
+    {
+      "profile": "onyxium_spear",
+      "ability_asset_id": "Spear_Throw_Charged",
+      "template": "spear_charged_throw_consume"
+    },
+    {
+      "profile": "scrap_spear",
+      "ability_asset_id": "Spear_Throw_Charged",
+      "template": "spear_charged_throw_consume"
+    },
+    {
+      "profile": "stone_trork_spear",
+      "ability_asset_id": "Spear_Throw_Charged",
+      "template": "spear_charged_throw_consume"
+    },
+    {
+      "profile": "thorium_spear",
+      "ability_asset_id": "Spear_Throw_Charged",
+      "template": "spear_charged_throw_consume"
+    },
+    {
+      "profile": "tribal_spear",
+      "ability_asset_id": "Spear_Throw_Charged",
+      "template": "spear_charged_throw_consume"
+    },
+    {
+      "profile": "double_incandescent_spear",
+      "ability_asset_id": "Spear_Throw_Charged",
+      "template": "spear_charged_throw_consume"
+    },
+    {
+      "profile": "clearshot_arrow",
+      "ability_asset_id": "Knife_Throw_Charged",
+      "template": "knife_throw_consume"
+    },
+    {
+      "profile": "crude_arrow",
+      "ability_asset_id": "Knife_Throw_Charged",
+      "template": "knife_throw_consume"
+    },
+    {
+      "profile": "deadeye_arrow",
+      "ability_asset_id": "Knife_Throw_Charged",
+      "template": "knife_throw_consume"
+    },
+    {
+      "profile": "iron_arrow",
+      "ability_asset_id": "Knife_Throw_Charged",
+      "template": "knife_throw_consume"
+    },
+    {
+      "profile": "trueshot_arrow",
+      "ability_asset_id": "Knife_Throw_Charged",
+      "template": "knife_throw_consume"
+    },
+    {
+      "profile": "tribal_dart",
+      "ability_asset_id": "Knife_Throw_Charged",
+      "template": "knife_throw_consume"
+    },
+    {
+      "profile": "demon_spellbook",
+      "ability_asset_id": "Spellbook_Cast_Hurl_Charged",
+      "template": "spellbook_cast_consume"
+    },
+    {
+      "profile": "fire_spellbook",
+      "ability_asset_id": "Spellbook_Cast_Hurl_Charged",
+      "template": "spellbook_cast_consume"
+    },
+    {
+      "profile": "frost_spellbook",
+      "ability_asset_id": "Spellbook_Cast_Hurl_Charged",
+      "template": "spellbook_cast_consume"
+    },
+    {
+      "profile": "brown_grimoire",
+      "ability_asset_id": "Spellbook_Cast_Hurl_Charged",
+      "template": "spellbook_cast_consume"
+    },
+    {
+      "profile": "purple_grimoire",
+      "ability_asset_id": "Spellbook_Cast_Hurl_Charged",
+      "template": "spellbook_cast_consume"
+    },
+    {
+      "profile": "combat_shortbow",
+      "ability_asset_id": "Projectile_Config_Bow_Combat_Charge_01",
+      "template": "prototype_bow_primary_arrow"
+    },
+    {
+      "profile": "combat_shortbow",
+      "ability_asset_id": "Projectile_Config_Bow_Combat_Charge_02",
+      "template": "prototype_bow_primary_arrow"
+    },
+    {
+      "profile": "combat_shortbow",
+      "ability_asset_id": "Projectile_Config_Bow_Combat_Charge_03",
+      "template": "prototype_bow_primary_arrow"
+    },
+    {
+      "profile": "combat_shortbow",
+      "ability_asset_id": "Projectile_Config_Bow_Combat_Charge_04",
+      "template": "prototype_bow_primary_arrow"
+    },
+    {
+      "profile": "combat_shortbow",
+      "ability_asset_id": "Projectile_Config_Bow_Combat_Charge_05",
+      "template": "prototype_bow_primary_arrow"
+    },
+    {
+      "profile": "combat_shortbow",
+      "ability_asset_id": "Projectile_Config_Bow_Combat_Charge_06",
+      "template": "prototype_bow_primary_arrow"
+    },
+    {
+      "profile": "combat_shortbow",
+      "ability_asset_id": "Projectile_Config_Bow_Combat_Charge_07",
+      "template": "prototype_bow_primary_arrow"
+    },
+    {
+      "profile": "combat_shortbow",
+      "ability_asset_id": "Projectile_Config_Bow_Combat_Charge_08",
+      "template": "prototype_bow_primary_arrow"
+    },
+    {
+      "profile": "combat_shortbow",
+      "ability_asset_id": "Projectile_Config_Bow_Combat_Charge_09",
+      "template": "prototype_bow_primary_arrow"
+    },
+    {
+      "profile": "combat_shortbow",
+      "ability_asset_id": "Projectile_Config_Bow_Combat_Charge_10",
+      "template": "prototype_bow_primary_arrow"
+    },
+    {
+      "profile": "vampire_shortbow",
+      "ability_asset_id": "Projectile_Config_Bow_Vamp_Charge_02",
+      "template": "prototype_bow_primary_arrow"
+    },
+    {
+      "profile": "vampire_shortbow",
+      "ability_asset_id": "Projectile_Config_Bow_Vamp_Charge_06",
+      "template": "prototype_bow_primary_arrow"
+    },
+    {
+      "profile": "vampire_shortbow",
+      "ability_asset_id": "Projectile_Config_Bow_Vamp_Charge_10",
+      "template": "prototype_bow_primary_arrow"
+    },
+    {
+      "profile": "combat_shortbow",
+      "ability_asset_id": "Bow_Combat_Trishot",
+      "template": "prototype_bow_trishot_arrows"
+    },
+    {
+      "profile": "assault_rifle",
+      "ability_asset_id": "Weapon_Assault_Rifle_Primary",
+      "template": "gunpvp_primary_arrow"
+    },
+    {
+      "profile": "handgun",
+      "ability_asset_id": "Weapon_Handgun_Primary",
+      "template": "gunpvp_primary_arrow"
+    }
+  ]
+}

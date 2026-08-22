@@ -1,0 +1,112 @@
+{
+  "schema": "hytalerl_damage_causes_v1",
+  "hytale_version": "0.5.7",
+  "assets_sha256": "1B8802C284C228AE4549DAC037716C175BC6B94B0FC9AAC2B7039AC6BD2FFD5D",
+  "causes": [
+    {
+      "id": "Physical",
+      "inherits": null,
+      "durability_loss": true,
+      "stamina_loss": true,
+      "bypass_resistances": false
+    },
+    {
+      "id": "Projectile",
+      "inherits": null,
+      "durability_loss": true,
+      "stamina_loss": false,
+      "bypass_resistances": false
+    },
+    {
+      "id": "Fire",
+      "inherits": "Elemental",
+      "durability_loss": false,
+      "stamina_loss": false,
+      "bypass_resistances": false
+    },
+    {
+      "id": "Ice",
+      "inherits": "Elemental",
+      "durability_loss": false,
+      "stamina_loss": false,
+      "bypass_resistances": false
+    },
+    {
+      "id": "Poison",
+      "inherits": null,
+      "durability_loss": false,
+      "stamina_loss": false,
+      "bypass_resistances": false
+    },
+    {
+      "id": "Environmental",
+      "inherits": null,
+      "durability_loss": true,
+      "stamina_loss": true,
+      "bypass_resistances": false
+    },
+    {
+      "id": "Elemental",
+      "inherits": null,
+      "durability_loss": false,
+      "stamina_loss": false,
+      "bypass_resistances": false
+    },
+    {
+      "id": "Environment",
+      "inherits": null,
+      "durability_loss": true,
+      "stamina_loss": false,
+      "bypass_resistances": true
+    },
+    {
+      "id": "Bludgeoning",
+      "inherits": "Physical",
+      "durability_loss": true,
+      "stamina_loss": true,
+      "bypass_resistances": false
+    },
+    {
+      "id": "Slashing",
+      "inherits": "Physical",
+      "durability_loss": true,
+      "stamina_loss": true,
+      "bypass_resistances": false
+    },
+    {
+      "id": "Command",
+      "inherits": null,
+      "durability_loss": false,
+      "stamina_loss": false,
+      "bypass_resistances": true
+    },
+    {
+      "id": "Drowning",
+      "inherits": "Environment",
+      "durability_loss": true,
+      "stamina_loss": false,
+      "bypass_resistances": true
+    },
+    {
+      "id": "Fall",
+      "inherits": "Environment",
+      "durability_loss": true,
+      "stamina_loss": false,
+      "bypass_resistances": true
+    },
+    {
+      "id": "OutOfWorld",
+      "inherits": "Environment",
+      "durability_loss": true,
+      "stamina_loss": false,
+      "bypass_resistances": true
+    },
+    {
+      "id": "Suffocation",
+      "inherits": "Environment",
+      "durability_loss": true,
+      "stamina_loss": false,
+      "bypass_resistances": true
+    }
+  ]
+}

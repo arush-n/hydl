@@ -1,0 +1,14 @@
+{
+  "Group": "HytaleRL",
+  "Name": "HytalePolicyAgent",
+  "Version": "0.1.0",
+  "Description": "Runs bundle-attested JAX policies; synthetic/untrained diagnostics make no competence claim",
+  "Authors": [
+    {
+      "Name": "HytaleRL Contributors"
+    }
+  ],
+  "Main": "com.hytalerlbridge.policy.PolicyAgentPlugin",
+  "ServerVersion": "=0.5.7",
+  "IncludesAssetPack": false
+}

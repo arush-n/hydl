@@ -1,0 +1,31 @@
+{
+  "schema": "hytalerl_actor_walk_movement_projection_v1",
+  "version": 1,
+  "hytale_server_version": "0.5.7",
+  "assets_sha256": "1B8802C284C228AE4549DAC037716C175BC6B94B0FC9AAC2B7039AC6BD2FFD5D",
+  "role_id": "Kweebec_Razorleaf",
+  "role_asset": "Server/NPC/Roles/Intelligent/Neutral/Kweebec/Templates/Template_Kweebec_Razorleaf.json",
+  "controller_type": "Walk",
+  "component_selector": [1.0, 0.0, 1.0],
+  "run_threshold": 0.3,
+  "run_threshold_range": 0.15,
+  "hover_height": 0.0,
+  "ascent_animation_type": "Walk",
+  "descent_animation_type": "Fall",
+  "minimum_descent_animation_height": 1.0,
+  "provenance": {
+    "authored_controller": "Assets.zip:Server/NPC/Roles/Intelligent/Neutral/Kweebec/Templates/Template_Kweebec_Razorleaf.json:MotionControllerList[0]",
+    "component_selector": "decompiled/com/hypixel/hytale/server/npc/movement/controllers/MotionControllerBase.java:121",
+    "run_threshold": "Assets.zip:Server/NPC/Roles/Intelligent/Neutral/Kweebec/Templates/Template_Kweebec_Razorleaf.json:MotionControllerList[0].RunThreshold",
+    "run_threshold_range": "decompiled/com/hypixel/hytale/server/npc/movement/controllers/builders/BuilderMotionControllerBase.java:88-99 (asset omits RunThresholdRange; default 0.15)",
+    "walk_animation_defaults": "decompiled/com/hypixel/hytale/server/npc/movement/controllers/builders/BuilderMotionControllerWalk.java:237-326",
+    "enum_order": "decompiled/com/hypixel/hytale/server/npc/movement/controllers/MotionControllerWalk.java:2774-2808",
+    "hover_defaults": "decompiled/com/hypixel/hytale/server/npc/movement/controllers/builders/BuilderMotionControllerWalk.java:376-438"
+  },
+  "not_claimed": [
+    "player_sprint_transition",
+    "client_owned_crouch_mantle_slide_roll_or_glide",
+    "controlled_descent_prediction",
+    "non_walk_controller_roles"
+  ]
+}

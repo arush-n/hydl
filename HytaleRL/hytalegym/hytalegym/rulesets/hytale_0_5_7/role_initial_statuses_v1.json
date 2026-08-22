@@ -1,0 +1,49 @@
+{
+  "schema": "hytalerl_role_initial_statuses_v1",
+  "version": 1,
+  "hytale_server_version": "0.5.7",
+  "assets_sha256": "1B8802C284C228AE4549DAC037716C175BC6B94B0FC9AAC2B7039AC6BD2FFD5D",
+  "provenance": {
+    "npc_spawn_application": "decompiled/com/hypixel/hytale/server/npc/systems/NPCSystems.java:92-102",
+    "entity_effect_defaults": "decompiled/com/hypixel/hytale/server/core/asset/type/entityeffect/config/EntityEffect.java:279-307",
+    "application_effect_defaults": "decompiled/com/hypixel/hytale/server/core/asset/type/entityeffect/config/ApplicationEffects.java:145-150"
+  },
+  "roles": [
+    {
+      "role_id": "Kweebec_Razorleaf",
+      "role_asset": "Server/NPC/Roles/Intelligent/Neutral/Kweebec/Templates/Template_Kweebec_Razorleaf.json",
+      "statuses": [
+        {
+          "effect_id": "Immunity_Environmental",
+          "effect_asset": "Server/Entity/Effects/Immunity/Immunity_Environmental.json",
+          "infinite": true,
+          "duration_seconds": null,
+          "debuff": false,
+          "invulnerable": false,
+          "cycle_cooldown_seconds": 0.0,
+          "damage_per_cycle": 0.0,
+          "damage_cause": "Physical",
+          "healing_per_cycle": 0.0,
+          "resource_id": -1,
+          "resource_delta_per_cycle": 0.0,
+          "speed_multiplier": 1.0,
+          "overlap_mode": "Ignore",
+          "flags": [],
+          "damage_resistance": {
+            "Environmental": [
+              {
+                "Amount": 1.0,
+                "CalculationType": "Percent"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "role_id": "Trork_Brawler",
+      "role_asset": "Server/NPC/Roles/Intelligent/Aggressive/Trork/Trork_Brawler.json",
+      "statuses": []
+    }
+  ]
+}

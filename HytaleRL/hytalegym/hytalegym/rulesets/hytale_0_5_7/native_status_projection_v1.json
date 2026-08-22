@@ -1,0 +1,32 @@
+{
+  "schema": "hytalerl_native_status_projection_v1",
+  "version": 1,
+  "hytale_server_version": "0.5.7",
+  "assets_sha256": "1B8802C284C228AE4549DAC037716C175BC6B94B0FC9AAC2B7039AC6BD2FFD5D",
+  "provenance": {
+    "damage_application": "HytaleAssets/Server/Item/Interactions/Weapons/DamageEntityParent.json",
+    "entity_effect_defaults": "decompiled/com/hypixel/hytale/server/core/asset/type/entityeffect/config/EntityEffect.java:272-307",
+    "application_effect_defaults": "decompiled/com/hypixel/hytale/server/core/asset/type/entityeffect/config/ApplicationEffects.java:142-161"
+  },
+  "statuses": [
+    {
+      "effect_id": "Red_Flash",
+      "effect_asset": "Server/Entity/Effects/Damage/Red_Flash.json",
+      "projection": "omit_visual_only",
+      "classification": "live_native_visual_only",
+      "duration_seconds": 0.2,
+      "overlap_behavior": "Extend",
+      "mechanics": {
+        "damage_calculator": false,
+        "stat_modifier_effects": false,
+        "entity_stats": false,
+        "stat_modifiers": false,
+        "damage_resistance": false,
+        "invulnerable": false,
+        "debuff": false,
+        "horizontal_speed_multiplier": 1.0,
+        "knockback_multiplier": 1.0
+      }
+    }
+  ]
+}

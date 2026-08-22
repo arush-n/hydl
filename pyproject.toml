@@ -1,0 +1,98 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hydl"
+version = "0.1.0"
+description = "RL agents trained in a JAX reimplementation of Hytale 0.5.7, transferring to the real server"
+# Landed 2026-08-22. Per-package documentation is DEV.md and stays unpublished
+# (see .gitignore), so this must keep naming the user-facing README and nothing
+# else: setuptools fails the build, rather than warning, when `readme` names a
+# file absent from a clone.
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [{ name = "Arush" }]
+
+# Runtime dependencies of the published packages (arena, adk, agents, console).
+# `hytalegym` is not listed: it ships inside this repository at
+# HytaleRL/hytalegym and is put on the path rather than resolved from an index;
+# README.md's "Installing" section is the user-facing statement of that.
+dependencies = [
+    "jax>=0.4.35",
+    "numpy>=1.24.0",
+    "gymnasium>=0.29.0",
+    "optax>=0.2.4",
+]
+
+[project.urls]
+Homepage = "https://github.com/arush-n/hydl"
+Repository = "https://github.com/arush-n/hydl"
+
+[project.optional-dependencies]
+# The console is a separate surface; nothing in arena/adk imports it.
+console = [
+    "fastapi>=0.110",
+    "pydantic>=2.0",
+    "uvicorn>=0.27",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-timeout>=2.2",
+    "ruff>=0.4",
+]
+
+[tool.setuptools.packages.find]
+# `agents` is here because `agents/basic` is a runnable entry point the Console
+# invokes as a module; omitting it published the source while `pip install .`
+# silently shipped a distribution that could not run it.
+include = ["arena*", "adk*", "console*", "npc*", "worlds*", "agents*"]
+# `find_packages` walks the working tree, not the git index, so anything that
+# is merely unpublished still lands in a wheel built here -- and a wheel built
+# from a fresh clone would then differ in contents at the same version.
+# Two classes have to be named explicitly:
+#   *.tests      contributor test packages
+#   agents.dawn* an unpublished agent tree that `agents*` otherwise sweeps in
+exclude = [
+    "*.tests", "*.tests.*", "tests", "tests.*",
+    "agents.dawn", "agents.dawn.*",
+]
+
+# `find_packages` collects MODULES; a wheel of .py files alone gave an installed
+# Console whose every page was a 404, because its entire browser UI is 27 files
+# that are not Python. These are the non-Python assets the packages actually
+# read at run time, listed rather than globbed so adding a new kind of asset is
+# a deliberate act:
+#   console/static      the Console UI -- HTML, JS, CSS
+#   console .../designs authored world designs the world picker offers
+#   agents  .../*.json  agent registrations and run profiles the Console reads
+#   arena   .../configs the target-tracking run config
+# `adk/pytest.ini` is deliberately absent: it configures the contributor test
+# suite, which is not published.
+[tool.setuptools.package-data]
+#
+# Keyed per PACKAGE, not per directory: `agents`, `agents.basic` and
+# `agents.ppo` are three packages, so a glob under `agents` does not reach
+# `agents/basic/console/agent.json` -- and that file is the registration the
+# Console reads to offer `profile_id=basic`, the one the README tells people to
+# use. Without it an installed Console has no agents to run.
+console = ["static/*", "static/css/*", "static/js/*", "core/worlds/designs/*.json"]
+agents = ["profiles/*.json"]
+"agents.basic" = ["console/*.json"]
+"agents.ppo" = ["*.json", "console/*.json"]
+arena = ["training/configs/*.json"]
+
+[tool.ruff]
+# Every published Python tree is in scope and lint-clean. Keep this list and the
+# lint job in .github/workflows/hygiene.yml in step -- a directory that is only
+# in one of them is unlinted in the other.
+include = [
+    "arena/**/*.py",
+    "agents/**/*.py",
+    "console/**/*.py",
+    "tools/**/*.py",
+    "adk/**/*.py",
+    "npc/**/*.py",
+    "worlds/**/*.py",
+]

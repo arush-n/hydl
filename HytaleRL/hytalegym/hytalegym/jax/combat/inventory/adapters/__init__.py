@@ -1,0 +1,1 @@
+"""Native inventory evidence adapters."""

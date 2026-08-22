@@ -1,0 +1,11 @@
+{
+  "title": "Dawn · shared training archive",
+  "agent": "dawn",
+  "architecture": "selected-jax",
+  "contract": {
+    "archive": "artifacts/console/shared/dawn",
+    "ownership": "all Dawn training, evaluation, and replay receipts",
+    "selection": "individual checkpoint profiles retain promotion status"
+  },
+  "notes": "Stable cross-checkpoint Archive owner. This profile groups every Dawn run without pretending that all archived candidates share one checkpoint or promotion disposition."
+}

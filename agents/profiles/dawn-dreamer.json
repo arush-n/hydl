@@ -1,0 +1,9 @@
+{
+  "title": "Dawn world-model",
+  "agent": "dawn",
+  "architecture": "dreamer",
+  "network": {"deterministic": 512, "stochastic": 32, "discrete": 32},
+  "hyperparameters": {"learning_rate": 0.0001, "imagination_horizon": 15, "kl_scale": 1.0},
+  "notes": "Reports world-model loss, imagined return and a KL term rather than PPO's four — the Train charts follow whatever a learner logs, so no console change is needed to watch it.",
+  "suggested_run": {"world": "region", "zone": "353404383:51", "decision_period": 6}
+}

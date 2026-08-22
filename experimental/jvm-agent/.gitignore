@@ -1,0 +1,23 @@
+# The Java parity sources and tests are part of this package's public contract,
+# so they override the repository-wide generated-test exclusions.
+!tests/
+!tests/**
+!deployment/
+!deployment/**
+
+!*Test.java
+!*Tests.java
+
+# Deployment fixtures may contain local working state.
+deployment/**/STATUS.md
+deployment/**/DEV.md
+# This fixture is local test/deployment material, not the production policy
+# agent.
+deployment/native-equipment-fixture/
+
+# Build output stays ignored -- the root rule for `out/` is correct.
+out/
+__pycache__/
+docs/
+tests/
+case/

@@ -1,0 +1,14 @@
+{
+  "Group": "HytaleRL",
+  "Name": "HytaleRLBridge",
+  "Version": "0.1.0",
+  "Description": "Gymnasium bridge with isolated native Hytale 0.5.9 NPC worlds and simulator tasks",
+  "Authors": [
+    {
+      "Name": "HytaleRL Contributors"
+    }
+  ],
+  "Main": "com.hytalerlbridge.HytaleRLBridgePlugin",
+  "ServerVersion": "=0.5.9",
+  "IncludesAssetPack": false
+}

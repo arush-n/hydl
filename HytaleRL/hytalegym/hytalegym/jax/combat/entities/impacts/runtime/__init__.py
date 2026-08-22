@@ -1,0 +1,2 @@
+"""Entity impact resolution runtime."""
+

@@ -1,0 +1,121 @@
+/* Design tokens. Colour is semantic here, never decorative: a hue means the
+   same thing in the 3D view, the charts, the event list and the badges.
+
+     ok    something worked / a good outcome
+     warn  degraded, or a result you must not read at face value
+     crit  a failure, or damage taken
+     info  neutral machine state
+     agent / target  actor identity, kept distinct from outcome colour
+
+   Both themes are first-class. The neutrals carry a slight blue bias so they
+   sit under the accent rather than fighting it. */
+
+:root {
+  color-scheme: dark light;
+
+  --ink:    #E8EDF4;
+  --ink-2:  #A9B4C4;
+  --ink-3:  #6F7C8E;
+
+  --bg:     #0E1218;
+  --panel:  #161C24;
+  --panel-2:#1C242E;
+  --sunk:   #0A0E13;
+  --rule:   #2A343F;
+  --rule-2: #1F2831;
+
+  --accent: #58C7F3;
+  --ok:     #55D6A0;
+  --warn:   #F2C14E;
+  --crit:   #F2685C;
+  --info:   #8B9DF7;
+
+  --agent:  #58C7F3;
+  --target: #F29D5C;
+
+  --shadow: 0 1px 2px rgb(0 0 0 / .35), 0 6px 18px rgb(0 0 0 / .22);
+  --r: 8px;
+  --r-lg: 14px;
+
+  /* Spacing scale. Every gap comes from here, so the page has one rhythm
+     rather than a dozen ad-hoc margins. Layout uses flex/grid `gap` -- margins
+     on siblings collapse and double, which is what made the old page's spacing
+     drift between sections. */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 18px;
+  --s-5: 28px;
+  --s-6: 44px;
+
+  /* Shared component dimensions keep forms and disclosures aligned across
+     workspaces. */
+  --control-h: 38px;
+  --card-pad: clamp(var(--s-4), 2vw, 24px);
+
+  /* Type scale. One ratio, so hierarchy is carried by size and weight rather
+     than by borders and boxes. */
+  --t-xs:  11px;
+  --t-sm:  12px;
+  --t-md:  14px;
+  --t-lg:  18px;
+  --t-xl:  26px;
+  --t-2xl: 38px;
+
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", monospace;
+
+  /* Content column. Wide enough for a map, narrow enough that prose stays
+     readable instead of running the full width of a 4K display. */
+  --measure: 1180px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --ink:    #16202B;
+    --ink-2:  #46556A;
+    --ink-3:  #77869A;
+
+    --bg:     #F4F6F9;
+    --panel:  #FFFFFF;
+    --panel-2:#F7F9FC;
+    --sunk:   #EEF2F7;
+    --rule:   #D5DDE7;
+    --rule-2: #E5EBF2;
+
+    --accent: #1080BC;
+    --ok:     #14875C;
+    --warn:   #9A6B06;
+    --crit:   #C0392B;
+    --info:   #4453C4;
+
+    --agent:  #1080BC;
+    --target: #C4661F;
+
+    --shadow: 0 1px 2px rgb(16 32 48 / .06), 0 6px 16px rgb(16 32 48 / .07);
+  }
+}
+
+/* The viewer's toggle must win over the media query in both directions. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ink:#E8EDF4; --ink-2:#A9B4C4; --ink-3:#6F7C8E;
+  --bg:#0E1218; --panel:#161C24; --panel-2:#1C242E; --sunk:#0A0E13;
+  --rule:#2A343F; --rule-2:#1F2831;
+  --accent:#58C7F3; --ok:#55D6A0; --warn:#F2C14E; --crit:#F2685C; --info:#8B9DF7;
+  --agent:#58C7F3; --target:#F29D5C;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --ink:#16202B; --ink-2:#46556A; --ink-3:#77869A;
+  --bg:#F4F6F9; --panel:#FFFFFF; --panel-2:#F7F9FC; --sunk:#EEF2F7;
+  --rule:#D5DDE7; --rule-2:#E5EBF2;
+  --accent:#1080BC; --ok:#14875C; --warn:#9A6B06; --crit:#C0392B; --info:#4453C4;
+  --agent:#1080BC; --target:#C4661F;
+}
+
+/* severity -> colour, used by events, badges and flags alike */
+.sev-info { --sev: var(--info); }
+.sev-good { --sev: var(--ok); }
+.sev-warn { --sev: var(--warn); }
+.sev-crit { --sev: var(--crit); }

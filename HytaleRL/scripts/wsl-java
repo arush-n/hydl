@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+java_bin="${HYTALERL_WINDOWS_JAVA:-}"
+if [[ -z "$java_bin" ]]; then
+  shopt -s nullglob
+  candidates=("$repo_root"/.tools/jdk25/*/bin/java.exe)
+  if (( ${#candidates[@]} == 0 )); then
+    echo "No repository Windows JDK found under $repo_root/.tools/jdk25" >&2
+    exit 127
+  fi
+  java_bin="${candidates[${#candidates[@]} - 1]}"
+fi
+
+translated=()
+for argument in "$@"; do
+  if [[ "$argument" == /mnt/[a-zA-Z]/* ]]; then
+    argument="$(wslpath -w "$argument")"
+  fi
+  translated+=("$argument")
+done
+
+exec "$java_bin" "${translated[@]}"

@@ -1,0 +1,160 @@
+:root{
+  --ground:#0E1216; --panel:#161C22; --sunk:#11161B; --raise:#1D242B;
+  --ink:#E4E9ED; --ink-2:#A3B0BB; --ink-3:#6B7A87;
+  --rule:#252D35; --rule-2:#1C232A;
+  --accent:#E0913C; --good:#4EA88F; --crit:#C9553F; --warn:#D6A83E;
+  --agent:#5A9BD8; --target:#C9553F;
+}
+@media (prefers-color-scheme:light){
+  :root{
+    --ground:#FBFAF8; --panel:#FFFFFF; --sunk:#F2F1EE; --raise:#F7F6F3;
+    --ink:#1A2027; --ink-2:#4A5761; --ink-3:#7C8894;
+    --rule:#DFDDD8; --rule-2:#EDEBE7;
+    --accent:#B26A1E; --good:#2F7F6B; --crit:#B4402A; --warn:#B07D1C;
+    --agent:#2F6DB0; --target:#B4402A;
+  }
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font:15px/1.5 ui-sans-serif,-apple-system,"Segoe UI",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.mono{font-family:ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace;
+  font-variant-numeric:tabular-nums}
+.shell{display:grid; grid-template-columns:308px 1fr; min-height:100%}
+
+/* ---- controls ---- */
+.controls{background:var(--panel); border-right:1px solid var(--rule);
+  padding:20px 18px 40px; overflow-y:auto}
+.controls h1{margin:0 0 4px; font-size:17px; font-weight:600; letter-spacing:-.01em}
+.lede{margin:0 0 18px; font-size:12.5px; color:var(--ink-3); line-height:1.45}
+fieldset{border:0; border-top:1px solid var(--rule-2); margin:0 0 16px; padding:14px 0 0}
+legend{font-size:10.5px; text-transform:uppercase; letter-spacing:.13em;
+  color:var(--ink-3); font-weight:650; padding:0}
+label{display:block; font-size:12.5px; color:var(--ink-2); margin-bottom:9px}
+label.check{display:flex; align-items:center; gap:8px; cursor:pointer}
+label.check.inline{margin:0; font-size:12.5px; color:var(--ink-3)}
+select,input[type=number]{
+  width:100%; margin-top:4px; padding:6px 8px; font:inherit; font-size:13px;
+  background:var(--sunk); color:var(--ink); border:1px solid var(--rule);
+  border-radius:2px; font-variant-numeric:tabular-nums;
+}
+input[type=checkbox]{width:auto; margin:0; accent-color:var(--accent)}
+label em{display:block; font-style:normal; font-size:11px; color:var(--ink-3);
+  margin-top:3px; font-variant-numeric:tabular-nums}
+.hint{margin:6px 0 0; font-size:11.5px; line-height:1.45; color:var(--ink-3)}
+.hint.warn{color:var(--warn)}
+button{font:inherit; font-size:13px; font-weight:600; padding:9px 16px;
+  border-radius:2px; border:1px solid var(--rule); background:var(--raise);
+  color:var(--ink); cursor:pointer}
+button:hover:not(:disabled){border-color:var(--accent); color:var(--accent)}
+button:disabled{opacity:.5; cursor:progress}
+#go{width:100%; background:var(--accent); border-color:var(--accent); color:#12161A}
+#go:hover:not(:disabled){filter:brightness(1.08); color:#12161A}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.status{margin:10px 0 0; font-size:11.5px; color:var(--ink-3);
+  font-family:ui-monospace,Menlo,monospace}
+
+/* ---- main ---- */
+main{padding:18px 20px 40px; display:flex; flex-direction:column; gap:14px;
+  min-width:0}
+.scene{position:relative; background:var(--sunk); border:1px solid var(--rule);
+  border-radius:2px; overflow:hidden}
+#view{display:block; width:100%; height:min(56vh,540px); cursor:grab}
+#view:active{cursor:grabbing}
+.camhint{position:absolute; right:10px; bottom:8px; font-size:11px;
+  color:var(--ink-3); pointer-events:none; letter-spacing:.02em}
+.overlay{position:absolute; left:10px; top:10px; right:10px;
+  display:flex; flex-direction:column; gap:6px; pointer-events:none}
+.flag{background:color-mix(in srgb,var(--crit) 17%,var(--panel));
+  border-left:3px solid var(--crit); color:var(--ink);
+  font-size:12px; padding:7px 10px; border-radius:2px; max-width:62ch}
+.flag.soft{background:color-mix(in srgb,var(--warn) 15%,var(--panel));
+  border-left-color:var(--warn)}
+
+.strip{display:grid; grid-template-columns:repeat(auto-fit,minmax(112px,1fr));
+  gap:1px; background:var(--rule); border:1px solid var(--rule); border-radius:2px}
+.stat{background:var(--panel); padding:9px 11px}
+.stat b{display:block; font-size:10px; text-transform:uppercase;
+  letter-spacing:.1em; color:var(--ink-3); font-weight:650; margin-bottom:3px}
+.stat span{font-size:16px; font-variant-numeric:tabular-nums;
+  font-family:ui-monospace,Menlo,monospace}
+.stat span.neg{color:var(--crit)} .stat span.pos{color:var(--good)}
+
+.transport{display:flex; align-items:center; gap:14px; flex-wrap:wrap}
+#scrub{flex:1; min-width:200px; accent-color:var(--accent)}
+#stepn{font-size:12.5px; color:var(--ink-2); min-width:104px}
+
+.readouts{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:1px; background:var(--rule); border:1px solid var(--rule); border-radius:2px}
+.ro{background:var(--panel); padding:8px 11px; font-size:12.5px;
+  display:flex; justify-content:space-between; gap:10px}
+.ro i{font-style:normal; color:var(--ink-3)}
+.ro b{font-weight:500; font-family:ui-monospace,Menlo,monospace;
+  font-variant-numeric:tabular-nums}
+.absent{color:var(--ink-3); font-style:italic; font-family:inherit}
+
+#timeline{width:100%; height:70px; display:block; background:var(--panel);
+  border:1px solid var(--rule); border-radius:2px}
+.heads{display:flex; flex-wrap:wrap; gap:5px 10px; font-size:12px;
+  color:var(--ink-2)}
+.heads span em{font-style:normal; color:var(--ink-3)}
+.heads .z{opacity:.4}
+
+/* ---- status bar ---- */
+.statusbar{display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+  font-size:12px; color:var(--ink-3)}
+.chip{display:inline-flex; align-items:center; gap:6px; padding:4px 9px;
+  background:var(--panel); border:1px solid var(--rule); border-radius:2px}
+.chip i{width:7px; height:7px; border-radius:50%; background:var(--ink-3)}
+.chip.up i{background:var(--good)} .chip.down i{background:var(--crit)}
+.chip b{font-weight:600; color:var(--ink-2)}
+
+/* ---- panels & charts ---- */
+.panel{background:var(--panel); border:1px solid var(--rule); border-radius:2px;
+  padding:14px 15px}
+.panel h2{margin:0 0 12px; font-size:11px; text-transform:uppercase;
+  letter-spacing:.12em; color:var(--ink-3); font-weight:650;
+  display:flex; align-items:center; gap:10px}
+.panel h2 em{font-style:normal; text-transform:none; letter-spacing:0;
+  font-weight:400; font-size:11.5px; color:var(--ink-3)}
+button.mini{margin-left:auto; font-size:11px; padding:3px 9px; font-weight:500}
+.charts{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:14px}
+.charts figure{margin:0}
+.charts figcaption{font-size:11px; color:var(--ink-3); margin-bottom:5px;
+  letter-spacing:.02em}
+canvas.chart{width:100%; height:118px; display:block; background:var(--sunk);
+  border:1px solid var(--rule-2); border-radius:2px}
+.histrows{margin-top:12px; display:flex; flex-direction:column; gap:2px;
+  font-size:11.5px; max-height:150px; overflow-y:auto}
+.hrow{display:grid; grid-template-columns:20px 1fr auto; gap:10px;
+  padding:4px 6px; background:var(--sunk); border-radius:2px;
+  font-family:ui-monospace,Menlo,monospace; font-variant-numeric:tabular-nums}
+.hrow u{text-decoration:none; color:var(--ink-3)}
+.hrow span{color:var(--ink-2); overflow:hidden; text-overflow:ellipsis;
+  white-space:nowrap}
+.adkgrid{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+  gap:1px; background:var(--rule); border:1px solid var(--rule); border-radius:2px}
+.adkgrid div{background:var(--panel); padding:8px 10px; font-size:12px}
+.adkgrid b{display:block; font-size:10px; text-transform:uppercase;
+  letter-spacing:.09em; color:var(--ink-3); margin-bottom:2px}
+.adkgrid code{font-size:11.5px; color:var(--ink-2)}
+
+/* The Java tab's two monospace blocks. `.cmd` is the launch line, shown so a
+   run can be reproduced in a terminal; `.log` is the server's own output and
+   is scrolled, not grown, so a chatty boot cannot push the page kilometres. */
+pre.cmd, pre.log{font-family:ui-monospace,Menlo,monospace; font-size:11.5px;
+  background:var(--sunk); border:1px solid var(--rule); border-radius:2px;
+  padding:8px 10px; margin-top:10px; color:var(--ink-2);
+  white-space:pre-wrap; word-break:break-all; overflow-x:auto}
+pre.log{max-height:340px; overflow-y:auto; white-space:pre; word-break:normal;
+  line-height:1.45}
+
+@media (max-width:940px){
+  .shell{grid-template-columns:1fr}
+  .controls{border-right:0; border-bottom:1px solid var(--rule)}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}

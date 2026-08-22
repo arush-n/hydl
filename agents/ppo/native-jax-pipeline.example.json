@@ -1,0 +1,38 @@
+{
+  "schema": "hytalerl_native_jax_pipeline_config_v1",
+  "corpus": "../../HytaleRL/artifacts/native-fundamentals-v5-corpus-v1/jax-replay-v12.npz",
+  "run_dir": "artifacts/native-jax-pipeline-run-v1",
+  "cache_root": "~/.cache/hytalerl/native-replay",
+  "observation_view": "arsenal_visual_conditioned",
+  "training": {
+    "seed": 570277,
+    "num_envs": 64,
+    "cloning_steps": 1024,
+    "cloning_sequence_lanes": 32,
+    "ppo_updates": 1,
+    "rollout_steps": 8,
+    "update_epochs": 1,
+    "num_minibatches": 4,
+    "encoder_size": 64,
+    "recurrent_size": 64,
+    "cloning_learning_rate": 0.0003,
+    "ppo_learning_rate": 0.0003,
+    "demonstration_replay_steps": 0,
+    "natural_frame_weight": 0.4
+  },
+  "live": {
+    "task": "plains_duel",
+    "actor_role": "Trork_Brawler",
+    "opponent_role": "Kweebec_Razorleaf",
+    "seed": 570401,
+    "batch": 32,
+    "ppo_updates": 8,
+    "rollout_steps": 32,
+    "update_epochs": 2,
+    "num_minibatches": 2,
+    "learning_rate": 0.00003,
+    "entropy_coefficient": 0.001,
+    "encoder_size": 64,
+    "recurrent_size": 64
+  }
+}

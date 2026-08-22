@@ -1,0 +1,197 @@
+{
+  "schema": "hytalerl_combat_asset_surface_v1",
+  "hytale_version": "0.5.7",
+  "assets_sha256": "1B8802C284C228AE4549DAC037716C175BC6B94B0FC9AAC2B7039AC6BD2FFD5D",
+  "scan_prefixes": [
+    "Server/Entity/Effects/",
+    "Server/Entity/HitboxCollision/",
+    "Server/Entity/Repulsion/",
+    "Server/GameplayConfigs/",
+    "Server/Item/Interactions/",
+    "Server/Item/Items/",
+    "Server/NPC/Balancing/",
+    "Server/NPC/Roles/",
+    "Server/Projectiles/"
+  ],
+  "scanned_document_count": 6221,
+  "scanned_paths_sha256": "F65A46134353F35333414ED3A4FE193629FC80A8A882A16C722054C900562AC0",
+  "surfaces": {
+    "damage_calculator_multi_cause": {
+      "count": 0,
+      "occurrences_sha256": "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945"
+    },
+    "damage_calculator_dps": {
+      "count": 0,
+      "occurrences_sha256": "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945"
+    },
+    "sequential_modifier_step": {
+      "count": 0,
+      "occurrences_sha256": "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945"
+    },
+    "sequential_modifier_minimum": {
+      "count": 0,
+      "occurrences_sha256": "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945"
+    },
+    "stamina_drain_multiplier": {
+      "count": 4,
+      "occurrences_sha256": "3D0F53CC24041DC0C7351E6DC1E62EEB1B30E22ED68865F5BDD0CAEE28BAE3BC"
+    },
+    "item_armor_damage_resistance": {
+      "count": 113,
+      "occurrences_sha256": "1217C54332FF78567FF2403405CAC3F48CB5110B871039E39BE7DE86CA5AFA8F"
+    },
+    "item_armor_base_damage_resistance": {
+      "count": 113,
+      "occurrences_sha256": "76164D3F2657DEEB5DDEA30E244A2352DFDBD463DFBC36CDB37F4386399D1A87"
+    },
+    "item_armor_knockback_resistances": {
+      "count": 2,
+      "occurrences_sha256": "34018149CFBD3CBF492CB215D9959D5B545E03DACA952692B2B2CA90EB2F934E"
+    },
+    "broken_item_resistance_penalty": {
+      "count": 1,
+      "occurrences_sha256": "81D4D5924F9F3803A78BDCFF265023D24821A56E012235ECBAC49527BDE60168"
+    },
+    "entity_effect_damage_resistance": {
+      "count": 6,
+      "occurrences_sha256": "E39355F129172BA647DB4AE92FD8E8D8B958DC968B27E675673966E2A1B78302"
+    },
+    "wielding_root_damage_modifiers": {
+      "count": 13,
+      "occurrences_sha256": "544DCF8A4E171FCF18D0D932469723BCDC3F4685D784F52F7746A84945201738"
+    },
+    "wielding_root_knockback_modifiers": {
+      "count": 0,
+      "occurrences_sha256": "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945"
+    },
+    "wielding_stamina_cost": {
+      "count": 93,
+      "occurrences_sha256": "EBE2E3B2D6DB33781787618542DB261AF55BD65D5163935A2627699C274F221F"
+    },
+    "angled_wielding_angle": {
+      "count": 15,
+      "occurrences_sha256": "E7F96D03BB1ACEDE381085D2768E9783328AC3236ED9D56421BDA6B27E8B2840"
+    },
+    "angled_wielding_nonzero_angle": {
+      "count": 0,
+      "occurrences_sha256": "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945"
+    },
+    "angled_wielding_damage_modifiers": {
+      "count": 15,
+      "occurrences_sha256": "CD4BC52557FAB54BE1992E29D07EE0DD87B20A869FD06113CF90AAC953C51390"
+    },
+    "angled_wielding_knockback_modifiers": {
+      "count": 15,
+      "occurrences_sha256": "39561F6BD42FE77BF1C600CBA4C832A862F2720CA91C679FD6947CD8F88BFB5C"
+    },
+    "hitbox_collision_soft_offset_ratio": {
+      "count": 1,
+      "occurrences_sha256": "DAAEA4972A7A2F4A84CD563CC8EECDBA9C6A5486C00623EB79DD9BB83FF124BB"
+    },
+    "npc_role_use_projected_distance": {
+      "count": 0,
+      "occurrences_sha256": "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945"
+    },
+    "matchup_role_chain": {
+      "count": 42,
+      "occurrences_sha256": "8C38A8BEBED80598A11E99CBA27455EDACBFA0210DFCDB90A8EEE4E080136387"
+    },
+    "matchup_role_apply_avoidance": {
+      "count": 0,
+      "occurrences_sha256": "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945"
+    },
+    "matchup_role_apply_separation": {
+      "count": 0,
+      "occurrences_sha256": "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945"
+    },
+    "matchup_role_min_hit_slowdown": {
+      "count": 0,
+      "occurrences_sha256": "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945"
+    },
+    "matchup_role_armor_assignments": {
+      "count": 0,
+      "occurrences_sha256": "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945"
+    },
+    "matchup_role_repulsion_config_index": {
+      "count": 0,
+      "occurrences_sha256": "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945"
+    },
+    "matchup_role_hitbox_collision_config_index": {
+      "count": 0,
+      "occurrences_sha256": "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945"
+    },
+    "matchup_role_combat_action_evaluator": {
+      "count": 0,
+      "occurrences_sha256": "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945"
+    },
+    "matchup_role_predictability_range": {
+      "count": 0,
+      "occurrences_sha256": "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945"
+    },
+    "matchup_guard_stamina_cost": {
+      "count": 1,
+      "occurrences_sha256": "3631F5FBE5DEABFC6EC798EBD1C7CB0911EAB7A7FB0D32E002AE676A8E8CA799"
+    },
+    "matchup_guard_root_damage_modifiers": {
+      "count": 0,
+      "occurrences_sha256": "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945"
+    },
+    "matchup_guard_root_knockback_modifiers": {
+      "count": 0,
+      "occurrences_sha256": "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945"
+    },
+    "matchup_guard_angled_angle": {
+      "count": 1,
+      "occurrences_sha256": "67643F9C992F26A0630C33F5ED248D4EBC5CE42846B3F54495C2E06E1F531770"
+    },
+    "matchup_guard_angled_damage_modifiers": {
+      "count": 1,
+      "occurrences_sha256": "FD499598FFBF68DC169BF2650CE39A09DAA6AA20F64AEBBEE9CBD29225D00BB5"
+    },
+    "matchup_guard_angled_knockback_modifiers": {
+      "count": 1,
+      "occurrences_sha256": "E289C302B13B4C50D09A5B0993F43BD5E4A7ABDA808A18D087B978E1781718DF"
+    },
+    "matchup_damage_stamina_drain_multiplier": {
+      "count": 0,
+      "occurrences_sha256": "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945"
+    }
+  },
+  "classifications": {
+    "damage_calculator_multi_cause": "verified-empty",
+    "damage_calculator_dps": "verified-empty",
+    "sequential_modifier_step": "verified-empty",
+    "sequential_modifier_minimum": "verified-empty",
+    "stamina_drain_multiplier": "live-outside-current-matchup",
+    "item_armor_damage_resistance": "live-modelled-core-current-matchup-empty",
+    "item_armor_base_damage_resistance": "live-modelled-core-current-matchup-empty",
+    "item_armor_knockback_resistances": "live-unreachable-current-matchup",
+    "broken_item_resistance_penalty": "live-unmodelled-equipment-durability",
+    "entity_effect_damage_resistance": "live-modelled-core",
+    "wielding_root_damage_modifiers": "live-outside-current-matchup",
+    "wielding_root_knockback_modifiers": "verified-empty",
+    "wielding_stamina_cost": "live-modelled",
+    "angled_wielding_angle": "live-modelled-at-zero-offset",
+    "angled_wielding_nonzero_angle": "verified-empty",
+    "angled_wielding_damage_modifiers": "live-modelled",
+    "angled_wielding_knockback_modifiers": "live-modelled",
+    "hitbox_collision_soft_offset_ratio": "live-unattached-current-matchup",
+    "npc_role_use_projected_distance": "verified-empty-server-default-false",
+    "matchup_role_chain": "asset-evidence",
+    "matchup_role_apply_avoidance": "verified-empty-server-default-false",
+    "matchup_role_apply_separation": "verified-empty-server-default-false",
+    "matchup_role_min_hit_slowdown": "verified-empty-server-default-0.1",
+    "matchup_role_armor_assignments": "verified-empty",
+    "matchup_role_repulsion_config_index": "verified-empty",
+    "matchup_role_hitbox_collision_config_index": "verified-empty",
+    "matchup_role_combat_action_evaluator": "verified-empty",
+    "matchup_role_predictability_range": "verified-empty-no-evaluator",
+    "matchup_guard_stamina_cost": "live-modelled",
+    "matchup_guard_root_damage_modifiers": "verified-empty",
+    "matchup_guard_root_knockback_modifiers": "verified-empty",
+    "matchup_guard_angled_angle": "live-modelled-at-zero-offset",
+    "matchup_guard_angled_damage_modifiers": "live-modelled",
+    "matchup_guard_angled_knockback_modifiers": "live-modelled",
+    "matchup_damage_stamina_drain_multiplier": "verified-empty-server-default-one"
+  }
+}

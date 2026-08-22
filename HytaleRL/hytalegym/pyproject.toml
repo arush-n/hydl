@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hytalegym"
+version = "0.1.0"
+description = "Gymnasium-compatible RL environments for Hytale"
+# No `readme`: per-package docs were renamed to DEV.md on 2026-08-19 and are
+# unpublished, so naming one here breaks the build in a clone. Restore as
+# `readme = "README.md"` when a user-facing README exists.
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "Arush" }
+]
+
+dependencies = [
+    "gymnasium>=0.29.0",
+    "numpy>=1.24.0",
+    "msgpack>=1.0.0",
+]
+
+[project.optional-dependencies]
+jax = [
+    "jax>=0.4.35",
+    "optax>=0.2.4",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-timeout>=2.2",
+    "stable-baselines3>=2.2.0",
+]
+
+[project.entry-points."gymnasium.envs"]
+__root__ = "hytalegym.envs:register_envs"
+
+[tool.setuptools.packages.find]
+include = ["hytalegym*"]
+
+[tool.setuptools.package-data]
+hytalegym = ["rulesets/**/*.json"]

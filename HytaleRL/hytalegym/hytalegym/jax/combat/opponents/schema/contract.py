@@ -1,0 +1,23 @@
+"""Pinned opponent-controller constants for the shipped 0.5.7 matchup."""
+
+from __future__ import annotations
+
+
+OPPONENT_MODE_INACTIVE = 0
+OPPONENT_MODE_CHASE = 1
+OPPONENT_MODE_SEARCH_REQUIRED = 2
+OPPONENT_MODE_RETURN_HOME_REQUIRED = 3
+
+# Template_Trork_Melee -> Search target-memory timeout.
+SEARCH_TIMEOUT_MIN_SECONDS = 8.0
+SEARCH_TIMEOUT_MAX_SECONDS = 10.0
+
+
+__all__ = [
+    "OPPONENT_MODE_CHASE",
+    "OPPONENT_MODE_INACTIVE",
+    "OPPONENT_MODE_RETURN_HOME_REQUIRED",
+    "OPPONENT_MODE_SEARCH_REQUIRED",
+    "SEARCH_TIMEOUT_MAX_SECONDS",
+    "SEARCH_TIMEOUT_MIN_SECONDS",
+]

@@ -1,0 +1,46 @@
+{
+  "schema": "hytalerl_worldgen_v2_environment_blueprint_v1",
+  "version": 1,
+  "environment_id": "mountain-forest-lakes-v1",
+  "recipe_id": "mountain-lake-exploration-r1",
+  "world_structure_asset_id": "Hydl_MountainForestLakes",
+  "seeds": [570057, 570058, 570059],
+  "required_capabilities": [
+    "exact_region_geometry",
+    "native_traversal",
+    "stable_block_identity",
+    "stable_fluid_identity",
+    "static_spawn_position",
+    "structure_instance_identity"
+  ],
+  "bounds": {
+    "coordinate_mode": "region_core",
+    "minimum": [0.0, 0.0, 0.0],
+    "maximum": [96.0, 320.0, 96.0]
+  },
+  "teams": [
+    {
+      "team_id": "explorers",
+      "spawn": {
+        "kind": "native_spawn",
+        "offset": [0.0, 0.0, 0.0]
+      }
+    }
+  ],
+  "objective": {
+    "kind": "survive",
+    "duration_steps": 8192
+  },
+  "quality_gates": {
+    "minimum_terrain_relief_blocks": 45,
+    "minimum_unique_non_air_material_ids": 48,
+    "minimum_full_fluid_cells": 49896,
+    "required_material_asset_ids": ["Rock_Quartzite"],
+    "required_fluid_asset_ids": ["Water_Source"],
+    "required_structure_asset_ids": [
+      "HytaleRL:Prefabs/Hydl/MountainLake/Ruins/Hydl_MountainLake_Ruins_001"
+    ]
+  },
+  "environment_count": 64,
+  "assignment_key": 0
+}

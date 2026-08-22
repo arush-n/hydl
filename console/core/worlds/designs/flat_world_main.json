@@ -1,0 +1,258 @@
+{
+  "canonical_note": "THE flat world. Use this design id for every flat-world scenario. Imported from a console export the user authored; the digest below was reproduced by console.core.worlds.worldgen.preview(), not copied on trust. config and digest are byte-identical to that export -- the digest is computed over config, so renaming the design would make it a different world.",
+  "canonical_role": "flat",
+  "config": {
+    "base_height": 32.0,
+    "canyon_strength": 0.0,
+    "cave_density": 0.0,
+    "cave_entrances": 0.0,
+    "cave_scale": 8.0,
+    "cave_style": "tunnels",
+    "cave_verticality": 0.0,
+    "crater_density": 0.0,
+    "crater_depth": 2.0,
+    "erosion": 0.0,
+    "forest_density": 0.0,
+    "generation_mode": "authored_family",
+    "lake_coverage": 0.0,
+    "macro_region_count": 6,
+    "moisture": 0.72,
+    "mountain_scale": 20.0,
+    "name": "mountain-forest-lakes",
+    "objective": "exploration",
+    "pillar_density": 0.05,
+    "pillar_height": 4.0,
+    "pillar_width": 3.0,
+    "region_blend": 0.0,
+    "relief": 4.0,
+    "ridge_strength": 0.0,
+    "river_strength": 0.0,
+    "roughness": 0.0,
+    "route_density": 1.0,
+    "route_width": 1.0,
+    "seed": 22,
+    "snow_line": 148.0,
+    "spawn_safety_radius": 8.0,
+    "structure_density": 0.0,
+    "structure_jitter": 0.0,
+    "structure_layout": "scattered",
+    "structure_material": "shale",
+    "structure_set": "mixed_ruins",
+    "structure_spacing": 16.0,
+    "structure_variety": 0.0,
+    "style_strength": 1.0,
+    "temperature": 0.48,
+    "terrace_steps": 7,
+    "terrain_canyon_weight": 0.0,
+    "terrain_crater_weight": 0.0,
+    "terrain_flat_weight": 1.0,
+    "terrain_hill_weight": 0.0,
+    "terrain_mountain_weight": 0.0,
+    "terrain_pillar_weight": 0.0,
+    "terrain_plateau_weight": 0.0,
+    "terrain_style": "flat",
+    "terrain_valley_weight": 0.0,
+    "traversal_bias": 0.0,
+    "tree_spacing": 3.0,
+    "water_level": 0.0,
+    "world_depth": 128,
+    "world_variation": 0.98,
+    "world_width": 128
+  },
+  "design": {
+    "caves": {
+      "cave_density": 0.0,
+      "cave_entrances": 0.0,
+      "cave_scale": 8.0,
+      "cave_style": "tunnels",
+      "cave_verticality": 0.0
+    },
+    "climate": {
+      "moisture": 0.72,
+      "snow_line": 148.0,
+      "temperature": 0.48
+    },
+    "ecology": {
+      "forest_density": 0.0,
+      "tree_spacing": 3.0
+    },
+    "environment_id": "mountain-forest-lakes",
+    "extent": {
+      "depth": 128,
+      "native_capture": {
+        "capture_core_blocks_per_axis": 96,
+        "capture_tiles": {
+          "total": 4,
+          "x": 2,
+          "z": 2
+        },
+        "captured_core_coverage": {
+          "depth": 192,
+          "width": 192
+        },
+        "exact_capture_artifacts_required": true,
+        "exact_port_supported_now": true,
+        "jax_world": {
+          "composite_manifest_schema": "hytalerl_worldgen_v2_composite_jax_world_v1",
+          "overlap_validation": [
+            "physical_geometry",
+            "stable_block_identity",
+            "stable_fluid_identity"
+          ],
+          "region_tiles": 4,
+          "shared_world_id": true,
+          "world_count": 1,
+          "world_id": 0
+        },
+        "multi_region_capture_required": true,
+        "native_generation_extent": "unbounded",
+        "placement_resolution": "Resolve chunk-aligned tile origins around the native spawn after generation, capture every tile without another reset, then bind them to one composite JAX world; do not infer native origins from the semantic preview.",
+        "region_core_bounds": null,
+        "requested_bounded_extent": {
+          "depth": 128,
+          "width": 128
+        },
+        "runtime_bounds_window_required": true,
+        "status": "composite_region_one_jax_world_ready_after_capture"
+      },
+      "width": 128
+    },
+    "gameplay": {
+      "objective": "exploration",
+      "spawn_safety_radius": 8.0
+    },
+    "hydrology": {
+      "lake_coverage": 0.0,
+      "river_strength": 0.0,
+      "water_level": 0.0
+    },
+    "native_handoff": {
+      "generator": "hytale_generator",
+      "legacy_world_identity_unchanged": true,
+      "required_steps": [
+        "compile parameters to project-authored WorldGen V2 assets",
+        "validate authored assets against the pinned 0.5.7 archive",
+        "generate requested seeds with the native server",
+        "capture bounded Regions including palette hazard columns",
+        "validate semantics, traversal, spawn and held-out diversity",
+        "publish an immutable captured-world corpus for JAX"
+      ],
+      "template_compilation": {
+        "capture_only_controls": [
+          "world_width",
+          "world_depth"
+        ],
+        "mapped_controls": [
+          "base_height",
+          "water_level",
+          "tree_spacing",
+          "structure_spacing",
+          "structure_jitter",
+          "structure_set"
+        ],
+        "preview_only_until_density_graph_compiler": [
+          "relief",
+          "mountain_scale",
+          "roughness",
+          "ridge_strength",
+          "erosion",
+          "style_strength",
+          "terrace_steps",
+          "pillar_density",
+          "pillar_width",
+          "pillar_height",
+          "canyon_strength",
+          "crater_density",
+          "crater_depth",
+          "cave_density",
+          "cave_scale",
+          "cave_verticality",
+          "cave_entrances"
+        ],
+        "profile": "default_flat",
+        "requested_cave_style": "tunnels",
+        "status": "template_backed",
+        "surface_family": "flat",
+        "warnings": [
+          "The selected pinned native template does not certify the requested cave topology."
+        ]
+      }
+    },
+    "schema": "hytalerl_worldgen_v2_console_design_v1",
+    "seed": 22,
+    "structures": {
+      "structure_density": 0.0,
+      "structure_jitter": 0.0,
+      "structure_layout": "scattered",
+      "structure_material": "shale",
+      "structure_set": "mixed_ruins",
+      "structure_spacing": 16.0
+    },
+    "terrain": {
+      "base_height": 32.0,
+      "canyon_strength": 0.0,
+      "crater_density": 0.0,
+      "crater_depth": 2.0,
+      "erosion": 0.0,
+      "mountain_scale": 20.0,
+      "pillar_density": 0.05,
+      "pillar_height": 4.0,
+      "pillar_width": 3.0,
+      "relief": 4.0,
+      "ridge_strength": 0.0,
+      "roughness": 0.0,
+      "style_strength": 1.0,
+      "terrace_steps": 7,
+      "terrain_style": "flat"
+    },
+    "version": 2
+  },
+  "design_id": "flat_world_main",
+  "digest": "eafabff5927b779f6fb5dc7a620473e6cf020189a61ccf29b9a8b565a0134f37",
+  "imported_from": "mountain-forest-lakes-eafabff592 (console export v1)",
+  "preview_receipt": {
+    "metrics": {
+      "biome_count": 2,
+      "biome_counts": {
+        "forest": 901,
+        "grassland": 1500
+      },
+      "cave_chamber_count": 0,
+      "cave_entrance_count": 0,
+      "cave_network_count": 0,
+      "cave_segment_count": 0,
+      "estimated_cave_volume": 0.0,
+      "estimated_region_columns": 16384,
+      "forest_fraction": 0.3753,
+      "maximum_height": 32.1,
+      "maximum_slope": 0.01,
+      "mean_height": 32.03,
+      "minimum_height": 31.96,
+      "relief": 0.14,
+      "route_connected": false,
+      "route_edge_count": 0,
+      "route_length": 0.0,
+      "route_maximum_slope": 0.0,
+      "route_node_count": 0,
+      "route_traversable_fraction": 0.0,
+      "structure_count": 0,
+      "structure_kind_count": 0,
+      "terrain_component_count": 1,
+      "terrain_region_count": 1,
+      "traversable_fraction": 1.0,
+      "tree_count": 0,
+      "water_fraction": 0.0
+    },
+    "not_native_capture": true,
+    "preview_resolution": 49,
+    "preview_schema": "hytalerl_worldgen_v2_console_preview_v1",
+    "quality": "review",
+    "warnings": [
+      "No structure site survived water and slope constraints for this seed.",
+      "Caves were requested but the bounded cave graph is empty."
+    ]
+  },
+  "saved_at": "2026-08-20T08:50:48.148557+00:00",
+  "schema": "hytalerl_worldgen_v2_console_saved_design_v1",
+  "version": 2
+}

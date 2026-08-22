@@ -1,0 +1,395 @@
+{
+  "schema": "hytalerl_combat_ruleset_v6",
+  "version": 9,
+  "hytale_server_version": "0.5.7",
+  "matchup": {
+    "agent_role": "Kweebec_Razorleaf",
+    "target_role": "Trork_Brawler"
+  },
+  "engine": {
+    "ticks_per_second": 30,
+    "nominal_delta_seconds": 0.03333333333333333,
+    "loaded_delta_seconds": 0.045,
+    "motion_timing_profile_count": 3,
+    "gravity": 32.0,
+    "steering_slowdown_falloff": 3.0,
+    "horizontal_selector_pi": 3.1415927410125732,
+    "legacy_horizontal_knockback_scale": 25.0,
+    "legacy_motion_controller_horizontal_factor": 0.18000000000000005
+  },
+  "fixture": {
+    "agent_spawn": [0.5, 65.0, 0.5],
+    "target_offset": [0.0, 0.0, -2.5],
+    "floor_y": 65.0
+  },
+  "agent": {
+    "max_health": 105.0,
+    "asset_max_walk_speed": 5.0,
+    "max_speed": 5.0,
+    "acceleration": 10.0,
+    "jump_velocity_gravity_floor": 10.0,
+    "jump_height_parameter": 1.3,
+    "knockback_scale": 0.5,
+    "movement_velocity_resistance": 0.242,
+    "min_walk_speed": 0.1,
+    "min_hit_slowdown": 0.1,
+    "landing_velocity_scale": 0.537,
+    "steering_relative_turn_speed": 1.5,
+    "turn_degrees_per_second": 540.0,
+    "max_head_rotation_degrees_per_second": 360.0,
+    "head_yaw_min_degrees": -45.0,
+    "head_yaw_max_degrees": 45.0,
+    "head_pitch_min_degrees": -45.0,
+    "head_pitch_max_degrees": 45.0,
+    "walk_controller": {
+      "inertia": 1.0,
+      "gravity": 10.0,
+      "fall_acceleration_multiplier": 5.0,
+      "gravity_drag_exponent": 3.0,
+      "max_fall_speed": 15.0,
+      "max_sink_speed_fluid": 4.0,
+      "max_climb_height": 1.3,
+      "max_drop_height": 3.0,
+      "force_velocity_damping": {
+        "ground_drag_base": 0.82,
+        "air_drag_min": 0.96,
+        "air_drag_max": 0.995,
+        "air_drag_min_speed": 6.0,
+        "air_drag_max_speed": 10.0,
+        "reference_ticks_per_second": 60.0,
+        "per_axis_deadzone": 0.1
+      }
+    },
+    "asset_eye_height": 1.0,
+    "model_scale": 1.0,
+    "effective_eye_height": 1.0,
+    "bounding_box": [-0.3, 0.0, -0.3, 0.3, 1.4, 0.3],
+    "damage": 5.0,
+    "attack_pause_min_seconds": 1.0,
+    "attack_pause_max_seconds": 2.0,
+    "attacks": [
+      {"hit_delay_ticks": 15, "range": 3.0, "half_angle_degrees": 60.0},
+      {"hit_delay_ticks": 11, "range": 3.0, "half_angle_degrees": 60.0},
+      {"hit_delay_ticks": 20, "range": 3.5, "half_angle_degrees": 18.0}
+    ]
+  },
+  "target": {
+    "max_health": 61.0,
+    "asset_max_walk_speed": 8.0,
+    "relative_chase_speed": 0.8,
+    "chase_speed": 6.4,
+    "acceleration": 10.0,
+    "velocity_control": "STEERING_TRANSLATION",
+    "agent_collision_mode": "NON_BLOCKING",
+    "asset_eye_height": 1.65,
+    "model_scale": 0.95,
+    "effective_eye_height": 1.5675,
+    "bounding_box": [-0.475, 0.0, -0.475, 0.475, 1.805, 0.475],
+    "max_head_rotation_degrees_per_second": 360.0,
+    "head_aim_relative_turn_speed": 1.5,
+    "head_default_relative_turn_speed": 1.0,
+    "head_yaw_min_degrees": -45.0,
+    "head_yaw_max_degrees": 45.0,
+    "head_pitch_min_degrees": -45.0,
+    "head_pitch_max_degrees": 45.0,
+    "chase": {
+      "stop_distance": 1.5,
+      "slowdown_distance": 3.0
+    },
+    "chase_senses": {
+      "view_range": 15.0,
+      "hearing_range": 8.0,
+      "hearing_suppressed_by_crouching": true
+    },
+    "maintain_distance": {
+      "activation_range": 5.0,
+      "desired_distance_min": 2.8,
+      "desired_distance_max": 2.8,
+      "move_threshold": 0.5,
+      "target_distance_factor": 0.5,
+      "move_towards_slowdown_distance": 2.0,
+      "relative_forward_speed": 1.0,
+      "relative_backward_speed": 0.4,
+      "strafing_duration_min_seconds": 0.5,
+      "strafing_duration_max_seconds": 1.0,
+      "strafing_frequency_min_seconds": 2.0,
+      "strafing_frequency_max_seconds": 4.0,
+      "strafing_yaw_offset_degrees": 45.0,
+      "strafing_translation_offset_degrees": 90.0
+    },
+    "chase_reaction_ticks": 1,
+    "turn_degrees_per_second": 360.0,
+    "activation_min_tick": 36,
+    "activation_max_tick": 44,
+    "decision_delay_ticks": 2,
+    "sensor_range": 16.0,
+    "attack_pause_min_seconds": 1.0,
+    "attack_pause_max_seconds": 2.0,
+    "attacks": [
+      {
+        "interaction_id": "Trork_Warrior_Battleaxe_Swing_Left",
+        "windup_ticks": 12,
+        "sweep_ticks": 5,
+        "recovery_ticks": 13,
+        "selector_runtime_seconds": 0.15,
+        "start_distance": 0.1,
+        "end_distance": 3.0,
+        "arc_degrees": 90.0,
+        "sweep_direction": "LEFT",
+        "yaw_start_offset_degrees": -45.0,
+        "pitch_offset_degrees": 0.0,
+        "roll_offset_degrees": 0.0,
+        "extend_top": 0.5,
+        "extend_bottom": 0.5,
+        "requires_line_of_sight": true,
+        "damage": 23.0
+      },
+      {
+        "interaction_id": "Trork_Warrior_Battleaxe_Swing_Right",
+        "windup_ticks": 12,
+        "sweep_ticks": 5,
+        "recovery_ticks": 13,
+        "selector_runtime_seconds": 0.15,
+        "start_distance": 0.1,
+        "end_distance": 3.0,
+        "arc_degrees": 90.0,
+        "sweep_direction": "RIGHT",
+        "yaw_start_offset_degrees": -45.0,
+        "pitch_offset_degrees": 0.0,
+        "roll_offset_degrees": 0.0,
+        "extend_top": 0.5,
+        "extend_bottom": 0.5,
+        "requires_line_of_sight": true,
+        "damage": 23.0
+      },
+      {
+        "interaction_id": "Trork_Warrior_Battleaxe_Swing_Up_Left",
+        "windup_ticks": 12,
+        "sweep_ticks": 5,
+        "recovery_ticks": 13,
+        "selector_runtime_seconds": 0.15,
+        "start_distance": 0.1,
+        "end_distance": 3.0,
+        "arc_degrees": 90.0,
+        "sweep_direction": "LEFT",
+        "yaw_start_offset_degrees": -45.0,
+        "pitch_offset_degrees": 0.0,
+        "roll_offset_degrees": -50.0,
+        "extend_top": 0.5,
+        "extend_bottom": 0.5,
+        "requires_line_of_sight": true,
+        "damage": 23.0
+      },
+      {
+        "interaction_id": "Trork_Warrior_Battleaxe_Swing_Down",
+        "windup_ticks": 12,
+        "sweep_ticks": 5,
+        "recovery_ticks": 13,
+        "selector_runtime_seconds": 0.15,
+        "start_distance": 0.1,
+        "end_distance": 3.0,
+        "arc_degrees": 90.0,
+        "sweep_direction": "LEFT",
+        "yaw_start_offset_degrees": -45.0,
+        "pitch_offset_degrees": 0.0,
+        "roll_offset_degrees": 90.0,
+        "extend_top": 0.5,
+        "extend_bottom": 0.5,
+        "requires_line_of_sight": true,
+        "damage": 23.0
+      },
+      {
+        "interaction_id": "Trork_Warrior_Battleaxe_Swing_Up_Right",
+        "windup_ticks": 12,
+        "sweep_ticks": 5,
+        "recovery_ticks": 13,
+        "selector_runtime_seconds": 0.15,
+        "start_distance": 0.1,
+        "end_distance": 3.0,
+        "arc_degrees": 90.0,
+        "sweep_direction": "RIGHT",
+        "yaw_start_offset_degrees": -45.0,
+        "pitch_offset_degrees": 0.0,
+        "roll_offset_degrees": 50.0,
+        "extend_top": 0.5,
+        "extend_bottom": 0.5,
+        "requires_line_of_sight": true,
+        "damage": 23.0
+      }
+    ]
+  },
+  "damage_interaction": {
+    "interaction_id": "NPC_Attack_Melee_Damage",
+    "knockback": {
+      "type": "DIRECTIONAL",
+      "force": 1.0,
+      "relative_x": 0.0,
+      "relative_z": -1.0,
+      "velocity_y": 3.0,
+      "velocity_type": "SET",
+      "duration_seconds": 0.0,
+      "velocity_config": null
+    }
+  },
+  "regeneration": {
+    "delay_ticks": 450,
+    "interval_ticks": 15,
+    "fraction": 0.05
+  },
+  "reward": {
+    "target_damage_scale": 2.0,
+    "agent_damage_scale": -1.0,
+    "completion": 50.0,
+    "death": -20.0
+  },
+  "observation_normalization": {
+    "wire_fixed_point_scale": 10.0,
+    "vertical_speed_scale": 10.0,
+    "facing_error_degrees_scale": 180.0,
+    "head_pitch_degrees_scale": 90.0
+  },
+  "provenance": {
+    "asset_source": "local Hytale 0.5.7 Assets.zip role, model, component, and interaction assets",
+    "asset_surface_audit": {
+      "schema": "hytalerl_combat_asset_surface_v1",
+      "resource": "hytale_0_5_7/asset_surface_v1.json",
+      "assets_sha256": "1B8802C284C228AE4549DAC037716C175BC6B94B0FC9AAC2B7039AC6BD2FFD5D",
+      "classification_policy": "live / verified-empty / live-unreachable-current-matchup"
+    },
+    "server_implementation_source": "local HytaleServer.jar 0.5.7 steering, head-motion, HorizontalSelector, HitDetectionExecutor, DirectionalKnockback, DamageSystems, and NPC motion-controller bytecode",
+    "native_trace_source": "headless Hytale 0.5.7 differential probes",
+    "fixture_only_fields": [
+      "fixture.agent_spawn",
+      "fixture.target_offset",
+      "fixture.floor_y"
+    ],
+    "native_measured_fields": [
+      "engine.loaded_delta_seconds",
+      "agent.landing_velocity_scale",
+      "target.activation_min_tick",
+      "target.activation_max_tick",
+      "target.velocity_control",
+      "target.agent_collision_mode",
+      "target.chase_reaction_ticks",
+      "agent.max_speed",
+      "agent.model_scale",
+      "agent.effective_eye_height",
+      "agent.attacks[*].hit_delay_ticks"
+    ],
+    "native_confirmed_asset_fields": [
+      "agent.bounding_box",
+      "agent.effective_eye_height",
+      "target.bounding_box",
+      "target.effective_eye_height",
+      "agent.knockback_scale",
+      "damage_interaction.knockback.*"
+    ],
+    "explicit_asset_fields": [
+      "agent.asset_max_walk_speed",
+      "agent.acceleration",
+      "agent.jump_velocity_gravity_floor",
+      "agent.jump_height_parameter",
+      "agent.knockback_scale",
+      "agent.steering_relative_turn_speed",
+      "agent.walk_controller.gravity",
+      "agent.walk_controller.max_fall_speed",
+      "agent.asset_eye_height",
+      "agent.bounding_box",
+      "agent.attack_pause_min_seconds",
+      "agent.attack_pause_max_seconds",
+      "target.asset_max_walk_speed",
+      "target.relative_chase_speed",
+      "target.acceleration",
+      "target.asset_eye_height",
+      "target.model_scale",
+      "target.bounding_box",
+      "target.head_aim_relative_turn_speed",
+      "target.chase.*",
+      "target.chase_senses.*",
+      "target.maintain_distance.*",
+      "target.turn_degrees_per_second",
+      "target.attack_pause_min_seconds",
+      "target.attack_pause_max_seconds",
+      "target.attacks[*]",
+      "damage_interaction.*"
+    ],
+    "source_classification": {
+      "authored_role_fields": [
+        {
+          "fields": [
+            "target.chase_senses.view_range",
+            "target.chase_senses.hearing_range",
+            "target.chase_senses.hearing_suppressed_by_crouching"
+          ],
+          "source": "Assets.zip:Server/NPC/Roles/_Core/Components/Steps/Component_Instruction_Intelligent_Chase.json",
+          "distance_semantics": "SensorEntityBase.java:258-259 with UseProjectedDistance omitted/default false"
+        }
+      ],
+      "asset_omission_server_defaults": [
+        {
+          "field": "agent.walk_controller.inertia",
+          "value": 1.0,
+          "asset": "Template_Kweebec_Razorleaf.json:97-107 omits Inertia",
+          "server_default": "BuilderRole.java:281"
+        }
+      ],
+      "server_runtime_defaults": [
+        {
+          "fields": [
+            "agent.movement_velocity_resistance",
+            "agent.walk_controller.force_velocity_damping.air_drag_min",
+            "agent.walk_controller.force_velocity_damping.air_drag_max",
+            "agent.walk_controller.force_velocity_damping.air_drag_min_speed",
+            "agent.walk_controller.force_velocity_damping.air_drag_max_speed"
+          ],
+          "source": "MovementManager.java:23-37; MotionControllerBase.java:1291-1294"
+        }
+      ],
+      "server_algorithm_constants": [
+        {
+          "field": "engine.legacy_horizontal_knockback_scale",
+          "value": 25.0,
+          "source": "DamageSystems.java:1166-1169,1191-1200"
+        },
+        {
+          "field": "engine.legacy_motion_controller_horizontal_factor",
+          "value": 0.18,
+          "source": "MotionControllerBase.java:919-929"
+        },
+        {
+          "fields": [
+            "agent.walk_controller.force_velocity_damping.ground_drag_base",
+            "agent.walk_controller.force_velocity_damping.reference_ticks_per_second",
+            "agent.walk_controller.force_velocity_damping.per_axis_deadzone"
+          ],
+          "source": "MotionControllerBase.java:712-750"
+        }
+      ]
+    },
+    "server_implementation_fields": [
+      "engine.steering_slowdown_falloff",
+      "engine.horizontal_selector_pi",
+      "engine.legacy_horizontal_knockback_scale",
+      "engine.legacy_motion_controller_horizontal_factor",
+      "agent.movement_velocity_resistance",
+      "agent.min_walk_speed",
+      "agent.min_hit_slowdown",
+      "agent.walk_controller.fall_acceleration_multiplier",
+      "agent.walk_controller.gravity_drag_exponent",
+      "agent.walk_controller.max_sink_speed_fluid",
+      "agent.walk_controller.max_climb_height",
+      "agent.walk_controller.max_drop_height",
+      "target.max_head_rotation_degrees_per_second",
+      "target.head_default_relative_turn_speed",
+      "target.head_yaw_min_degrees",
+      "target.head_yaw_max_degrees",
+      "target.head_pitch_min_degrees",
+      "target.head_pitch_max_degrees",
+      "agent.max_head_rotation_degrees_per_second",
+      "agent.head_yaw_min_degrees",
+      "agent.head_yaw_max_degrees",
+      "agent.head_pitch_min_degrees",
+      "agent.head_pitch_max_degrees"
+    ]
+  }
+}

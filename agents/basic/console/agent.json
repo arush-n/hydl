@@ -1,0 +1,9 @@
+{
+  "title": "Basic",
+  "summary": "Recurrent movement and 3D target-tracking combat foundation.",
+  "architecture": "hytalegym-jax-recurrent-factored-policy",
+  "run": {"world": "region", "ticks": 512},
+  "metrics": ["learner.mean_return", "learner.mean_visible_aim_error_degrees", "learner.mean_distance"],
+  "streams": ["basic-*"],
+  "entrypoint": "agents.basic"
+}

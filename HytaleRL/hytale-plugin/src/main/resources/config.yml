@@ -1,0 +1,21 @@
+# HytaleRLBridge Configuration
+
+# Network settings for the TCP bridge
+network:
+  # Keep loopback-only unless remote agents explicitly need access.
+  host: "127.0.0.1"
+  port: 5556
+
+# Default environment settings
+environment:
+  # Ticks per RL step (1 = every tick, 4 = every 4 ticks, etc.)
+  ticks_per_step: 4
+  # Maximum episode length in RL steps (0 = let the Python client decide)
+  max_episode_steps: 0
+  # Default task when none specified
+  default_task: "survive"
+
+# Performance settings
+performance:
+  # Buffer size for network I/O
+  buffer_size: 65536

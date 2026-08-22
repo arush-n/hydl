@@ -1,0 +1,63 @@
+{
+  "schema": "hytalerl_worldgen_v2_custom_environment_spec_v1",
+  "version": 1,
+  "environment_id": "mountain-forest-lakes-v1",
+  "server_version": "0.5.7",
+  "assets_archive_sha256": "1b8802c284c228ae4549dac037716c175bc6b94b0fc9aac2b7039ac6bd2ffd5d",
+  "pack": {
+    "group": "HytaleRL",
+    "name": "MountainForestLakes",
+    "version": "1.2.0",
+    "description": "Project-authored mountainous WorldGen V2 terrain with dense trees, lake water, and marker-backed generated ruins"
+  },
+  "asset_ids": {
+    "world_structure": "Hydl_MountainForestLakes",
+    "biome": "Hydl_MountainForestLakes",
+    "structure_assignment": "Hydl_MountainLake_Ruins",
+    "structure_marker": "Hydl_MountainLake_Structure",
+    "structure_prefab_directory": "Hydl/MountainLake/Ruins",
+    "structure_prefab": "Hydl_MountainLake_Ruins_001"
+  },
+  "terrain": {
+    "base_height": 112,
+    "water_height": 108,
+    "bedrock_height": 0,
+    "spawn_height": 220
+  },
+  "dense_trees": {
+    "source_assignment": "Plains1_Mountains_Trees",
+    "spacing": [8, 8, 8]
+  },
+  "structures": {
+    "spacing": [48, 48, 48],
+    "jitter": 0.35,
+    "seed": "Hydl-MountainLake-Structures",
+    "registry_asset_id": "HytaleRL:Prefabs/Hydl/MountainLake/Ruins/Hydl_MountainLake_Ruins_001"
+  },
+  "source_assets": {
+    "mountain_biome": {
+      "path": "Server/HytaleGenerator/Biomes/Plains1/Plains1_Mountains.json",
+      "sha256": "f9a3a186aebe81bb897cff8b485fb03703e6dd9baf4f42c76037aa24db794879"
+    },
+    "water_biome": {
+      "path": "Server/HytaleGenerator/Biomes/Experimental/ForestRivers.json",
+      "sha256": "e5ac355d654da56ca47846ef45e8190d1b9eb11bb32c1b80772bffe5dfcb5bf6"
+    },
+    "world_structure": {
+      "path": "Server/HytaleGenerator/WorldStructures/Basic.json",
+      "sha256": "28a560d4d4ad4a273b1932070595fb41f5fb64f98b253cc43525459e0bd2654c"
+    },
+    "structure_assignment": {
+      "path": "Server/HytaleGenerator/Assignments/Plains1/Plains1_Mountains_Trees.json",
+      "sha256": "22b99cef58dcae874e3d3cced9f8cddf20c530ae5fdba69911ea71dcff261f0d"
+    },
+    "structure_prefab": {
+      "path": "Server/Prefabs/Monuments/Incidental/Shale/Ruins/Normal/Incidental_Shale_Monuments_Incidental_Shale_Normal_003.prefab.json",
+      "sha256": "98478eee2b2fbdbcdfc3ee3d5d0291b533e17b253fb2056eefabbded26a2d182"
+    },
+    "structure_marker_prefab": {
+      "path": "Server/Prefabs/Cave/Klops/Basalt/Main/Klops_Basalt_Main_001.prefab.json",
+      "sha256": "757f4a984d1100692b420106105126e8d821d2bdbf732b4196be5dacffa01d3b"
+    }
+  }
+}
