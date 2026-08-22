@@ -239,3 +239,62 @@ adk/runs/*
 # captured worlds, logs, check results, dispatch scratch and native server
 # state. None of it is source.
 /storage/
+
+# ---------------------------------------------------------------------------
+# Contributor-only material: handoffs, changelogs, issue registers, internal
+# audits, one-off tools and probe dumps. None of it is user documentation --
+# the README in each package is the public orientation layer instead.
+#
+# LISTED EXPLICITLY, NOT GLOBBED. `adk/docs/` and `console/docs/` also hold
+# published files, so a directory rule here would take the README and the API
+# reference with it.
+#
+# These paths were protected only by this machine's .git/info/exclude until CI
+# caught it. That file never leaves the machine, so a fresh clone had no rule
+# at all and `git add -A` there would have published every one of them.
+# ---------------------------------------------------------------------------
+/.codex-local/agent-state/adk/HANDOFF-ADK.md
+/HytaleRL/examples/audit_hytale_combat_assets.py
+/HytaleRL/examples/jax_arsenal_benchmark.py
+/HytaleRL/examples/jax_arsenal_outcome_controls.py
+/HytaleRL/examples/jax_force_clearance_packing_prototype.py
+/HytaleRL/hytalegym/hytalegym/jax/combat/PACKAGE-MAP.md
+/HytaleRL/hytalegym/hytalegym/jax/combat/observation/v3/NATIVE-PORT.md
+/HytaleRL/scripts/docs/migrate_readme_status.py
+/adk/CHANGELOG.md
+/adk/ISSUES.md
+/adk/docs/CAPABILITY-AUDIT.md
+/adk/docs/CATALOG.md
+/adk/docs/IMITATION-WORKFLOW.md
+/adk/docs/PERFORMANCE.md
+/adk/docs/WIRING-NOTES.md
+/adk/docs/surface-survey-geometry-v1.json
+/adk/docs/surface-survey-v1.json
+/adk/probes/HEAD-LEGALITY.md
+/adk/probes/head_legality_v1.json
+/adk/tools/REPLAY_VIEWER_SPEC.md
+/adk/tools/region_map3d.json
+/adk/tools/replay_data.json
+/agents/basic/TRAINING.md
+/agents/dawn/artifacts/README.md
+/agents/design/REVISIONS.md
+/agents/ppo/TRAINING-PLAN.md
+/agents/profiles/combat-32x32-fixture.json
+/agents/profiles/dawn-pursuit-v7-incumbent.json
+/agents/profiles/dawn-vision-locomotion-g2.json
+/console/docs/EXTENDING.md
+/console/docs/LIVE-SERVER.md
+/console/docs/TRAINING-CONTROLS.md
+/console/tools/backfill_pursuit_replay_world.py
+/experimental/jvm-agent/harness/Main.java
+/experimental/jvm-agent/run_tests.sh
+/experimental/jvm-agent/src/com/hytalerlbridge/policy/testing/HeadlessCombatFixture.java
+/experimental/worldgen-v2/custom_environments/audit_corpus.py
+/experimental/worldgen-v2/jax_port/bundles/benchmark_bundle.py
+/experimental/worldgen-v2/jax_port/evidence/worldgen-v2-r1-plains-570059-load.receipt
+/experimental/worldgen-v2/jax_port/verification/minigame_runtime_check.py
+/experimental/worldgen-v2/procedural_generation/audit.py
+/experimental/worldgen-v2/tools/surrogate_biome_asset_audit.py
+/experimental/worldgen-v2/tools/surrogate_biome_prop_asset_audit.py
+/experimental/worldgen-v2/tools/surrogate_world_offline_smoke.py
+/experimental/worldgen-v2/verification/conftest.py
