@@ -136,22 +136,6 @@ Being explicit, because the absences are load-bearing:
 - **Hytale server installs, plugin jars and bridge build output.** The Gradle
   wrapper jar is the single deliberate exception, because `./gradlew` cannot
   bootstrap without it.
-- **Test suites.** Both the Python and Java suites are developer material and are
-  excluded. This is why CI runs hygiene and lint but no test job: a test job on a
-  tree with no tests would collect zero tests and report green, which reads
-  exactly like a green that passed. See the comment at the top of
-  [`.github/workflows/hygiene.yml`](.github/workflows/hygiene.yml).
-- **Run artifacts, checkpoints and captured world libraries.** Large, generated,
-  and reproducible from the code that made them.
-- **Contributor-only maintenance records.** They are not part of the user
-  documentation; the README files inside each package are the public
-  orientation layer.
-- **The root `docs/` tree.** Design records, knowledge registers, coverage
-  censuses and port critical paths — development history rather than a manual.
-  The README files inside each package are the published orientation layer.
-
-If you are working from a clone and something referenced in the docs does not
-exist, this list is the likely reason.
 
 ---
 
