@@ -8,6 +8,7 @@ This module wires the pieces together and does nothing else. Routes live in
 
 from __future__ import annotations
 
+import os
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -21,8 +22,15 @@ from fastapi.staticfiles import StaticFiles  # noqa: E402
 
 from console.api.routes import STATIC, router  # noqa: E402
 
-HOST = "127.0.0.1"
-PORT = 8770
+#: Loopback by default, because a console that binds every interface the moment
+#: it starts exposes an unauthenticated launch API to the local network.
+#:
+#: `HYTALERL_CONSOLE_HOST` overrides it, and a container MUST set it to
+#: `0.0.0.0`. Inside a container `127.0.0.1` is the container's own loopback, so
+#: `-p 8770:8770` publishes a port that nothing is listening on and the browser
+#: gets a connection reset with a server that looks healthy from its own logs.
+HOST = os.environ.get("HYTALERL_CONSOLE_HOST", "127.0.0.1")
+PORT = int(os.environ.get("HYTALERL_CONSOLE_PORT", "8770"))
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):

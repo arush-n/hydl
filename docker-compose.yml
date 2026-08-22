@@ -1,0 +1,101 @@
+# The normalised launch.
+#
+#   docker compose up console                      # CPU
+#   docker compose --profile gpu up console-gpu    # CUDA, needs the toolkit
+#   docker compose run --rm console pytest console/tests -q
+#
+# Runs are the console's business: start it, open http://127.0.0.1:8770 and
+# launch from the Train tab. Nothing here invokes a trainer directly, because
+# the console owns preflight, cache identity and evidence, and bypassing it
+# loses all three.
+
+services:
+  console:
+    build:
+      context: .
+      target: cpu
+    image: hydl-console:cpu
+    # Published on LOOPBACK, not on every interface. The launch API is
+    # unauthenticated, so the default must not put it on the local network.
+    # Change to "8770:8770" deliberately, and only behind something that
+    # authenticates.
+    ports:
+      - "127.0.0.1:8770:8770"
+    volumes:
+      # The console's whole store: runs, minted policies, captured worlds, logs,
+      # check results, dispatch scratch and native server state. A named volume
+      # rather than a bind mount so it survives `down` and does not inherit host
+      # file ownership, which is what makes the non-root user in the image work
+      # the same way on Linux, macOS and Windows.
+      - hydl-storage:/data
+      # THE STORE IS MID-MIGRATION, SO IT TAKES THREE MOUNTS, NOT ONE.
+      # `console.core.storage` routes every area through one root, but seven of
+      # its eight areas are still in `_NOT_YET_MOVED` and resolve to their
+      # legacy paths under the repository: `artifacts/console`,
+      # `artifacts/worlds`, `artifacts/console-checks`, ... and `logs/`. Inside
+      # a container those are `/app/...`, which is the image's own writable
+      # layer and is destroyed with the container. Only `ladder` follows
+      # HYTALERL_STORAGE_ROOT today.
+      #
+      # When the areas move, these two collapse into `hydl-storage` above and
+      # nothing else here changes. Until then, dropping them loses every run,
+      # every minted policy and every captured world on `docker compose down`.
+      - hydl-artifacts:/app/artifacts
+      - hydl-logs:/app/logs
+      # JAX writes its content-addressed executable cache under
+      # `~/.cache/hytalerl/jax/<platform-target>`; a live run reports that path
+      # as `cache.persistent_path`. Without this volume every container start
+      # recompiles from cold.
+      - hydl-jax-cache:/home/hydl/.cache
+    environment:
+      HYTALERL_STORAGE_ROOT: /data
+      # NOTE: `runner` is a per-launch field, not an environment variable, and
+      # `runners.ACTIVE` is already "local". The `wsl` option is a Windows-host
+      # dispatch path that cannot exist inside a Linux container -- `scan()`
+      # reports it as unavailable rather than failing, so leave the Train tab's
+      # compute picker on Local here.
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  console-gpu:
+    profiles: ["gpu"]
+    build:
+      context: .
+      target: gpu
+      args:
+        # Must match the host driver. See the Dockerfile note.
+        CUDA_IMAGE: nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04
+    image: hydl-console:gpu
+    ports:
+      - "127.0.0.1:8770:8770"
+    volumes:
+      # The SAME four mounts as `console`, and for the same reason: seven of the
+      # eight storage areas still resolve under /app. Sharing the named volumes
+      # also means a CPU run and a GPU run see one store, so a policy trained on
+      # one is selectable as the source for the other.
+      - hydl-storage:/data
+      - hydl-artifacts:/app/artifacts
+      - hydl-logs:/app/logs
+      - hydl-jax-cache:/home/hydl/.cache
+    environment:
+      HYTALERL_STORAGE_ROOT: /data
+      # JAX preallocates ~75% of the device by default. The console's async
+      # evaluation shares the allocator with training, and that overlap is a
+      # recorded cause of an OOM at update ~200, so the container does not
+      # preallocate and lets the two grow into what they actually use.
+      XLA_PYTHON_CLIENT_PREALLOCATE: "false"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: ["gpu"]
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+volumes:
+  hydl-storage:
+  hydl-artifacts:
+  hydl-logs:
+  hydl-jax-cache:

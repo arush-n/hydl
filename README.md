@@ -58,6 +58,38 @@ gym and the training code always move together. Put the repository root on
 A GPU is strongly recommended. JAX on CPU will run the code but not at a scale
 where the curricula are meaningful.
 
+### Or run it in Docker
+
+```bash
+docker compose up console                      # CPU,  http://127.0.0.1:8770
+docker compose --profile gpu up console-gpu    # CUDA, needs nvidia-container-toolkit
+docker compose run --rm console pytest console/tests -q
+```
+
+The image runs from `/app` with `PYTHONPATH` set rather than pip-installing the
+project, because `console.core.storage` derives its root from its own file
+location and `hytalegym` is not on any index — an installed copy in
+site-packages would put the store somewhere that is not the repository.
+Container and laptop therefore behave the same way, which is the point.
+
+Three things are worth knowing before the first run:
+
+- **The port is published on loopback.** The launch API is unauthenticated, so
+  `127.0.0.1:8770:8770` is deliberate. Widen it only behind something that
+  authenticates.
+- **State lives in volumes, never in the image.** `hydl-storage`,
+  `hydl-artifacts`, `hydl-logs` and `hydl-jax-cache`. It takes more than one
+  because the store is mid-migration: only the `ladder` area follows
+  `HYTALERL_STORAGE_ROOT` today and the rest still resolve under the repository.
+  Drop those mounts and `docker compose down` takes every run with it.
+- **`runner: wsl` does not exist in a container.** It is a Windows-host dispatch
+  path; `runners.scan()` reports it unavailable rather than failing. Leave the
+  Train tab's compute picker on Local.
+
+`HYTALERL_CONSOLE_HOST` defaults to `127.0.0.1` and the image sets it to
+`0.0.0.0` — inside a container the loopback default would publish a port with
+nothing listening on it.
+
 ---
 
 ## Training an agent

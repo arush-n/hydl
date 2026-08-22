@@ -1,0 +1,113 @@
+# What the build context is allowed to contain.
+#
+# THIS IS NOT A COPY OF .gitignore. `.gitignore` decides what gets published;
+# this decides what gets sent to the Docker daemon, and the two answers differ.
+# A tracked file that the running system never reads is still dead weight here,
+# and an untracked local artifact tree is worse than dead weight -- `artifacts/`
+# alone is multiple gigabytes, and every byte of it would be tarred up and
+# shipped to the daemon on every single build.
+#
+# The rule: include what `python -m console.server` actually imports or serves.
+
+# --- Version control and build output ---------------------------------------
+.git/
+.gitignore
+.github/
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# --- Python bytecode and tool caches ----------------------------------------
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.jax_cache/
+.jax-cache/
+.cache/
+**/.cache/
+.coverage
+htmlcov/
+
+# --- Environments -----------------------------------------------------------
+.venv/
+venv/
+.env
+.tools/
+
+# --- Generated trees --------------------------------------------------------
+# `artifacts/` is run output and captured worlds; `storage/` is the console's
+# own store. Both are mounted at run time as a volume, never baked into a layer:
+# an image carrying one run's output is not a reproducible starting point.
+artifacts/
+**/artifacts/
+storage/
+logs/
+output/
+telemetry/*.jsonl
+telemetry/*.jsonl.gz
+adk/runs/*
+!adk/runs/__init__.py
+
+# --- Reverse-engineered sources ---------------------------------------------
+# Never in an image, for the same reason they are never in the repository.
+decompiled/
+**/decompiled/
+decompile/
+**/decompile/
+decomp/
+**/decomp/
+
+# --- Test suites ------------------------------------------------------------
+# The image runs the console; it does not run the suites. `docker compose run
+# --rm console pytest ...` against a bind-mounted tree is how you test, which
+# keeps the shipped image small and its contents honest about being runtime.
+tests/
+**/tests/
+test/
+**/test/
+test-results/
+junit*.xml
+
+# --- Trees with no runtime consumer -----------------------------------------
+# None of these is imported by the console or by `arena.training`.
+experimental/
+mods/
+docs/
+HytaleRL/docs/
+HytaleRL/examples/
+HytaleRL/hytale-plugin/
+HytaleRL/protocol/
+HytaleRL/scripts/
+.codex-local/
+.codex/
+.claude/
+.agents/
+skills/
+**/skills/
+!arena/training/skills/
+
+# --- Model and capture blobs ------------------------------------------------
+*.npz
+*.ckpt
+*.safetensors
+*.pkl
+*.zip
+*.jar
+*.class
+
+# --- Editor and OS ----------------------------------------------------------
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# --- Docker's own files -----------------------------------------------------
+Dockerfile
+docker-compose*.yml
+.dockerignore
