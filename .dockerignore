@@ -10,33 +10,33 @@
 # The rule: include what `python -m console.server` actually imports or serves.
 
 # --- Version control and build output ---------------------------------------
-.git/
+**/.git/
 .gitignore
 .github/
-build/
-dist/
+**/build/
+**/dist/
 *.egg-info/
-.eggs/
+**/.eggs/
 
 # --- Python bytecode and tool caches ----------------------------------------
 __pycache__/
 **/__pycache__/
 *.py[cod]
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-.jax_cache/
-.jax-cache/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/.jax_cache/
+**/.jax-cache/
 .cache/
 **/.cache/
 .coverage
 htmlcov/
 
 # --- Environments -----------------------------------------------------------
-.venv/
-venv/
+**/.venv/
+**/venv/
 .env
-.tools/
+**/.tools/
 
 # --- Generated trees --------------------------------------------------------
 # `artifacts/` is run output and captured worlds; `storage/` is the console's
@@ -45,8 +45,8 @@ venv/
 artifacts/
 **/artifacts/
 storage/
-logs/
-output/
+**/logs/
+**/output/
 telemetry/*.jsonl
 telemetry/*.jsonl.gz
 adk/runs/*
@@ -75,17 +75,17 @@ junit*.xml
 # --- Trees with no runtime consumer -----------------------------------------
 # None of these is imported by the console or by `arena.training`.
 experimental/
-mods/
-docs/
+**/mods/
+**/docs/
 HytaleRL/docs/
 HytaleRL/examples/
 HytaleRL/hytale-plugin/
 HytaleRL/protocol/
 HytaleRL/scripts/
-.codex-local/
-.codex/
-.claude/
-.agents/
+**/.codex-local/
+**/.codex/
+**/.claude/
+**/.agents/
 skills/
 **/skills/
 !arena/training/skills/
@@ -111,3 +111,8 @@ Thumbs.db
 Dockerfile
 docker-compose*.yml
 .dockerignore
+
+# --- Local tooling that is not runtime -------------------------------------
+**/.playwright-cli/
+**/.playwright-mcp/
+*AGENT-INSTRUCTIONS*.md
