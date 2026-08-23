@@ -155,11 +155,30 @@ def bridge_identity(
 
 
 def _newest_runtime_candidate(root: Path) -> dict[str, Path] | None:
-    base = root / "artifacts" / "console-hytale"
-    if not base.is_dir():
+    # The area's locations, taken from `storage` but kept RELATIVE and rejoined
+    # to `root`. This was the one runtime reader still spelling
+    # `artifacts/console-hytale` itself, so relocating the area would have left
+    # it looking at an empty directory and reporting no runtime candidate at
+    # all. `read_roots` returns absolute paths under the real repository, and
+    # using them directly would ignore the `root` argument -- which is the whole
+    # interface here, and how a test points this at a fixture workspace.
+    from console.core import storage
+
+    bases = []
+    for absolute in storage.read_roots("hytale"):
+        try:
+            base = root / absolute.relative_to(storage.PROJECT_ROOT)
+        except ValueError:
+            # An area relocated outside the repository (HYTALERL_STORAGE_ROOT
+            # pointing at another disk) has no meaningful spelling under a
+            # different root, so it is only consulted when it IS the root.
+            base = absolute
+        if base.is_dir():
+            bases.append(base)
+    if not bases:
         return None
     logs = sorted(
-        base.rglob("*_server.log"),
+        (log for base in bases for log in base.rglob("*_server.log")),
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )

@@ -22,26 +22,18 @@ services:
     ports:
       - "127.0.0.1:8770:8770"
     volumes:
-      # The console's whole store: runs, minted policies, captured worlds, logs,
-      # check results, dispatch scratch and native server state. A named volume
-      # rather than a bind mount so it survives `down` and does not inherit host
-      # file ownership, which is what makes the non-root user in the image work
-      # the same way on Linux, macOS and Windows.
-      - hydl-storage:/data
-      # THE STORE IS MID-MIGRATION, SO IT TAKES THREE MOUNTS, NOT ONE.
-      # `console.core.storage` routes every area through one root, but seven of
-      # its eight areas are still in `_NOT_YET_MOVED` and resolve to their
-      # legacy paths under the repository: `artifacts/console`,
-      # `artifacts/worlds`, `artifacts/console-checks`, ... and `logs/`. Inside
-      # a container those are `/app/...`, which is the image's own writable
-      # layer and is destroyed with the container. Only `ladder` follows
-      # HYTALERL_STORAGE_ROOT today.
+      # ONE MOUNT FOR THE WHOLE STORE: runs, minted policies, captured worlds,
+      # logs, check results, dispatch scratch, native-server state and the
+      # ladder. Every area resolves under HYTALERL_STORAGE_ROOT since the
+      # 2026-08-23 migration, so /data is the only thing that has to persist.
+      # This took three mounts before that, because seven areas still wrote to
+      # legacy paths under /app -- which in a container is the image's own
+      # writable layer and dies with it.
       #
-      # When the areas move, these two collapse into `hydl-storage` above and
-      # nothing else here changes. Until then, dropping them loses every run,
-      # every minted policy and every captured world on `docker compose down`.
-      - hydl-artifacts:/app/artifacts
-      - hydl-logs:/app/logs
+      # A named volume rather than a bind mount, so it survives `down` and does
+      # not inherit host file ownership. That is what makes the non-root user in
+      # the image behave the same way on Linux, macOS and Windows.
+      - hydl-storage:/data
       # JAX writes its content-addressed executable cache under
       # `~/.cache/hytalerl/jax/<platform-target>`; a live run reports that path
       # as `cache.persistent_path`. Without this volume every container start
@@ -69,13 +61,9 @@ services:
     ports:
       - "127.0.0.1:8770:8770"
     volumes:
-      # The SAME four mounts as `console`, and for the same reason: seven of the
-      # eight storage areas still resolve under /app. Sharing the named volumes
-      # also means a CPU run and a GPU run see one store, so a policy trained on
-      # one is selectable as the source for the other.
+      # The same store as `console`, deliberately: a policy trained on the CPU
+      # image is then selectable as the source for a GPU run and vice versa.
       - hydl-storage:/data
-      - hydl-artifacts:/app/artifacts
-      - hydl-logs:/app/logs
       - hydl-jax-cache:/home/hydl/.cache
     environment:
       HYTALERL_STORAGE_ROOT: /data
@@ -96,6 +84,4 @@ services:
 
 volumes:
   hydl-storage:
-  hydl-artifacts:
-  hydl-logs:
   hydl-jax-cache:

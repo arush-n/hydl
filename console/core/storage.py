@@ -31,14 +31,21 @@ found; `write_root` returns exactly one directory, so nothing new is ever added
 to a legacy location. That asymmetry is the whole migration strategy: the tree
 converges as things are rewritten, and nothing has to be moved to keep working.
 
-## `runs` has not switched yet, deliberately
+## Every area has now moved
 
-`artifacts/console/` holds 2.9 GB across 4,212 entries and a training job writes
-into it while the console is up. Repointing it is a data migration, not a
-constant change, so `RUNS` still resolves to the legacy root and says so. When
-it moves, `store.ARTIFACT_ROOT` becomes `write_root("runs")` and the old path
-stays in `LEGACY` -- no other module should need editing, which is the point of
-routing them all through here.
+Completed 2026-08-23: all seven remaining areas were relocated under
+`STORAGE_ROOT` and `_NOT_YET_MOVED` is empty. 41,159 files, renamed on the same
+volume with the console stopped, file counts checked equal on both sides.
+
+No module outside this one was edited to do it, which was the point of routing
+them all through here -- with two exceptions that had been spelling a legacy
+path themselves rather than asking:
+`console/core/catalog/identities.py` (native-server logs) and
+`adk/probes/crosslang.py` (bridge jar discovery). Both now span the move.
+
+Legacy roots are still listed in `_LEGACY` and still searched by `read_roots`,
+so a path recorded before the move -- a source checkpoint in an old launch
+spec, a bookmarked artifact -- continues to resolve.
 """
 
 from __future__ import annotations
@@ -94,24 +101,24 @@ _LEGACY: dict[str, tuple[Path, ...]] = {
     "hytale": (PROJECT_ROOT / "artifacts" / "console-hytale",),
 }
 
-#: Areas still served from their legacy root, because relocating one is a data
-#: migration rather than a constant change. Remove an entry here in the SAME
-#: change that moves its contents -- flipping it early splits the store, which
-#: is the failure this module exists to end.
+#: Areas still served from their legacy root. **Empty: the migration is done.**
 #:
-#: Today that is all of them, and that is deliberate. `artifacts/worlds` is
-#: written by `worlds/scene_cache.py` during a live Region run, `artifacts/
-#: console` is 2.9 GB with a training job writing into it, and none of the rest
-#: is worth a move on its own. What this module changes NOW is where the next
-#: new kind of artifact goes: `write_root` for an area absent from this set
-#: returns `storage/<area>`, so nothing new lands in an eleventh ad-hoc root.
+#: Completed 2026-08-23 with the console stopped, by renaming each directory on
+#: the same volume -- 41,159 files across seven areas, file counts verified
+#: equal on both sides of every move. `policies` went first because it lived
+#: INSIDE `runs` (`artifacts/console/init-policies`) and would otherwise have
+#: travelled with it.
 #:
-#: Migration order when the device is idle, cheapest and least-referenced first:
-#: `checks` (1 KB), `dispatch` (14 KB), `logs` (89 KB), `presets` (24 KB),
-#: `worlds` (73 KB), `hytale` (163 MB), `policies`, then `runs` (2.9 GB) last.
-_NOT_YET_MOVED = frozenset(
-    {"runs", "policies", "worlds", "logs", "checks", "dispatch", "hytale"}
-)
+#: The entry for an area must be removed in the SAME change that moves its
+#: contents. Removing it early points writes at an empty directory while the
+#: history stays behind; removing it late writes new artifacts into the location
+#: just vacated. Either way the store splits, which is the failure this module
+#: exists to end.
+#:
+#: `read_roots` still lists every legacy path after the current one, so a
+#: reference held from before the move -- a checkpoint path in an old run's
+#: spec, a bookmarked artifact -- still resolves.
+_NOT_YET_MOVED: frozenset[str] = frozenset()
 
 AREAS = tuple(sorted(_LEGACY))
 

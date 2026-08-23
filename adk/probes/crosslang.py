@@ -334,14 +334,18 @@ def _bridge_jar_candidates(root: Path) -> tuple[Path, ...]:
             key=lambda path: str(path).casefold(),
         )
     )
-    candidates.extend(
-        sorted(
-            root.glob(
-                "artifacts/console-hytale/*/mods/HytaleRLBridge-0.1.0.jar"
-            ),
-            key=lambda path: str(path).casefold(),
+    # Both spellings of the console's native-server area, because it is being
+    # relocated from `artifacts/console-hytale` to `storage/hytale`. Listed
+    # rather than resolved through `console.core.storage`: `adk` does not import
+    # `console`, and inverting that dependency to save one glob is not a trade
+    # worth making.
+    for pattern in (
+        "artifacts/console-hytale/*/mods/HytaleRLBridge-0.1.0.jar",
+        "storage/hytale/*/mods/HytaleRLBridge-0.1.0.jar",
+    ):
+        candidates.extend(
+            sorted(root.glob(pattern), key=lambda path: str(path).casefold())
         )
-    )
     appdata = os.environ.get("APPDATA")
     if appdata:
         candidates.append(
