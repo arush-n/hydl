@@ -18,6 +18,32 @@ The digest covers the library's own semantic hash, so regenerating a world
 library invalidates its entries rather than serving them against new terrain.
 It also covers `FORMAT_VERSION`: changing what a payload holds must not read
 an old payload back as if the format had not moved.
+
+## NOTHING CALLS THIS YET, and the reason is not neglect
+
+Assessed 2026-08-23. The Region build this was written for is
+`arena/training/runs/pursuit_run.py::_materialize_region`, an `lru_cache` whose
+entries die with the worker -- exactly the case described above. Wiring it is
+NOT a small change, because the shapes do not meet:
+
+* `store` takes `Mapping[str, np.ndarray]`. `load_region` returns
+  `LoadedRegion`, whose `fixture` and `runtime` fields are both `Any` and come
+  straight out of the gym's `load_arsenal_region_fixture`. They are not a flat
+  array mapping, and `runtime` is ALIASED -- the same object is referenced by
+  both `LoadedRegion.runtime` and the fixture built from it, so a naive
+  round-trip through two npz entries would silently unshare them.
+* Getting it subtly wrong means training on a scene that is not the one the key
+  describes, which no gate in this repository would catch. Proving it right
+  needs two full ~380s Region builds and a leaf-by-leaf comparison, which is an
+  experiment rather than a refactor.
+
+The cost is also narrower than it looks: only Region runs pay it. An authored
+`world_design` builds its arena with no capture step and reports a scene build
+of about 6 seconds against roughly 380 for Region.
+
+So this stays unwired deliberately. What it needs first is a flatten/unflatten
+for `LoadedRegion` that preserves aliasing, with a round-trip test against a
+real build -- not a call site.
 """
 
 from __future__ import annotations
@@ -39,7 +65,19 @@ import numpy as np
 FORMAT_VERSION = 1
 
 _ROOT = Path(__file__).resolve().parents[1]
-CACHE_ROOT = _ROOT / "artifacts" / "worlds" / "scene-cache"
+
+#: Under the console's store, which is where the `worlds` area lives since the
+#: 2026-08-23 migration. Spelled from `HYTALERL_STORAGE_ROOT` directly rather
+#: than by calling `console.core.storage.write_root("worlds")`: the two agree by
+#: construction, and this module has no other reason to import the console.
+#:
+#: It previously pointed at `artifacts/worlds/scene-cache`, which that migration
+#: vacated -- so entries would have been written somewhere nothing reads.
+CACHE_ROOT = (
+    Path(os.environ["HYTALERL_STORAGE_ROOT"]).expanduser().resolve()
+    if os.environ.get("HYTALERL_STORAGE_ROOT")
+    else _ROOT / "storage"
+) / "worlds" / "scene-cache"
 #: Length of the digest kept in a directory name. The full digest is recorded
 #: in the manifest; this is a prefix for humans, not the identity.
 _DIGEST_IN_NAME = 16

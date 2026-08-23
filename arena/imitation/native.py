@@ -68,6 +68,7 @@ from hytalegym.jax.combat.observation.v3.schema.contract import (
     ACTOR_WORLD_FLOAT_FEATURES,
     ACTOR_WORLD_MASK_FEATURES,
     DEFENSE_FLOAT_FEATURES,
+    DEFENSE_FLOAT_SIZE,
     LEARNER_OBSERVATION_V3_SCHEMA,
     LEARNER_OBSERVATION_V3_VERSION,
     MOVEMENT_STATE_FEATURES,
@@ -1582,16 +1583,25 @@ def _actor_components(capture: NativeNpcTraceCapture) -> tuple[TraceComponent, .
         ),
         numeric_component(
             "native.defense",
-            _field(current, "defense_values", np.float64, 7),
-            next=_field(following, "defense_values", np.float64, 7),
+            # DERIVED, not restated. `DEFENSE_FLOAT_FEATURES` grew to 8 when
+            # `locomotion_stamina_fraction` was added to the observation, and
+            # these widths stayed at 7 -- so every TraceSpec here was built
+            # with an 8-name layout over a 7-wide shape and `contract.py`
+            # refused it, taking 19 of the 25 arena failures with it.
+            _field(current, "defense_values", np.float64, DEFENSE_FLOAT_SIZE),
+            next=_field(
+                following, "defense_values", np.float64, DEFENSE_FLOAT_SIZE
+            ),
             kind="state",
             layout=DEFENSE_FLOAT_FEATURES,
             layer="internal",
         ),
         numeric_component(
             "native.defense_mask",
-            _field(current, "defense_available", np.bool_, 7),
-            next=_field(following, "defense_available", np.bool_, 7),
+            _field(current, "defense_available", np.bool_, DEFENSE_FLOAT_SIZE),
+            next=_field(
+                following, "defense_available", np.bool_, DEFENSE_FLOAT_SIZE
+            ),
             kind="mask",
             layout=DEFENSE_FLOAT_FEATURES,
             layer="internal",
