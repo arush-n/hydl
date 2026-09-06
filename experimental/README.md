@@ -8,8 +8,11 @@ consumed by Arena's world providers.
 The native policy agent depends on the HytaleRL bridge and ADK deployment
 contracts. WorldGen V2 supplies authoring, capture, compilation, and JAX
 loading seams used by [`arena/worlds.py`](../arena/worlds.py) and
-[`arena/publication_worlds.py`](../arena/publication_worlds.py). Captured
-evidence and local test harnesses are not runtime dependencies.
+[`arena/publication_worlds.py`](../arena/publication_worlds.py). The
+`cnn_training` package provides simulator-agnostic voxel scene generation,
+first-person raycast frames, aligned supervision, and token features for
+vision experiments. Captured evidence and local test harnesses are not runtime
+dependencies.
 
 ## Entry points
 
@@ -17,6 +20,8 @@ evidence and local test harnesses are not runtime dependencies.
   integration and export tools.
 - [`worldgen-v2/README.md`](worldgen-v2/README.md) covers custom environment
   recipes and the JAX world-provider path.
+- [`cnn_training/README.md`](cnn_training/README.md) covers generic CNN data
+  generation, rendering, tokenization, and NPZ sample persistence.
 
 Start with [`arena/README.md`](../arena/README.md) if you want to use these
 integrations through the task and training layer.
