@@ -204,7 +204,6 @@ skills/
 # are part of the shipped product.
 /experimental/3d_audio/
 /experimental/hierarchical_planner/
-/experimental/cnn_training/
 
 # --- Hytale server runtime state ---------------------------------------------
 # The server writes these at the repository root on first boot. They are
