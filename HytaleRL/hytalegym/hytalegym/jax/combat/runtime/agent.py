@@ -7,7 +7,13 @@ from hytalegym.jax.world.region.geometry import region_aabb_grounded, region_aab
 from hytalegym.jax.world.region.types import RegionGeometryState
 from hytalegym.jax.combat.loadout.schema.types import MeleeLoadoutBatch
 from hytalegym.jax.combat.motion.movement_state import actor_walk_movement_state_result, hytale_0_5_7_actor_walk_movement_config
-from hytalegym.jax.combat.types import AGENT_ENTITY, TARGET_ENTITY, CombatParams, CombatState
+from hytalegym.jax.combat.types import (
+    AGENT_ENTITY,
+    AGENT_MOTION_NPC_WALK,
+    TARGET_ENTITY,
+    CombatParams,
+    CombatState,
+)
 from .math import (  # noqa: F401  (re-exported: callers unchanged)
     _approach,
     _approach_angle,
@@ -207,6 +213,41 @@ def _airborne_walk_motion(
         speed_cap / jnp.maximum(steered_speed, jnp.finfo(jnp.float32).tiny),
     )
     return steered_x * clamp, steered_z * clamp, steered_speed * clamp
+
+
+def _npc_airborne_walk_motion(
+    prior_velocity_x: jax.Array,
+    prior_velocity_z: jax.Array,
+    yaw_degrees: jax.Array,
+    carried_move_speed: jax.Array,
+    speed_cap: jax.Array,
+    wish_x: jax.Array,
+    wish_z: jax.Array,
+    motion_delta: jax.Array,
+    params: CombatParams,
+) -> tuple[jax.Array, jax.Array, jax.Array]:
+    """Airborne horizontal motion for native ``MotionControllerWalk`` NPCs."""
+
+    del wish_x, wish_z, motion_delta, params
+    prior_horizontal_speed = jnp.hypot(prior_velocity_x, prior_velocity_z)
+    safe_prior_horizontal_speed = jnp.maximum(
+        prior_horizontal_speed,
+        jnp.finfo(jnp.float32).tiny,
+    )
+    moving = prior_horizontal_speed > jnp.float32(1.0e-9)
+    yaw_radians = jnp.deg2rad(yaw_degrees)
+    direction_x = jnp.where(
+        moving,
+        prior_velocity_x / safe_prior_horizontal_speed,
+        -jnp.sin(yaw_radians),
+    )
+    direction_z = jnp.where(
+        moving,
+        prior_velocity_z / safe_prior_horizontal_speed,
+        -jnp.cos(yaw_radians),
+    )
+    carried_speed = jnp.minimum(carried_move_speed, speed_cap)
+    return direction_x * carried_speed, direction_z * carried_speed, carried_speed
 
 
 def _force_pushed_agent_motion(
@@ -517,7 +558,7 @@ def _tick_agent_motion(
         & ~control_lock_at_start
         & ~force_active
     )
-    airborne_velocity_x, airborne_velocity_z, airborne_move_speed = (
+    player_airborne_velocity_x, player_airborne_velocity_z, player_airborne_move_speed = (
         _airborne_walk_motion(
             agent_velocity[:, 0],
             agent_velocity[:, 2],
@@ -537,6 +578,45 @@ def _tick_agent_motion(
             motion_delta,
             params,
         )
+    )
+    npc_airborne_velocity_x, npc_airborne_velocity_z, npc_airborne_move_speed = (
+        _npc_airborne_walk_motion(
+            agent_velocity[:, 0],
+            agent_velocity[:, 2],
+            agent_yaw,
+            state.agent_move_speed,
+            params.agent_max_speed * horizontal_speed_multiplier,
+            jnp.where(
+                desired_zero,
+                jnp.float32(0.0),
+                desired_velocity[:, 0] / safe_desired_speed,
+            ),
+            jnp.where(
+                desired_zero,
+                jnp.float32(0.0),
+                desired_velocity[:, 1] / safe_desired_speed,
+            ),
+            motion_delta,
+            params,
+        )
+    )
+    use_npc_airborne_motion = (
+        params.agent_motion_model == jnp.int32(AGENT_MOTION_NPC_WALK)
+    )
+    airborne_velocity_x = jnp.where(
+        use_npc_airborne_motion,
+        npc_airborne_velocity_x,
+        player_airborne_velocity_x,
+    )
+    airborne_velocity_z = jnp.where(
+        use_npc_airborne_motion,
+        npc_airborne_velocity_z,
+        player_airborne_velocity_z,
+    )
+    airborne_move_speed = jnp.where(
+        use_npc_airborne_motion,
+        npc_airborne_move_speed,
+        player_airborne_move_speed,
     )
     move_speed = jnp.where(
         walk_airborne,

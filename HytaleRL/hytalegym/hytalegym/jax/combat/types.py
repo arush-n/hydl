@@ -177,6 +177,13 @@ PLAYER_AIR_CONTROL_MAX_MULTIPLIER = 3.13
 #: motion. Their absence is a known, bounded gap rather than an oversight.
 PLAYER_AIR_CONTROL_APPLICATION_IS_INFERRED = True
 
+# The native bridge controls NPCEntity roles, whose MotionControllerWalk
+# movement model differs from the player-only client path above. Keep both
+# models explicit so a native NPC fidelity run cannot accidentally certify the
+# inferred player recurrence or use the player's base speed in FluidFX.
+AGENT_MOTION_PLAYER = 0
+AGENT_MOTION_NPC_WALK = 1
+
 # Stamina, from ``Server/Entity/Stats/Stamina.json`` and
 # ``StaminaRegenDelay.json``. The assets express these as an amount per 0.1 s
 # interval; they are stated per second here and scaled by ``motion_delta``.
@@ -210,6 +217,7 @@ class CombatParams(NamedTuple):
     agent_max_health: Array
     agent_max_speed: Array
     agent_acceleration: Array
+    agent_motion_model: Array
     agent_jump_velocity: Array
     agent_variable_jump_fall_gravity: Array
     #: Fastest speed any gait can reach. Observation normalisation divides by
@@ -538,6 +546,7 @@ def default_combat_params(
     *,
     microticks: int = 4,
     target_active: bool = True,
+    motion_model: str = "player",
 ) -> CombatParams:
     """Return the packaged Kweebec-versus-Brawler ruleset.
 
@@ -548,6 +557,10 @@ def default_combat_params(
     if not 1 <= microticks <= MAX_MICROTICKS:
         raise ValueError(
             f"microticks must be in [1, {MAX_MICROTICKS}], got {microticks}"
+        )
+    if motion_model not in {"player", "npc_walk"}:
+        raise ValueError(
+            "motion_model must be 'player' or 'npc_walk'"
         )
 
     f32 = jnp.float32
@@ -571,6 +584,9 @@ def default_combat_params(
     target_offset = fixture["target_offset"]
     initial_distance = math.hypot(target_offset[0], target_offset[2])
     sweep_direction = {"LEFT": 0, "RIGHT": 1}
+    agent_base_speed = (
+        agent["max_speed"] if motion_model == "npc_walk" else PLAYER_BASE_SPEED
+    )
     return CombatParams(
         microticks=jnp.asarray(microticks, dtype=i32),
         target_active=jnp.asarray(target_active, dtype=jnp.bool_),
@@ -591,11 +607,17 @@ def default_combat_params(
         agent_spawn=jnp.asarray(fixture["agent_spawn"], dtype=f32),
         target_offset=jnp.asarray(fixture["target_offset"], dtype=f32),
         agent_max_health=jnp.asarray(agent["max_health"], dtype=f32),
-        # The player's ``BaseSpeed``, not the NPC ruleset's 5.0. This is the
-        # *run* gait; the gait multipliers scale it. Both the legacy single-actor
-        # step and the entity locomotion path read it, so the two stay in step.
-        agent_max_speed=jnp.asarray(PLAYER_BASE_SPEED, dtype=f32),
+        # The selected role's run speed; gait multipliers scale it. Both the
+        # legacy single-actor step and the entity locomotion path read it, so
+        # the two stay in step.
+        agent_max_speed=jnp.asarray(agent_base_speed, dtype=f32),
         agent_acceleration=jnp.asarray(agent["acceleration"], dtype=f32),
+        agent_motion_model=jnp.asarray(
+            AGENT_MOTION_NPC_WALK
+            if motion_model == "npc_walk"
+            else AGENT_MOTION_PLAYER,
+            dtype=i32,
+        ),
         # The NPC formula this replaces --
         # ``sqrt(2 * jump_velocity_gravity_floor * jump_height_parameter)`` --
         # assumes the ascent runs at the walk controller's gravity floor (10.0),
@@ -607,7 +629,7 @@ def default_combat_params(
             PLAYER_VARIABLE_JUMP_FALL_FORCE, dtype=f32
         ),
         agent_maximum_gait_speed=jnp.asarray(
-            PLAYER_BASE_SPEED * max(PLAYER_GAIT_SPEED_MULTIPLIERS), dtype=f32
+            agent_base_speed * max(PLAYER_GAIT_SPEED_MULTIPLIERS), dtype=f32
         ),
         agent_knockback_scale=jnp.asarray(agent["knockback_scale"], dtype=f32),
         agent_movement_velocity_resistance=jnp.asarray(

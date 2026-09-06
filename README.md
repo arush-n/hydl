@@ -1,190 +1,168 @@
-# hydl
+# HYDL
 
-**Reinforcement-learning agents trained in a JAX reimplementation of Hytale
-0.5.7, built to transfer to the real server.**
+HYDL is a high-throughput software twin of Hytale for training autonomous game
+agents.
 
-The premise is that a game server is too slow to train against and too
-authoritative to train without. So the combat, locomotion and world rules are
-reimplemented in JAX — where thousands of environments step in parallel on a
-GPU — and the resulting policy is run against the actual Hytale server through a
-JVM bridge. Everything in this repository exists to keep those two worlds
-telling the same story: the simulation is derived from the shipped game's own
-authored data, and the parts that drift are treated as defects rather than
-tuning.
+It reimplements Hytale's structured game state and rules in JAX so many worlds
+can run in parallel inside compiled array code. A Java bridge then runs the
+policy against the authoritative Hytale server for validation.
 
-> **Status: research code, pre-1.0.** One training lesson is bound end to end and
-> works; five more are drafted but not runnable. The sections below say which is
-> which. Nothing here is a supported product.
+The current policy uses numerical state, action-allowed flags, and target
+features. It does not use screenshots or video.
 
----
+## What is proven
 
-## What is actually in here
+- The JAX combat, locomotion, and world state machine runs in batched,
+  JIT-compatible array code.
+- The simulator has separate player and NPC locomotion models, including the
+  native NPC walk behavior used by the current motion lane.
+- Disabled targets are handled safely instead of producing invalid geometry
+  transitions.
+- Bounded geometry and locomotion checks pass against an installed Hytale 0.5.9
+  server for the fixtures exercised so far.
+- A native 0.5.9 policy trace reproduces **296/296** action decisions when
+  replayed through the JAX policy.
+- The Java policy runtime executes the policy in Hytale and drives locomotion
+  under explicit test accommodations.
+- Validation fails closed when the policy, simulator version, or task setup does
+  not match.
 
-| Path | What it is |
+This proves a working, narrow policy and locomotion lane. It does not prove
+that the complete JAX environment and Hytale server behave identically.
+
+## Gaps to close
+
+1. Start JAX and Hytale from the same state and compare what the agent sees on
+   every tick.
+2. Record what the server actually applied, not only what the policy requested.
+3. Compare movement, damage, death, rewards, inventory, block interactions, and
+   other world effects.
+4. Run a fair pursuit evaluation with the same start distance, target behavior,
+   episode length, game version, and held-out trials.
+5. Validate a native scripted fleeing target without special target information.
+6. Add vision so an agent can learn from screenshots or video.
+7. Measure the speed advantage on one matched task. JAX is the high-throughput
+   training path; Hytale is limited by its real-time server loop, the cost of
+   running many separate worlds, and CPU/bridge/device transfers.
+
+The policy, simulator version, and native task setup must be aligned before a
+matched native pursuit result can be certified.
+
+## Architecture
+
+```text
+Hytale authored data
+        |
+        v
+HytaleGym: batched JAX state machine
+        |
+        v
+Arena: tasks, rewards, policies, training, evaluation
+        |
+        v
+PPO / self-play / rollouts
+
+Hytale server <-> Java bridge <-> policy runtime <-> validation evidence
+```
+
+### Main directories
+
+| Directory | Responsibility |
 |---|---|
-| `arena/` | The task, world, evaluation, imitation and training layer. Reward laws, action-scope contracts, PPO collectors, curricula, promotion gates. Agent-neutral by design. |
-| `adk/` | The agent development kit that adapts Arena. The dependency points one way: `adk` may import `arena`, never the reverse. |
-| `console/` | A FastAPI service that owns training runs — preflight, launch, evidence, replay. Runs are launched through it, not by calling a trainer directly. |
-| `agents/` | Concrete agents and their run profiles. `agents/basic` is the one the Console drives. |
-| `worlds/` | Turning bounded captured worlds into JAX world providers. |
-| `npc/` | NPC behaviour surfaces. |
-| `tools/` | Repository gates, including the publication-hygiene check that CI runs. |
-| `HytaleRL/hytalegym/` | The JAX gym itself — combat, locomotion, perception, world stepping. |
-| `experimental/` | Work that has not earned a place in the trees above. |
+| `HytaleRL/hytalegym/` | JAX environment: combat, motion, collision, observations, actions, geometry, and world stepping. |
+| `arena/` | Tasks, rewards, world binding, rollout collection, PPO, and evaluation. |
+| `adk/` | Deployment bundles, runtime setup, provenance, and transfer validation. |
+| `experimental/jvm-agent/` | Java policy execution, native state projection, action decoding, and server validation. |
+| `console/` | Training-job API and run management. |
+| `agents/` | Training profiles and policy artifacts. |
+| `worlds/` and `npc/` | World providers and NPC/task behavior surfaces. |
 
-**Start here:** [`arena/README.md`](arena/README.md) is the public orientation
-layer for the training stack, and the READMEs beneath it cover the task
-framework, contracts, rewards, evaluation and self-play.
+The current end-to-end training lesson is pursuit. Other task interfaces exist,
+but they are not all runnable end to end.
 
----
+## Setup
 
-## Installing
+Requirements:
 
-Python 3.11 or newer.
+- Python 3.11 or newer
+- JAX, NumPy, Gymnasium, and Optax
+- A GPU is recommended for training
+
+From the repository root:
 
 ```bash
-pip install -e .                 # arena, adk, console, npc, worlds
-pip install -e ".[console]"      # + FastAPI/uvicorn, to run the Console
-pip install -e ".[dev]"          # + pytest, ruff
+python -m pip install -e ".[dev]"
+export PYTHONPATH="$PWD:$PWD/HytaleRL"
 ```
 
-Runtime dependencies are `jax`, `numpy`, `gymnasium` and `optax`.
+PowerShell:
 
-**`hytalegym` is not resolved from an index.** It ships inside this repository at
-`HytaleRL/hytalegym` and is put on the path rather than installed, so that the
-gym and the training code always move together. Put the repository root on
-`PYTHONPATH`.
+```powershell
+python -m pip install -e ".[dev]"
+$env:PYTHONPATH = "$PWD;$PWD\HytaleRL"
+```
 
-A GPU is strongly recommended. JAX on CPU will run the code but not at a scale
-where the curricula are meaningful.
+`hytalegym` is shipped in this repository rather than resolved from a package
+index, so the `HytaleRL` path is required.
 
-### Or run it in Docker
+## Train in JAX
+
+Training is owned by the Console so the task, environment, policy, and evidence
+contracts are recorded together.
 
 ```bash
-docker compose up console                      # CPU,  http://127.0.0.1:8770
-docker compose --profile gpu up console-gpu    # CUDA, needs nvidia-container-toolkit
-docker compose run --rm console pytest console/tests -q
+python -m console.server --help
 ```
 
-The image runs from `/app` with `PYTHONPATH` set rather than pip-installing the
-project, because `console.core.storage` derives its root from its own file
-location and `hytalegym` is not on any index — an installed copy in
-site-packages would put the store somewhere that is not the repository.
-Container and laptop therefore behave the same way, which is the point.
+Use the Console API documented in [`console/docs/API.md`](console/docs/API.md)
+to run the `basic` pursuit profile. JAX training does not require a running
+Hytale server.
 
-Three things are worth knowing before the first run:
+For an environment throughput measurement:
 
-- **The port is published on loopback.** The launch API is unauthenticated, so
-  `127.0.0.1:8770:8770` is deliberate. Widen it only behind something that
-  authenticates.
-- **State lives in volumes, never in the image.** `hydl-storage`,
-  `hydl-artifacts`, `hydl-logs` and `hydl-jax-cache`. It takes more than one
-  because the store is mid-migration: only the `ladder` area follows
-  `HYTALERL_STORAGE_ROOT` today and the rest still resolve under the repository.
-  Drop those mounts and `docker compose down` takes every run with it.
-- **`runner: wsl` does not exist in a container.** It is a Windows-host dispatch
-  path; `runners.scan()` reports it unavailable rather than failing. Leave the
-  Train tab's compute picker on Local.
-
-`HYTALERL_CONSOLE_HOST` defaults to `127.0.0.1` and the image sets it to
-`0.0.0.0` — inside a container the loopback default would publish a port with
-nothing listening on it.
-
----
-
-## Training an agent
-
-Runs go through the Console. That is a deliberate constraint, not a convenience
-wrapper — the Console owns preflight validation, cache identity and ownership of
-the evidence a run produces, and bypassing it loses all three.
-
-```
-POST http://127.0.0.1:8770/api/train/preflight    # launch only if passed: true
-POST http://127.0.0.1:8770/api/train?profile_id=basic
+```bash
+python tools/bench_env_throughput.py --out results
 ```
 
-Do not invoke the trainer module directly. The agent profile and Console API
-boundary are described in [`agents/basic/README.md`](agents/basic/README.md)
-and [`console/docs/API.md`](console/docs/API.md).
+## Test the simulator
 
-The algorithm is **recurrent PPO**. It is not selected by a flag — the collector
-is a PPO loop, and the source checkpoint you pass defines the network shape.
+```bash
+python -m pytest \
+  HytaleRL/hytalegym/tests/jax/combat/runtime/test_airborne_player_motion.py \
+  HytaleRL/hytalegym/tests/jax/combat/motion/test_target_vertical.py \
+  HytaleRL/hytalegym/tests/jax/test_geometry.py -q
+```
 
-### What is runnable
+```bash
+python -m ruff check HytaleRL/hytalegym/hytalegym
+```
 
-**One lesson.** `pursuit` — chase a fleeing target — is the only contract bound
-to a collector.
+## Native validation
 
-| | |
-|---|---|
-| Reward law | `arena/training/contracts/pursuit.py` |
-| Collector | `arena/training/runs/pursuit_run.py` |
-| Console stage | `pursuit_tracking` |
+Native validation requires an installed Hytale server, matching assets, a
+compatible JDK, and bridge/plugin build outputs. Those runtime files are not
+distributed here.
 
-Five further lessons (`guard_duel`, `punish_window`, `evasion`,
-`ability_landing`, `checkpoint_route`) publish a reward law, an action scope and
-a manifest, but have no collector, so the Console will not offer them. Their
-registrations in `arena/training/contracts/catalog.py` carry the `blockers=`
-that say why.
+Use this lane to answer three questions:
 
-### Curricula are gated, and the gate runs one rung at a time
+- Does the Java policy execute inside the real server?
+- Does the server provide the state and action evidence expected by the policy?
+- Does behavior survive the move from the fast twin to the authoritative game?
 
-`arena/curriculum/pursuit.py` declares two ladders — an objective ladder
-(`long_range` → `closing` → `contact` → `recursive`) and a terrain ladder — and
-`arena/curriculum/ladder.py` owns the promote / hold / demote decision.
+A policy replay is not a full environment-fidelity result. A locomotion result
+is not a combat result. Every native result must state its server version, task
+setup, accommodations, and evidence type.
 
-`POST /api/train/ladder/start` launches the **current rung only**. When it
-finishes, its own selected success rate is fed to the gate, and what runs next
-is whatever the gate returns: the rung above, the same rung again, or the rung
-below. Queueing every rung up front is what makes a threshold decorative — two
-of the three outcomes are not "the next rung" — so the driver
-(`console/core/execution/ladder.py`) never has more than one rung outstanding.
-`GET /api/train/ladder` reports where it is and why.
+## Boundaries
 
-### Running without the captured worlds
-
-The Region world libraries are large and are not published, so a fresh clone has
-none. Two things follow, and both are deliberate:
-
-- **The gym still imports.** The geometry-token contract reports its staging
-  provenance as absent rather than refusing, so `import arena.training` works on
-  a clean checkout. A checkpoint pinned to a staged library is still correctly
-  rejected — the two contracts hash differently.
-- **Flat-world training still runs.** `world_design` builds a pursuit arena from
-  an authored design with no capture step (`worlds/flat.py`), which is also why
-  it skips the scene build: about 6 seconds against roughly 380 for a Region
-  run. `completely_flat` is a plane on which every point is standable.
-
-Training on captured Hytale terrain needs a library you capture yourself.
-
----
-
-## What is deliberately *not* in this repository
-
-Being explicit, because the absences are load-bearing:
-
-- **Decompiled Hytale sources.** Never published. CI fails the build if any are
-  committed, independently of the ignore rules. See [`LICENSE`](LICENSE).
-- **Hytale server installs, plugin jars and bridge build output.** The Gradle
-  wrapper jar is the single deliberate exception, because `./gradlew` cannot
-  bootstrap without it.
-
----
-
-## Repository gates
-
-CI (`.github/workflows/hygiene.yml`) runs on push to `main` and on pull requests:
-
-- `tools/check_publication_hygiene.py` — asserts excluded paths stay excluded and
-  source paths stay trackable
-- no decompiled sources committed
-- no jars committed beyond the Gradle wrapper
-- `ruff check arena agents console tools adk npc worlds`
-
----
+- The current policy interface is structured state, not vision.
+- Native evidence is bounded to specific fixtures and accommodations.
+- Full sim-to-server certification has not been issued.
+- Hytale server installs, assets, captured worlds, private fixtures, and runtime
+  jars are not distributed.
+- Decompiled Hytale source code is not distributed.
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE). The license file also states the position on
-Hytale's own assets and decompiled code, which are **not** covered by it and are
-not distributed here.
+MIT. Hytale's own assets, server files, and decompiled code are not distributed
+under this license.

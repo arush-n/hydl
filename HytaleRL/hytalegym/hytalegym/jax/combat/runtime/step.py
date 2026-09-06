@@ -465,12 +465,16 @@ def _microtick(
         )
     else:
         state = moved_target
-    state = _tick_target_vertical_motion(
+    target_vertical_state = _tick_target_vertical_motion(
         state,
         motion_delta,
         params,
         geometry,
     )
+    # Native capture fixtures may intentionally omit target geometry when the
+    # target is disabled. Do not let that absent actor fall through the world
+    # and turn an otherwise valid learner transition into geometry exhaustion.
+    state = _select_state(target_active, target_vertical_state, state)
     attacked_target = _tick_target_attack(
         state,
         target_pause_draw,
