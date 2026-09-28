@@ -12,41 +12,32 @@ features. It does not use screenshots or video.
 
 ## What is proven
 
-- The JAX combat, locomotion, and world state machine runs in batched,
-  JIT-compatible array code.
-- The simulator has separate player and NPC locomotion models, including the
-  native NPC walk behavior used by the current motion lane.
-- Disabled targets are handled safely instead of producing invalid geometry
-  transitions.
-- Bounded geometry and locomotion checks pass against an installed Hytale 0.5.9
-  server for the fixtures exercised so far.
-- A native 0.5.9 policy trace reproduces **296/296** action decisions when
-  replayed through the JAX policy.
-- The Java policy runtime executes the policy in Hytale and drives locomotion
-  under explicit test accommodations.
-- Validation fails closed when the policy, simulator version, or task setup does
-  not match.
+- HytaleGym's combat, locomotion, and world state machine runs in batched,
+  JIT-compatible JAX array code.
+- A trained HYDL policy has been loaded through the Java bridge and run by an
+  authoritative Hytale server. It received structured game state and controlled
+  a native actor toward an assigned target using legal actions. This shows that
+  the policy deployment and locomotion path works for the tested task surface.
+- Exported policies carry their input and action requirements. The runtime checks
+  compatibility and action legality before taking control of an actor.
+- Training, task definitions, policy execution, and server validation are
+  separate parts of the codebase, so an agent can be evaluated independently of
+  the simulator that trained it.
 
-This proves a working, narrow policy and locomotion lane. It does not prove
-that the complete JAX environment and Hytale server behave identically.
+This establishes a working policy-to-server deployment path. It does not show
+that Hytale and JAX behave identically or that performance transfers unchanged
+across tasks and worlds.
 
-## Gaps to close
+## Current gaps
 
-1. Start JAX and Hytale from the same state and compare what the agent sees on
-   every tick.
-2. Record what the server actually applied, not only what the policy requested.
-3. Compare movement, damage, death, rewards, inventory, block interactions, and
-   other world effects.
-4. Run a fair pursuit evaluation with the same start distance, target behavior,
-   episode length, game version, and held-out trials.
-5. Validate a native scripted fleeing target without special target information.
-6. Add vision so an agent can learn from screenshots or video.
-7. Measure the speed advantage on one matched task. JAX is the high-throughput
-   training path; Hytale is limited by its real-time server loop, the cost of
-   running many separate worlds, and CPU/bridge/device transfers.
-
-The policy, simulator version, and native task setup must be aligned before a
-matched native pursuit result can be certified.
+1. Measure how well policies transfer by evaluating the same tasks and starting
+   conditions in JAX and Hytale across repeated runs.
+2. Expand reliable end-to-end training beyond pursuit; other task interfaces are
+   not all runnable end to end yet.
+3. Validate more movement and world interactions against Hytale. The current
+   policy interface uses structured numerical state rather than screenshots or
+   video.
+4. Verify compatibility with future Hytale server releases.
 
 ## Architecture
 
