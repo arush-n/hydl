@@ -184,7 +184,8 @@ two sources: (1) the recorded decision rows (`eval/record_traces.py`, labels = J
 (2) decisions under *varied executive states*: E_t variants with reordered priorities, different goal
 sets, different constraints and horizons, rendered through the same renderer, labelled by the rule the
 variant implies (and, when the owner runs the top LLM, by the LLM's own choice). Source (2) is what
-teaches goal reading; source (1) alone teaches J0.
+teaches goal reading; source (1) alone teaches J0. The LLM-written states come out of the executive
+store through `executive/export.py` (`export_history` / `load_history`, JSON lines, added 2026-10-17).
   `L_A = CE(s~, y_skill) + BCE(r, y_replace) + lambda_p ||p - y_params||^2 [+ sum_k CE(s~^{(k)}, y^{(k)})]`
 Stage B, calibration (COMMITTED). With the heads frozen, fit the confidence head on held-out-like rows:
   `L_B = (c - 1[argmax s~ = y_skill])^2`   (Brier, a proper scoring rule, [RLCR]); report ECE = sum_b (n_b/N) |acc_b - conf_b|.

@@ -188,3 +188,8 @@ verdict: FAIL, NOT YET ATTRIBUTED — the working tree holds about 17 simulator 
 result:  owner: "yes that is fine, remember the simple goal is that the model can share a state with llm/read the inputs and be able to create outputs very quickly for the neural components, note that the library will increase over time". `.venv/bin/pip install transformers` -> transformers 5.20.1, tokenizers 0.23.3, safetensors 0.8.0 (undo: `.venv/bin/pip uninstall transformers`). Design: the primary skill head becomes catalogue-agnostic matching (SYSTEM_ONE.md §8.3, FORMULAS M3b), new gate G3b (a skill added after training is scored without head retraining). The scaffold subagent was told. G2 probe launched: one forward pass of answerdotai/ModernBERT-base and Qwen/Qwen3-0.6B (open weights downloaded locally) on the real rendering, batch 1 and 8, CPU.
 verdict: INFO — docs tests 11 passed after the edits.
 
+## 2026-10-17 — executive/export.py: E_t history to JSON lines (J-S1 stage A, source 2)
+command: JAX_PLATFORMS=cpu .venv/bin/python -m pytest tests/experimental/neural_agent/test_na_executive_export.py tests/experimental/neural_agent/test_na_docs.py -q
+result:  export tests 3 passed after two test-side fixes (GoalSpec is not a NamedTuple; the second version reuses the first state's goals), docs tests pass; ruff clean
+verdict: PASS — the LLM's goal states can leave the store as training rows for the System One model.
+
