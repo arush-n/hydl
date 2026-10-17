@@ -241,3 +241,8 @@ verdict: PASS — against the clean-HEAD baseline the simulator change now fixes
 result:  tasks/arenas.py registers `neural_agent/open_flat_legal`: the shipped `combat/open_flat_control` scene's world capabilities with a runtime config built by `arsenal_runtime_config(..., legal_observation=True)` for the batch (adk's build() prefers a scene's runtime_config); description schema v2 carries `base_scene` and `legal_observation`; the composition report caveat names the mode. Tests: test_na_arenas.py (new test_open_flat_arena_runs_in_the_legal_observation_mode) and the caveat tests pass. The 64-lane composition on the legal scene is running as the regression check.
 verdict: PASS so far — this architecture does not cheat; the Gym default is unchanged for everyone else.
 
+## 2026-10-17 — composition at 512 ticks, 64 lane-runs, on the arena's legal-mode scene (regression check of the opt-in)
+command: as the 64-lane entry, --out experimental/neural_agent/eval/out/openflat512_b8e8_legalscene
+result:  flat 0/89 (re-engagements 0.989, 353 damage events), j0 33/64 = 0.516 (0.396) (0.516, 252), shuffled 16/64 = 0.250 (0.160) + 2 loose (0.391, 253); interrupts j0 333/337, shuffled 405/408; identical to the privileged-mode rows. The report caveat now reads "AgentKit's combat/open_flat_control ... in the Gym's legal observation mode (legal_observation=True, 2026-10-17)". exit 0
+verdict: PASS — the architecture's arena runs legal and loses nothing on this scene, where the target is visible on every tick; the legal mode matters on scenes with occlusion.
+
