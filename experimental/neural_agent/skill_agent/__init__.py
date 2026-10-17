@@ -16,4 +16,6 @@ nothing. Import the submodules:
 * ``library``: the skill registry: create, register and use verbs and programs.
 * ``programs``: the runner that turns an activity program into requests and reads the statuses back.
 * ``scratchpad``: the combiner on S_t: requests in from the requests section, statuses out to skills.
+* ``encoder``: the token-set encoder, the one trunk every body reads its tokens through (B1).
+* ``bench_tick``: the per-tick latency bench of resolver, combiner and encoder (the 30 Hz gate).
 """

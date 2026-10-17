@@ -350,6 +350,41 @@ world, seed), so it is never used against the wrong ruleset.
 count as fidelity. Randomising a gap (Tobin et al. 2017) is allowed only after a differential has named
 that gap.
 
+### 2.7 The trunk: a token-set encoder (`encoder.py`, B1)
+
+**What it reads.** Every body reads its agent's token sets through one trunk: entity, block candidate,
+inventory slot, geometry, self and kit tokens (`surface.TOKEN_TYPES` names), any number of each.
+
+```
+h      = MLP_t(features) + type_t + marked · m      one small MLP per token type; learned type and mark vectors
+X      = pre-LayerNorm transformer blocks over all valid tokens (masked multi-head attention, then an MLP)
+context = Dense(concat(mean, max, marked mean, self token))     tokens[t] = the per-token embeddings
+```
+
+**Why this shape.**
+- **Sets, not slots.** The tokens are a set, so the trunk is permutation-invariant and its parameters
+  never depend on how many tokens there are (Deep Sets, Zaheer et al. 2017; Set Transformer, Lee et al.
+  2019). Attention lets each token see the others (Vaswani et al. 2017); pre-LayerNorm blocks train stably
+  without warm-up tricks (Xiong et al. 2020).
+- **Marking is how one network points.** The instructed target is marked inside its set, and the marked
+  mean is a separate readout, so the target is never averaged away. A pointer head indexes `tokens[t]`
+  (Pointer Networks, Vinyals et al. 2015).
+- **Masking is exact.** A padded slot is zeroed before the first layer and is never attended to, so
+  nothing a padded slot holds, even NaN, changes an output.
+  [test: test_sa_encoder.py, padding, permutation and capacity invariance]
+
+**The 30 Hz budget.** The owner set p95 <= 15 ms for the whole per-tick path, inside the 33.3 ms tick.
+`bench_tick.py` times the lower layer's share: the resolver, the combiner and the encoder.
+
+| batch | p95 per tick |
+|---|---|
+| 1 | 0.65 ms |
+| 8 | 2.29 ms |
+| 64 | 12.1 ms (one 40 ms spike) |
+
+These were measured on 2026-10-17 at a machine load of about 21 on 18 cores [ledger: B1]. The bodies
+were stand-ins, so a trained body's own heads come on top of the encoder's cost.
+
 ## 3. For the agent building the gen-7 simulator
 
 **What you receive.** Each tick you get one choice per head per agent, in this order. A head no request
@@ -505,8 +540,10 @@ done [(0, 'wave_at(friend)', 0, 'accepted'), (1, ..., 'running'), (2, ...), (3, 
 - Sutton, R. S., Precup, D., & Singh, S. (1999). Between MDPs and semi-MDPs: A framework for temporal abstraction in reinforcement learning. Artificial Intelligence 112(1-2), 181-211. — recalled.
 - Tavakoli, A., Pardo, F., & Kormushev, P. (2018). Action branching architectures for deep reinforcement learning. AAAI. — recalled.
 - Tobin, J., et al. (2017). Domain randomization for transferring deep neural networks from simulation to the real world. IROS. — recalled.
+- Vaswani, A., et al. (2017). Attention is all you need. NeurIPS. — recalled.
 - Vinyals, O., Fortunato, M., & Jaitly, N. (2015). Pointer networks. NeurIPS. — recalled.
 - Vinyals, O., et al. (2019). Grandmaster level in StarCraft II using multi-agent reinforcement learning. Nature 575, 350-354. — recalled.
 - Wang, G., et al. (2023). Voyager: An open-ended embodied agent with large language models. arXiv:2305.16291. — recalled.
+- Xiong, R., et al. (2020). On layer normalization in the transformer architecture. ICML. — recalled.
 - Zaheer, M., et al. (2017). Deep Sets. NeurIPS. — recalled.
 - ROS actionlib goal states: http://wiki.ros.org/actionlib/DetailedDescription. — recalled.
