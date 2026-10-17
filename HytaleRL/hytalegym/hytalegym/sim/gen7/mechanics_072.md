@@ -1,0 +1,62 @@
+# Gen-7 constructs: what 0.7.2 does that the gen-5 engine does not (design, 2026-10-17)
+
+A construct is one behaviour, implemented once in the engine behind one field of
+`hytalegym.sim.common.profile.Constructs`. Gen 5 keeps every default (today's behaviour); gen 7
+sets the field (`sim/gen7/profile.py`). The stubs in `mechanics/` are typed, unwired interfaces;
+`mechanics.require_construct(profile, field)` raises `NotImplementedError` until a construct is
+implemented, so a gen-7 render cannot quietly run with gen-5 behaviour. Under the owner's render
+rule the gen-5 source is never edited: a render copies it from `git show HEAD:<path>`, applies the
+redirect list (`sim/common/content/redirects.json`), and inserts a hook where a construct runs.
+
+Gaps and measurements come from `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md` (rows cited as
+F1a, F5a, ...). Inputs name gen-7 content-table rows (`family/row#field`) that exist now (asserted
+by `tests/sim/test_constructs.py`).
+
+## Constructs (new behaviour behind a switch)
+
+| Construct (stub) | Field: gen 5 -> gen 7 | What 0.7.2 does | Inputs from the gen-7 tables | Differential and pass bar | Phase |
+|---|---|---|---|---|---|
+| Hit interrupt, stun, flinch (`hit_interrupt.py`) | `hit_interrupt`: False -> True | 31 attack files parent `DamageEntityParent_Hit_Interrupt` (Weapons: Daggers 9, Mace 7, Sword 6, Battleaxe 5; Abilities: Fireball 1, GroundSlam 2, WindStrike 1). On hit, if the target carries `Hit_Interrupt_Eligible` and none of Flinch/Enraged/Recovery_Pending: cancel its attack, stun, flinch, record the reaction | `weapons/interaction:*#hit_interrupt`; `weapons/interaction:DamageEntityParent_Hit_Interrupt_On_Hit#document`; `weapons/effect:Hit_Interrupt_*#duration,document` (Flinch 0.5 s at speed x0, Stunned 0.7 s, Enraged 8 s, Recovery_Pending 2 s, Recent_Reaction_A/B 4 s, Eligible 1 s); eligibility: `npc_roles/role:*#component_references` reaching `Component_Instruction_Hit_Interrupt` along `reference_chain` | live hits on an eligible role (Skeleton_Fighter, Goblin_Scrapper): attack-cancel tick, flinch window and displacement, stun, enrage after the third flinch; match native within tolerance (F5a). Note F5a: the current opponents (Trork_Brawler, Trork_Unarmed, Kweebec_Razorleaf) are not eligible | P3 |
+| Mana pool (`mana.py`) | `mana_pool`: False -> True | Mana 100/100 at spawn, +1 per 0.3 s while alive (0.5.10: 0/0, +1 per 0.2 s gated on 6 s without damage and not charging) | `stats/stat:Mana#initial_value,max,regenerating` | refill rate +1 per 0.3 s within 5 % (F7a) | P3 |
+| Rune casting (`mana.py`) | `rune_casting`: False -> True | Rune items carry an `Ability` block (slot, cost in mana, cooldown, keywords, `Cast` root); casts launch ability projectiles (`LaunchAbilityProjectile`) | `weapons/item:Rune_*#ability` (e.g. Rune_Fireball cost 30, cooldown 2); `weapons/root:Root_Ability_*`; `weapons/interaction:Ability_*_Cast#document` (fireball cast RunTime 0.87); `weapons/projectile_config:Projectile_Config_Ability_*`; modifier runes need `Server/Abilities` keyword semantics (not extracted) | per rune: cost, cooldown, cast time, flight and effect match native (F7b) | P3 |
+| Hookshot (`hookshot.py`) | `hookshot`: False -> True | Tool_Hookshot fires, attaches and pulls; Rune_ChainHook casts a chain hook | `weapons/item:Tool_Hookshot` and its graph; `weapons/projectile_config:Projectile_Config_Hookshot`, `Projectile_Config_ChainHook`; `weapons/interaction:Ability_ChainHook_Cast`, `_Hit` | fire, attach, pull distance and timing (catalogue: chain hook to 1.5) | P3, on demand |
+| Dodge action head (`dodge.py`) | `dodge_action_head`: (left, right, forward, back) -> (left, right) | Nothing new: the seven dodge assets are identical in 0.5.10 and 0.7.2 and the engine already executes left/right only (`DODGE_AUTHORED_ACTION_MASK`); only the policy head shrinks | `weapons/interaction:Dodge#document` (only Left/Right branch to a chain), `Dodge_Left`/`Dodge_Right` (cost 2, force 13 Set, regen delay Set -0.7), `weapons/effect:Dodge_Invulnerability#duration` 0.25 | existing dodge boundary tests on 0.7.2 (F9 MATCH) | P3 |
+| Line of sight (`line_of_sight.py`) | `line_of_sight`: non_transparent_blocks -> detail_hitbox | A non-transparent block occludes only where the ray hits one of its detail hitboxes (0.7.2 `PositionCache`); full cubes agree (F2a) | `blocks/block:*#opacity,hitbox_type`; `blocks/hitbox:*#boxes`; cell rotation from the Region capture | occlusion fixture with slabs, stairs, fences: every ray agrees (F2b); then the catch rule and the `hidden` opening | P2 |
+| Slope and wall limits (`slope_limits.py`) | `slope_limits`: False -> True | `MaxSlopeAngleDegrees` 30, `MaxWallAngleDegrees` 15 (new keys) | `movement/config:Default#fields.MaxSlopeAngleDegrees,fields.MaxWallAngleDegrees` | slope fixture, <= 5e-4 m per step (F1d) | P2 |
+| Walk descent (`walk_descent.py`) | `walk_descent`: free_fall -> minimum_descent_rate | 0.7.2 walk controller forces a minimum descent rate when descending (code) | none (engine code) | stairs/ledge/slope fixture extending `adk/tools/native_motion_differential.py`, <= 5e-4 m per step (F1e) | P2 |
+| Climbing (`climbing.py`) | `climbing`: False -> True | Climb on `IsClimbable` blocks (present in 0.5.10 too; the gen-5 engine never models it) | `blocks/block:*#climbable` (57 resolved types; 44 files author the key); `movement/config:Default#fields.ClimbSpeed,ClimbSpeedLateral,ClimbUpSprintSpeed,ClimbDownSprintSpeed` | ladder fixture: up, down, lateral speeds (F10a) | after P2 |
+| Gliding (`gliding.py`) | `gliding`: False -> True | Glider item (0.7.2 `Glider_Scrap`) | `weapons/item:Glider_Scrap`; `stats/stat:GlidingActive`; `stats/stat:Stamina` Gliding drain rule | glide speed, fall rate, stamina (catalogue 10, <= 2/s, 1/s) (F10d) | on demand |
+| Riding (`riding.py`) | `riding`: False -> True | Mounts (`MovementConfig/Mount.json` new in 0.7.2) | `movement/config:Mount#fields`; mount roles in `npc_roles` | rider speed, sprint, jump (catalogue 8, 13.2, 14) (F10e) | on demand |
+| NPC set-velocity (`npc_velocity.py`) | `npc_velocity_model`: zero_then_add -> role_set_velocity | `Role.processSetVelocityInstruction` applies one set velocity (~23x for set-type NPC knockback); never reaches the bridge-driven agent | none (engine code) | NPC-on-NPC knockback displacement | P3 |
+| Block health reset (`block_health.py`) | `block_health_reset_on_write`: False -> True | health entry dropped once health leaves (0, 1) and on any block write | none (engine rule) | mutable-block native compare re-baselined on 0.7.2 | P5 |
+
+`doors` and `swimming` keep their gen-5 models in gen 7 (`world_v0_5`, `fluidfx_v0_5`) until a 0.7.2
+differential differs; the doors source audit crashes on 0.7.2 on removed classes (F10b, F12) and the
+swimming compare asserts 0.5.7 (F10c), so both need P5 re-baselining before they can measure.
+
+## Content changes that need no construct (the overlay's redirects and patches)
+
+These are new numbers flowing through behaviour the engine already has. They become redirects (a
+symbol reads its table field) or, where the gen-5 engine encodes the number structurally, a
+fidelity patch in the gen-7 overlay. Every value below is in the gen-7 tables and asserted by
+`tests/sim/test_a2_diff.py`.
+
+| Change | Table field | Engine target today |
+|---|---|---|
+| Sword knockback: Swing_Left 6.0 at (0,1,-1) -> 4.3 at (0,0.2,-1); Swing_Right 7 -> 5.0; Swing_Down 12 at (0,1,-2) -> 10.8 at (0,0.2,-2) | `weapons/interaction:Weapon_Sword_Primary_Swing_*_Damage#knockback` | `profiles/hytale_0_5_7.py` force tuples (redirect `sword_knockback`) |
+| Sword hold gates 0.2 / 0.65 -> 0.174 / 0.565 (not in TRAINING-0.7.2.md; a lead for F5f, the agent's own hits landing 1-2 ticks later) | `weapons/interaction:Weapon_Sword_Primary#charge_thresholds`, `Weapon_Sword_Primary_Thrust#charge_thresholds` | `_NESTED_OUTER_GATE_SECONDS`, `_SWORD_THRUST_HOLD_SECONDS` (redirect `melee_hold_constants`) |
+| Dagger swings +50 % (Iron 4 -> 6, Mithril 8 -> 12) | `weapons/item:Weapon_Daggers_*#damage` | `_iron_daggers` defaults, `SCALAR_VARIANTS` |
+| Ranged: Shortbow Iron 6/9/12/16 -> 1/2/4/7, launch 15/30/50/70 -> 12/22/35/50 (full draw 85/25 unchanged); crossbow Iron combo 27 -> 13, Ancient Steel 42 -> 14 / Big Arrow 123 -> 82 / standard 16 -> 10.5 | `weapons/item:*#damage`; `projectiles/config:Projectile_Config_Arrow_Shortbow_Strength_*#launch_force` | `shortbow_tiers`, `iron_template_damage`, `SCALAR_VARIANTS` redirects |
+| Durability: 57 of 143 compiled rows change maximum, 82 change loss (Sword Iron 120 -> 250, 0.21 -> 0.13) | `durability/item:*` | `hytale_0_5_7_item_programs_v1.json#weapon_items` (redirect `compiled_weapon_durability`) |
+| Guard roots no longer interrupt Primary (`Rules.Interrupting: [Primary]` removed from the Sword, Battleaxe, Daggers and Mace guard roots) | `weapons/root:Root_Weapon_*_Secondary_Guard#document.Rules` | `_guard(interrupting_type_mask=1 << PRIMARY)` default (patch: read the root's Rules) |
+| Crafting 1,947 -> 2,047 recipes, 22 bench ids, 19 without a bench | `crafting/recipe:*` | `jax/crafting/contract.py` `RECIPE_TABLE_CAPACITY` (redirect `crafting_capacities`) |
+| Spider web speed 0.65 -> 0.45 (jump 0.5 -> 0.45, drag 0.45 -> 0.82) and a new NPC web-collision slow (x0.2, 1 s) | `blocks/block:Deco_SpiderWeb#movement_settings,collision_interactions` | Region recapture on 0.7.2 (the engine reads captured cells) |
+| Mana 0 -> 100 | `stats/stat:Mana` | `mechanics/factory.py` defaults (redirect `mechanics_factory_resources`) |
+
+## Engine fixes that are not version constructs
+
+- F1c NPC jump: native gravity integrates with the previous tick's duration, the engine with the
+  current one (inferred from receipts); it failed on 0.5.9 too. A fix belongs in the engine for every
+  generation, gated by the gen-5 identity check, not behind a gen-7 switch.
+- F5f the agent's own hits land 1-2 ticks later on 0.7.2: cause not isolated; the sword gate change
+  above is the first lead to test.

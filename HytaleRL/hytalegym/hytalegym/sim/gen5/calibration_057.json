@@ -1,0 +1,30 @@
+{
+ "schema": "hytalerl_content_calibration_v1",
+ "generation": "gen5",
+ "certified_version": "0.5.7",
+ "purpose": "Values the gen-5 engine holds that the extracted tables (data/, from the installed 0.5.10 archive) do not reproduce. Applied by hytalegym.sim.common.content.load for gen 5 so the engine behind the gen-5 profile reproduces today's rollouts bit for bit. Every entry is a difference listed by the A1 gate (tests/sim/test_a1_gen5.py); the gate fails if an entry is unneeded or a difference is unlisted.",
+ "overrides": [
+  {
+   "family": "weapons",
+   "row": "interaction:Weapon_Sword_Primary_Swing_Left_Damage",
+   "path": ["knockback", "velocity_type"],
+   "value": "Set",
+   "extracted": "Add",
+   "constants": ["sword_knockback:Weapon_Sword_Primary_Swing_Left.velocity_type"],
+   "classification": "transcription_error",
+   "evidence": "The asset authors DamageEffects.Knockback.VelocityType \"Add\". The Weapon_Sword_Iron graph's semantic SHA-256 on the installed 0.5.10 equals the 0.5.7 pin (sim/gen5/evidence_057.json, weapon_graphs), so 0.5.7 authored Add too. The profile passes force=push without force_mode, so the event takes _melee's default FORCE_SET. Swing_Down, Thrust and Vortexstrike author Set. Kept as Set for gen 5; the gen-7 differential decides the model (FIDELITY-0.7.2.md row 5b).",
+   "consumer": "jax/combat/arsenal/profiles/hytale_0_5_7.py:2064-2075 (push, force=push; _melee force_mode default at :1517)"
+  },
+  {
+   "family": "weapons",
+   "row": "interaction:Weapon_Sword_Primary_Swing_Right_Damage",
+   "path": ["knockback", "velocity_type"],
+   "value": "Set",
+   "extracted": "Add",
+   "constants": ["sword_knockback:Weapon_Sword_Primary_Swing_Right.velocity_type"],
+   "classification": "transcription_error",
+   "evidence": "As Swing_Left: the asset authors VelocityType \"Add\" (0.5.7-identical graph); the profile's force=(0, 1, -1, 7) event takes the default FORCE_SET.",
+   "consumer": "jax/combat/arsenal/profiles/hytale_0_5_7.py:2094 (force=(0, 1, -1, 7); _melee force_mode default at :1517)"
+  }
+ ]
+}
