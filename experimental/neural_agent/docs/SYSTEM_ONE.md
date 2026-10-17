@@ -541,6 +541,16 @@ Recommendation: (a) first because it is a one-day test with the harness already 
 the kind-accuracy bar on held-out wordings. Both keep the two-timescale design: encode once per
 version, never per decision.
 
+**Measured the same night (ledger "interpret stage ... frozen encoders"; `jev/system_one/interpret.py`,
+`interpret_benchmark.py`).** The number reader passes (argument exact-match 1.0000 on every generated
+surface form). No frozen encoder meets the kind bar: hashed 0.41, ModernBERT-base mean-pooled 0.68,
+MiniLM-L6-v2 0.71 on held-out wordings, with systematic polarity errors (every "not visible" text read as
+distance-below; below versus above near chance), the known weakness of pooled frozen embeddings with
+negation. Intent -> skill: MiniLM with a fitted map 0.91 on held-out wordings (the one passing cell),
+zero-shot 0.85 on held-out families (the best unseen-skill reader; only two families held out, so
+fragile). Option (a) is therefore out; (b), fine-tuning, is the path, which is J-S2 (§9). MiniLM
+(22M, 0.45 s per 1,000 texts, 5x faster than ModernBERT-base) joins the backbone candidates of §9.2.
+
 ### 8.8 What is deliberately not in J-S1
 
 No text generation, no tool use, no chain of thought at decision time (System One). No external
@@ -580,7 +590,7 @@ Primary: ModernBERT-base (149M; 72.5 ms per pass over 330 tokens on this CPU, un
 2026-10-17), the Laya precedent. Heads: the bilinear matcher `W` (d x d), the kind classifier
 (d -> 9), the argument flag (d -> 1), on marker states. Fine-tuning: the top 4 of 22 layers plus the
 heads trainable, the rest frozen (backward cost about a fifth of a full fine-tune; unfreeze more if the
-gate misses). Fallbacks, in order: a 22M six-layer encoder (about 8 ms per pass) if speed binds; the
+gate misses). Fallbacks, in order: a 22M six-layer encoder (MiniLM-L6-v2, the best frozen reader in the §8.13 benchmark; about 8 ms per pass) if speed binds; the
 decoder path, Qwen3-0.6B with field readouts at the marker positions and LoRA (245 ms per pass measured;
 int4 later), the owner's KEV idea, if the encoder misses accuracy.
 
