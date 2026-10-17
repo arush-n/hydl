@@ -50,9 +50,19 @@ package is *rendered* from that source plus the generation's **overlay**:
   where its overlay says, and each difference has a differential;
 - updating to generation N+1 is: extract, write the overlay delta, render, run the differentials. The
   overlay delta is the whole port, in one reviewable file.
-Optimisation is a standing objective of the render step, not a separate project: table lookups become
-static arrays, Python-side loops in the copied modules are vectorised when a profile exposes them, and
-compile and step times are measured before and after each render (a number in the receipts).
+Optimisation is a first-class requirement of the port (owner, 2026-10-17: "when porting you should also be
+optimizing and trying to make it faster from the terrain worlds to other accuracy checks"), measured, not
+assumed, and never at the cost of bit-exactness unless the owner sees the numbers:
+- **baselines first**, on the committed gen-5 engine: step throughput (lane-steps per second at batch 8
+  and 64), jit compile time of the combat step, Region library load time, path-table build time, the
+  runtime of each fidelity differential and of the eleven source-pin audits, and the test suites' wall
+  time; recorded as receipts so every render reports its delta;
+- **targets in the render step**: content tables as static arrays, vectorised replacements for
+  Python-side loops the copied modules expose, cached Region and light captures, incremental path tables
+  (rebuild only the changed sections), differentials that run against a recorded native receipt instead
+  of a live server where the mechanic has not changed, and audits that hash once per jar;
+- **the rule from the speed-ups memory**: measure first; only bit-exact opt-in changes while other
+  sessions run; a methodology change goes to the owner with the numbers.
 
 ## 3. Getting there from today
 
