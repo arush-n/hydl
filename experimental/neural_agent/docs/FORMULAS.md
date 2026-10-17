@@ -1,6 +1,6 @@
 # experimental/neural_agent: formulas
 
-Status on 2026-10-16; third pass 2026-10-17 (UTC; the local clock read 2026-10-16 evening, CDT), see the verification notes. Every formula the three-level design relies on, with one line on what it means and where it comes from. Sources are the decision record (ADR-001, local-only, SHA-256 `227500cc89eb13a8a50be882a5bb75f7c3fb13bc36921da87a479b9c1d3b9112`, modified 20:59:34), PLAN v0.2 (`agents/design/PLAN.md`, local-only, SHA-256 `db6413db…`), the repository code named in each entry, and the papers listed in `REFERENCES.md`.
+Status on 2026-10-16; third pass 2026-10-17 (UTC; the local clock read 2026-10-16 evening, CDT), see the verification notes. Every formula the three-level design relies on, with one line on what it means and where it comes from. Sources are the decision record (ADR-001, local-only, SHA-256 `9abf0a4f1c44300b12a1042328543531ae77efedac0fc6c8918da63dd33450dc`, modified 20:59:34), PLAN v0.2 (`agents/design/PLAN.md`, local-only, SHA-256 `db6413db…`), the repository code named in each entry, and the papers listed in `REFERENCES.md`.
 
 **Labels.** Each formula carries one of four labels.
 
@@ -365,6 +365,12 @@ All entries *COMMITTED* by `SYSTEM_ONE.md` section 8 (2026-10-17); none is *CODE
 **(M6) Stage B, calibration.** *COMMITTED* (`SYSTEM_ONE.md` §8). With $W_s, w_r, W_p$ frozen: $\mathcal L_B = (c - [\arg\max \tilde s = y_{\text{skill}}])^2$ (Brier, a proper scoring rule, [RLCR]); report $\mathrm{ECE} = \sum_b \frac{n_b}{N}\,\lvert \mathrm{acc}_b - \mathrm{conf}_b \rvert$ over 10 bins. Freezing the decision heads is the non-hackable form: confidence cannot rise by changing answers ([RLCR2]).
 
 **(M7) Stage C, outcomes.** The PPO of (E9) and (E11) with $\mathrm{apply\_fn}(\cdot) = (\tilde s_i, V_i)$ on `SimGoalDecisionEnv`, trunk frozen, adapter and heads trained; reward as in (E11). *HYPOTHESIS* as a result; the harness is *CODE*.
+
+**(M9) Structured executive encoder.** *COMMITTED* (`SYSTEM_ONE.md` §8.9, owner refocus 2026-10-17). Per goal slot $k$: $q_k = W_{\text{slot}}[\,e_{\text{skill}_k};\ p_k;\ v_k;\ \text{params}_k;\ h_k/H;\ d_k;\ c_k\,] + b_{\text{slot}}$ with the cached skill-description embedding $e_{\text{skill}_k}$, priority $p_k$, validity $v_k$, horizon $h_k$ over the scale $H = 30$ s, deadline flag $d_k$ and constraint-label embedding $c_k$; attention pooling $\alpha_k = \mathrm{softmax}_k(w_a^\top q_k + \log v_k)$, $g_E = \sum_k \alpha_k q_k$; $q_{\text{top}}$ the vector of the top-priority valid slot. Fusion $z_i = \mathrm{LayerNorm}([\,h_E;\ g_E;\ q_{\text{top}};\ a_i;\ e_{\text{current}_i}\,])$, $h_E$ behind a flag. No shape depends on $K$.
+
+**(M10) Generic teacher rule for goal reading.** *COMMITTED* (`SYSTEM_ONE.md` §8.9; the generalisation of J0's rule in `jev/scripted.py`). With the damage window open, $t_{\text{dmg}}$ known and $< 40$ ticks, and $S_{\text{dmg}} = \{k : v_k \wedge \texttt{on\_damage} \in c_k\}$ non-empty, choose $\arg\max_{k \in S_{\text{dmg}}} p_k$; else $\arg\max_{k : v_k} p_k$; else idle. $y_{\text{replace}} = [\text{chosen} \neq \text{current}]$.
+
+**(M11) Goal-reading splits.** *COMMITTED* (`SYSTEM_ONE.md` §8.9). Agreement with (M10) on held-out executive states; a second split holds out catalogue sizes (train $K \le 5$, test $K \in \{6,7,8\}$), which a one-hot head cannot enter. Gate G3: $\ge 0.90$ on both.
 
 **(M8) Speed budget.** *COMMITTED* (`SYSTEM_ONE.md` §8, revised 2026-10-17). Per decision $T_{\text{decide}} = T_{\text{heads}}$ (the fast path); per executive version $T_{\text{update}} = T_{\text{render}} + T_{\text{trunk}}$ (the slow path, off the tick). Measured slow path on this CPU under contention: ModernBERT-base 544 ms, Qwen3-0.6B 1,529 ms per pass over 330 tokens; a decision is a miss when $T_{\text{decide}} > \text{budget}$ (20 ms default, `eval/arms.py`), and the runner keeps the goal (`jev/runner.py`). Measured today: J1 heads alone about $0.1$ ms compiled; J-LM $471$ ms (`LEDGER.md`). $T_{\text{trunk}}$ is gate G2 of `SYSTEM_ONE.md`.
 

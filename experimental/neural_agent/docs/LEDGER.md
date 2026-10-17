@@ -256,3 +256,7 @@ command: JAX_PLATFORMS=cpu .venv/bin/python -m pytest tests/experimental/neural_
 result:  473 passed, 2 skipped in 138.72s; exit 0. Against the phase baseline of 426 passed / 2 skipped: +47 tests (record_traces 4, sim_goal_env and actor-critic 14, system_one 25, executive export 3, arena legal mode 1), 0 regressions.
 verdict: PASS — every component of the day is gated; the simulator switch is committed with its attribution; the J-S1 scaffold passes G1 and G2b; G3, G4 and G5 are the open gates (task: structured executive encoder).
 
+## 2026-10-17 — owner refocus: goal reading first
+result:  "the goal is that this fast middle layer is just tuned to reading the state/goals fast and to be able to query the lower level neural actions faster, right now we need to focus on making it able to read state and llm inputs fast as we have not finalized or gotten close to finishing the neural library". SYSTEM_ONE.md §8.9 and FORMULAS M9-M11 specify the structured, catalogue-agnostic executive encoder, the generic teacher rule and the goal-reading benchmark with a held-out-catalogue-size split; an Opus subagent builds it against the spec.
+verdict: INFO — G4 (online composition with js1) and G5 (calibration) are deferred behind G3 while the library is unfinished.
+

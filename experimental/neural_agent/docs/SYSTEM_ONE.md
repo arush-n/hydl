@@ -272,6 +272,47 @@ because a commitment held the goal). No skill description texts exist yet, so sk
 their ids; writing descriptions is the first step towards G3b quality. The subagent's own caveat stands:
 its latency figures were taken on a loaded machine; the main session's rerun above was quieter.
 
+### 8.9 Goal reading first: the structured executive encoder (owner refocus, 2026-10-17)
+
+Owner: "the goal is that this fast middle layer is just tuned to reading the state/goals fast and to
+be able to query the lower level neural actions faster, right now we need to focus on making it able to
+read state and llm inputs fast as we have not finalized or gotten close to finishing the neural library".
+So the open gate that matters is G3, goal reading, and it must not depend on which skills exist. Skills
+are placeholders with ids and short descriptions; the catalogue is a variable K.
+
+**Why the text embedding alone failed G3 (0.78 / 0.81).** E_t is structured data: per goal slot a skill,
+a priority, params, constraint labels, a horizon, a deadline. A mean-pooled embedding of its rendering
+carries the words but blurs the numbers and the slot structure. J1 read the lowered arrays directly and
+reached 0.996 on recorded rows, but its one-hot slots tie it to K.
+
+**Structured, catalogue-agnostic encoding (COMMITTED).** For each goal slot k = 1..MAX_GOALS:
+  `q_k = W_slot [ e_{skill_k} ; priority_k ; valid_k ; params_k ; horizon_k / H ; has_deadline_k ; c_k ] + b_slot`
+with `e_{skill_k}` the cached description embedding of the slot's skill (zeros for an empty slot), `c_k`
+the embedding of the slot's constraint labels (cached per distinct label; zeros for none), H a fixed
+horizon scale (30 s). Pooled over slots with validity-masked attention:
+  `alpha_k = softmax_k( w_a . q_k + log(valid_k) )`,   `g_E = sum_k alpha_k q_k`,
+plus the top-priority valid slot's vector `q_top`. Fast-path fusion becomes
+  `z_i = LayerNorm([ h_E ; g_E ; q_top ; a_i ; e_current_i ])`
+where `h_E` (the text embedding) is kept behind a flag for the ablation "text off". No weight shape
+depends on K or on the number of distinct constraint labels. Everything here changes only when E_t
+changes, so it belongs to the slow path's cache; the per-decision cost stays the heads.
+
+**Goal-reading benchmark (COMMITTED).** A generator of executive states that is independent of the
+real skill library: a placeholder catalogue of K skills (K sampled in 3..8, ids like `skill_a`, with
+one-line generated descriptions), 1..MAX_GOALS goals with distinct skills, random priorities, params,
+horizons, deadlines, and constraint labels drawn from a small vocabulary that includes `on_damage`.
+The teacher is the generic form of J0's rule, labelling any such state together with a belief row:
+  if the damage window is open (ticks_since_damage known and < 40) and a valid goal carries `on_damage`,
+  choose that goal (highest priority among them); else the highest-priority valid goal; else idle.
+`target_replace` = chosen skill differs from the current skill. Splits are by executive state, and a
+second split holds out catalogue sizes (train K <= 5, test K in {6, 7, 8}) to show K-independence.
+Belief rows come from the recorded datasets (real belief distributions), the current skill from the row.
+
+**Gates.** G3: skill agreement >= 0.90 on held-out states, K-held-out split reported separately; J1
+(fixed one-hot slots) as the control that cannot run on the K-held-out split. G2b unchanged: fast
+path per decision within an order of magnitude of J1 (measured 0.29 ms at batch 64). G3 reading
+latency: time from a new E_t to a ready cache (structured path alone, text path alone, both).
+
 ### 8.8 What is deliberately not in J-S1
 
 No text generation, no tool use, no chain of thought at decision time (System One). No external
