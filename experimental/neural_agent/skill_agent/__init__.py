@@ -4,4 +4,6 @@
 nothing. Import the submodules:
 
 * ``surface``: the gen-7 token types and action heads in six scopes (A1).
+* ``catalogue``: the skill catalogue parsed into typed records, verb contracts, descriptions and
+  activity programs; a JSON dump (A2).
 """
