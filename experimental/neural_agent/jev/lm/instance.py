@@ -31,10 +31,12 @@ Formulas (lane b; k_cur,b, p_cur,b, v_cur,b, s_cur,b are the current goal):
                   lane b keeps lane b's goal. The runner counts a miss when the whole call
                   exceeds the budget, then re-emits the current goal for every lane
                   [ADR-001 D2 timeout semantics; jev/runner.py:280-282 and 334-340]
-    controls      minimum commitment 0.5 s, maximum duration 10 s,
-                  emergency mask {DAMAGE_RECEIVED, TARGET_DIED, NPC_STUCK}
-                  [values chosen in this file; ADR-001 D2 retains PLAN section 19.4, which
-                  names the commit rule but not these values]
+    controls      (min_b, max_b, mask_b) = control_for(control, skill of goal'_b): the
+                  row of that skill in the instance's SkillControlTable
+                  [SYSTEM_ONE.md section 8.12 item 1: the skill's contract owns them;
+                  default default_control_table(skill_ids). Until 2026-10-17 every lane got
+                  0.5 s, 10 s and {DAMAGE_RECEIVED, TARGET_DIED, NPC_STUCK}, the constants
+                  below]
     state         state' = state + 1 per lane, errors included
                   [implementation; initial_state: decisions made per lane]
 
@@ -70,7 +72,10 @@ from experimental.neural_agent.contracts import (
     JevBudget,
     JevMode,
     SharedBeliefState,
-    event_mask,
+    SkillControlTable,
+    _require_control_table,
+    control_for,
+    default_control_table,
     make_goal,
 )
 from experimental.neural_agent.jev.lm.prompting import (
@@ -81,6 +86,8 @@ from experimental.neural_agent.jev.lm.prompting import (
 )
 from experimental.neural_agent.jev.lm.protocol import DecisionLM
 
+# The control every lane got until 2026-10-17. No longer applied: a goal's
+# control is its skill's row of the instance's SkillControlTable.
 MINIMUM_COMMITMENT_SECONDS: float = 0.5
 MAXIMUM_DURATION_SECONDS: float = 10.0
 EMERGENCY_EVENTS: tuple[DecisionEvent, ...] = (
@@ -143,6 +150,8 @@ class LanguageModelJev:
         backend: DecisionLM,
         skill_ids: Sequence[str],
         budget: JevBudget,
+        *,
+        control: SkillControlTable | None = None,
     ) -> None:
         """Bind the instance to a language model, a skill catalogue and a budget.
 
@@ -153,11 +162,15 @@ class LanguageModelJev:
                 ``validate_skill_ids``.
             budget: The per-decision latency budget. Its ``latency_ms`` is the
                 timeout of each model call, as ``latency_ms / 1000`` seconds.
+            control: Keyword only. The goal control of each catalogue skill, one
+                row per id. Default ``default_control_table(skill_ids)``; pass
+                ``SkillRegistry.control_table()`` to use the registry's contracts.
 
         Raises:
-            TypeError: If ``backend`` does not implement DecisionLM, or ``budget``
-                is not a JevBudget.
-            ValueError: If ``name`` is empty or the catalogue is invalid.
+            TypeError: If ``backend`` does not implement DecisionLM, ``budget``
+                is not a JevBudget, or ``control`` is not a SkillControlTable.
+            ValueError: If ``name`` is empty, the catalogue is invalid, or
+                ``control`` does not have one row per catalogue id.
         """
 
         if not isinstance(name, str) or not name:
@@ -170,6 +183,10 @@ class LanguageModelJev:
         self.mode = JevMode.HOST
         self._backend = backend
         self._skill_ids = validate_skill_ids(skill_ids)
+        self._control = _require_control_table(
+            default_control_table(self._skill_ids) if control is None else control,
+            len(self._skill_ids),
+        )
         self._timeout_s = budget.latency_ms / 1000.0
         self._executive: ExecutiveState | None = None
         self.last_errors: tuple[str, ...] = ()
@@ -249,8 +266,8 @@ class LanguageModelJev:
         Returns:
             A GoalDecision. ``state`` is int32[B]. ``goal`` is a ManagedGoal with a
             GoalPayload (``skill_index`` int32[B], ``params`` float32[B, 4],
-            ``executive_version`` int32[B], ``goal_slot`` int32[B]), commitment
-            0.5 s, maximum duration 10 s and the emergency mask. ``terminate`` is
+            ``executive_version`` int32[B], ``goal_slot`` int32[B]) and, per lane,
+            its skill's row of the control table. ``terminate`` is
             bool[B]. ``diagnostics`` is ``{"lane_failed": bool[B]}``, True where the
             lane kept its goal after a failure. Only batched arrays cross the ADK core
             (parent SKILL.md rule 4). The failure messages are in ``last_errors``.
@@ -279,18 +296,16 @@ class LanguageModelJev:
                 failed.append(True)
         self.last_errors = tuple(errors)
 
+        skills = jnp.asarray(np.array([c.skill for c in choices], dtype=np.int32))
+        minimum, maximum, mask = control_for(self._control, skills)
         goal = make_goal(
-            jnp.asarray(np.array([c.skill for c in choices], dtype=np.int32)),
+            skills,
             jnp.asarray(np.stack([c.params for c in choices]).astype(np.float32)),
             jnp.asarray(np.array([c.version for c in choices], dtype=np.int32)),
             jnp.asarray(np.array([c.slot for c in choices], dtype=np.int32)),
-            minimum_commitment_seconds=jnp.full(
-                (lanes,), MINIMUM_COMMITMENT_SECONDS, dtype=jnp.float32
-            ),
-            maximum_duration_seconds=jnp.full(
-                (lanes,), MAXIMUM_DURATION_SECONDS, dtype=jnp.float32
-            ),
-            emergency_interrupt_mask=event_mask(*EMERGENCY_EVENTS, batch=lanes),
+            minimum_commitment_seconds=minimum,
+            maximum_duration_seconds=maximum,
+            emergency_interrupt_mask=mask,
         )
         return GoalDecision(
             state=jnp.asarray(counts + 1, dtype=jnp.int32),

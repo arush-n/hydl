@@ -13,7 +13,13 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from experimental.neural_agent.contracts import SKILL_IDLE, Skill, SkillContract
+from experimental.neural_agent.contracts import (
+    SKILL_IDLE,
+    Skill,
+    SkillContract,
+    SkillControlTable,
+    control_table,
+)
 from experimental.neural_agent.skill_library._common import validate_batch
 from experimental.neural_agent.skill_library.evader import ScriptedEvaderSkill
 from experimental.neural_agent.skill_library.idle import IdleSkill
@@ -69,6 +75,15 @@ class SkillRegistry:
         """The ``SkillContract`` of every skill, in catalog order."""
 
         return tuple(skill.contract for skill in self._skills)
+
+    def control_table(self) -> SkillControlTable:
+        """The goal control each skill's contract declares, in catalog order (idle first).
+
+        Pass it to a JEV instance and its runner as ``control=``, so every goal
+        carries the chosen skill's own control (SYSTEM_ONE.md section 8.12, item 1).
+        """
+
+        return control_table(self.contracts)
 
     def index(self, skill_id: str) -> int:
         """Return the catalog position of ``skill_id``.

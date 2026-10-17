@@ -1,5 +1,7 @@
 # Our own System One decision model for goal reading and decision making
 
+> Consolidated overview and plan (2026-10-17 night): [`MIDDLE_LAYER.md`](MIDDLE_LAYER.md). This file holds the detail it points to.
+
 Written 2026-10-17 (main session) after the owner's clarifications of that day: the middle layer
 is a JEV-like System One model; nothing external is used except the top LLM; we build our own.
 Research question (ADR-001 §1) unchanged. Every number below is either quoted from the cited source
@@ -544,6 +546,220 @@ version, never per decision.
 No text generation, no tool use, no chain of thought at decision time (System One). No external
 model or service: the only external component is the top LLM. No change to the goal contract: the
 "series of quick actions" is the sequence of decisions, plus the optional plan head.
+
+## 9. J-S2: the fine-tuned System One interpreter (design, 2026-10-17 night; awaiting the owner's go)
+
+**Position.** J-S2 is the Jev recipe applied where our CPU has time for it. One forward pass of a
+pretrained backbone fine-tuned on our decision data, every output field read in parallel as a small
+typed classification with a calibrated probability, run once per executive version. The per-tick path
+is unchanged: the typed structured encoder and light heads of §8 (0.3 ms), with the predicates J-S2 read
+evaluated exactly on B_t. J-S1's frozen-trunk text path is retired to the benchmark floor.
+
+### 9.1 One query: input and outputs
+
+Input, rendered once per executive version (and re-rendered when the catalogue changes): the executive
+section's goals as the LLM wrote them (typed fields plus `intent`, `when`, `note`), its facts and notes,
+and the skill catalogue as `id: description` lines. Every goal and every catalogue entry gets a marker
+token, so the backbone's token states at the markers are the span representations the heads read.
+No belief in the input: J-S2 interprets, it does not decide per tick (§9.5 for the optional decision mode).
+
+Outputs, all from the same pass, per goal slot k (up to MAX_GOALS):
+- `skill_k`: a distribution over the K catalogue entries, `softmax_j (q_k^T W e_j)` with `q_k` the goal
+  marker's state and `e_j` the catalogue entry's marker state from the same pass. No weight depends on K;
+  an unseen skill is matched through its description (owner ruling: always the best choice, §8.12).
+- `kind_k`: a distribution over the predicate kinds of §8.11 (nine, from the `when` span).
+- `has_argument_k`: whether the condition carries a number; the number itself comes from the exact
+  reader (`interpret.read_number`), never from the network.
+- Later, per lane and only in the decision mode: `skill_now`, `replace`, `confidence`.
+Every head is a softmax, so the probabilities are calibratable (Brier, temperature) and the typed value
+is the argmax: typed by construction, parallel, one pass.
+
+### 9.2 Backbone and heads
+
+Primary: ModernBERT-base (149M; 72.5 ms per pass over 330 tokens on this CPU, uncontended, measured
+2026-10-17), the Laya precedent. Heads: the bilinear matcher `W` (d x d), the kind classifier
+(d -> 9), the argument flag (d -> 1), on marker states. Fine-tuning: the top 4 of 22 layers plus the
+heads trainable, the rest frozen (backward cost about a fifth of a full fine-tune; unfreeze more if the
+gate misses). Fallbacks, in order: a 22M six-layer encoder (about 8 ms per pass) if speed binds; the
+decoder path, Qwen3-0.6B with field readouts at the marker positions and LoRA (245 ms per pass measured;
+int4 later), the owner's KEV idea, if the encoder misses accuracy.
+
+### 9.3 Training
+
+Data: the goal-language generator, 32k states over real and synthetic catalogues (free; states are the
+unit, not rows: no belief is needed to label an interpretation), labels per slot = the generator's
+meanings (skill, kind, has-argument). Held out exactly as §8.11: wordings, skill families, catalogue
+sizes. Stage A: supervised, cross-entropy on the three heads, 3 epochs, batch 8, AdamW; on this CPU
+about 4-6 hours with the top layers trainable (one overnight run), under an hour for the 22M encoder.
+Stage B: temperature scaling and a Brier check on held-out wordings. Stage C (later, with the lower
+level): outcomes through the harness, RLCR-style with the non-hackable scoring.
+
+### 9.4 Runtime placement and speed
+
+Slow path, per executive version: render (0.1 ms) + one pass (73 ms, batch 1; int8 dynamic quantisation
+to be measured, expected about 2x) + the number reader -> a typed `GoalInterpretation` per slot, written
+to the `decision` section (the LLM sees how its words were read and can correct them). Per tick: the
+interpreted predicates evaluated exactly on B_t, the priority rule (M13), and the §8 heads for replace,
+params and confidence; 0.3 ms, zero backbone calls (G2b holds). With one to four NPCs per scratchpad the
+slow path fits inside the LLM's own cadence many times over.
+
+### 9.5 Optional decision mode (not built first)
+
+With the belief summary appended to the input and `skill_now`/`replace`/`confidence` heads per lane,
+J-S2 is a full Jev-style decider at the host cadence (0.5 s). On this CPU it fits only for a handful of
+lanes (batch 8 was 463 ms); on a GPU it fits all lanes. Built only if the interpret mode passes and the
+owner wants decisions from the backbone itself.
+
+### 9.6 Gates
+
+- I1 interpretation: kind accuracy >= 0.95 on held-out wordings; argument exact-match >= 0.98 (reader);
+  intent -> skill >= 0.90 on held-out wordings, held-out families and held-out sizes.
+- I2 end to end: agreement with M13 >= 0.90 on the three splits with interpret + exact evaluation
+  (this replaces G3-NL).
+- I3 speed: a new executive version read in <= 150 ms at batch 1 on this CPU; zero backbone calls per
+  decision; the recorded-row agreement (G1) stays >= 0.95 because the per-tick heads are untouched.
+- I4 calibration: ECE <= 0.05 for `skill_k` and `kind_k` on held-out wordings after temperature scaling.
+- I5 no regression: the composition rows on the legal open-flat scene unchanged for J0; the js1 arm
+  with J-S2 interpretation not below J0's lower bound (G4, when run).
+
+### 9.7 Build order (each step gated before the next)
+
+1. Floor and reader (running): `interpret.py` number reader and the interpretation benchmark; the frozen
+   encoders become the floor row. Gate: reader exact-match >= 0.98 on every generated surface form.
+2. Fine-tuning harness (`jev/system_one/finetune.py`, PyTorch): rendering with markers, dataset from the
+   generator, the heads, the training loop with the top-N-layers switch, evaluation on the three splits,
+   checkpoint save/load. Gate: a 2k-state smoke run learns the training wordings (>= 0.99) in minutes.
+3. The first real fine-tune of ModernBERT-base (overnight on CPU). Gate: I1.
+4. Calibration and speed: temperature scaling, ECE, int8 latency, the probe. Gates: I3, I4.
+5. Integration: `SystemOneJev.set_shared_state` calls the interpreter once per version and writes the
+   interpretation to the `decision` section; the per-tick evaluator uses it; end-to-end test; the js1 arm
+   through the composition driver. Gates: I2, I5.
+6. If I1 misses: more states, more trainable layers, then the decoder path (§9.2), in that order.
+
+### 9.8 What is reused and what is retired
+
+Reused: the generator and teacher (§8.11), the splits, the number reader, the benchmark, the scratchpad
+and its views, the typed structured encoder and heads for the per-tick path, the two-timescale instance
+code and caches, the LLM prompt vocabulary (§8.12). Retired as a mechanism: per-goal frozen text
+embeddings in the slot vectors (`--goal-language` rows, `--language-mode`), kept only as the floor row of
+the benchmark and as the record of why the design changed.
+
+### 9.9 Behaviour programs: the series of actions (owner principle, 2026-10-17 night)
+
+Owner: "the principle idea of the middle layer is that it can give a series of neural actions to create
+unique human like behaviors based on the llm input and state." This amends §9.1, §9.4, §9.6 and §9.7.
+
+**What changes.** The decision model's output per intent is a *program*, not one skill: up to L = 4
+steps, each step a skill chosen over the catalogue by description, an exit condition (a predicate kind
+of §8.11 over B_t, or "done" when the skill reports completion, or a timer) and a hold-time bucket
+(0.5, 1, 2, 4, 8 s) for human-like timing. A one-step program is today's single call. The LLM may write
+a high-level intent ("ambush them at the door", "harass them but don't die"); composing the steps from the
+library is the middle layer's job, which is where the "reasoning within" lives. All program fields are
+typed and read in parallel from the same pass (multi-token-prediction style heads), so the recipe holds.
+
+**Where "unique" comes from.** Programs are *sampled* from the calibrated distributions (temperature
+tau) once per executive version per agent, so two agents given the same intent behave differently; a
+program is re-sampled when a step's skill reports failure. The LLM's notes (style words: cautious,
+aggressive, patient) are in the input, so the model learns to shift the program with them. Human-likeness
+itself cannot be gated procedurally; its ingredients can: composition with timing, reactive interrupts,
+sampled variety under validity, and later outcome learning (stage C).
+
+**Execution (fast path, per cadence tick, exact, no backbone).** Per agent: evaluate the current step's
+exit condition on B_t (or the skill's completion report, or the timer); advance or hold. The LLM's
+conditional goals ("if hit, evade") act as interrupts by priority: a conditional goal that holds now
+pre-empts the program (M13 over the goals that hold versus the current step); when it ends, the program
+resumes at its step. The selection crossing to the neural layer stays one skill call plus params; the
+skill's contract owns its commitment (§8.12). Replace, confidence and value heads stay. The decision
+section holds the program, the current step and the sampled temperature, so the LLM sees the plan it
+caused; the skills section reports step completions.
+
+**Teacher for stage A: a behaviour-language generator** beside §8.11's: behaviour families (ambush,
+kite / hit-and-run, patrol-then-engage, hunt, hold-and-defend, flee-and-regroup, harass, ...) each with
+at least twelve paraphrases, a canonical program over *skill families* (so synthetic catalogues work:
+reach_point -> hold -> pursue-when-within-4-blocks is "ambush" in any catalogue that has those three),
+hold-time ranges, and style modifiers that change the canonical program in a known way (cautious:
+longer waits, earlier exits). Held out as before: wordings, behaviour families, catalogue sizes.
+
+**Gates added.** B1 program agreement (step skills and exit kinds, step-wise) >= 0.90 on held-out
+wordings and >= 0.85 on held-out behaviour families (zero-shot composition is the hard case; the bar is
+honest). B2 validity: 100 % of sampled programs name catalogue skills and evaluable exits. B3 variety:
+at tau = 1, at least 3 distinct valid programs per intent in 16 samples, each with step agreement >= 0.7
+to the canonical (varied but sensible). B4 online: on the composition task the intent "catch the target
+but do not get hurt" composes pursuit and evasion not below J0's lower bound at 512 ticks (the
+human-like behaviour test the repository already has).
+
+**Plan deltas.** Step 2 gains the program heads and the behaviour generator (about half a day more);
+step 5 gains the program executor in the fast path (a small exact state machine, about a day); the Mac
+GPU makes every fine-tune a matter of minutes, so iterations on the behaviour head are cheap.
+
+### 9.10 The request stream: how the middle and lower layers correspond (owner answers, 2026-10-17 night)
+
+Owner's answers, condensed: the neural layer receives a *stream* of requests from the state, conflicting,
+sequential or parallel; it interprets them, rejects the invalid ones and keeps acting as best it can, and
+streams its status back into the state; the middle layer works in correspondence with that stream.
+Conflicts are resolved greedily by an urgency or confidence metric, one request rejected. The combiner
+should combine independent discrete actions (locomotion and attacks do not depend on each other). Requests
+are structured: coordinates, directions and scalars are passed; the neural layer follows directions
+clearly and thinks only at the low level (better combat, pathfinding). As many concurrent requests as
+plausible.
+
+**Requests (middle -> lower), a new scratchpad section `requests`, writer: the decision layer.** Per agent
+an ordered list of `ActionRequest`: `request_id` (monotonic per agent), `issued_tick`, `expires_tick`,
+`verb` (a skill id of the library), typed `args` (`target_position[3]`, `target_direction[3]`,
+`target_entity`, `scalars[4]` named by the verb's contract, each with a presence flag), `mode`
+(`parallel`, `after: request_id`, `interrupt`), `urgency` and `confidence` in [0, 1], `priority`,
+`goal_slot`, `executive_version`, `program_step`. Coordinates travel typed, never in prose: the LLM's goal
+schema gains an optional typed `target` (position, direction or entity) beside the words, and the belief
+section carries the agent's and the target's positions, so the middle layer can fill `args` from the
+state and the behaviour programs of §9.9 can name places.
+
+**Status (lower -> state), the `skills` section extended, writer: the dispatcher.** Per request:
+`accepted | rejected(reason) | deferred(conflict with id) | running | done(outcome) | aborted(reason)`
+with ticks, the progress signals of the verb's contract while it runs, and per tick which requests drove
+which action heads (the composition of the real action). This is the context the owner asked for: the
+upper layers see what was actually done, what was refused and why.
+
+**The combiner (lower layer, in the dispatcher), per tick and per agent, fixed and exact:**
+1. Take the live requests (not expired, not done).
+2. Validate each against the verb's contract: the verb exists; required args present and in range
+   (positions inside the world, entity known to the belief); the verb's action scope is legal under the
+   current action mask; `after` predecessors are done. Invalid -> `rejected(reason)`.
+3. Greedy arbitration: sort by (urgency, confidence, priority, recency); grant a request if every action
+   head in its scope is free, else `deferred(conflict with id)` until the holder finishes or expires.
+   Independent heads co-run (locomotion with attack), dependent ones conflict and the loser waits.
+4. Run the granted verbs' policies, each emitting factors for its heads only; merge into one factored
+   action, unused heads neutral.
+5. Stream the status back. The combiner never thinks beyond this; the thinking inside a verb (combat
+   micro, pathfinding) is the skill's own.
+
+**Correspondence (the middle layer, every cadence tick).** Read the status stream: `rejected` -> fix the
+args or choose another verb (the program re-samples the step); repeated rejections of the same step ->
+an information request to the LLM (§8.13 gaps); `done` -> advance the program; a stalled progress signal
+-> re-sample; `deferred` beyond the step's hold time -> raise urgency or drop the request. The decision
+section records the live program, its step and the requests it issued, so the LLM sees the plan and the
+stream in one view.
+
+**Contracts.** `SkillContract` gains a typed argument schema (which of position / direction / entity it
+needs, its scalar names) and an explicit action scope by head group (locomotion, look, hands, posture);
+`PARAM_WIDTH` 4 grows to an `ARG_WIDTH` block (3 + 3 + 1 + 4 = 11 floats plus presence flags); the
+in-graph lowering for the compiled runner becomes an active-request table per agent of M concurrent
+granted requests (M = 4, one per head group; the host-side queue is unbounded, "as many as plausible").
+These replace the "one skill per lane" assumption of today's dispatcher and runner; the typed goal slots
+of the executive section stay as they are (the LLM's goals), the requests are what the middle layer
+derives from them.
+
+**Gates.** R1 every invalid request is rejected with a reason and the valid ones still run (stub skills).
+R2 no two granted requests ever share an action head. R3 the greedy order is (urgency, confidence,
+priority, recency) and is reproducible. R4 `after` chains execute in order and parallel sets co-run.
+R5 the middle layer reacts to a rejection within one cadence tick. R6 the compiled active-request table
+produces the same actions as the host combiner on the same stream. Composition rows unchanged with
+single-request programs (today's behaviour is the one-request special case).
+
+**Plan deltas.** A new step before the J-S2 program heads: the request and status sections, the combiner
+with stub skills, the contract and lowering changes, R1-R6 (about two days, host side first; the
+compiled table follows with the library). The J-S2 program heads then emit request sets with typed args;
+the behaviour generator writes canonical programs as request sets. Reading the LLM's words (§9.1-§9.4)
+is unchanged.
 
 ## References
 

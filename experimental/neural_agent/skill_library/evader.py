@@ -126,6 +126,9 @@ class ScriptedEvaderSkill:
         success_signals=("separation_increases",),
         failure_signals=("target_not_visible",),
         checkpoint_sha256=None,
+        minimum_commitment_seconds=2.0,
+        maximum_duration_seconds=10.0,
+        emergency_events=("DAMAGE_RECEIVED", "TARGET_DIED", "NPC_STUCK"),
     )
 
     def initial_state(self, batch: int) -> jax.Array:

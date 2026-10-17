@@ -14,15 +14,27 @@ and known_b = feature_known[b, ticks_since_damage]::
                 = idle: skill 0, goal_slot -1          otherwise
     terminate_b = chosen_skill_b != current_skill_b    (False means continue)
 
-Control of the chosen goal::
+Control of the chosen goal. The skill owns it (SYSTEM_ONE.md section 8.12,
+item 1), so J0 gathers the chosen skill's row of its ``SkillControlTable``::
 
-    minimum_commitment_seconds = 2.0 if evading_b, 0.5 for another goal, 0.0 for idle
-    maximum_duration_seconds   = min(10.0, 30.0) = 10.0 for a goal, +inf for idle
-    emergency_interrupt_mask   = {DAMAGE_RECEIVED, TARGET_DIED, NPC_STUCK} for a
-                                 goal, the empty mask for idle
+    (minimum_commitment_seconds, maximum_duration_seconds,
+     emergency_interrupt_mask) = control_for(control, chosen_skill_b)
 
-The 10 s limit is a constant. ``ExecutiveArrays`` carries no planning horizon,
-so the ``GoalSpec.horizon_seconds`` value is not used here.
+The default table, ``default_control_table(skill_ids)``, holds the contracts
+that ``skill_library`` declares: evader 2.0 s / 10 s / {DAMAGE_RECEIVED,
+TARGET_DIED, NPC_STUCK}; pursuit and any unknown id 0.5 s / 10 s / the same
+events; idle 0 s / +inf / no events. Until 2026-10-17 J0 applied the constants
+below itself (2.0 s if evading_b, 0.5 s for another goal, idle's control when
+no goal is valid). The two rules give different control in three cases only:
+an evader goal chosen as the highest-priority goal outside the damage window
+(0.5 s before, 2.0 s now), an executive goal that names idle (0.5 s / 10 s /
+the three events before, idle's control now), and an evader whose id is not
+``"evader"`` under the default table (2.0 s before when evading, the contract
+default 0.5 s now). The composition executive reaches none of them: its
+pursuit goal has priority 1.0 and its evader goal 0.5.
+
+``ExecutiveArrays`` carries no planning horizon, so the
+``GoalSpec.horizon_seconds`` value is not used here.
 
 Units. ``belief/core.py`` publishes the damage counter as
 ``counter / TICKS_SATURATION``. The counter counts ticks and saturates at
@@ -56,7 +68,10 @@ from experimental.neural_agent.contracts import (
     GoalPayload,
     JevMode,
     SharedBeliefState,
-    event_mask,
+    SkillControlTable,
+    _require_control_table,
+    control_for,
+    default_control_table,
     executive_arrays,
     feature_index,
     make_goal,
@@ -66,9 +81,14 @@ from experimental.neural_agent.contracts import (
 EVADER_SKILL_ID: str = "evader"
 # Evasion applies while ticks_since_damage, in ticks, is strictly below this value.
 EVADE_DAMAGE_WINDOW_TICKS: float = 40.0
-# Minimum commitment of an evader goal, in seconds.
+# The goal control below belongs to the skill contracts since 2026-10-17
+# (SYSTEM_ONE.md section 8.12, item 1). J0 no longer applies these constants: it
+# reads the chosen skill's row of its SkillControlTable. They keep the values that
+# the contracts declare and that FORMULAS (D9) cites, and test_na_jev_core.py pins
+# default_control_table(("idle", "pursuit", "evader")) to them row by row.
+# Minimum commitment that the evader's contract declares, in seconds.
 EVADE_MINIMUM_COMMITMENT_SECONDS: float = 2.0
-# Minimum commitment of any other goal, in seconds.
+# Minimum commitment that the pursuit contract (and the contract default) declares, in seconds.
 GOAL_MINIMUM_COMMITMENT_SECONDS: float = 0.5
 # Planning horizon used for every goal, in seconds. E_t carries no horizon.
 GOAL_HORIZON_SECONDS: float = 10.0
@@ -76,7 +96,7 @@ GOAL_HORIZON_SECONDS: float = 10.0
 MAXIMUM_DURATION_CAP_SECONDS: float = 30.0
 # Maximum duration of a chosen goal: min(horizon, cap) = 10.0 s.
 MAXIMUM_DURATION_SECONDS: float = min(GOAL_HORIZON_SECONDS, MAXIMUM_DURATION_CAP_SECONDS)
-# Events that bypass the minimum commitment of a chosen goal.
+# Events that bypass the minimum commitment of a pursuit or evader goal.
 EMERGENCY_EVENTS: tuple[DecisionEvent, ...] = (
     DecisionEvent.DAMAGE_RECEIVED,
     DecisionEvent.TARGET_DIED,
@@ -100,17 +120,24 @@ class ScriptedJev:
         skill_ids: The skill catalog in dispatcher order. Index 0 must be
             ``SKILL_IDLE``. The catalog must name one evader: the id
             ``"evader"``, or else exactly one id that contains ``"evad"``.
+        control: Keyword only. The goal control of each catalog skill, one row
+            per id. Default ``default_control_table(skill_ids)``; pass
+            ``SkillRegistry.control_table()`` to use the registry's contracts.
 
     Raises:
-        TypeError: If ``skill_ids`` is one string, or holds a non-string id.
+        TypeError: If ``skill_ids`` is one string, or holds a non-string id, or
+            ``control`` is not a SkillControlTable.
         ValueError: If the catalog is empty, repeats an id, does not start with
-            ``"idle"``, or names no evader or more than one.
+            ``"idle"``, or names no evader or more than one, or ``control`` does
+            not have one row per catalog id.
     """
 
     name: str = "J0"
     mode: JevMode = JevMode.IN_GRAPH
 
-    def __init__(self, skill_ids: Sequence[str]) -> None:
+    def __init__(
+        self, skill_ids: Sequence[str], *, control: SkillControlTable | None = None
+    ) -> None:
         if isinstance(skill_ids, (str, bytes)):
             raise TypeError("skill_ids must be a sequence of skill ids, not one string")
         catalog = tuple(skill_ids)
@@ -122,6 +149,9 @@ class ScriptedJev:
             )
         self._evader_index = _evader_index(catalog)
         self._ticks_column = feature_index("ticks_since_damage")
+        self._control = _require_control_table(
+            default_control_table(catalog) if control is None else control, len(catalog)
+        )
 
     def initial_state(self, batch: int) -> tuple[()]:
         """Return the empty state. J0 keeps none, so the batch has no lane leaves.
@@ -173,7 +203,8 @@ class ScriptedJev:
             A GoalDecision. ``goal`` is a ManagedGoal whose GoalPayload has
             ``skill_index`` int32[B], ``params`` float32[B, 4],
             ``executive_version`` int32[B] and ``goal_slot`` int32[B], which is
-            -1 for idle. ``terminate`` is bool[B]. ``diagnostics`` is
+            -1 for idle. Its control is the chosen skill's row of the control
+            table. ``terminate`` is bool[B]. ``diagnostics`` is
             ``{"chosen_slot": int32[B], "evading": bool[B]}``.
 
         Raises:
@@ -202,17 +233,7 @@ class ScriptedJev:
         ).astype(jnp.int32)
         chosen_params = jnp.where(has_goal[:, None], executive.params[rows, slot], 0.0)
         chosen_slot = jnp.where(has_goal, slot, -1).astype(jnp.int32)
-        minimum = jnp.where(
-            has_goal,
-            jnp.where(evading, EVADE_MINIMUM_COMMITMENT_SECONDS, GOAL_MINIMUM_COMMITMENT_SECONDS),
-            0.0,
-        )
-        maximum = jnp.where(has_goal, MAXIMUM_DURATION_SECONDS, jnp.inf)
-        mask = jnp.where(
-            has_goal[:, None],
-            event_mask(*EMERGENCY_EVENTS, batch=lanes),
-            event_mask(batch=lanes),
-        )
+        minimum, maximum, mask = control_for(self._control, chosen_skill)
 
         goal = make_goal(
             chosen_skill,

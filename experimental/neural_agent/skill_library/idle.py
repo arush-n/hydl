@@ -10,9 +10,14 @@ legal idle action. A concrete call then raises ``ValueError``.
 
 Skill-local state. None. ``initial_state`` and every returned state are zeros,
 float32[B, SKILL_STATE_WIDTH].
+
+Goal control declared in the contract: no minimum commitment, no maximum
+duration and no emergency events, the control of ``contracts.idle_goal``.
 """
 
 from __future__ import annotations
+
+import math
 
 import jax
 import jax.numpy as jnp
@@ -64,6 +69,9 @@ class IdleSkill:
         success_signals=("neutral_emitted",),
         failure_signals=("neutral_masked",),
         checkpoint_sha256=None,
+        minimum_commitment_seconds=0.0,
+        maximum_duration_seconds=math.inf,
+        emergency_events=(),
     )
 
     def initial_state(self, batch: int) -> jax.Array:

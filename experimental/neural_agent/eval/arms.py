@@ -33,6 +33,11 @@ The arms follow the composition brief and
   ``init_heads`` with the run seed and the report labels the arm ``js1-untrained``;
   ``--js1-heads PATH`` loads them (``jev/system_one/train_supervised.load_heads``).
 
+The JEV arms (``j0``, ``shuffled``, ``j1``, ``j_lm``) build their instance and
+runner with the registry's control table (:func:`_control_table`), so each goal
+carries the chosen skill's declared control (SYSTEM_ONE.md section 8.12, item 1).
+``js1`` is not wired to it yet.
+
 Every manager in this module returns ``diagnostics=()``. The core runs the
 manager inside ``jax.lax.cond``, and both branches must have the same PyTree
 structure, so an empty diagnostic structure is the only one that every arm can
@@ -60,6 +65,7 @@ from experimental.neural_agent.contracts import (
     JevBudget,
     JevMode,
     JevStats,
+    default_control_table,
     executive_arrays,
     idle_goal,
     make_goal,
@@ -101,7 +107,8 @@ class ArmContext(NamedTuple):
     Attributes:
         skill_ids: Catalogue ids in dispatcher order. ``skill_ids[0]`` is ``"idle"``.
         registry: The sibling skill registry with ``.ids`` and ``.skills``. It is
-            passed through to the actor factory unchanged.
+            passed through to the actor factory unchanged, and the JEV arms take
+            its ``control_table()`` (:func:`_control_table`).
         batch: Number of lanes B, a positive int.
         executive: The executive state E_t that the scripted arms run under.
         seed: The run seed. The ``j1`` arm initializes its parameters from it, and
@@ -604,6 +611,27 @@ def _skill_dispatcher(ctx: ArmContext) -> Any:
     return SkillDispatcher(ctx.registry)
 
 
+def _control_table(ctx: ArmContext) -> Any:
+    """Return the goal control of the catalogue, one row per ``ctx.skill_ids`` entry.
+
+    That is the registry's ``control_table()`` when the registry has one, and
+    otherwise ``default_control_table(ctx.skill_ids)`` (a test context passes no
+    registry).
+
+    Raises:
+        ValueError: If the registry's ids differ from ``ctx.skill_ids``.
+    """
+
+    table_of = getattr(ctx.registry, "control_table", None)
+    if table_of is None:
+        return default_control_table(ctx.skill_ids)
+    if tuple(ctx.registry.ids) != ctx.skill_ids:
+        raise ValueError(
+            f"the registry's ids {tuple(ctx.registry.ids)} differ from the catalogue {ctx.skill_ids}"
+        )
+    return table_of()
+
+
 def _flat_manager(ctx: ArmContext) -> ConstantGoalManager:
     """Return the flat arm's manager, which proposes the pursuit skill every tick."""
 
@@ -620,11 +648,13 @@ def _scripted_manager(ctx: ArmContext) -> JevArmManager:
     from experimental.neural_agent.jev.runner import JevRunner
     from experimental.neural_agent.jev.scripted import ScriptedJev
 
-    instance = ScriptedJev(ctx.skill_ids)
+    control = _control_table(ctx)
+    instance = ScriptedJev(ctx.skill_ids, control=control)
     runner = JevRunner(
         instance,
         JevBudget(latency_ms=J0_LATENCY_BUDGET_MS),
         ctx.skill_ids,
+        control=control,
     )
     return JevArmManager(
         runner,
@@ -679,16 +709,19 @@ def _network_manager(ctx: ArmContext) -> JevArmManager:
         params = init_j1(jax.random.key(ctx.seed), num_skills=len(ctx.skill_ids))
     else:
         params = load_j1_params(ctx.j1_params)
-    instance = NetworkJev(params)
-    if instance.num_skills != len(ctx.skill_ids):
+    scored = NetworkJev(params).num_skills
+    if scored != len(ctx.skill_ids):
         raise ValueError(
-            f"the J1 parameters score {instance.num_skills} skills; "
+            f"the J1 parameters score {scored} skills; "
             f"the catalogue has {len(ctx.skill_ids)}"
         )
+    control = _control_table(ctx)
+    instance = NetworkJev(params, control=control)
     runner = JevRunner(
         instance,
         JevBudget(latency_ms=J0_LATENCY_BUDGET_MS),
         ctx.skill_ids,
+        control=control,
     )
     return JevArmManager(
         runner,
@@ -737,6 +770,7 @@ def _lm_host_decider(ctx: ArmContext, steps: int) -> LanguageModelHostDecider:
         backend,
         ctx.skill_ids,
         JevBudget(latency_ms=J0_LATENCY_BUDGET_MS),
+        control=_control_table(ctx),
     )
     return LanguageModelHostDecider(instance, ctx.executive, ctx.batch, seed=ctx.seed)
 

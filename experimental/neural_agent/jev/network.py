@@ -44,13 +44,17 @@ BELIEF_LATENT_WIDTH (64); K = num_skills; G = MAX_GOALS (4); P = PARAM_WIDTH
                    tie), or -1 when no slot matches k*_b
 
    The goal is ``skill_index = k*``, ``params = p_head``,
-   ``executive_version = E_t.version`` and ``goal_slot = slot``, with minimum
-   commitment 0.5 s, maximum duration 10 s, and emergency events
-   {DAMAGE_RECEIVED, TARGET_DIED, NPC_STUCK}. Source: ADR-001 section 2 names
-   the three controls (minimum commitment, maximum duration, emergency-interrupt
-   mask). The values, the three events and REPLACE_THRESHOLD = 0.5 are this
-   module's choices; ADR-001 sets none of these values. ADR-001 section 8, P2
-   names DAMAGE_RECEIVED only as an evade interrupt in a composition task.
+   ``executive_version = E_t.version`` and ``goal_slot = slot``. Its control is
+   skill k*'s row of the instance's ``SkillControlTable`` (``control_for``):
+   the skill's contract owns it (SYSTEM_ONE.md section 8.12, item 1). Without a
+   table J1 knows no catalogue, so every index gets the ``SkillContract``
+   defaults: minimum commitment 0.5 s, maximum duration 10 s and emergency
+   events {DAMAGE_RECEIVED, TARGET_DIED, NPC_STUCK}, the control J1 gave every
+   goal until 2026-10-17. Source: ADR-001 section 2 names the three controls
+   (minimum commitment, maximum duration, emergency-interrupt mask).
+   REPLACE_THRESHOLD = 0.5 is this module's choice; ADR-001 sets none of these
+   values. ADR-001 section 8, P2 names DAMAGE_RECEIVED only as an evade
+   interrupt in a composition task.
 
 4. Initialization, ``init_j1``: He normal for W1 and W2 (std sqrt(2 / fan_in);
    He et al., see Citations); for W_skill and w_replace, fan-in scaling with
@@ -100,6 +104,10 @@ from experimental.neural_agent.contracts import (
     GoalPayload,
     JevMode,
     SharedBeliefState,
+    SkillContract,
+    SkillControlTable,
+    _require_control_table,
+    control_for,
     event_mask,
     make_goal,
 )
@@ -110,6 +118,9 @@ IDLE_SKILL_INDEX: int = 0
 # Columns of ExecutiveArrays.budget: [jev_latency_ms, search_expansions,
 # executive_calls_per_minute].
 BUDGET_WIDTH: int = 3
+# The control J1 gave every goal until 2026-10-17, equal to the SkillContract
+# defaults. No longer applied: a goal's control is the chosen skill's row of the
+# instance's SkillControlTable. Kept because tests and documents cite them.
 COMMITMENT_SECONDS: float = 0.5
 MAX_DURATION_SECONDS: float = 10.0
 EMERGENCY_EVENTS: tuple[DecisionEvent, ...] = (
@@ -451,21 +462,31 @@ class NetworkJev:
     name: str = JEV_NAME
     mode: JevMode = JevMode.IN_GRAPH
 
-    def __init__(self, params: J1Params) -> None:
+    def __init__(
+        self, params: J1Params, *, control: SkillControlTable | None = None
+    ) -> None:
         """Bind parameters after checking every shape against the others.
 
         Args:
             params: J1Params, as produced by :func:`init_j1` or loaded from a
                 run.
+            control: Keyword only. The goal control of each of the K skills, in
+                catalogue order (``SkillRegistry.control_table()``). Default: K
+                rows of the ``SkillContract`` defaults, because J1 knows no ids.
 
         Raises:
-            TypeError: If ``params`` is not a J1Params or a leaf is not float32.
-            ValueError: If any shape is inconsistent with the others.
+            TypeError: If ``params`` is not a J1Params or a leaf is not float32,
+                or ``control`` is not a SkillControlTable.
+            ValueError: If any shape is inconsistent with the others, or
+                ``control`` does not have K rows.
         """
 
         _, skills = _check_params(params)
         self.params = params
         self.num_skills = skills
+        self._control = _require_control_table(
+            _contract_default_table(skills) if control is None else control, skills
+        )
 
     def initial_state(self, batch: int) -> jax.Array:
         """Return the reset instance state: float32[B, 0].
@@ -528,12 +549,12 @@ class NetworkJev:
         Returns:
             GoalDecision with ``goal`` a ManagedGoal whose payload is a
             GoalPayload (skill_index int32[B], params float32[B, 4],
-            executive_version int32[B], goal_slot int32[B]), ``terminate``
-            bool[B], and ``diagnostics`` as in :meth:`diagnostics_template`.
+            executive_version int32[B], goal_slot int32[B]) and the chosen
+            skill's row of the control table, ``terminate`` bool[B], and
+            ``diagnostics`` as in :meth:`diagnostics_template`.
         """
 
         x = j1_inputs(belief, executive, current_goal, num_skills=self.num_skills)
-        lanes = x.shape[0]
         skill_logits, replace_logit, params_head = apply_j1(self.params, x)
         allowed = j1_allowed_skills(executive, num_skills=self.num_skills)
         masked = jnp.where(allowed, skill_logits, -jnp.inf)
@@ -541,18 +562,15 @@ class NetworkJev:
         replace_prob = jax.nn.sigmoid(replace_logit)
         current = jnp.asarray(current_goal.skill_index, dtype=jnp.int32)
         terminate = (replace_prob > REPLACE_THRESHOLD) & (skill != current)
+        minimum, maximum, mask = control_for(self._control, skill)
         goal = make_goal(
             skill,
             params_head,
             executive.version,
             _matching_slot(executive, skill),
-            minimum_commitment_seconds=jnp.full(
-                (lanes,), COMMITMENT_SECONDS, dtype=jnp.float32
-            ),
-            maximum_duration_seconds=jnp.full(
-                (lanes,), MAX_DURATION_SECONDS, dtype=jnp.float32
-            ),
-            emergency_interrupt_mask=event_mask(*EMERGENCY_EVENTS, batch=lanes),
+            minimum_commitment_seconds=minimum,
+            maximum_duration_seconds=maximum,
+            emergency_interrupt_mask=mask,
         )
         return GoalDecision(
             state=state,
@@ -560,6 +578,23 @@ class NetworkJev:
             terminate=terminate,
             diagnostics={"skill_logits": skill_logits, "replace_prob": replace_prob},
         )
+
+
+def _contract_default_table(num_skills: int) -> SkillControlTable:
+    """Return K rows of the SkillContract defaults: the control of a skill that declares none."""
+
+    return SkillControlTable(
+        minimum_commitment_seconds=jnp.full(
+            (num_skills,), SkillContract.minimum_commitment_seconds, dtype=jnp.float32
+        ),
+        maximum_duration_seconds=jnp.full(
+            (num_skills,), SkillContract.maximum_duration_seconds, dtype=jnp.float32
+        ),
+        emergency_interrupt_mask=event_mask(
+            *(DecisionEvent[name] for name in SkillContract.emergency_events),
+            batch=num_skills,
+        ),
+    )
 
 
 def _matching_slot(executive: ExecutiveArrays, skill: jax.Array) -> jax.Array:

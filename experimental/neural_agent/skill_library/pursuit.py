@@ -167,6 +167,9 @@ def load_pursuit_skill(batch: int) -> PursuitSkill:
         success_signals=("distance_below_one_block",),
         failure_signals=("horizon_256_ticks",),
         checkpoint_sha256=record["checkpoint_sha256"],
+        minimum_commitment_seconds=0.5,
+        maximum_duration_seconds=10.0,
+        emergency_events=("DAMAGE_RECEIVED", "TARGET_DIED", "NPC_STUCK"),
     )
     return PursuitSkill(contract, policy_function, scope)
 

@@ -51,6 +51,10 @@ from experimental.neural_agent.contracts import (
     JevMode,
     JevStats,
     SharedBeliefState,
+    SkillControlTable,
+    _require_control_table,
+    control_for,
+    default_control_table,
     empty_executive_arrays,
     executive_arrays,
     idle_goal,
@@ -101,12 +105,16 @@ class JevRunner:
         budget: The per-decision budget. ``latency_ms`` bounds a HOST call.
         skill_ids: The skill catalog in dispatcher order, with ``"idle"`` first
             by convention. Goals in E_t name skills by these ids.
+        control: Keyword only. The goal control of each catalog skill, one row
+            per id; the runner's idle goal takes row 0. Default
+            ``default_control_table(skill_ids)``. Pass the instance's table.
 
     Raises:
         TypeError: If ``instance`` is not a ``JevInstance``, its ``mode`` is not
-            a ``JevMode``, ``budget`` is not a ``JevBudget``, or ``skill_ids``
-            is a single string.
-        ValueError: If ``skill_ids`` repeats an id or holds an empty id.
+            a ``JevMode``, ``budget`` is not a ``JevBudget``, ``skill_ids``
+            is a single string, or ``control`` is not a SkillControlTable.
+        ValueError: If ``skill_ids`` repeats an id or holds an empty id, or
+            ``control`` does not have one row per id.
     """
 
     def __init__(
@@ -114,6 +122,8 @@ class JevRunner:
         instance: JevInstance,
         budget: JevBudget,
         skill_ids: Sequence[str],
+        *,
+        control: SkillControlTable | None = None,
     ) -> None:
         if not isinstance(instance, JevInstance):
             raise TypeError(
@@ -131,6 +141,9 @@ class JevRunner:
         self._instance = instance
         self._budget = budget
         self._skill_ids = catalog
+        self._control = _require_control_table(
+            default_control_table(catalog) if control is None else control, len(catalog)
+        )
         self._decisions = 0
         self._misses = 0
         self._compute_units = 0
@@ -140,9 +153,10 @@ class JevRunner:
         """Return the reset runner state for ``batch`` lanes.
 
         The executive is empty (``empty_executive_arrays``), the instance state
-        is the instance's own reset, and the goal control is the idle control
-        of ``idle_goal(batch)``. Start the carry with ``idle_goal(batch)`` so
-        that the control in force matches this state.
+        is the instance's own reset, and the goal control is idle's row of the
+        control table, which equals ``idle_goal(batch).control`` for the idle
+        contract. Start the carry with ``idle_goal(batch)`` so that the control
+        in force matches this state.
 
         Args:
             batch: Number of lanes B, a positive int.
@@ -158,7 +172,7 @@ class JevRunner:
         return JevRunnerState(
             instance_state=self._instance.initial_state(batch),
             executive=empty_executive_arrays(batch),
-            goal_control=idle_goal(batch).control,
+            goal_control=self._idle_goal(batch).control,
         )
 
     def set_executive(
@@ -296,6 +310,14 @@ class JevRunner:
             state, current_goal, raw, lanes, missed=False, eager=eager, goal_runtime=goal_runtime
         )
 
+    def _idle_goal(self, lanes: int) -> ManagedGoal:
+        """Return ``idle_goal(lanes)`` with the control that the table gives idle (index 0)."""
+
+        goal = idle_goal(lanes)
+        return goal._replace(
+            control=GoalControl(*control_for(self._control, goal.payload.skill_index))
+        )
+
     def _invoke(
         self,
         state: JevRunnerState,
@@ -353,7 +375,7 @@ class JevRunner:
                     | jnp.asarray(goal_runtime.timed_out, dtype=jnp.bool_)
                     | jnp.asarray(goal_runtime.actor_termination_requested, dtype=jnp.bool_)
                 )
-                idle = idle_goal(lanes)
+                idle = self._idle_goal(lanes)
 
                 def pick(idle_leaf: Any, held_leaf: Any) -> Any:
                     idle_arr = jnp.asarray(idle_leaf)

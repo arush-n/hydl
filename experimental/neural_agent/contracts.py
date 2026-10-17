@@ -14,14 +14,19 @@ The three levels of ADR-001 section 2 use these types:
 * Level 2, the JEV decision model (about 2 Hz plus interrupts, hard latency
   budget), reads a :class:`SharedBeliefState` (B_t) and the
   :class:`ExecutiveArrays`, and returns a goal: a :class:`GoalPayload` inside an
-  ADK ``ManagedGoal``, built with :func:`make_goal` or :func:`idle_goal`.
+  ADK ``ManagedGoal``, built with :func:`make_goal` or :func:`idle_goal`. The
+  goal's control is the chosen skill's: :func:`control_for` reads it from a
+  :class:`SkillControlTable` built from the skill contracts (SYSTEM_ONE.md
+  section 8.12, item 1).
 * Level 1, the skill policies (every decision step), implement :class:`Skill`
   and return int32 action factors on the 12-head surface, restricted to the
-  skill scope and to the runtime action mask.
+  skill scope and to the runtime action mask. Each :class:`SkillContract`
+  declares the commitment, duration and emergency events of its goals.
 
 Conventions:
 
-* Every array has a leading lane axis ``B``. Records that cross the ADK
+* Every array has a leading lane axis ``B``, except the catalogue axis ``K``
+  of :class:`SkillControlTable`. Records that cross the ADK
   hierarchy core (:class:`SharedBeliefState`, :class:`ExecutiveArrays`,
   :class:`GoalPayload`) are batched JAX pytrees. Host-side records
   (:class:`ExecutiveState`, :class:`GoalSpec`, :class:`ComputeBudget`,
@@ -883,9 +888,20 @@ class SkillOutcome(IntEnum):
     TIMEOUT = 4
 
 
+# Goal control that a SkillContract declares when it sets none.
+_DEFAULT_MINIMUM_COMMITMENT_SECONDS: float = 0.5
+_DEFAULT_MAXIMUM_DURATION_SECONDS: float = 10.0
+_DEFAULT_EMERGENCY_EVENTS: tuple[str, ...] = ("DAMAGE_RECEIVED", "TARGET_DIED", "NPC_STUCK")
+
+
 @dataclass(frozen=True)
 class SkillContract:
     """Frozen contract of one Level 1 skill (ADR-001 D1 and D6).
+
+    The skill owns the control of its goals: the last three attributes. A JEV
+    instance looks them up by skill index (:func:`control_table`,
+    :func:`control_for`) and does not choose them (SYSTEM_ONE.md section 8.12,
+    item 1).
 
     Attributes:
         skill_id: Non-empty catalog id, for example ``"pursuit"``.
@@ -905,10 +921,18 @@ class SkillContract:
             skill is entered (ADR-001 D6).
         legal_observation_only: Must be True. A deployed skill reads only legal
             observation products.
+        minimum_commitment_seconds: Time a goal for this skill is held before an
+            ordinary request may replace it, finite and >= 0. Default 0.5.
+        maximum_duration_seconds: Time after which a goal for this skill is
+            forced to end, positive; ``math.inf`` means no limit. Default 10.0.
+        emergency_events: ``EVENT_NAMES`` entries that may interrupt a goal for
+            this skill before its minimum commitment, each at most once; ``()``
+            means none. Default ``("DAMAGE_RECEIVED", "TARGET_DIED", "NPC_STUCK")``.
 
     Raises:
         TypeError: If a field has the wrong Python type.
-        ValueError: If a value is empty or too long, or ``state_reset`` or
+        ValueError: If a value is empty, too long or out of range, an emergency
+            event is unknown or repeated, or ``state_reset`` or
             ``legal_observation_only`` breaks its rule.
     """
 
@@ -923,6 +947,9 @@ class SkillContract:
     checkpoint_sha256: str | None
     state_reset: str = "on_entry"
     legal_observation_only: bool = True
+    minimum_commitment_seconds: float = _DEFAULT_MINIMUM_COMMITMENT_SECONDS
+    maximum_duration_seconds: float = _DEFAULT_MAXIMUM_DURATION_SECONDS
+    emergency_events: tuple[str, ...] = _DEFAULT_EMERGENCY_EVENTS
 
     def __post_init__(self) -> None:
         """Validate the contract and normalize sequences to tuples."""
@@ -969,6 +996,204 @@ class SkillContract:
                 "SkillContract.legal_observation_only must be True: deployed skills "
                 "read legal observation products only (ADR-001 section 2)"
             )
+        minimum = _finite_number(
+            self.minimum_commitment_seconds, "SkillContract.minimum_commitment_seconds"
+        )
+        if minimum < 0.0:
+            raise ValueError(
+                f"SkillContract.minimum_commitment_seconds must be >= 0, got {minimum}"
+            )
+        object.__setattr__(self, "minimum_commitment_seconds", minimum)
+        maximum = self.maximum_duration_seconds
+        if isinstance(maximum, (float, np.floating)) and maximum == math.inf:
+            maximum = math.inf
+        else:
+            maximum = _finite_number(maximum, "SkillContract.maximum_duration_seconds")
+            if maximum <= 0.0:
+                raise ValueError(
+                    f"SkillContract.maximum_duration_seconds must be positive, got {maximum}"
+                )
+        object.__setattr__(self, "maximum_duration_seconds", maximum)
+        events = _text_tuple(self.emergency_events, "SkillContract.emergency_events")
+        unknown = [name for name in events if name not in EVENT_NAMES]
+        if unknown:
+            raise ValueError(
+                f"SkillContract.emergency_events has unknown names {unknown}; "
+                "expected names from EVENT_NAMES"
+            )
+        if len(set(events)) != len(events):
+            raise ValueError(f"SkillContract.emergency_events repeats a name: {events}")
+        object.__setattr__(self, "emergency_events", events)
+
+
+# The control that the known skills' contracts declare (skill_library/idle.py,
+# pursuit.py, evader.py), for callers that hold only skill ids. contracts.py
+# imports no sibling module, so this mirrors those declarations, and
+# test_na_skills.py pins the mirror to the real contracts.
+_DECLARED_CONTROL: dict[str, tuple[float, float, tuple[str, ...]]] = {
+    SKILL_IDLE: (0.0, math.inf, ()),
+    "pursuit": (0.5, 10.0, _DEFAULT_EMERGENCY_EVENTS),
+    "evader": (2.0, 10.0, _DEFAULT_EMERGENCY_EVENTS),
+}
+
+
+class SkillControlTable(NamedTuple):
+    """The goal control that each catalogue skill declares, by skill index.
+
+    Build it with :func:`control_table` from the contracts, or with
+    :func:`default_control_table` when only the ids are known. A JEV instance
+    holds one and gathers rows with :func:`control_for`. The leading axis is
+    the catalogue axis K, not the lane axis B, so the table itself never
+    crosses the hierarchy core.
+
+    Shapes, with K skills in catalogue order:
+        minimum_commitment_seconds: float32[K].
+        maximum_duration_seconds: float32[K]. ``inf`` means no limit.
+        emergency_interrupt_mask: bool[K, len(EVENT_NAMES)], in the layout of
+            :func:`event_mask`.
+    """
+
+    minimum_commitment_seconds: jax.Array
+    maximum_duration_seconds: jax.Array
+    emergency_interrupt_mask: jax.Array
+
+
+def _control_rows(
+    rows: Sequence[tuple[float, float, tuple[str, ...]]],
+) -> SkillControlTable:
+    """Return the table whose row k is ``rows[k] = (minimum, maximum, event names)``."""
+
+    mask = np.zeros((len(rows), len(DecisionEvent)), dtype=np.bool_)
+    for index, (_, _, events) in enumerate(rows):
+        for name in events:
+            mask[index, int(DecisionEvent[name])] = True
+    return SkillControlTable(
+        minimum_commitment_seconds=jnp.asarray([row[0] for row in rows], dtype=jnp.float32),
+        maximum_duration_seconds=jnp.asarray([row[1] for row in rows], dtype=jnp.float32),
+        emergency_interrupt_mask=jnp.asarray(mask),
+    )
+
+
+def control_table(contracts: Sequence[SkillContract]) -> SkillControlTable:
+    """Return the control table of a catalogue: row k is ``contracts[k]``'s control.
+
+    Args:
+        contracts: The catalogue's SkillContract values in catalogue order, at
+            least one (``SkillRegistry.contracts``).
+
+    Returns:
+        A SkillControlTable with K = ``len(contracts)`` rows.
+
+    Raises:
+        TypeError: If ``contracts`` is not a sequence of SkillContract values.
+        ValueError: If ``contracts`` is empty.
+    """
+
+    items = tuple(contracts)
+    if not items:
+        raise ValueError("contracts must hold at least one SkillContract")
+    for position, contract in enumerate(items):
+        if not isinstance(contract, SkillContract):
+            raise TypeError(
+                f"contracts[{position}] must be a SkillContract, got {type(contract).__name__}"
+            )
+    return _control_rows(
+        [
+            (
+                contract.minimum_commitment_seconds,
+                contract.maximum_duration_seconds,
+                contract.emergency_events,
+            )
+            for contract in items
+        ]
+    )
+
+
+def default_control_table(skill_ids: Sequence[str]) -> SkillControlTable:
+    """Return the control table of a catalogue that is known only by its ids.
+
+    The ids ``"idle"``, ``"pursuit"`` and ``"evader"`` get the control their
+    contracts declare in ``skill_library``. Any other id gets the
+    :class:`SkillContract` defaults. With a registry at hand, prefer
+    ``SkillRegistry.control_table()``.
+
+    Args:
+        skill_ids: Catalogue ids in catalogue order, at least one.
+
+    Returns:
+        A SkillControlTable with K = ``len(skill_ids)`` rows.
+
+    Raises:
+        TypeError: If ``skill_ids`` is one string or holds a non-string.
+        ValueError: If ``skill_ids`` is empty or holds an empty id.
+    """
+
+    ids = _text_tuple(skill_ids, "skill_ids")
+    if not ids:
+        raise ValueError("skill_ids must name at least one skill")
+    default = (
+        _DEFAULT_MINIMUM_COMMITMENT_SECONDS,
+        _DEFAULT_MAXIMUM_DURATION_SECONDS,
+        _DEFAULT_EMERGENCY_EVENTS,
+    )
+    return _control_rows([_DECLARED_CONTROL.get(skill_id, default) for skill_id in ids])
+
+
+def control_for(
+    table: SkillControlTable, skill_index: jax.Array
+) -> tuple[jax.Array, jax.Array, jax.Array]:
+    """Gather the declared control of each lane's skill. Traceable under ``jax.jit``.
+
+    Args:
+        table: The catalogue's SkillControlTable.
+        skill_index: int32[B], the catalogue index of each lane's skill. Values
+            are not inspected, as in :func:`make_goal`: an index outside
+            ``[0, K)`` is clipped into range.
+
+    Returns:
+        ``(minimum_commitment_seconds, maximum_duration_seconds,
+        emergency_interrupt_mask)``: float32[B], float32[B] and
+        bool[B, len(EVENT_NAMES)], in ``GoalControl`` order, ready for the
+        keyword arguments of :func:`make_goal`.
+
+    Raises:
+        TypeError: If ``table`` is not a SkillControlTable.
+        ValueError: If ``skill_index`` does not have shape (B,).
+    """
+
+    if not isinstance(table, SkillControlTable):
+        raise TypeError(f"table must be a SkillControlTable, got {type(table).__name__}")
+    index = jnp.asarray(skill_index, dtype=jnp.int32)
+    if index.ndim != 1:
+        raise ValueError(f"skill_index must have shape (B,), got {index.shape}")
+    return (
+        jnp.take(table.minimum_commitment_seconds, index, axis=0, mode="clip"),
+        jnp.take(table.maximum_duration_seconds, index, axis=0, mode="clip"),
+        jnp.take(table.emergency_interrupt_mask, index, axis=0, mode="clip"),
+    )
+
+
+def _require_control_table(table: Any, skills: int) -> SkillControlTable:
+    """Return ``table`` after checking that it is a SkillControlTable with ``skills`` rows."""
+
+    if not isinstance(table, SkillControlTable):
+        raise TypeError(f"control must be a SkillControlTable, got {type(table).__name__}")
+    _require_shape(
+        jnp.asarray(table.minimum_commitment_seconds),
+        (skills,),
+        "control.minimum_commitment_seconds",
+    )
+    _require_shape(
+        jnp.asarray(table.maximum_duration_seconds),
+        (skills,),
+        "control.maximum_duration_seconds",
+    )
+    _require_shape(
+        jnp.asarray(table.emergency_interrupt_mask),
+        (skills, len(DecisionEvent)),
+        "control.emergency_interrupt_mask",
+    )
+    return table
 
 
 @runtime_checkable
@@ -1200,8 +1425,12 @@ __all__ = [
     "SharedBeliefState",
     "Skill",
     "SkillContract",
+    "SkillControlTable",
     "SkillOutcome",
     "TICKS_SATURATION",
+    "control_for",
+    "control_table",
+    "default_control_table",
     "empty_executive_arrays",
     "event_mask",
     "executive_arrays",
