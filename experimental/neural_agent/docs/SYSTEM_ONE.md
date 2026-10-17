@@ -313,6 +313,66 @@ Belief rows come from the recorded datasets (real belief distributions), the cur
 path per decision within an order of magnitude of J1 (measured 0.29 ms at batch 64). G3 reading
 latency: time from a new E_t to a ready cache (structured path alone, text path alone, both).
 
+### 8.10 The shared scratchpad and natural-language goals (owner answers, 2026-10-17)
+
+Owner's answers, verbatim where it matters:
+1. Goals: "the goal will likely be a json (jev like) formatted structure that contains some unique
+   natural language, it is yet to be determined but it will always be in context of the state and some
+   idea that the model has, it is up to us to interpret it properly".
+2. Conditions: "we dont know, it will be natural language we have to figure it out, the job of the llm
+   is to communicate it cleanly and our job to interpret it".
+3. The state: "the llm will effectively be modifying the same state as it goes, think of the state as
+   the scratchpad between all 3 layers where all models pass their information in between (like a
+   shared memory) there are different parts for each component but this is primarily where information
+   is shared, we have to find an optimal way to structure it such that each model gets the information
+   it needs and has the proper context to make better decisions".
+4. No live LLM run until the lower level is finished.
+
+**Consequence 1: the text path is not optional.** A goal carries typed fields and unique natural
+language, so the decision layer must interpret words, not only numbers. The structured encoder of §8.9
+stays for the typed fields; the text enters *per goal*, not as one pooled rendering of everything:
+  `e_text_k = f_theta(text_k)` for the natural-language fields of slot k (intent, condition), cached per
+  distinct text, entering `q_k` beside `e_skill_k` and `c_k`.
+A frozen encoder's phrase embeddings separate paraphrases to a degree; where they do not, the trunk is
+fine-tuned on the goal language (contrastive paraphrase-to-predicate), which is the first use of a
+trainable trunk in this design. This replaces the "text off" ablation as the default: text is on, per goal.
+
+**Consequence 2: conditions are interpreted, not enumerated.** Nobody fixes the vocabulary. The decision
+layer learns to map condition text to predicates over the belief it can evaluate (target visible,
+distance band, own health fraction, damage window, time since the target was seen, closing speed) and
+over the executive's own facts. The teacher for this is procedural at first: a goal-language generator
+writes conditions and intents as paraphrase families with known semantics ("if you get hit", "when
+damaged", "after taking a hit" -> the damage window), labels every state with the rule those semantics
+imply, and holds out whole paraphrase families, so the gate measures reading of wording never seen.
+Gate G3-NL: skill agreement >= 0.90 on held-out paraphrase families and on held-out catalogue sizes.
+When the top LLM is allowed to run (answer 4: later), its real goal texts become the second source.
+
+**Consequence 3: one shared scratchpad, sectioned by writer (COMMITTED as a design; code to follow).**
+Today the three records are separate: E_t (LLM to JEV), B_t (belief, shared), GoalReports (skills to LLM
+through the harness). They become sections of one versioned document, the scratchpad S_t:
+
+| Section | Writer | Readers | Content |
+|---|---|---|---|
+| `executive` | the LLM, through the harness | JEV, LLM (its own last version) | goals as JSON with typed fields and natural-language `intent` and `when`; facts; budget; the LLM's working notes ("the idea it has") |
+| `belief` | the belief module | JEV, LLM (rendered), skills (numeric) | B_t features, known flags, latent summary |
+| `decision` | the JEV | LLM, skills | the goal in force, confidence, entropy, the last few decisions with their reasons as typed fields |
+| `skills` | the dispatcher and skills | JEV, LLM | active skill, its runtime state summary, outcomes (today's GoalReports) |
+| `events` | the runtime | all | the decision events of the last window |
+
+Rules: each section has one writer; every write bumps the document version; each reader gets a *view*,
+a rendering sized for it (the LLM a compact text, the JEV typed arrays plus per-goal text, the skills
+the goal payload only), so no model receives more than it needs and every model receives the context
+of the others' last state. The existing records stay as the typed building blocks; `shared_state.py`
+composes them, carries the JSON schema and the views, and is the single thing the executive harness
+reads and writes. This is the "shared memory" the owner described, with the ownership that keeps it
+consistent.
+
+**Build order from here.** (a) The structured encoder (§8.9, in progress). (b) Per-goal text in the
+slot vector and the goal-language generator with paraphrase families; G3-NL. (c) `shared_state.py` with
+the sections, the views and the schema, wired into the harness and the J-S1 slow path; the ADR's E_t
+becomes the `executive` section. (d) Trunk fine-tuning on the goal language only if (b) fails its gate.
+The live LLM run waits for the lower level, as instructed.
+
 ### 8.8 What is deliberately not in J-S1
 
 No text generation, no tool use, no chain of thought at decision time (System One). No external

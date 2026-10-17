@@ -372,6 +372,8 @@ All entries *COMMITTED* by `SYSTEM_ONE.md` section 8 (2026-10-17); none is *CODE
 
 **(M11) Goal-reading splits.** *COMMITTED* (`SYSTEM_ONE.md` §8.9). Agreement with (M10) on held-out executive states; a second split holds out catalogue sizes (train $K \le 5$, test $K \in \{6,7,8\}$), which a one-hot head cannot enter. Gate G3: $\ge 0.90$ on both.
 
+**(M12) Per-goal text in the slot vector.** *COMMITTED* (`SYSTEM_ONE.md` §8.10, owner answers 2026-10-17: goals carry unique natural language). $e_{\text{text}_k} = f_\theta(\text{text}_k)$ for the natural-language fields of slot $k$ (intent, condition), cached per distinct text, enters $q_k$ of (M9) beside $e_{\text{skill}_k}$ and $c_k$. Gate G3-NL: agreement with the generator's semantics $\ge 0.90$ on held-out paraphrase families and held-out catalogue sizes. If a frozen $f_\theta$ fails it, $\theta$ is fine-tuned contrastively on paraphrase-to-predicate pairs, the first trainable-trunk stage.
+
 **(M8) Speed budget.** *COMMITTED* (`SYSTEM_ONE.md` §8, revised 2026-10-17). Per decision $T_{\text{decide}} = T_{\text{heads}}$ (the fast path); per executive version $T_{\text{update}} = T_{\text{render}} + T_{\text{trunk}}$ (the slow path, off the tick). Measured slow path on this CPU under contention: ModernBERT-base 544 ms, Qwen3-0.6B 1,529 ms per pass over 330 tokens; a decision is a miss when $T_{\text{decide}} > \text{budget}$ (20 ms default, `eval/arms.py`), and the runner keeps the goal (`jev/runner.py`). Measured today: J1 heads alone about $0.1$ ms compiled; J-LM $471$ ms (`LEDGER.md`). $T_{\text{trunk}}$ is gate G2 of `SYSTEM_ONE.md`.
 
 ## Verification notes
