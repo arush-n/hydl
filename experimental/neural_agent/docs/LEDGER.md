@@ -246,3 +246,13 @@ command: as the 64-lane entry, --out experimental/neural_agent/eval/out/openflat
 result:  flat 0/89 (re-engagements 0.989, 353 damage events), j0 33/64 = 0.516 (0.396) (0.516, 252), shuffled 16/64 = 0.250 (0.160) + 2 loose (0.391, 253); interrupts j0 333/337, shuffled 405/408; identical to the privileged-mode rows. The report caveat now reads "AgentKit's combat/open_flat_control ... in the Gym's legal observation mode (legal_observation=True, 2026-10-17)". exit 0
 verdict: PASS — the architecture's arena runs legal and loses nothing on this scene, where the target is visible on every tick; the legal mode matters on scenes with occlusion.
 
+## 2026-10-17 — closing package gate after the arena opt-in: FAIL, cause and fix
+command: JAX_PLATFORMS=cpu .venv/bin/python -m pytest tests/experimental/neural_agent -q -rf
+result:  4 failed, 469 passed, 2 skipped in 104.88s. All four (the j_lm eager CLI test, two sim_goal_env tests, the js1 eager CLI test) raised KeyError "scene 'neural_agent/open_flat_legal' is not registered in this AgentKit" from adk/api.py build(). Cause: AgentKit keeps scenes per instance but agent names process-wide, so on the second open-flat build in one process `COMBAT_OPEN_FLAT_AGENT in kit.list_agents()` was already true and my code skipped the block that registered the legal scene. Reproduced with test_na_arenas.py followed by the js1 CLI test in one process (1 failed, 5 passed); after moving `kit.register_scene(legal_scene)` out of the conditional (idempotent for an identical scene) the same pair plus the j_lm CLI test give 7 passed.
+verdict: FIXED, gate rerunning — the earlier 5-passed arena run had hidden this because it built the arena first in its process.
+
+## 2026-10-17 — closing package gate of the day, final code
+command: JAX_PLATFORMS=cpu .venv/bin/python -m pytest tests/experimental/neural_agent -q -rf
+result:  473 passed, 2 skipped in 138.72s; exit 0. Against the phase baseline of 426 passed / 2 skipped: +47 tests (record_traces 4, sim_goal_env and actor-critic 14, system_one 25, executive export 3, arena legal mode 1), 0 regressions.
+verdict: PASS — every component of the day is gated; the simulator switch is committed with its attribution; the J-S1 scaffold passes G1 and G2b; G3, G4 and G5 are the open gates (task: structured executive encoder).
+

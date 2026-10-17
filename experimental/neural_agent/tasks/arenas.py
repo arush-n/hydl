@@ -214,24 +214,26 @@ def _combat_open_flat(batch: int, ticks: int, seed: int) -> BuiltArena:
     from hytalegym.jax.combat.types import AGENT_ENTITY, TARGET_ENTITY
 
     kit = AgentKit()
+    spec = AgentSpec(name=COMBAT_OPEN_FLAT_AGENT, scene=COMBAT_OPEN_FLAT_LEGAL_SCENE)
+    # The shipped open-flat scene, in the Gym's legal observation mode (2026-10-17): the same
+    # world capabilities, and a runtime config for this batch with legal_observation=True.
+    # adk's build() takes a scene's runtime_config over the default one (env_adapter.py).
+    # Scenes live on the kit instance while agent names are process-wide, so the scene is
+    # registered on every fresh kit (register_scene is idempotent for an identical scene).
+    legal_scene = JaxScene(
+        name=COMBAT_OPEN_FLAT_LEGAL_SCENE,
+        contract_sha256=hashlib.sha256(
+            f"{OPEN_FLAT_CONTROL_SCENE.contract_sha256}:legal_observation=true".encode("ascii")
+        ).hexdigest(),
+        environment_kwargs=OPEN_FLAT_CONTROL_SCENE.environment_kwargs,
+        runtime_config=arsenal_runtime_config(
+            hytale_0_5_7_loadouts([spec.loadout] * batch), legal_observation=True
+        ),
+        expected_batch=batch,
+        expected_loadout=spec.loadout,
+    )
+    kit.register_scene(legal_scene)
     if COMBAT_OPEN_FLAT_AGENT not in kit.list_agents():
-        spec = AgentSpec(name=COMBAT_OPEN_FLAT_AGENT, scene=COMBAT_OPEN_FLAT_LEGAL_SCENE)
-        # The shipped open-flat scene, in the Gym's legal observation mode (2026-10-17): the same
-        # world capabilities, and a runtime config for this batch with legal_observation=True.
-        # adk's build() takes a scene's runtime_config over the default one (env_adapter.py).
-        legal_scene = JaxScene(
-            name=COMBAT_OPEN_FLAT_LEGAL_SCENE,
-            contract_sha256=hashlib.sha256(
-                f"{OPEN_FLAT_CONTROL_SCENE.contract_sha256}:legal_observation=true".encode("ascii")
-            ).hexdigest(),
-            environment_kwargs=OPEN_FLAT_CONTROL_SCENE.environment_kwargs,
-            runtime_config=arsenal_runtime_config(
-                hytale_0_5_7_loadouts([spec.loadout] * batch), legal_observation=True
-            ),
-            expected_batch=batch,
-            expected_loadout=spec.loadout,
-        )
-        kit.register_scene(legal_scene)
         kit.register(spec)
     handle = kit.build(COMBAT_OPEN_FLAT_AGENT, batch=batch).with_episode_limit(ticks)
     description = {
