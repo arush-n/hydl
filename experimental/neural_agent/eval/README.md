@@ -1,0 +1,139 @@
+# experimental/neural_agent/eval
+
+Evaluation of the composition arms of ADR-001's three-level agent (sections 8 and 9).
+Last updated **2026-10-17** (UTC; the local clock read 2026-10-16 evening, CDT). Source: `metrics.py`, `arms.py`, `traces.py`, `run_composition.py`, and `tasks/composition.py` for the verdicts.
+
+## Thesis
+
+ADR-001 section 1 (status COMMITTED):
+
+> The research question is how an intelligent agent uses time and compute: when to think, when to act, and when to reuse an existing decision. Task completion is the instrument, not the question.
+
+This package measures the instrument. On the composition task (pursue, evade when damaged, resume pursuit) it reports goal switching, interrupt response, JEV latency and task completion for five arms: a flat pursuit actor, a scripted JEV (J0), a shuffled-goal control, a learned JEV (J1) and a quick language-model JEV (J-LM). `j1` and `j_lm` are wired via `eval/arms.py`. `j1` runs untrained until a checkpoint is supplied, and until then its report labels it `j1-untrained`. `j_lm` is a host-mode arm and requires `--runner eager`, because it runs through `session.run_session`. A structural run is not evidence that the hierarchy works. ADR-001 section 0 and section 6.5 say what the existing evidence does not establish.
+
+ADR-001 is a local record. It is not in this repository, so the section numbers above refer to a copy that the reader may not have.
+
+## What is measured
+
+| Quantity | Definition | Source |
+|---|---|---|
+| Lane-run | One lane over one collector run of `ticks` steps. `lane_runs = episodes x batch` | `run_composition.py` |
+| Episode | The ticks from a reset through the first tick with `done`. The horizon and a catch both end it | `metrics.completed_episodes` |
+| Success | An episode that `CompositionTask.classify` returns as `composed` | `tasks/composition.py` |
+| Pursue-only | An episode that `classify` returns as `pursue_only` (caught, no evade before the catch, no damage) | `tasks/composition.py` |
+| Skill changes | Changes of the active skill index between consecutive ticks, on ticks where a goal was in force (the forced first goal of an episode is excluded) | `metrics.goal_switches` |
+| Core replacements | Core switches on ticks where a goal was already in force | `run_composition._score_run` |
+| Interrupt latency | Ticks from an interrupt-event onset to answered by the next core goal replacement, or, since 2026-10-17, by a skill change on a tick with a goal in force (host-mode arms write goals between steps and never produce a core replacement) (a switch on a tick where a goal was in force) | `metrics.interrupt_latency_ticks`, fed by `run_composition._score_run` |
+| Commitment violations | Ordinary switches made before the goal's minimum commitment | `metrics.commitment_violations` |
+| JEV misses and latency | Decisions over the latency budget, and their p50 and p95 | `JevRunner.stats()`, only when measured |
+
+## Formulas
+
+Each formula names the rule that the code applies. `[confirmed]` means read in the cited source. `[inferred]` means derived here, with the reason given.
+
+**1. Trials and success rate** `[confirmed]`
+
+```text
+lane_runs            = episodes x batch
+episodes_completed   = number of episodes that reached done inside the run
+success_rate         = successes / episodes_completed
+catches_per_episode  = catches / episodes_completed
+```
+
+An episode still running when the run ends is not counted. The arena's horizon is set to `ticks`, so an episode normally ends by a catch or at the end of the run.
+
+**2. Wilson lower bound** `[confirmed: formula, as recipe.py computes it; source Wilson 1927, DOI record checked, paper not read]`
+
+With p = successes / n and z = 1.96:
+
+```text
+lower = (p + z^2/(2n) - z * sqrt((p(1-p) + z^2/(4n)) / n)) / (1 + z^2/n)
+```
+
+This is the formula of `agent_skills/training_runs/recipe.py` (`wilson_lower`). The test checks equality on three cases. The advance rule of the recipe compares this bound with `advance_lower_bound`. The bound is exactly 0.0 when there are no successes.
+
+**3. Episode verdicts** `[confirmed: tasks/composition.py classify, strict rule of 2026-10-17]`
+
+```text
+caught         = terminated[t] for some t in the episode
+composed       = caught, and some evade entry e before the catch with
+                   a damage tick d where e - 40 <= d <= e   (EVADE_TRIGGER_WINDOW_TICKS = 40)
+                   and a pursuit entry p where e < p < catch
+composed_loose = caught, and some evade entry before the catch, but not composed
+pursue_only    = caught, no evade entry before the catch, and zero damage events
+failed         = every other completed episode
+```
+
+Only `composed` is a success. `composed_loose` is reported and never counted as a success. Without the optional keys `damage_ticks` and `pursuit_entry_ticks`, every caught episode with an evade entry before the catch is `composed_loose`. An evade entry is a tick where the active skill is the evader and the previous tick is not. A damage event is a rising edge of DAMAGE_RECEIVED.
+
+Why the rule changed: the earlier rule made `composed` mean any evade entry before the catch. The 256-tick gate run of 2026-10-17 then scored the shuffled-goal control 3/5 with no damage in the arena, so the rule counted random evader selections as composition. `run_composition._score_run` records both keys: `damage_ticks` are the episode ticks with DAMAGE_RECEIVED active and known, and `pursuit_entry_ticks` are the ticks where the active skill becomes pursuit, the first tick included (the formula block of `run_composition.py`). Both are recorded step indices, so the 40-tick window is 40 steps (`docs/FORMULAS.md` B5).
+
+**4. Skill changes and core replacements** `[confirmed]`
+
+```text
+skill_changes_per_lane_run   = sum over lane-runs of sum_{t=1}^{T-1} [skill[t] != skill[t-1]] * [goal_valid[t]] / lane_runs
+core_replacements_per_lane_run = sum over lane-runs of sum_{t>=1} [goal_switched[t] and goal_valid[t]] / lane_runs
+```
+
+A replacement with the same skill index counts only in the second quantity. The forced first goal of an episode (`goal_valid` False) is excluded from both, so a catch followed by an autoreset counts as neither a skill change nor a replacement. The first tick of a record is never counted as a change.
+
+**5. Interrupt onset and latency** `[confirmed]`
+
+The interrupt events are PROJECTILE_THREAT_ENTERED and DAMAGE_RECEIVED. ADR-001 section 8 P2 names them as the evade triggers.
+
+```text
+onset(t, b)       = event_active[t, b] and not event_active[t-1, b]
+replacement(t, b) = goal_switched[t, b] and goal_valid[t, b]
+latency           = t' - t,   t' = min{ t' >= t : replacement[t', b] }
+unanswered        = an onset with no such t'
+```
+
+A latency of 0 means the goal changed on the tick the event became active. This is the core's own rule: an active known event makes the manager due (`adk/architecture/decision_context.py:415`). The forced first goal of an episode is not a reply to an event, so it is not a replacement here.
+
+**6. Commitment violations** `[inferred]`
+
+```text
+violations = #{ ordinary switches : goal_age < minimum_commitment }
+ordinary   = valid goal, not timed out, not an emergency interrupt
+```
+
+The core's switch rule allows an ordinary switch only when `goal_age >= minimum_commitment` (`adk/architecture/hierarchy.py:273` and `:347-356`). So the count should be 0 by construction. A nonzero value points at the core or at a bypass that was recorded wrongly. This is inferred from reading the rule. It is not tested against a live arena.
+
+**7. Terminated means catch** `[inferred]`
+
+The flat arena publishes `info.terminated` as "catch or death", and `info.truncated` as the horizon (`tasks/flat_arena.py`, `step_detailed`). The arena closes combat, so no actor can die there, and terminated is read as a catch. This is inferred from `tasks/events.py` and `step_detailed`, not tested.
+
+**8. JEV miss and latency** `[confirmed: jev/runner.py]`
+
+```text
+jev_miss_rate = misses / decisions;  a miss is latency_ms > budget_ms   (strict)
+```
+
+`JevRunner` counts eager calls only, and its latency is NaN for in-graph instances. The J0 instance is in-graph, and the compiled collector traces its manager. So the J0 and shuffled arms report JEV columns as not measured.
+
+## Citations
+
+- Wilson, E. B. (1927). Probable inference, the law of succession, and statistical inference. *Journal of the American Statistical Association* 22(158): 209-212. https://doi.org/10.1080/01621459.1927.10502953. The Crossref record was checked on 2026-10-16 (metadata only), and the DOI resolves to the publisher, Taylor & Francis (checked 2026-10-17). The paper was not read. The formula above is the one `recipe.py` implements. `docs/REFERENCES.md` [WILSON] holds the same entry.
+- Sutton, R. S., Precup, D., Singh, S. (1999). Between MDPs and semi-MDPs: a framework for temporal abstraction in reinforcement learning. *Artificial Intelligence* 112(1-2): 181-211. https://doi.org/10.1016/S0004-3702(99)00052-1. The DOI resolves to Elsevier PII S0004370299000521, and its Crossref record matches the title, authors, volume and pages (checked 2026-10-17). Public copy: https://people.cs.umass.edu/~barto/courses/cs687/Sutton-Precup-Singh-AIJ99.pdf (returned a PDF on 2026-10-17). ADR-001 section 11 cites it as [O1], and `docs/REFERENCES.md` [O1] holds the same entry.
+- ADR-001 three-level agent, a local record that is not in the repository (no URL): section 8 P2 exit (goal switches, interrupt latency, commitment violations); section 9 (metric families and the ablation matrix); section 1 (thesis).
+- `experimental/hierarchical_planner/DESIGN.md` section 6: the shuffled-goal control, and the reading that if the transformer and shuffled arms agree, the manager adds temporal structure rather than goal content.
+- `agent_skills/training_runs/recipe.py`: `wilson_lower` and the advance rule.
+- `experimental/neural_agent/tasks/composition.py`: the verdicts and the executive. `tasks/events.py`: the DAMAGE_RECEIVED read helper, and the ablation that injects it (ADR-001 D5).
+- `adk/architecture/hierarchy.py` (lines 273-282, 347-356 and 372, the goal-valid update), `adk/architecture/decision_context.py` (line 415), `adk/runtime/hierarchical.py` (the collector). These are repository paths, the only locator for them.
+
+## Running
+
+```bash
+export PYTHONPATH="/Users/arush/hydl:/Users/arush/hydl/HytaleRL/hytalegym" JAX_PLATFORMS=cpu
+/Users/arush/hydl/.venv/bin/python -m experimental.neural_agent.eval.run_composition \
+    --arms flat,j0,shuffled --episodes 2 --batch 8 --ticks 64 --seed 0 --arena flat_pursuit --out DIR
+```
+
+The command writes `metrics.csv` and `REPORT.md` into `DIR`. The `j1` and `j_lm` arms are wired via `eval/arms.py`: `j1` runs untrained until a checkpoint is supplied (`--j1-params PATH`), and `j_lm` requires `--runner eager`. `--arena` picks `combat_baseline`, the default, where DAMAGE_RECEIVED fires and nothing can be caught, or `flat_pursuit`, where a catch ends an episode and no actor takes damage. The 256-tick gate run of 2026-10-17 used the flat pursuit arena. `--runner` is `compiled` (the default) or `eager`. The default `DIR` is `eval/out/`, which `experimental/neural_agent/.gitignore` (line 2) excludes. `REPORT.md` repeats this file's thesis, formulas and citations, with the run's own table and caveats.
+
+## Limits
+
+- The table describes the instrument. It does not show that the hierarchy makes better decisions, and no result here should be read that way.
+- Success and pursue-only come from the composition task, as the task defines them. Since 2026-10-17 `combat_open_flat` composes (J0 33/64 at 512 ticks, `docs/LEDGER.md`); of the two earlier arenas, neither composes on its own: `flat_pursuit` has catches and no damage, and `combat_baseline` has damage and no catches (`run_composition.py` docstring). So no episode can be composed unless a damage event is injected on `flat_pursuit`. That injection is an ablation (ADR-001 D5), and the CLI does not apply it.
+- The belief parameters are a random initialization with a fixed seed. The arena publishes no speed scales, so two belief features are unknown.
+- The trace dataset `traces.py` writes is read by `record_traces.py` (2026-10-17), which keeps the `manager_due` rows and adds `num_skills`; `jev/train_j1.py` trained on it and `jev/eval_j1.py` scored it (`docs/LEDGER.md`). Before that date the layout had no reader and was unverified.
