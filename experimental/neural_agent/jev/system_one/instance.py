@@ -1,15 +1,22 @@
-"""SystemOneJev: J-S1 as a host-mode JEV instance on two timescales (FORMULAS (M2), (M4), (M8)).
+"""SystemOneJev: J-S1 as a host-mode JEV instance on two timescales (FORMULAS (M2), (M4), (M8), (M9)).
 
 Slow path, off the tick (the only trunk calls)::
 
     construction:           E = catalogue_embeddings(trunk, skill_ids, descriptions)          once per catalogue
     set_executive_state:    h_E = trunk.encode([render_executive(skill_ids, descriptions, E_t)])[0]
+                                                                         with the text path only
+                            c_l = trunk.encode([l])[0] for each constraint label l not seen before
+                            x   = data.slot_inputs(E_t, skill_ids, E, c)                  with the structured encoder
+                            x_E = encode_executive(params, x) = [g_E ; q_top]             (M9), compiled
                             cached by E_t.version: the same version again costs no trunk call
+
+The label embeddings are cached for the instance's life (one catalogue), so with the structured
+encoder alone (``text_path`` False) a new E_t whose labels were seen before costs no trunk call.
 
 Fast path, every decision (``__call__``): no text and no trunk call. One compiled call::
 
     u_b       = belief_inputs(B_t)_b ;  m = j1_allowed_skills(E_t arrays)
-    out       = apply_heads(params, [h_E]*B, u, onehot(k_cur), m, E)
+    out       = apply_heads(params, [h_E]*B, u, onehot(k_cur), m, E, [x_E]*B)     h_E, x_E as the heads hold them
     k_b       = argmax_k out.skill_logits[b, k]
     terminate = [out.replace_logit_b > 0] and [k_b != k_cur,b]
     slot_b    = highest-priority valid E_t slot naming k_b, lowest slot on a tie, else -1   (network._matching_slot)
@@ -63,25 +70,38 @@ from experimental.neural_agent.jev.system_one.data import (
     catalogue_embeddings,
     render_executive,
     skill_descriptions_of,
+    slot_inputs,
 )
-from experimental.neural_agent.jev.system_one.heads import HeadsParams, apply_heads, belief_inputs, heads_dims
+from experimental.neural_agent.jev.system_one.heads import (
+    HeadsParams,
+    apply_heads,
+    belief_inputs,
+    encode_executive,
+    heads_dims,
+)
 from experimental.neural_agent.jev.system_one.trunk import TrunkEncoder
+from experimental.neural_agent.shared_state import SharedState
 
 JEV_NAME: str = "js1"
+_encode_executive = jax.jit(encode_executive)
 
 
 @functools.partial(jax.jit, static_argnames=("num_skills",))
 def fast_path(
     params: HeadsParams,
-    h_executive: jax.Array,
+    h_executive: jax.Array | None,
     belief: SharedBeliefState,
     current: jax.Array,
     executive: ExecutiveArrays,
     skill_embeddings: jax.Array | None,
+    executive_code: jax.Array | None = None,
     *,
     num_skills: int,
 ) -> tuple[Any, jax.Array, jax.Array, jax.Array]:
     """The per-decision computation (module formulas), compiled; no text and no trunk.
+
+    ``h_executive`` (float32[D]) is None without the text path, ``executive_code`` (float32[2S],
+    the cached [g_E ; q_top]) None without the structured encoder.
 
     Returns:
         ``(goal, terminate, confidence, entropy)``: a ManagedGoal batched [B], bool[B],
@@ -90,9 +110,10 @@ def fast_path(
 
     lanes = current.shape[0]
     u = belief_inputs(belief.features, belief.feature_known, belief.latent)
-    h = jnp.broadcast_to(h_executive, (lanes, h_executive.shape[0]))
+    h = None if h_executive is None else jnp.broadcast_to(h_executive, (lanes, h_executive.shape[0]))
+    code = None if executive_code is None else jnp.broadcast_to(executive_code, (lanes, executive_code.shape[0]))
     allowed = j1_allowed_skills(executive, num_skills=num_skills)
-    out = apply_heads(params, h, u, jax.nn.one_hot(current, num_skills), allowed, skill_embeddings)
+    out = apply_heads(params, h, u, jax.nn.one_hot(current, num_skills), allowed, skill_embeddings, code)
     skill = jnp.argmax(out.skill_logits, axis=-1).astype(jnp.int32)
     log_probs = jax.nn.log_softmax(out.skill_logits, axis=-1)
     entropy = -jnp.sum(jnp.exp(log_probs) * log_probs, axis=-1)
@@ -118,7 +139,8 @@ class SystemOneJev:
     Args:
         trunk: A TrunkEncoder, frozen. Called on the slow path only.
         params: HeadsParams whose trunk width is ``trunk.dim``. A fixed head (the ablation)
-            must score ``len(skill_ids)`` skills; a matching head scores any catalogue.
+            must score ``len(skill_ids)`` skills; a matching head scores any catalogue. The
+            params' shapes say whether the structured encoder and the text path are used.
         skill_ids: The catalogue in dispatcher order, idle first.
         skill_descriptions: One description per skill, or None to describe each skill by its id.
 
@@ -156,15 +178,18 @@ class SystemOneJev:
         self._trunk = trunk
         self._skill_ids = catalogue
         self._descriptions = descriptions
-        self.skill_embeddings = (
-            None if dims.skill_head == "fixed" else jnp.asarray(catalogue_embeddings(trunk, catalogue, descriptions))
-        )
+        self._dims = dims
+        self._skill_table = None if dims.skill_head == "fixed" else catalogue_embeddings(trunk, catalogue, descriptions)
+        self.skill_embeddings = None if self._skill_table is None else jnp.asarray(self._skill_table)
+        self._label_embeddings: dict[str, np.ndarray] = {}
         self._executive: ExecutiveState | None = None
         self._h_executive: jax.Array | None = None
+        self._executive_code: jax.Array | None = None
         self._lowered: dict[int, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
 
     def set_executive_state(self, state: ExecutiveState) -> None:
-        """Slow path: set E_t and encode its stable text, once per version.
+        """Slow path: set E_t and read it once per version: its stable text (text path) and its
+        slots (structured encoder; new constraint labels are encoded once and cached).
 
         The same version with the same content again is a no-op (no trunk call).
 
@@ -181,10 +206,33 @@ class SystemOneJev:
             if state != self._executive:
                 raise ValueError(f"executive version {state.version} is already set with different content")
             return
-        text = render_executive(self._skill_ids, self._descriptions, state)
-        self._h_executive = jnp.asarray(self._trunk.encode([text])[0], dtype=jnp.float32)
+        h_executive = code = None
+        if self._dims.text_path:
+            text = render_executive(self._skill_ids, self._descriptions, state)
+            h_executive = jnp.asarray(self._trunk.encode([text])[0], dtype=jnp.float32)
+        if self._dims.slot_width:
+            new = sorted({label for goal in state.goals for label in goal.constraints} - set(self._label_embeddings))
+            if new:
+                self._label_embeddings.update(zip(new, np.asarray(self._trunk.encode(new), dtype=np.float32)))
+            slots = slot_inputs(state, self._skill_ids, self._skill_table, self._label_embeddings)
+            code = _encode_executive(self.params, jnp.asarray(slots))
+        self._h_executive, self._executive_code = h_executive, code
         self._executive = state
         self._lowered = {}
+
+    def set_shared_state(self, shared: SharedState) -> None:
+        """Slow path from the scratchpad S_t: read its ``executive`` section (SYSTEM_ONE.md §8.10).
+
+        The typed fields go through :meth:`set_executive_state` (once per E_t version). The per-slot
+        texts (``intent``, ``when``) enter the slot vectors in the G3-NL stage (M12); not read yet.
+
+        Raises:
+            TypeError: If ``shared`` is not a SharedState.
+        """
+
+        if not isinstance(shared, SharedState):
+            raise TypeError("shared must be a SharedState")
+        self.set_executive_state(shared.executive.to_executive_state())
 
     def initial_state(self, batch: int) -> jax.Array:
         """Return int32[batch] zeros: the decisions made per lane."""
@@ -251,6 +299,7 @@ class SystemOneJev:
             jnp.asarray(current, dtype=jnp.int32),
             executive,
             self.skill_embeddings,
+            self._executive_code,
             num_skills=len(self._skill_ids),
         )
         return GoalDecision(

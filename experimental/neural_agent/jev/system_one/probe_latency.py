@@ -7,8 +7,20 @@ Slow path, off the tick, timed per call:
 * ``trunk_executive``: ``trunk.encode`` of that one text (h_E, once per executive version);
 * ``trunk_catalogue``: ``trunk.encode`` of the K skill descriptions (e_j, once per catalogue).
 
+Reading (gate G3 reading latency, SYSTEM_ONE.md 8.9), timed per call: ``set_executive_state``
+on a new E_t version (the CompositionTask E_t with the version bumped, built before timing),
+i.e. the time from a new E_t to a ready cache, for three untrained matching heads:
+
+* ``structured``: the structured encoder alone (``slot_width=SLOT_WIDTH, text_path=False``): slot
+  inputs and the compiled ``encode_executive``; a warm-up version before timing compiles it and caches the label;
+* ``text``: the text path alone (the scaffold's head): render and one trunk call;
+* ``both``: the structured encoder and the text path, J-S1's configuration.
+
+``reading_trunk_calls_per_version`` gives the trunk calls per timed new version for each.
+
 Fast path, every decision, for batch 1, 8 and 64 (belief rows from
-``train_j1.synthetic_dataset``, matching heads from ``init_heads``):
+``train_j1.synthetic_dataset``, matching heads with the structured encoder and the text path
+from ``init_heads``):
 
 * ``decide``: ``SystemOneJev.__call__``, what a host decider pays per decision, host checks included;
 * ``compiled``: the compiled ``instance.fast_path`` alone, through ``jax.block_until_ready``.
@@ -27,6 +39,7 @@ Command::
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import platform
 import time
@@ -46,12 +59,17 @@ from experimental.neural_agent.contracts import (
     executive_arrays,
 )
 from experimental.neural_agent.jev.system_one.data import render_executive
-from experimental.neural_agent.jev.system_one.heads import init_heads
+from experimental.neural_agent.jev.system_one.heads import SLOT_WIDTH, init_heads
 from experimental.neural_agent.jev.system_one.instance import SystemOneJev, fast_path
 from experimental.neural_agent.jev.system_one.train_supervised import DEFAULT_SKILL_IDS, load_executive, make_trunk
 from experimental.neural_agent.jev.train_j1 import synthetic_dataset
 
 BATCHES: tuple[int, ...] = (1, 8, 64)
+READINGS: dict[str, dict[str, Any]] = {
+    "structured": {"slot_width": SLOT_WIDTH, "text_path": False},
+    "text": {},
+    "both": {"slot_width": SLOT_WIDTH},
+}
 
 
 class _CountingTrunk:
@@ -91,7 +109,16 @@ def probe(trunk_spec: str, repeats: int) -> dict[str, Any]:
         "trunk_catalogue": _time_ms(lambda: trunk.encode(list(DEFAULT_SKILL_IDS)), repeats),
         "rendering_chars": len(text),
     }
-    jev = SystemOneJev(trunk, init_heads(jax.random.key(0), trunk.dim), DEFAULT_SKILL_IDS)
+    reading: dict[str, Any] = {}
+    reading_calls: dict[str, float] = {}
+    for name, options in READINGS.items():
+        reader = SystemOneJev(trunk, init_heads(jax.random.key(0), trunk.dim, **options), DEFAULT_SKILL_IDS)
+        versions = iter([dataclasses.replace(executive, version=version) for version in range(1, repeats + 3)])
+        reader.set_executive_state(next(versions))  # compiles encode_executive and caches the label embedding
+        before = trunk.calls
+        reading[name] = _time_ms(lambda: reader.set_executive_state(next(versions)), repeats)
+        reading_calls[name] = (trunk.calls - before) / (repeats + 1)
+    jev = SystemOneJev(trunk, init_heads(jax.random.key(0), trunk.dim, slot_width=SLOT_WIDTH), DEFAULT_SKILL_IDS)
     jev.set_executive_state(executive)
     fast: dict[str, Any] = {}
     calls_before = trunk.calls
@@ -117,7 +144,7 @@ def probe(trunk_spec: str, repeats: int) -> dict[str, Any]:
         def compiled() -> Any:
             return jax.block_until_ready(
                 fast_path(jev.params, jev._h_executive, belief, current, arrays, jev.skill_embeddings,
-                          num_skills=len(DEFAULT_SKILL_IDS))
+                          jev._executive_code, num_skills=len(DEFAULT_SKILL_IDS))
             )
 
         fast[f"batch_{batch}"] = {"decide": _time_ms(decide, repeats), "compiled": _time_ms(compiled, repeats)}
@@ -125,7 +152,11 @@ def probe(trunk_spec: str, repeats: int) -> dict[str, Any]:
         "trunk": trunk_spec,
         "dim": trunk.dim,
         "skill_head": "matching",
+        "slot_width": SLOT_WIDTH,
+        "text_path": True,
         "slow_path_ms": slow,
+        "reading_ms": reading,
+        "reading_trunk_calls_per_version": reading_calls,
         "fast_path_ms": fast,
         "trunk_calls_during_decisions": trunk.calls - calls_before,
     }
@@ -136,7 +167,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(
         prog="python -m experimental.neural_agent.jev.system_one.probe_latency",
-        description="Time J-S1's slow path (per executive version) and fast path (per decision) on CPU (gate G2).",
+        description=(
+            "Time J-S1's slow path (per executive version), its reading of a new E_t (gate G3) and its "
+            "fast path (per decision) on CPU (gate G2)."
+        ),
     )
     parser.add_argument("--trunk", default="hashed", help="hashed (default) or torch:<model>")
     parser.add_argument("--repeats", type=int, default=50, help="timed calls per measurement (default 50)")
