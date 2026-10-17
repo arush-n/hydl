@@ -31,6 +31,29 @@ against a live server of that version, compute the stamp, retrain, flip the defa
 The decision rule: a value that changes when the game updates is content; a behaviour that appears,
 disappears or changes shape is a construct behind a switch; everything else is engine.
 
+## 2b. Render, do not replace (owner, 2026-10-17, late)
+
+Owner: "we should not replace the existing code rather make copies or some rendering that updates it
+such that the new gen is properly implemented ... optimizing where we can and in the future try to make
+updating to a newer generation easier and quicker." So the mechanism that makes the engine generation-
+agnostic is a **renderer**: the gen-5 source stays untouched (frozen), and each generation's simulator
+package is *rendered* from that source plus the generation's **overlay**:
+- the overlay names the modules to copy, the constants and tables to redirect to the content layer (by
+  symbol, from the swap plan of phase 1), the construct hooks to insert (profile-gated), and any patch
+  the fidelity report requires (for 0.7.2: the detail-hitbox line-of-sight rule, slope and wall limits,
+  the guard rule, knockback values, hit timing, interrupt / flinch, mana and runes, the crafting table
+  capacity, the dodge head size);
+- `sim/common/render.py` applies an overlay to the committed source (read from `git show HEAD:`, never
+  from the working tree, so no uncommitted work is baked in) and writes `sim/genN/engine/`;
+- the **identity gate**: rendering the gen-5 source with the gen-5 overlay (content tables and no
+  constructs) must give byte-identical rollouts on the fixed seeds; the gen-7 render then differs only
+  where its overlay says, and each difference has a differential;
+- updating to generation N+1 is: extract, write the overlay delta, render, run the differentials. The
+  overlay delta is the whole port, in one reviewable file.
+Optimisation is a standing objective of the render step, not a separate project: table lookups become
+static arrays, Python-side loops in the copied modules are vectorised when a profile exposes them, and
+compile and step times are measured before and after each render (a number in the receipts).
+
 ## 3. Getting there from today
 
 Today the gen-5 numbers are hand-transcribed into the engine's code and 0.7.2 has no profile beyond a
