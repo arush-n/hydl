@@ -786,6 +786,35 @@ compiled table follows with the library). The J-S2 program heads then emit reque
 the behaviour generator writes canonical programs as request sets. Reading the LLM's words (§9.1-§9.4)
 is unchanged.
 
+### 9.11 Selecting skills: the typed id is the selector (measured, 2026-10-17 night)
+
+Measured (ledger "P3"): matching an intent to a skill by its description over the owner's real catalogue
+fails for every encoder tried: MiniLM-L6-v2 zero-shot top-1 0.42 (top-3 0.62) over the 119 learned and
+command rows, 0.44 with a fitted map, about 0.05 with whole catalogue sections held out; ModernBERT-base
+and the hashed floor lower; the fine-tuned pilot weights add 3-4 points. The size curve is the fact that
+matters: 0.86 at four candidates, 0.60 at thirty-two, 0.42 at 119. The earlier 0.85 on synthetic
+held-out families was the small-catalogue regime. The catalogue itself is not separable by one sentence:
+near-synonym rows, parameters written as rows (walk / run / sprint share a description), terse command
+descriptions, one identical pair.
+
+Decision. The LLM's typed `skill_id` is the selector. The LLM is told the catalogue with ids and
+descriptions in its prompt, and the executive schema already requires the id, so the middle layer must
+not re-derive what the LLM knows. Matching by description is demoted to the fallback for an unknown or
+absent id: it returns the top three candidates and writes a low-confidence flag into the `decision`
+section so the LLM corrects the id in its next version; that is "the best possible choice" of §8.12
+item 4 without pretending accuracy the measurements refute. Consequences:
+- §9.1's `skill_k` head over the catalogue is retired as a selector and kept only as the fallback and
+  for synthetic benchmarks; the interpret stage reads conditions (nine kinds, the natural-language part
+  the layer must learn) and numbers.
+- §9.9's programs name skills by id; the catalogue's nineteen activities are the canonical program seeds;
+  a learned program head classifies over the current catalogue's ids, with description embeddings as an
+  input for ids it has not seen, not zero-shot by description.
+- Library growth: adding a skill is adding a catalogue row (contract and description); the LLM can use it
+  in its next version with no retraining of the middle layer for selection; only programs that involve
+  the new skill need data.
+- Gate I1 changes: "intent -> skill >= 0.90" becomes: typed id validity 100 % by schema; the fallback's
+  top-3 containment and flag precision are reported, not gated.
+
 ## References
 
 - [JEV] TypeSafe AI, "Introducing System One Models & Jev", 2026. https://typesafe.ai/blog/introducing-system-one-models-and-jev
