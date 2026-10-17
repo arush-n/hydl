@@ -9,8 +9,10 @@ What it reads
 -------------
 Sections ``## N. Title`` with a markdown table each. Sections 1 to 13 have the columns
 ``skill | what a person does | Hytale mechanic | instruction -> done | kind | gen 5``; sections 9 to
-12 omit ``instruction -> done``. Section 14 has ``activity | sequence | context it needs``. A skill
-cell may hold several ids (``"walk_to, run_to, sprint_to"``): one row, several verbs sharing it.
+12 omit ``instruction -> done``. Section 14 has ``activity | sequence | context it needs``, then
+``program of | sequence | context it needs``: the programs of activity rows that live in other
+sections (not rows of their own, so a row count stays one per activity). A skill cell may hold
+several ids (``"walk_to, run_to, sprint_to"``): one row, several verbs sharing it.
 
 What it yields
 --------------
@@ -30,10 +32,11 @@ What it yields
 * A description per verb for the middle layer's matching: ``"<id>: <what a person does>. ..."``.
 
 Scopes. A row's scope is its section's (``SECTION_SCOPES``) unless ``VERB_SCOPES`` names the verb;
-each departure carries its reason there. A few learned verbs need a second scope to act on their own
-(``COMPANION_SCOPES``, for example ``build_up`` places blocks with the hands while it jumps): the
-combiner grants only the verb's own scope, and the middle layer issues a parallel request for the
-companion. E7 tests whether that works; if not, the grouping changes (``BUILD.md`` section 9).
+each departure carries its reason there. A few learned verbs drive a second scope as part of the same
+competency (``SECOND_SCOPES``, for example ``build_up`` places blocks with the hands while it jumps):
+the one request carries both scopes, and the combiner grants them together or not at all
+(``requests.ArgumentSchema.scopes`` is a tuple; agreed with the middle layer on 2026-10-17). Parallel
+requests are for independent verbs (walk while looking at something), not for halves of one verb.
 
 The three proof-of-concept skills (``idle``, ``pursuit``, ``evader``) are not catalogue rows.
 ``proof_of_concept_contracts`` maps them onto the rows that describe them (``PROOF_OF_CONCEPT``)
@@ -115,7 +118,7 @@ VERB_SCOPES: Mapping[str, str] = {
     "punish": "hands",  # attack timing
     "interrupt": "hands",  # attack timing
     "keep_range": "locomotion",  # distance keeping
-    "kite": "locomotion",  # back away; the shot is the companion
+    "kite": "locomotion",  # back away; the shot is its second scope (hands)
     "flank": "locomotion",  # move to the side
     "finish": "locomotion",  # chase
     "give": "hands",  # item_drop_give
@@ -125,7 +128,7 @@ VERB_SCOPES: Mapping[str, str] = {
 }
 """Departures from ``SECTION_SCOPES``, one reason each."""
 
-COMPANION_SCOPES: Mapping[str, tuple[str, ...]] = {
+SECOND_SCOPES: Mapping[str, tuple[str, ...]] = {
     "build_up": ("locomotion",),
     "bridge": ("locomotion",),
     "mine_in_direction": ("locomotion",),
@@ -137,7 +140,7 @@ COMPANION_SCOPES: Mapping[str, tuple[str, ...]] = {
     "search_for": ("locomotion",),
     "lure_animal": ("hands",),
 }
-"""Learned verbs that need a parallel request on a second scope to act on their own."""
+"""Learned verbs that also drive a second scope; their one request carries both scopes."""
 
 PROOF_OF_CONCEPT: Mapping[str, str] = {"idle": "wait_here", "pursuit": "finish", "evader": "avoid"}
 """Proof-of-concept skill id -> the catalogue row that describes it."""
@@ -245,7 +248,6 @@ class VerbContract:
     contract: SkillContract
     arguments: ArgumentSchema
     scopes: tuple[str, ...]
-    companions: tuple[str, ...]
     kind: str
     section: int
     description: str
@@ -254,7 +256,7 @@ class VerbContract:
         contract = self.contract
         return {
             "verb": self.verb, "kind": self.kind, "section": self.section, "scopes": list(self.scopes),
-            "companions": list(self.companions), "arguments": self.arguments.to_dict(),
+            "arguments": self.arguments.to_dict(),
             "description": self.description,
             "contract": {
                 "skill_id": contract.skill_id, "version": contract.version,
@@ -272,17 +274,27 @@ class VerbContract:
 
 @dataclass(frozen=True)
 class ActivityStep:
-    """One step of an activity: its text as written, the catalogue ids it names, its argument and exit."""
+    """One step of an activity: its text, the catalogue ids it names, its argument, stage and exit.
+
+    Steps with the same ``stage`` run at the same time (joined by ``+`` in the catalogue); stages run
+    in order (separated by ``,``). ``repeat`` marks ``(for each ...)``: the step runs once per target
+    the caller supplies. The exit is the step's ``done`` (the catalogue gives no other exit).
+    """
 
     text: str
     verbs: tuple[str, ...]
     argument: str
     exit: str = "done"
+    stage: int = 0
+    repeat: bool = False
 
 
 @dataclass(frozen=True)
 class ActivityProgram:
-    """A section-14 activity: ordered steps and the context it needs."""
+    """A section-14 program: its steps (by stage) and the context it needs.
+
+    A program whose id is an activity row of another section is that row's program.
+    """
 
     activity: str
     steps: tuple[ActivityStep, ...]
@@ -292,13 +304,25 @@ class ActivityProgram:
     def description(self) -> str:
         """The text the middle layer matches against: the steps in order and the context needed."""
 
-        steps = ", then ".join(step.text for step in self.steps)
+        stages: dict[int, list[str]] = {}
+        for step in self.steps:
+            stages.setdefault(step.stage, []).append(step.text)
+        steps = ", then ".join(" together with ".join(texts) for _, texts in sorted(stages.items()))
         return f"{self.activity}: {steps}. Needs {self.context or 'nothing more'}."
+
+    @property
+    def stages(self) -> tuple[tuple[ActivityStep, ...], ...]:
+        """The steps grouped by stage, in order."""
+
+        grouped: dict[int, list[ActivityStep]] = {}
+        for step in self.steps:
+            grouped.setdefault(step.stage, []).append(step)
+        return tuple(tuple(steps) for _, steps in sorted(grouped.items()))
 
     def to_dict(self) -> dict[str, Any]:
         return {"activity": self.activity, "context": self.context, "description": self.description,
                 "steps": [{"text": step.text, "verbs": list(step.verbs), "argument": step.argument,
-                           "exit": step.exit} for step in self.steps]}
+                           "exit": step.exit, "stage": step.stage, "repeat": step.repeat} for step in self.steps]}
 
 
 @dataclass(frozen=True)
@@ -340,6 +364,7 @@ def parse_catalogue(text: str) -> Catalogue:
             section, header = 0, None
             continue
         if not section or not line.startswith("|"):
+            header = None  # a table ends at its first non-table line; the next table brings its own header
             continue
         cells = _cells(line)
         if header is None:
@@ -352,7 +377,7 @@ def parse_catalogue(text: str) -> Catalogue:
             unparsed.append(line)
             continue
         record = dict(zip(header, cells))
-        if "activity" in record:
+        if "activity" in record or "program of" in record:
             program = _activity(record)
             if program is None:
                 unparsed.append(line)
@@ -403,14 +428,16 @@ def _top_level_split(text: str, separator: str = ",") -> list[str]:
 
 
 def _activity(record: Mapping[str, str]) -> ActivityProgram | None:
-    name = record.get("activity", "").strip()
+    name = (record.get("activity") or record.get("program of", "")).strip()
     if not _ID.match(name):
         return None
     steps = []
-    for text in _top_level_split(record.get("sequence", "")):
-        match = re.match(r"^([a-z][a-z0-9_]*)\s*\((.*)\)\s*$", text)
-        argument = match.group(2).strip() if match else ""
-        steps.append(ActivityStep(text=text, verbs=(), argument=argument))
+    for stage, stage_text in enumerate(_top_level_split(record.get("sequence", ""))):
+        for text in _top_level_split(stage_text, "+"):
+            match = re.match(r"^([a-z][a-z0-9_]*)\s*\((.*)\)\s*$", text)
+            argument = match.group(2).strip() if match else ""
+            steps.append(ActivityStep(text=text, verbs=(), argument=argument, stage=stage,
+                                      repeat=argument.lower().startswith("for each")))
     return ActivityProgram(activity=name, steps=tuple(steps), context=record.get("context it needs", ""))
 
 
@@ -427,7 +454,7 @@ def resolve_activities(catalogue: Catalogue) -> tuple[ActivityProgram, ...]:
         for step in program.steps:
             words = re.findall(r"[a-z][a-z0-9_]*", step.text.split("(")[0])
             verbs = tuple(dict.fromkeys(word for word in words if word in known))
-            steps.append(ActivityStep(step.text, verbs, step.argument, step.exit))
+            steps.append(ActivityStep(step.text, verbs, step.argument, step.exit, step.stage, step.repeat))
         resolved.append(ActivityProgram(program.activity, tuple(steps), program.context))
     return tuple(resolved)
 
@@ -551,22 +578,57 @@ def verb_contract(skill: CatalogueSkill, verb: str) -> VerbContract | None:
         return None
     arguments = parse_instruction(verb, skill.instruction, skill.section, skill.kind)
     scope = scope_for(verb, skill.section)
-    scopes = (scope,) if scope else ()
+    scopes = (scope, *SECOND_SCOPES.get(verb, ())) if scope else ()
+    return build_verb_contract(verb, arguments, scopes, skill.kind, skill.section, describe(skill, verb, arguments))
+
+
+def build_verb_contract(
+    verb: str,
+    arguments: ArgumentSchema,
+    scopes: Sequence[str],
+    kind: str,
+    section: int,
+    description: str,
+    *,
+    version: str = CATALOGUE_VERSION,
+    checkpoint_sha256: str | None = None,
+    **control: Any,
+) -> VerbContract:
+    """Build a verb's contract from its parts: the one constructor for catalogue and created skills.
+
+    The SkillContract gets the verb id, the observation groups the arguments and scopes imply, the scope
+    digest, the scalars as ``param_names``, ``(success, failures...)`` as termination (success is the done
+    text as a label; failures ``stuck`` and ``timeout`` for learned verbs, ``precondition_failed`` for
+    commands) and the control fields given in ``control`` (``minimum_commitment_seconds``,
+    ``maximum_duration_seconds``, ``emergency_events``; today's defaults otherwise).
+
+    Raises:
+        ValueError: If ``kind`` is not in ``KINDS``, a scope is unknown, the schema is incomplete, or the
+            SkillContract refuses a field.
+    """
+
+    if kind not in KINDS:
+        raise ValueError(f"kind must be one of {tuple(KINDS)}, got {kind!r}")
+    unknown = [scope for scope in scopes if scope not in SCOPE_NAMES]
+    if unknown or len(set(scopes)) != len(tuple(scopes)):
+        raise ValueError(f"scopes must be distinct names from {SCOPE_NAMES}, got {tuple(scopes)}")
+    if not arguments.complete:
+        raise ValueError(f"the argument schema of {verb!r} is incomplete: {arguments.unparsed or 'no done text'}")
     success = _label(arguments.done)
-    failures = ("precondition_failed",) if skill.kind == "C" else ("stuck", "timeout")
+    failures = ("precondition_failed",) if kind == "C" else ("stuck", "timeout")
     contract = SkillContract(
         skill_id=verb,
-        version=CATALOGUE_VERSION,
+        version=version,
         observation_groups=_observation_groups(arguments, scopes),
         action_scope_sha256=scope_sha256(scopes),
         param_names=arguments.scalars[:PARAM_WIDTH],
         termination=(success, *failures),
         success_signals=(success,),
         failure_signals=failures,
-        checkpoint_sha256=None,
+        checkpoint_sha256=checkpoint_sha256,
+        **control,
     )
-    return VerbContract(verb, contract, arguments, scopes, COMPANION_SCOPES.get(verb, ()), skill.kind,
-                        skill.section, describe(skill, verb, arguments))
+    return VerbContract(verb, contract, arguments, tuple(scopes), kind, section, description)
 
 
 def verb_contracts(catalogue: Catalogue) -> tuple[VerbContract, ...]:
@@ -610,7 +672,7 @@ def proof_of_concept_contracts(catalogue: Catalogue) -> tuple[VerbContract, ...]
             maximum_duration_seconds=math.inf if math.isinf(maximum) else maximum,
             emergency_events=events,
         )
-        built.append(VerbContract(skill_id, contract, base.arguments, SCOPE_NAMES, (), row.kind, row.section,
+        built.append(VerbContract(skill_id, contract, base.arguments, SCOPE_NAMES, row.kind, row.section,
                                   f"{skill_id} (proof of concept, catalogue row {PROOF_OF_CONCEPT[skill_id]}): "
                                   f"{row.description}."))
     return tuple(built)
@@ -632,22 +694,29 @@ def summary(catalogue: Catalogue) -> dict[str, Any]:
     contracts = verb_contracts(catalogue)
     by_verb = {contract.verb: contract for contract in contracts}
     learned = [skill for skill in catalogue.skills if skill.kind == "L"]
-    learned_scoped = [skill for skill in learned if all(len(by_verb[verb].scopes) == 1 for verb in skill.ids)]
+    learned_scoped = [skill for skill in learned if all(1 <= len(by_verb[verb].scopes) <= 2 for verb in skill.ids)]
+    two_scope = [skill for skill in learned if any(len(by_verb[verb].scopes) == 2 for verb in skill.ids)]
     learned_complete = [skill for skill in learned if all(by_verb[verb].arguments.complete for verb in skill.ids)]
     activities = resolve_activities(catalogue)
     unresolved = [f"{program.activity}: {step.text}" for program in activities for step in program.steps
                   if not step.verbs]
+    activity_rows = {verb for skill in catalogue.skills if skill.kind == "A" for verb in skill.ids}
+    programs = {program.activity for program in catalogue.activities}
+    attached = programs & activity_rows
     kinds = {name: sum(skill.kind == code for skill in catalogue.skills) for code, name in KINDS.items()}
-    kinds["activity"] += len(catalogue.activities)
+    kinds["activity"] += len(programs - attached)
     return {
-        "rows": len(catalogue.skills) + len(catalogue.activities),
+        "rows": len(catalogue.skills) + len(programs - attached),
         "skill_rows": len(catalogue.skills),
-        "activity_rows": len(catalogue.activities),
+        "activity_rows": len(programs - attached),
+        "activity_programs": len(programs),
+        "activities_without_program": sorted(activity_rows - programs),
         "kinds": kinds,
         "verbs": len(catalogue.ids),
         "contracts": len(contracts),
         "learned_rows": len(learned),
-        "learned_rows_with_one_scope": len(learned_scoped),
+        "learned_rows_with_scopes": len(learned_scoped),
+        "learned_rows_with_two_scopes": len(two_scope),
         "learned_rows_with_complete_schema": len(learned_complete),
         "rows_on_group_default": sum(1 for skill in catalogue.skills if skill.kind != "A" and not skill.instruction),
         "incomplete_schemas": [f"{contract.verb}: {list(contract.arguments.unparsed)}" for contract in contracts
@@ -694,7 +763,7 @@ __all__ = [
     "ARGUMENT_KINDS",
     "CARRIED_KINDS",
     "CATALOGUE_VERSION",
-    "COMPANION_SCOPES",
+    "SECOND_SCOPES",
     "CONTEXT_KINDS",
     "DEFAULT_CATALOGUE",
     "KINDS",
@@ -707,6 +776,7 @@ __all__ = [
     "Catalogue",
     "CatalogueSkill",
     "VerbContract",
+    "build_verb_contract",
     "catalogue_json",
     "describe",
     "load_catalogue",
