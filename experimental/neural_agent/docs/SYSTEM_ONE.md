@@ -611,7 +611,9 @@ teacher's traces never contain, because the teacher leaves them on the first tic
 shadow"). Stage A therefore trains on the learner's own visited decision states labelled by the teacher
 rule, merged with the teacher's rollouts, in rounds (DAgger), until the online rate meets the bar. The
 teacher is a rule, so the labels are free; the same applies to J-S2's programs once the behaviour
-generator's canonical programs label a learner's states.
+generator's canonical programs label a learner's states. This is DAgger [DAGGER]: the learner's own
+rollouts, the expert's labels, the aggregated dataset, repeated; its guarantee needs the aggregation
+(every round trains on all rounds' data), which `eval/record_dagger.py` does.
 
 ### 9.4 Runtime placement and speed
 
@@ -847,6 +849,21 @@ Decision. Structure where exactness matters; words as context.
 
 What this keeps of the owner's intent: the LLM writes freely and keeps its ideas in words; the layer
 below acts on the typed fields the LLM also writes, as Jev's schema-defined outputs do on the way out.
+
+**Owner ruling after this (2026-10-17, late) and the research pass.** "We need accuracy; this middle layer
+can afford to be a little slower as long as it is relatively fast": the reading stage may use a larger
+model once per executive version (hundreds of milliseconds per goal are acceptable at a cadence of
+seconds). Research consulted: negation is a documented weak spot of language models [NEGATION], which
+matches the polarity failures measured here; below about 4B parameters, structured-extraction accuracy is
+dominated by output-format failures rather than reading failures [VAREX], so a reader must constrain its
+output to the schema; prompting strategy matters more than model size for structured outputs
+[LLMSTRUCT], so prompts are fixed on training wordings before any held-out run. Experiment P6 (running):
+instruction-tuned decoders Qwen3-0.6B, Qwen3-1.7B and qwen3:4b, thinking off, schema-constrained JSON,
+zero-shot on the same held-out sets as P2 and P3 (condition kind with the polarity breakdown; skill id
+over the real 119-row catalogue given in the prompt; end-to-end agreement), then LoRA on the generator's
+wordings for the best size at or below 1.7B; latency per goal and per four-goal version on the Mac GPU
+and on CPU. The typed-fields contract above stands regardless: a decoder reader that passes becomes the
+reader for goals that arrive with words, replacing the deterministic fallback where it is better.
 
 ## References
 

@@ -175,6 +175,11 @@ These entries cover formulas that ADR section 11 does not cite. Each one says wh
 - [RLCR] Damani, Slocum, et al. *Beyond Binary Rewards: Training LMs to Reason About Their Uncertainty.* ICLR 2026; arXiv:2507.16806. https://arxiv.org/abs/2507.16806 — cited in FORMULAS (M6) for the Brier-score calibration reward; abstract checked on 2026-10-17 by web search, full paper not read.
 - [RLCR2] *On the effectiveness of reward functions in reinforcement learning for confidence calibration of large language models.* arXiv:2607.04332. https://arxiv.org/abs/2607.04332 — cited in FORMULAS (M6) for the hackability of unconstrained calibration rewards; abstract checked on 2026-10-17 by web search.
 
+- [DAGGER] Ross, S., Gordon, G. J., Bagnell, J. A. *A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning.* AISTATS 2011; arXiv:1011.0686. https://arxiv.org/abs/1011.0686 — cited in SYSTEM_ONE.md §9.3 and §9.12 for the relabeling loop (P1d): behaviour cloning's compounding errors under covariate shift and the dataset-aggregation remedy with the expert labelling the learner's visited states.
+- [NEGATION] Truong, T. H., Baldwin, T., Verspoor, K., Cohn, T. *Language models are not naysayers: an analysis of language models on negation benchmarks.* *SEM 2023. https://aclanthology.org/2023.starsem-1.10 — cited in SYSTEM_ONE.md §9.12: negation is a known weak spot of language models, consistent with the polarity failures measured here.
+- [VAREX] *VAREX: A Benchmark for Multi-Modal Structured Extraction from Documents.* arXiv:2603.15118, 2026. https://arxiv.org/abs/2603.15118 — cited in SYSTEM_ONE.md §9.12: below 4B parameters, structured extraction accuracy is dominated by output-compliance failures, so the decoder-LM reader (P6) uses schema-constrained decoding.
+- [LLMSTRUCT] *LLMStructBench* (structured-output benchmark over 22 models), 2026. https://arxiv.org/abs/2602.14743 — cited in SYSTEM_ONE.md §9.12: prompting strategy matters more than model size for structured outputs; the P6 prompt is fixed on training wordings before any held-out run.
+
 ## 4. Keys used, by document
 
 Generated on 2026-10-17 (UTC) from the three documents with the citation pattern of `tests/experimental/neural_agent/test_na_docs.py`, which checks that every key cited in them and in `docs/SKILL.md` has an entry in section 1 or 3.
