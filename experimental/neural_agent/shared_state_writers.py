@@ -74,7 +74,12 @@ class SessionScribe:
         self._write(
             "skills",
             SkillsSection(
-                active=skills, runtime=previous.runtime, outcomes=previous.outcomes, outcome_limit=previous.outcome_limit
+                active=skills,
+                runtime=previous.runtime,
+                outcomes=previous.outcomes,
+                outcome_limit=previous.outcome_limit,
+                statuses=previous.statuses,
+                status_limit=previous.status_limit,
             ),
             tick,
         )
@@ -112,6 +117,8 @@ class SessionScribe:
                 runtime=previous.runtime,
                 outcomes=previous.outcomes + (report,),
                 outcome_limit=previous.outcome_limit,
+                statuses=previous.statuses,
+                status_limit=previous.status_limit,
             ),
             report.tick,
         )
