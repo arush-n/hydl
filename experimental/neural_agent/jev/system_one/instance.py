@@ -61,17 +61,14 @@ from experimental.neural_agent.contracts import (
     GoalPayload,
     JevMode,
     SharedBeliefState,
-    event_mask,
+    SkillControlTable,
+    control_for,
+    default_control_table,
     executive_arrays,
     make_goal,
 )
 from experimental.neural_agent.jev.lm.prompting import validate_skill_ids
-from experimental.neural_agent.jev.network import IDLE_SKILL_INDEX, _matching_slot, j1_allowed_skills
-from experimental.neural_agent.jev.scripted import (
-    EMERGENCY_EVENTS,
-    GOAL_MINIMUM_COMMITMENT_SECONDS,
-    MAXIMUM_DURATION_SECONDS,
-)
+from experimental.neural_agent.jev.network import _matching_slot, j1_allowed_skills
 from experimental.neural_agent.jev.system_one.data import (
     catalogue_embeddings,
     encode_goal_texts,
@@ -103,6 +100,7 @@ def fast_path(
     executive: ExecutiveArrays,
     skill_embeddings: jax.Array | None,
     executive_code: jax.Array | None = None,
+    control: SkillControlTable | None = None,
     *,
     num_skills: int,
 ) -> tuple[Any, jax.Array, jax.Array, jax.Array]:
@@ -125,17 +123,19 @@ def fast_path(
     skill = jnp.argmax(out.skill_logits, axis=-1).astype(jnp.int32)
     log_probs = jax.nn.log_softmax(out.skill_logits, axis=-1)
     entropy = -jnp.sum(jnp.exp(log_probs) * log_probs, axis=-1)
-    has_goal = skill != IDLE_SKILL_INDEX
+    if control is None:
+        raise ValueError("fast_path needs the skill contracts' control table (SkillControlTable)")
+    # Control fields come from the chosen skill's contract (owner ruling 2026-10-17: commitment and
+    # duration belong to the skill); idle's row is 0 s / inf / no interrupts.
+    minimum, maximum, mask = control_for(control, skill)
     goal = make_goal(
         skill,
         out.params,
         executive.version,
         _matching_slot(executive, skill),
-        minimum_commitment_seconds=jnp.where(has_goal, GOAL_MINIMUM_COMMITMENT_SECONDS, 0.0),
-        maximum_duration_seconds=jnp.where(has_goal, MAXIMUM_DURATION_SECONDS, jnp.inf),
-        emergency_interrupt_mask=jnp.where(
-            has_goal[:, None], event_mask(*EMERGENCY_EVENTS, batch=lanes), event_mask(batch=lanes)
-        ),
+        minimum_commitment_seconds=minimum,
+        maximum_duration_seconds=maximum,
+        emergency_interrupt_mask=mask,
     )
     terminate = (out.replace_logit > 0.0) & (skill != current)
     return goal, terminate, out.confidence, entropy
@@ -172,11 +172,19 @@ class SystemOneJev:
         params: HeadsParams,
         skill_ids: Sequence[str],
         skill_descriptions: Sequence[str] | None = None,
+        control: SkillControlTable | None = None,
     ) -> None:
         if not isinstance(trunk, TrunkEncoder):
             raise TypeError("trunk must implement TrunkEncoder (dim and encode)")
         dims = heads_dims(params)
         catalogue = validate_skill_ids(skill_ids)
+        if control is None:
+            control = default_control_table(catalogue)
+        elif not isinstance(control, SkillControlTable):
+            raise TypeError("control must be a SkillControlTable (contracts.control_table / default_control_table)")
+        if int(control.minimum_commitment_seconds.shape[0]) != len(catalogue):
+            raise ValueError(f"control has {int(control.minimum_commitment_seconds.shape[0])} rows for {len(catalogue)} skills")
+        self._control = control
         descriptions = skill_descriptions_of(catalogue, skill_descriptions)
         if dims.skill_head == "fixed" and dims.num_skills != len(catalogue):
             raise ValueError(f"the fixed head scores {dims.num_skills} skills; the catalogue has {len(catalogue)}")
@@ -325,6 +333,7 @@ class SystemOneJev:
             executive,
             self.skill_embeddings,
             self._executive_code,
+            self._control,
             num_skills=len(self._skill_ids),
         )
         return GoalDecision(

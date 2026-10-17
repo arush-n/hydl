@@ -32,6 +32,12 @@ The arms follow the composition brief and
   :class:`LanguageModelHostDecider`. Without ``--js1-heads`` its heads are
   ``init_heads`` with the run seed and the report labels the arm ``js1-untrained``;
   ``--js1-heads PATH`` loads them (``jev/system_one/train_supervised.load_heads``).
+* ``jprog``: a host-mode arm wired like ``j_lm``. ``ProgramExecutor``
+  (``jev/programs.py``, SYSTEM_ONE.md section 9.9) runs one hand-written behaviour
+  program on every lane: ``NA_PROGRAM=J0`` (the default) or ``SEQ``, with the
+  feedback rule's window ``NA_NO_REISSUE`` seconds (default 0, off). It uses the
+  registry's control table. The report labels it ``jprog-<program>``, plus
+  ``-noreissue<w>s`` when the rule is on.
 
 The JEV arms (``j0``, ``shuffled``, ``j1``, ``j_lm``) build their instance and
 runner with the registry's control table (:func:`_control_table`), so each goal
@@ -46,7 +52,12 @@ share without knowing a sibling's diagnostics.
 
 from __future__ import annotations
 
+import atexit
+import json
+import math
 import numbers
+import os
+import sys
 from pathlib import Path
 from typing import Any, Callable, NamedTuple, Protocol, Sequence
 
@@ -89,6 +100,11 @@ LM_BACKENDS: tuple[str, ...] = ("fake", "ollama")
 
 #: Ollama model tag of the ``ollama`` backend.
 OLLAMA_MODEL: str = "qwen3:4b"
+
+#: Environment variables of the ``jprog`` arm: the program name (``jev/programs.py`` PROGRAMS, default
+#: ``J0``) and the feedback rule's window in seconds (default 0, off).
+PROGRAM_ENV: str = "NA_PROGRAM"
+NO_REISSUE_ENV: str = "NA_NO_REISSUE"
 
 #: The fake backend's reply on every call: switch to pursuit. With
 #: ``continue_current`` False, ``LanguageModelJev`` sets terminate only on a lane
@@ -794,8 +810,60 @@ def _js1_host_decider(ctx: ArmContext, steps: int) -> LanguageModelHostDecider:
         heads = init_heads(jax.random.key(ctx.seed), trunk.dim)
     else:
         heads = load_heads(ctx.js1_heads)
-    instance = SystemOneJev(trunk, heads, ctx.skill_ids)
+    instance = SystemOneJev(trunk, heads, ctx.skill_ids, control=_control_table(ctx))
     return LanguageModelHostDecider(instance, ctx.executive, ctx.batch, seed=ctx.seed)
+
+
+def program_settings() -> tuple[str, float]:
+    """Return the ``jprog`` arm's (program name, no-reissue seconds) from ``NA_PROGRAM`` and ``NA_NO_REISSUE``.
+
+    Raises:
+        ValueError: If the program is not in ``jev/programs.py`` PROGRAMS, or the window is not a
+            finite number >= 0.
+    """
+
+    from experimental.neural_agent.jev.programs import PROGRAMS
+
+    name = os.environ.get(PROGRAM_ENV, "J0")
+    if name not in PROGRAMS:
+        raise ValueError(f"{PROGRAM_ENV} must be one of {tuple(PROGRAMS)}, got {name!r}")
+    text = os.environ.get(NO_REISSUE_ENV, "0")
+    try:
+        window = float(text)
+    except ValueError:
+        raise ValueError(f"{NO_REISSUE_ENV} must be a number of seconds, got {text!r}") from None
+    if not math.isfinite(window) or window < 0.0:
+        raise ValueError(f"{NO_REISSUE_ENV} must be finite and >= 0, got {text!r}")
+    return name, window
+
+
+def _program_host_decider(ctx: ArmContext, steps: int) -> Any:
+    """Return the ``jprog`` host decider: ``ProgramExecutor`` with one program on every lane.
+
+    The program and window come from :func:`program_settings`; the control table is the registry's
+    (:func:`_control_table`). For a session longer than one step (the timed session, not the one-step
+    warm-up), the executor's per-lane counters are written to stderr as one JSON line when the process
+    exits, because the composition report has no field for them.
+    """
+
+    from experimental.neural_agent.jev.programs import PROGRAMS, ProgramExecutor
+
+    name, window = program_settings()
+    executor = ProgramExecutor(
+        ctx.skill_ids,
+        _control_table(ctx),
+        (PROGRAMS[name],) * ctx.batch,
+        no_reissue_seconds=window,
+    )
+    if steps > 1:
+        atexit.register(_write_program_counters, arm_label("jprog", ctx), steps, executor)
+    return executor
+
+
+def _write_program_counters(label: str, steps: int, executor: Any) -> None:
+    """Write the executor's counters to stderr as one JSON line (registered with ``atexit``)."""
+
+    sys.stderr.write(f"{label} program counters ({steps}-step session): {json.dumps(executor.counters())}\n")
 
 
 def arm_label(name: str, ctx: ArmContext) -> str:
@@ -811,6 +879,9 @@ def arm_label(name: str, ctx: ArmContext) -> str:
         return "js1-untrained"
     if name == "j_lm":
         return f"j_lm-{ctx.lm_backend}"
+    if name == "jprog":
+        program, window = program_settings()
+        return f"jprog-{program}" + (f"-noreissue{window:g}s" if window > 0.0 else "")
     return name
 
 
@@ -834,7 +905,7 @@ class Arm(NamedTuple):
     make_host_decider: Callable[[ArmContext, int], Any] | None = None
 
 
-#: The arms by command-line name. ``j_lm`` and ``js1`` are the host-mode arms.
+#: The arms by command-line name. ``j_lm``, ``js1`` and ``jprog`` are the host-mode arms.
 ARMS: dict[str, Arm] = {
     "flat": Arm("flat", _flat_manager, _skill_dispatcher, _shared_belief),
     "j0": Arm("j0", _scripted_manager, _skill_dispatcher, _shared_belief),
@@ -842,6 +913,7 @@ ARMS: dict[str, Arm] = {
     "j1": Arm("j1", _network_manager, _skill_dispatcher, _shared_belief),
     "j_lm": Arm("j_lm", _hold_manager, _skill_dispatcher, _shared_belief, _lm_host_decider),
     "js1": Arm("js1", _hold_manager, _skill_dispatcher, _shared_belief, _js1_host_decider),
+    "jprog": Arm("jprog", _hold_manager, _skill_dispatcher, _shared_belief, _program_host_decider),
 }
 
 
@@ -868,11 +940,14 @@ __all__ = [
     "JevArmManager",
     "LM_BACKENDS",
     "LanguageModelHostDecider",
+    "NO_REISSUE_ENV",
     "OLLAMA_MODEL",
+    "PROGRAM_ENV",
     "PURSUIT_SKILL_ID",
     "ShuffledGoalManager",
     "arm_label",
     "build_arm_context",
     "get_arm",
     "load_j1_params",
+    "program_settings",
 ]

@@ -169,7 +169,7 @@ def probe(trunk_spec: str, repeats: int) -> dict[str, Any]:
         def compiled() -> Any:
             return jax.block_until_ready(
                 fast_path(jev.params, jev._h_executive, belief, current, arrays, jev.skill_embeddings,
-                          jev._executive_code, num_skills=len(DEFAULT_SKILL_IDS))
+                          jev._executive_code, jev._control, num_skills=len(DEFAULT_SKILL_IDS))
             )
 
         fast[f"batch_{batch}"] = {"decide": _time_ms(decide, repeats), "compiled": _time_ms(compiled, repeats)}
