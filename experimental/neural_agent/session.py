@@ -115,6 +115,13 @@ class SessionConfig:
     host_cadence_ticks: int = 11
     host_budget_ms: float = 20.0
     host_on_events: bool = True
+    # When True, a host decider's goal is applied per lane only where the core would allow a
+    # switch (the goal is invalid, its minimum commitment elapsed, it timed out, or an emergency
+    # event fired) and only where it differs from the goal in force; unchanged lanes keep their
+    # goal age. This mirrors ``HierarchicalAgentCore`` (switch_allowed) so host instances obey the
+    # skill's contract (owner ruling 2026-10-17: commitment belongs to the skill). Default False
+    # keeps the 2026-10-17 behaviour until the attribution runs are done.
+    host_respects_commitment: bool = False
 
     def __post_init__(self) -> None:
         if isinstance(self.steps, bool) or not isinstance(self.steps, int) or self.steps < 1:
@@ -140,6 +147,9 @@ class HostStats(NamedTuple):
     errors: int
     latency_ms_p50: float
     latency_ms_p95: float
+    held: int = 0
+    """Lane-decisions where a host goal change was requested but held by the skill's commitment
+    (only counted with ``SessionConfig.host_respects_commitment``)."""
 
 
 class SessionMetrics(NamedTuple):
@@ -193,6 +203,27 @@ def _percentile(values: Sequence[float], q: float) -> float:
         return float(ordered[low])
     weight = position - low
     return float(ordered[low] * (1.0 - weight) + ordered[high] * weight)
+
+
+def _goal_differs(new_payload: Any, current_payload: Any, batch: int) -> jax.Array:
+    """bool[B]: lanes where the proposed goal differs from the goal in force (skill, slot or params).
+
+    Payloads that are not GoalPayloads are treated as different on every lane.
+    """
+
+    if not (isinstance(new_payload, GoalPayload) and isinstance(current_payload, GoalPayload)):
+        return jnp.ones((batch,), dtype=jnp.bool_)
+    return (
+        (jnp.asarray(new_payload.skill_index) != jnp.asarray(current_payload.skill_index))
+        | (jnp.asarray(new_payload.goal_slot) != jnp.asarray(current_payload.goal_slot))
+        | jnp.any(jnp.asarray(new_payload.params) != jnp.asarray(current_payload.params), axis=-1)
+    )
+
+
+def _lane_mask(mask: jax.Array, leaf: jax.Array) -> jax.Array:
+    """Reshape a bool[B] lane mask so it broadcasts over ``leaf``'s trailing axes."""
+
+    return jnp.reshape(mask, (mask.shape[0],) + (1,) * (jnp.ndim(leaf) - 1))
 
 
 def _outcome_for_switch(step: Any, lane: int) -> SkillOutcome:
@@ -255,6 +286,7 @@ def run_session(
     host_misses = 0
     host_errors = 0
     host_decisions = 0
+    host_held = 0
     goal_started_tick = np.zeros((batch,), dtype=np.int64)
 
     def hook(
@@ -263,7 +295,7 @@ def run_session(
         hierarchy_state: HierarchicalCoreState,
     ) -> HierarchicalCoreState | None:
         nonlocal clock_tick, latest_executive, executive_versions_applied
-        nonlocal host_misses, host_errors, host_decisions
+        nonlocal host_misses, host_errors, host_decisions, host_held
 
         clock_tick += 1
         step = transition.hierarchy_step
@@ -347,14 +379,39 @@ def run_session(
                 else:
                     if not isinstance(goal, ManagedGoal) or jax.tree.structure(goal) != goal_structure:
                         raise ValueError("host_decider returned a goal with the wrong structure")
-                    new_state = new_state._replace(
-                        carry=new_state.carry._replace(
-                            goal=goal,
-                            goal_age=jnp.zeros((batch,), dtype=jnp.float32),
-                        ),
-                        goal_valid=jnp.ones((batch,), dtype=jnp.bool_),
-                    )
-                    changed = True
+                    if config.host_respects_commitment:
+                        current = new_state.carry.goal
+                        runtime = step.goal_runtime
+                        differs = _goal_differs(goal.payload, current.payload, batch)
+                        allowed = (
+                            ~jnp.asarray(new_state.goal_valid, dtype=jnp.bool_)
+                            | jnp.asarray(runtime.commitment_elapsed, dtype=jnp.bool_)
+                            | jnp.asarray(runtime.timed_out, dtype=jnp.bool_)
+                            | jnp.asarray(runtime.emergency_interrupt, dtype=jnp.bool_)
+                        )
+                        apply = differs & allowed
+                        host_held += int(np.asarray(differs & ~allowed).sum())
+                        if bool(np.asarray(apply).any()):
+                            merged = jax.tree.map(
+                                lambda new, old: jnp.where(_lane_mask(apply, new), new, old), goal, current
+                            )
+                            new_state = new_state._replace(
+                                carry=new_state.carry._replace(
+                                    goal=merged,
+                                    goal_age=jnp.where(apply, 0.0, new_state.carry.goal_age),
+                                ),
+                                goal_valid=jnp.asarray(new_state.goal_valid, dtype=jnp.bool_) | apply,
+                            )
+                            changed = True
+                    else:
+                        new_state = new_state._replace(
+                            carry=new_state.carry._replace(
+                                goal=goal,
+                                goal_age=jnp.zeros((batch,), dtype=jnp.float32),
+                            ),
+                            goal_valid=jnp.ones((batch,), dtype=jnp.bool_),
+                        )
+                        changed = True
 
         # 5. scratchpad: the sections the session owns, once per host cadence tick
         if scribe is not None and (step_index % config.host_cadence_ticks) == 0:
@@ -386,6 +443,7 @@ def run_session(
             errors=host_errors,
             latency_ms_p50=_percentile(host_latencies, 0.5),
             latency_ms_p95=_percentile(host_latencies, 0.95),
+            held=host_held,
         ),
         wall_seconds=wall,
     )
