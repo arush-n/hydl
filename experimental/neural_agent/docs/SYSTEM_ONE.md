@@ -121,6 +121,108 @@ trunk without the goal text, autoregressive decoding instead of parallel heads (
 4. Calibration stage and the reliability gate.
 5. Hand-off: the outcome stage runs on the PPO harness by whoever owns training.
 
+## 8. Design specification of J-S1 (2026-10-17, owner: "start designing it now")
+
+Labels as in ADR-001: IMPLEMENTED / COMMITTED / HYPOTHESIS. Everything in this section is COMMITTED
+unless marked; nothing is IMPLEMENTED until `jev/system_one/` exists and its tests pass.
+
+### 8.1 Position in the stack
+
+J-S1 is one more `JevInstance` (`contracts.py`), host mode, behind `JevRunner`: the same inputs
+(`SharedBeliefState` B_t, `GoalPayload` current goal, `ExecutiveState` E_t, decision context, goal
+runtime), the same output (`GoalDecision` with a `ManagedGoal`), the same latency budget, miss rule and
+idle fallback. The dispatcher, the arenas, the five arms and the composition task do not change. The
+decision layer reads from the LLM layer through E_t and calls the neural layer through the goal; the
+outcomes return as `GoalReport`s (owner ruling, ADR D3).
+
+### 8.2 Inputs, per lane i
+
+- Text rendering (exists: `jev/lm/prompting.py build_decision_prompt`):
+  `x_i = render(skills with descriptions, E_t, current_skill_i, B_t^i)`; stable part first (skills, E_t),
+  volatile part last (current skill, belief lines), so a cached prefix is possible later.
+- Numeric belief vector (exists as J1's input pieces, `jev/network.py j1_inputs`):
+  `u_i = [features_i * known_i ; known_i ; latent_i]`, width 10 + 10 + 64 = 84.
+- Allowed-skill mask from E_t (exists: `j1_allowed_skills`): `m_i in {0,1}^K`.
+
+### 8.3 Model
+
+Trunk, frozen at first (COMMITTED; the backbone class is an open measurement):
+  `h_i = f_theta(x_i) in R^D`           pooled representation of the rendering (mean or last token).
+Belief adapter (trained):
+  `a_i = W_u u_i + b_u in R^{D_a}`      LLaRP-style observation adapter, D_a = 64.
+Fusion (trained):
+  `z_i = LayerNorm([h_i ; a_i ; onehot(current_skill_i)])`, then one hidden layer `g_i = GELU(W_g z_i + b_g)`, width 256.
+Heads, all evaluated in the same pass (System One):
+  skill      `s_i = W_s g_i + b_s in R^K`,  masked `s~_i = where(m_i, s_i, -1e9)`
+  replace    `r_i = w_r . g_i + b_r`
+  params     `p_i = W_p g_i + b_p in R^{PARAM_WIDTH}`
+  confidence `c_i = sigmoid(w_c . g_i + b_c)`      probability that the chosen skill is the right one
+  value      `V_i = w_v . g_i + b_v`                critic for stage C only
+  plan (flag, HYPOTHESIS) `s_i^{(k)} = W_k g_i + b_k`, k = 1..K_plan, the next K_plan skill calls, independent heads as in [MTP].
+Decision: `skill_i = argmax s~_i`, `replace_i = r_i > 0`, control constants as J0 (`jev/scripted.py`:
+commitment, horizon, emergency mask). Diagnostics carry `c_i` and the entropy of `softmax(s~_i)`.
+
+Why this shape: the trunk supplies goal reading (words in E_t and skill descriptions); the adapter
+supplies the numeric precision J1 had; the heads make it one pass; the confidence head is what makes
+it a System One model rather than a classifier.
+
+### 8.4 Training
+
+Stage A, supervised (COMMITTED). Data rows `(x_i, u_i, m_i) -> (y_skill, y_replace, y_params)` from
+two sources: (1) the recorded decision rows (`eval/record_traces.py`, labels = J0's decisions),
+(2) decisions under *varied executive states*: E_t variants with reordered priorities, different goal
+sets, different constraints and horizons, rendered through the same renderer, labelled by the rule the
+variant implies (and, when the owner runs the top LLM, by the LLM's own choice). Source (2) is what
+teaches goal reading; source (1) alone teaches J0.
+  `L_A = CE(s~, y_skill) + BCE(r, y_replace) + lambda_p ||p - y_params||^2 [+ sum_k CE(s~^{(k)}, y^{(k)})]`
+Stage B, calibration (COMMITTED). With the heads frozen, fit the confidence head on held-out-like rows:
+  `L_B = (c - 1[argmax s~ = y_skill])^2`   (Brier, a proper scoring rule, [RLCR]); report ECE = sum_b (n_b/N) |acc_b - conf_b|.
+Freezing the heads during B is the non-hackable form: confidence cannot improve by changing answers ([RLCR-HACK]).
+Stage C, outcomes (COMMITTED as a harness, HYPOTHESIS as a result). PPO over goal decisions on
+`SimGoalDecisionEnv` with `apply_fn(params, obs) -> (s~, V)`; the trunk stays frozen, adapter and heads
+train; reward = the arena's reward (`jev/sim_goal_env.py`). Running it is the training side's work.
+
+### 8.5 Speed budget
+
+`T_decide = T_render + T_trunk + T_heads` per batch of lanes, host mode. Today: J1 0.1 ms (heads only,
+compiled); J-LM 471 ms (token by token). Targets: T_trunk measured first (G2 below); the decision
+cadence is 0.5 s, the host budget 20 ms (`eval/arms.py J0_LATENCY_BUDGET_MS`), a miss keeps the goal
+(`jev/runner.py`). The plan head amortises one pass over K_plan decisions.
+
+### 8.6 Gates
+
+| Gate | Pass condition | Depends on |
+|---|---|---|
+| G1 pipeline | with a deterministic fake trunk (hashed bag of tokens, no weights), stage A reaches >= 0.95 skill agreement with J0 on the 737 held-out rows (J1 reached 0.996 with numeric input only) | nothing new |
+| G2 latency | one forward pass of each backbone class on the real rendering, batch 1 and 8, CPU, in process; numbers in `LEDGER.md` | a weight loader (`transformers`; owner's call) |
+| G3 goal reading | on a held-out split of E_t variants (goal order, sets, constraints never seen in training), skill agreement >= 0.90 with the rule the variant implies; J1 is the control and is expected to fail this split | stage A on source (2) |
+| G4 online | four arms plus `js1` at 512 ticks on held-out seeds: J-S1 composed rate not below J0's Wilson lower bound; interrupts answered; 0 misses at the measured latency | G1-G3 |
+| G5 calibration | ECE <= 0.05 on the held-out rows after stage B | G1 |
+
+### 8.7 Files (to build)
+
+```
+experimental/neural_agent/jev/system_one/
+  __init__.py
+  trunk.py        TrunkEncoder protocol: encode(list[str]) -> float32[B, D]; HashedBagTrunk (deterministic, no weights);
+                  TorchTransformerTrunk adapter (imports transformers lazily; refused with a clear message when absent)
+  heads.py        JAX: init_heads(key, D, K), apply_heads(params, h, u, current) -> (skill_logits, replace_logit, params, confidence, value[, plan])
+  instance.py     SystemOneJev(JevInstance, HOST): renders, encodes, applies heads, builds the ManagedGoal, diagnostics
+  data.py         rows from a decision dataset + an ExecutiveState -> (texts, u, mask, labels); executive variants generator (templated)
+  train_supervised.py   stage A (optax, like train_j1.py); writes heads params .npz and metrics.csv
+  calibrate.py    stage B; writes the confidence head and ECE
+  probe_latency.py      G2
+tests/experimental/neural_agent/test_na_system_one.py
+```
+`eval/arms.py` gains the `js1` arm (host decider, like `j_lm`), `run_composition.py` the choice.
+`record_traces.py` writes the run's `executive.json` next to the traces so rows can be re-rendered.
+
+### 8.8 What is deliberately not in J-S1
+
+No text generation, no tool use, no chain of thought at decision time (System One). No external
+model or service: the only external component is the top LLM. No change to the goal contract: the
+"series of quick actions" is the sequence of decisions, plus the optional plan head.
+
 ## References
 
 - [JEV] TypeSafe AI, "Introducing System One Models & Jev", 2026. https://typesafe.ai/blog/introducing-system-one-models-and-jev

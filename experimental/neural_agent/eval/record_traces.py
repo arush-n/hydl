@@ -16,7 +16,8 @@ Run (CPU, from the repository root)::
         --out experimental/neural_agent/eval/out/traces/train
 
 ``summary.json`` next to the dataset records the row counts and the label
-balance, so the ledger can quote them.
+balance, so the ledger can quote them. ``executive.json`` is the executive state
+E_t of the run (``ExecutiveState.to_json``), for readers that re-render rows as text.
 """
 
 from __future__ import annotations
@@ -142,6 +143,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     paths, skill_ids = record_seeds(args.out, arena=args.arena, batch=args.batch, ticks=args.ticks, seeds=args.seeds)
     dataset = merge_decisions(paths, num_skills=len(skill_ids))
     np.savez(args.out / "dataset.npz", **dataset)
+    # The executive E_t the recorded J0 ran under, so a reader can re-render every row as text
+    # (jev/system_one/data.py, 2026-10-17). The composition executive is fixed for a whole run.
+    from experimental.neural_agent.eval.run_composition import load_context
+
+    ctx, _task = load_context(args.batch, args.ticks)
+    (args.out / "executive.json").write_text(ctx.executive.to_json() + "\n")
     summary = summarize(paths, dataset, skill_ids)
     summary.update({"arena": args.arena, "batch": args.batch, "ticks": args.ticks, "seeds": list(args.seeds)})
     (args.out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
