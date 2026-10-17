@@ -100,7 +100,7 @@ class ExecutiveVariant(NamedTuple):
 
 
 def skill_descriptions_of(skill_ids: Sequence[str], skill_descriptions: Sequence[str] | None = None) -> tuple[str, ...]:
-    """Return one description per skill: ``skill_descriptions``, or the skill ids when it is None.
+    """Return one description per skill: ``skill_descriptions``, or the library's descriptions (ids for unknown skills) when None.
 
     Raises:
         ValueError: If the catalogue is invalid, or the descriptions are not one non-empty string per skill.
@@ -108,7 +108,11 @@ def skill_descriptions_of(skill_ids: Sequence[str], skill_descriptions: Sequence
 
     catalogue = validate_skill_ids(skill_ids)
     if skill_descriptions is None:
-        return catalogue
+        # The library's own descriptions (skill_library/descriptions.py, 2026-10-17); a skill
+        # without one is described by its id, as before.
+        from experimental.neural_agent.skill_library.descriptions import describe
+
+        return describe(catalogue)
     if isinstance(skill_descriptions, (str, bytes)):
         raise ValueError("skill_descriptions must be a sequence of strings, not one string")
     texts = tuple(skill_descriptions)

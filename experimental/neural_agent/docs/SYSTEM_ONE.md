@@ -255,9 +255,9 @@ subagent; every gate below was re-run by the main session (`LEDGER.md`).
 | Gate | Status |
 |---|---|
 | G1 pipeline | PASS: held-out skill agreement 1.0000 (737 of 737) with the matching head and the hashed trunk; train 0.9993; replace agreement 0.9932; seeds 1 and 2 (subagent) 0.9973 and 0.9986; fixed-head ablation 1.0000 |
-| G2a slow path | contended numbers only (ModernBERT-base 544 ms, Qwen3-0.6B 1,529 ms per pass); uncontended rerun pending; runs off the tick |
+| G2a slow path | PASS for the two-timescale design: uncontended, ModernBERT-base 72.5 ms p50 per pass over the 330-token rendering at batch 1 (462.9 ms at batch 8), Qwen3-0.6B 245.5 ms (1,527.6 at batch 8); the contended run had read 544 / 1,529 ms. About 73 ms per executive version, off the tick; never per decision |
 | G2b fast path | PASS: hashed trunk, no trunk call per decision (counted: 0); full decision p50 0.175 / 0.206 / 0.292 ms at batch 1 / 8 / 64, compiled pass alone 0.047 / 0.141 / 0.208 ms |
-| G3 goal reading | NOT MET with the hashed trunk, as expected for a bag of words: 0.8069 on 10 held-out executive variants (0.7769 under the earlier per-decision-text design); needs the pretrained trunk |
+| G3 goal reading | NOT MET with either trunk on 10 held-out executive variants: hashed 0.8069, ModernBERT-base (frozen, mean-pooled, ids as descriptions) 0.7843, and the pretrained trunk also lost 3 points on the recorded rows (0.9701 vs 0.9986). A mean-pooled text embedding carries priorities, goal sets and constraints poorly, and 22 training variants are few. Next: a structured, catalogue-agnostic executive encoder in the fast path (per slot: skill description embedding, priority, validity, params; pooled over slots) beside the text embedding; more variants; LoRA on the trunk later |
 | G3b growing library | mechanism shown (a skill appended after initialisation is scored and can be chosen, test (b)); the quality threshold waits for the pretrained trunk |
 | G4 online | not run |
 | G5 calibration | degenerate: stage A is 99.9% correct on the fit rows, so the confidence head saturates at 1.0 and ECE 0.0 says nothing; needs harder rows (variants, outcomes) |

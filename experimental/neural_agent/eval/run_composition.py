@@ -983,7 +983,7 @@ def _caveats(runs: Sequence[ArmRun], *, arena: str, runner: str) -> list[str]:
         )
         lines += [
             f"- The arena is `{arena}` (`tasks/arenas.py`): AgentKit's `{kit_name}` with an episode "
-            f"limit of `ticks`. DAMAGE_RECEIVED fires there without injection{damage_note}, so the evade "
+            f"limit of `ticks`" + (" in the Gym's legal observation mode (`legal_observation=True`, 2026-10-17)" if arena == COMBAT_OPEN_FLAT else "") + f". DAMAGE_RECEIVED fires there without injection{damage_note}, so the evade "
             "trigger and the interrupt columns are live.",
             f"- Nothing can be caught on `{arena}`: `terminated` is a death or a world error "
             "(`adk/runtime/env_adapter.py` BuiltAgent.step_detailed), so it is never read as a catch. The objective "

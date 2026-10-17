@@ -46,10 +46,14 @@ ARENA_NAMES: tuple[str, ...] = (FLAT_PURSUIT, COMBAT_BASELINE, COMBAT_OPEN_FLAT)
 #: DAMAGE_RECEIVED on open_flat 17 of 1,024 lane-steps with a neutral actor).
 COMBAT_OPEN_FLAT_AGENT: str = "neural_agent/open_flat_control"
 COMBAT_OPEN_FLAT_SCENE: str = "combat/open_flat_control"
+#: Our registration of that scene in the Gym's legal observation mode (2026-10-17): the same
+#: world capabilities, a runtime config built with ``legal_observation=True`` for the batch.
+#: The Gym default stays privileged for other consumers; this architecture must not cheat.
+COMBAT_OPEN_FLAT_LEGAL_SCENE: str = "neural_agent/open_flat_legal"
 #: The AgentKit name that the combat baseline arena builds.
 COMBAT_BASELINE_AGENT: str = "combat/baseline"
 COMBAT_BASELINE_SCHEMA: str = "experimental-neural-agent-combat-baseline-v1"
-COMBAT_OPEN_FLAT_SCHEMA: str = "experimental-neural-agent-combat-open-flat-v1"
+COMBAT_OPEN_FLAT_SCHEMA: str = "experimental-neural-agent-combat-open-flat-v2"  # v2: legal observation mode
 
 
 class BuiltArena(NamedTuple):
@@ -187,37 +191,61 @@ __all__ = [
     "COMBAT_OPEN_FLAT",
     "COMBAT_OPEN_FLAT_AGENT",
     "COMBAT_OPEN_FLAT_SCENE",
+    "COMBAT_OPEN_FLAT_LEGAL_SCENE",
     "COMBAT_OPEN_FLAT_SCHEMA",
 ]
 
 def _combat_open_flat(batch: int, ticks: int, seed: int) -> BuiltArena:
     """Build the open-flat combat scene through AgentKit, with an episode limit of ``ticks``.
 
-    Registers ``COMBAT_OPEN_FLAT_AGENT`` (scene ``combat/open_flat_control``) on a fresh
-    kit when the name is not already registered. This is the arena the composition task
+    Registers ``COMBAT_OPEN_FLAT_AGENT`` on a fresh kit, bound to ``neural_agent/open_flat_legal``:
+    the shipped ``combat/open_flat_control`` scene in the Gym's legal observation mode (2026-10-17). This is the arena the composition task
     needs: the target is visible there and DAMAGE_RECEIVED fires, so a damage-triggered
     evade, a resumed pursuit and a re-engagement are all observable. ``combat/baseline``
     binds the fail_closed scene, where the target is never visible (adk/DEV.md).
     """
 
-    from adk.api import AgentKit
-    from hytalegym.jax.combat.types import AGENT_ENTITY, TARGET_ENTITY
+    import hashlib
 
+    from adk.api import AgentKit
     from adk.core.spec import AgentSpec
+    from adk.runtime.scenes import OPEN_FLAT_CONTROL_SCENE, JaxScene
+    from hytalegym.jax.combat import arsenal_runtime_config, hytale_0_5_7_loadouts
+    from hytalegym.jax.combat.types import AGENT_ENTITY, TARGET_ENTITY
 
     kit = AgentKit()
     if COMBAT_OPEN_FLAT_AGENT not in kit.list_agents():
-        kit.register(AgentSpec(name=COMBAT_OPEN_FLAT_AGENT, scene=COMBAT_OPEN_FLAT_SCENE))
+        spec = AgentSpec(name=COMBAT_OPEN_FLAT_AGENT, scene=COMBAT_OPEN_FLAT_LEGAL_SCENE)
+        # The shipped open-flat scene, in the Gym's legal observation mode (2026-10-17): the same
+        # world capabilities, and a runtime config for this batch with legal_observation=True.
+        # adk's build() takes a scene's runtime_config over the default one (env_adapter.py).
+        legal_scene = JaxScene(
+            name=COMBAT_OPEN_FLAT_LEGAL_SCENE,
+            contract_sha256=hashlib.sha256(
+                f"{OPEN_FLAT_CONTROL_SCENE.contract_sha256}:legal_observation=true".encode("ascii")
+            ).hexdigest(),
+            environment_kwargs=OPEN_FLAT_CONTROL_SCENE.environment_kwargs,
+            runtime_config=arsenal_runtime_config(
+                hytale_0_5_7_loadouts([spec.loadout] * batch), legal_observation=True
+            ),
+            expected_batch=batch,
+            expected_loadout=spec.loadout,
+        )
+        kit.register_scene(legal_scene)
+        kit.register(spec)
     handle = kit.build(COMBAT_OPEN_FLAT_AGENT, batch=batch).with_episode_limit(ticks)
     description = {
         "schema": COMBAT_OPEN_FLAT_SCHEMA,
         "arena": COMBAT_OPEN_FLAT,
         "built_by": (
-            f"AgentKit().register(AgentSpec({COMBAT_OPEN_FLAT_AGENT!r}, scene={COMBAT_OPEN_FLAT_SCENE!r})).build(..., batch=B)"
+            f"AgentKit().register_scene(<{COMBAT_OPEN_FLAT_SCENE} with legal_observation=True>)"
+            f".register(AgentSpec({COMBAT_OPEN_FLAT_AGENT!r}, scene={COMBAT_OPEN_FLAT_LEGAL_SCENE!r})).build(..., batch=B)"
             ".with_episode_limit(ticks).built"
         ),
         "agent": COMBAT_OPEN_FLAT_AGENT,
         "scene": handle.spec.scene,
+        "base_scene": COMBAT_OPEN_FLAT_SCENE,
+        "legal_observation": True,
         "loadout": handle.spec.loadout,
         "batch": batch,
         "seed": seed,
