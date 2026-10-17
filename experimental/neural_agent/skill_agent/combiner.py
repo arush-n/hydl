@@ -112,6 +112,7 @@ class CombinedStep(NamedTuple):
 class _AgentState:
     holders: dict[str, int] = field(default_factory=dict)
     unscoped: set[int] = field(default_factory=set)  # granted requests whose verb owns no scope (idle)
+    done: set[int] = field(default_factory=set)  # ids that finished done: the after:<p> predecessors
     granted_at: dict[int, int] = field(default_factory=dict)
     finished: dict[int, str] = field(default_factory=dict)
     seen: dict[int, ActionRequest] = field(default_factory=dict)
@@ -168,6 +169,9 @@ class Combiner:
             for scope in [scope for scope, holder in state.holders.items() if holder == request_id]:
                 del state.holders[scope]
             state.unscoped.discard(request_id)
+            state.granted_at.pop(request_id, None)
+            if kind == "done":
+                state.done.add(request_id)
 
         for request_id, request in list(state.seen.items()):
             if request_id in state.finished:
@@ -180,7 +184,7 @@ class Combiner:
         live = {rid: request for rid, request in current.items()
                 if rid not in state.finished and tick < request.expires_tick}
         state.seen.update(live)
-        done_ids = frozenset(rid for rid, kind in state.finished.items() if kind == "done")
+        done_ids = state.done
 
         def reason_for(request: ActionRequest) -> str | None:
             return check(request, self.specs.get(request.verb), tick=tick, world_bounds=context.world_bounds,
@@ -267,6 +271,12 @@ class Combiner:
             if result.done:
                 finish(request_id, "done", outcome=result.outcome)
         since_grant = {rid: value for rid, value in since_grant.items() if rid in set(drivers.values())}
+        # Forget what can never matter again: a finished request that has left the stream (ids are
+        # monotonic per agent and never come back). Done ids stay in ``state.done`` for after-chains, so
+        # the work per tick follows the live requests, not every request the agent ever sent.
+        for request_id in [rid for rid in state.seen if rid in state.finished and rid not in current]:
+            del state.seen[request_id]
+            del state.finished[request_id]
         return CombinedStep(tuple(factors), tuple(statuses), composition, drivers, since_grant)
 
 
