@@ -239,12 +239,15 @@ class ArmRun(NamedTuple):
         records: The host arrays of the last timed run, shaped [T, B]. They are
             kept for inspection and tests.
         notes: Lines for the report's caveats that only this run can state.
+        scratchpad: The shared state S_t of the timed eager session (``shared_state.py``),
+            or None for the compiled runner, which has no session.
     """
 
     name: str
     row: dict[str, Any]
     records: dict[str, np.ndarray]
     notes: tuple[str, ...] = ()
+    scratchpad: Any = None
 
 
 @dataclasses.dataclass
@@ -823,12 +826,13 @@ def run_arm_eager(
     """
 
     from experimental.neural_agent.session import SessionConfig, run_session
+    from experimental.neural_agent.shared_state import ExecutiveSection, SharedState
 
     composed = _compose(arm, ctx, built=built, ticks=ticks, episodes=episodes, seed=seed)
     record_fn = composition_record_fn()
     key = jax.random.fold_in(jax.random.key(seed), 0)
 
-    def session(steps: int) -> tuple[Any, Any]:
+    def session(steps: int, shared: SharedState | None = None) -> tuple[Any, Any]:
         decider = None if arm.make_host_decider is None else arm.make_host_decider(ctx, steps)
         result = run_session(
             built,
@@ -838,6 +842,7 @@ def run_arm_eager(
             SessionConfig(steps=steps, host_budget_ms=J0_LATENCY_BUDGET_MS),
             skill_ids=ctx.skill_ids,
             host_decider=decider,
+            shared_state=shared,
             record_fn=record_fn,
         )
         return result, decider
@@ -845,7 +850,10 @@ def run_arm_eager(
     started = time.perf_counter()
     session(1)
     warmup_seconds = time.perf_counter() - started
-    result, decider = session(episodes * ticks)
+    # The scratchpad opens with the arm's fixed E_t in the executive section (no harness runs
+    # here); the session writes the sections it owns.
+    scratchpad = SharedState(executive=ExecutiveSection.from_executive_state(ctx.executive))
+    result, decider = session(episodes * ticks, scratchpad)
     host = {name: np.asarray(value) for name, value in result.records.items()}
     totals = _Totals()
     _score_run(
@@ -885,7 +893,7 @@ def run_arm_eager(
     )
     if not catches_known:
         notes += (_distance_note(row["arm"], totals),)
-    return ArmRun(name=arm.name, row=row, records=totals.last, notes=notes)
+    return ArmRun(name=arm.name, row=row, records=totals.last, notes=notes, scratchpad=scratchpad)
 
 
 def _cell(value: Any) -> str:
@@ -1302,6 +1310,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     ]
     out_dir = Path(args.out)
     write_metrics_csv(out_dir / "metrics.csv", [result.row for result in runs])
+    for result in runs:
+        if result.scratchpad is not None:
+            from experimental.neural_agent.shared_state import view_for_llm
+
+            (out_dir / f"scratchpad_{result.name}.json").write_text(result.scratchpad.to_json(), encoding="utf-8")
+            (out_dir / f"scratchpad_{result.name}_llm_view.md").write_text(
+                view_for_llm(result.scratchpad), encoding="utf-8"
+            )
     from experimental.neural_agent.tasks.composition import (
         EVADE_TRIGGER_WINDOW_TICKS,
         REENGAGE_DISTANCE_BLOCKS,

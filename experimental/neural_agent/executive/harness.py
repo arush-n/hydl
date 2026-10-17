@@ -46,6 +46,7 @@ from experimental.neural_agent.executive.scheduler import (
     VirtualClock,
 )
 from experimental.neural_agent.executive.store import ExecutiveStateStore
+from experimental.neural_agent.shared_state import SECTION_WRITERS, ExecutiveSection, SharedState
 
 
 def _elapsed_ms(started: float) -> float:
@@ -65,6 +66,8 @@ class ExecutiveHarness:
         ledger: The CallLedger that records each call.
         trigger: An ExecutiveTrigger that decides when a call is due.
         clock: The VirtualClock whose tick the asynchronous worker reads.
+        shared_state: The scratchpad S_t (``shared_state.py``), or None. When given, every
+            accepted proposal is also written into its ``executive`` section as the LLM's writer.
     """
 
     def __init__(
@@ -75,6 +78,7 @@ class ExecutiveHarness:
         ledger: CallLedger,
         trigger: ExecutiveTrigger,
         clock: VirtualClock,
+        shared_state: SharedState | None = None,
     ) -> None:
         self._backend = backend
         self._store = store
@@ -82,6 +86,7 @@ class ExecutiveHarness:
         self._ledger = ledger
         self._trigger = trigger
         self._clock = clock
+        self._shared_state = shared_state
         self._call_lock = threading.Lock()
         self._worker: threading.Thread | None = None
         self._stop_event = threading.Event()
@@ -206,6 +211,13 @@ class ExecutiveHarness:
                 self._record(tick, usage, latency_ms, accepted=False)
                 self._last_error = str(error)
                 return None
+            if self._shared_state is not None:
+                self._shared_state.write(
+                    "executive",
+                    ExecutiveSection.from_executive_state(state),
+                    writer=SECTION_WRITERS["executive"],
+                    tick=tick,
+                )
             self._record(tick, usage, latency_ms, accepted=True)
             self._last_error = None
             return state

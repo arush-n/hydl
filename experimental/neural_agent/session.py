@@ -52,6 +52,8 @@ from experimental.neural_agent.contracts import (
     SkillOutcome,
 )
 from experimental.neural_agent.eval.eager_loop import run_eager
+from experimental.neural_agent.shared_state import SharedState
+from experimental.neural_agent.shared_state_writers import SessionScribe
 
 TICK_SECONDS = 0.045
 
@@ -218,6 +220,7 @@ def run_session(
     executive_writer: ExecutiveWriter | None = None,
     host_decider: HostDecider | None = None,
     report_sink: ReportSink | None = None,
+    shared_state: SharedState | None = None,
     record_fn: Callable[[HierarchicalLoopTransition], Any] = default_record,
 ) -> SessionResult:
     """Run the stack for ``config.steps`` ticks with the executive in the loop.
@@ -225,7 +228,10 @@ def run_session(
     ``skill_ids`` is the dispatcher's registry order; it labels reports. When
     ``executive`` is given, ``executive_writer`` is required: it is how a new
     E_t reaches the manager. ``host_decider`` is only for host-mode JEV
-    instances; in-graph instances live inside ``core``.
+    instances; in-graph instances live inside ``core``. When ``shared_state`` is
+    given, a :class:`SessionScribe` writes the belief, events, skills and
+    decision sections at the host cadence, and each goal report into the
+    skills section (``docs/SYSTEM_ONE.md`` §8.10).
     """
 
     if executive is not None and executive_writer is None:
@@ -235,6 +241,7 @@ def run_session(
     ids = tuple(str(s) for s in skill_ids)
     if not ids:
         raise ValueError("skill_ids must not be empty")
+    scribe = None if shared_state is None else SessionScribe(shared_state, ids)
 
     batch = int(jnp.asarray(initial_state.carry.previous_action).shape[0])
     goal_structure = jax.tree.structure(initial_state.carry.goal)
@@ -295,6 +302,8 @@ def run_session(
                 reports.append(report)
                 if report_sink is not None:
                     report_sink.push_goal_report(report)
+                if scribe is not None:
+                    scribe.push_goal_report(report)
 
         # 3. executive seam
         if executive is not None:
@@ -346,6 +355,10 @@ def run_session(
                         goal_valid=jnp.ones((batch,), dtype=jnp.bool_),
                     )
                     changed = True
+
+        # 5. scratchpad: the sections the session owns, once per host cadence tick
+        if scribe is not None and (step_index % config.host_cadence_ticks) == 0:
+            scribe.record_tick(clock_tick, transition, new_state)
 
         return new_state if changed else None
 

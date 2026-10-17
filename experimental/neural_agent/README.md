@@ -4,7 +4,7 @@ ADR-001's three-level agent, as code. Last updated **2026-10-16**.
 
 | | |
 |---|---|
-| Decision record | [`agents/design/ADR-001-three-level-agent.md`](../../agents/design/ADR-001-three-level-agent.md). Local-only: this clone excludes it through `.git/info/exclude`, and it is not in the repository. Accepted by the project owner on 2026-10-16. sha256 `9abf0a4f1c44300b12a1042328543531ae77efedac0fc6c8918da63dd33450dc` (modified 20:59:34). The earlier pin `363a7196…` is stale. |
+| Decision record | [`agents/design/ADR-001-three-level-agent.md`](../../agents/design/ADR-001-three-level-agent.md). Local-only: this clone excludes it through `.git/info/exclude`, and it is not in the repository. Accepted by the project owner on 2026-10-16. sha256 `b4991168b8b4e9f5d58eaa719c784402e999c793abb5c199a49ecea99be49a5e` (modified 20:59:34). The earlier pin `363a7196…` is stale. |
 | Shared interface | [`contracts.py`](contracts.py), sha256 `b0fc994d9f55506ffee29507a5bdfe8b06036b52c96428198679a729bb90dd13` (modified 20:00:18). The only module that other modules in this package may import from. |
 | System One decision model | [`docs/SYSTEM_ONE.md`](docs/SYSTEM_ONE.md): what JEV is (TypeSafe's System One model), the open clones and precedents, and the design, formulas (FORMULAS M1-M8) and gates G1-G5 of J-S1, our own System One model for goal reading and decision making. Owner (2026-10-17): nothing external except the top LLM. |
 | Status (2026-10-16) | Every module with a gate passes it. `probes/` and `jev/kev.py` have no gate. Across `tests/experimental/neural_agent/`: 372 passed, 2 skipped (one run, CPU, no network, exit 0). The table under "Modules and gates" gives the count for each module. No module here is measured on decision quality. See Limits. |

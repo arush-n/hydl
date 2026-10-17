@@ -313,6 +313,17 @@ Belief rows come from the recorded datasets (real belief distributions), the cur
 path per decision within an order of magnitude of J1 (measured 0.29 ms at batch 64). G3 reading
 latency: time from a new E_t to a ready cache (structured path alone, text path alone, both).
 
+**Status 2026-10-17 (evening), main-session verification.** Built as specified in `jev/system_one/`
+(`heads.py` slot attention and `encode_executive`, `data.py` goal-reading states/rows/split and the generic
+rule, `instance.py` slow path once per version, `train_supervised.py --goal-reading N --text-path on|off`,
+`probe_latency.py` reading latency). G3 FAILS at N = 256 training states (the encoder memorises the 101
+states that survive the K <= 5 split: 0.79 held-out states / 0.63 held-out catalogue sizes, same on every
+trunk and text setting, no regulariser or schedule fixed it) and PASSES at N = 4096 (0.9599 / 0.9489 text
+off, 0.9608 / 0.9457 text on, recorded rows 1.000; reproduced by the main session to four digits). The gate
+is therefore defined at N = 4096, which the generator produces for free and trains in about 15 s. The
+per-decision path makes no trunk call (probe); reading a new E_t on the structured path takes 0.16 ms.
+Ledger: "G3 goal reading with the structured executive encoder".
+
 ### 8.10 The shared scratchpad and natural-language goals (owner answers, 2026-10-17)
 
 Owner's answers, verbatim where it matters:
@@ -372,6 +383,76 @@ slot vector and the goal-language generator with paraphrase families; G3-NL. (c)
 the sections, the views and the schema, wired into the harness and the J-S1 slow path; the ADR's E_t
 becomes the `executive` section. (d) Trunk fine-tuning on the goal language only if (b) fails its gate.
 The live LLM run waits for the lower level, as instructed.
+
+**Status 2026-10-17 (evening).** `shared_state.py` exists and passes its module gate (9 tests; ledger entry
+"shared scratchpad S_t built"): `GoalEntry` = GoalSpec + `intent`/`when`/`note`, the five sections with
+one writer each, `SharedState.write` (ownership, version bump), the closed JSON schema, and the three views.
+Wired the same evening (ledger "scratchpad wired"): `ExecutiveHarness(shared_state=...)` writes every
+accepted proposal into the `executive` section as the LLM's writer; `run_session(shared_state=...)` runs a
+`SessionScribe` (`shared_state_writers.py`) that writes belief, events, skills and decision at the host
+cadence and each GoalReport into the skills outcomes. The J-S1 slow path reading the `executive` section
+and its per-slot texts waits for §8.9.
+
+### 8.11 The goal-language generator: the teacher for natural-language goal reading (2026-10-17)
+
+**Why.** G3-NL (M12) needs labelled goal language before the top LLM is allowed to write any (owner answer
+4). The generator writes goals the way the LLM will, typed fields plus unique words, with the meaning known
+by construction, and it is the only source of skill descriptions for *synthetic* catalogues, so held-out
+catalogue sizes and held-out skills come from one mechanism.
+
+**Families.** Two kinds, each a `family_id`, a meaning and at least twelve paraphrases (imperative,
+descriptive, with and without the object noun, short and long, synonyms; at least a third of a family's
+paraphrases share no content word with its canonical description, so a bag of words cannot solve the gate).
+- *Intent families*, one per thing a skill does. Each carries a canonical `description` in the register of
+  `skill_library/descriptions.py` (the matching head must meet the same kind of text as a real catalogue
+  entry) and the real skill ids it names today: pursue -> `pursuit`, evade -> `evader`, hold -> `idle`.
+  Further families (reach a point, patrol an area, retreat to cover, guard a position, search for the
+  target, ...) name no real skill yet; they stand in for skills the library will gain and populate the
+  synthetic catalogues.
+- *Condition families*, one per predicate over B_t (`BELIEF_FEATURE_NAMES`) the decision layer can
+  evaluate: `always` (no condition, in words or empty), `on_damage` (ticks since damage known and below
+  40, the J0 window), `target_visible`, `target_not_visible`, `target_lost_for(ticks)`,
+  `distance_below(blocks)`, `distance_above(blocks)`, `self_health_below(fraction)`,
+  `target_health_below(fraction)`. A numeric family renders its argument in several surface forms (digits,
+  words, with and without a unit) and the meaning carries the number. An unknown feature (known flag
+  False) makes a predicate False.
+
+**Catalogues.** A catalogue is `skill_id -> description`. The real one is `SKILL_DESCRIPTIONS`. A
+synthetic one of size K has `idle` first (its real description) and K-1 ids `skill_<n>` whose descriptions
+are the canonical descriptions of distinct intent families. An intent family *resolves* in a catalogue to
+the id it names, or to the id whose description is the family's; an intent that resolves to nothing is not
+a valid goal for that catalogue, and the generator does not emit it there.
+
+**Goals and states.** A goal is a `GoalEntry`: `skill_id` typed (the contracts require it today; see the
+follow-up below), `priority`, `horizon_seconds`, optional `deadline_tick`, `intent` from the resolved
+family, `when` from a condition family, `note` from a small pool of neutral remarks (distractors) in a
+fraction of goals, and `constraints` carrying the predicate label as a typed hint only at a configurable
+hint rate (default 0 for the gate: the gate measures reading of words). A state has 1 to `MAX_GOALS` goals
+in an `ExecutiveSection`, with a `SlotMeaning(intent_family, skill_id, predicate)` per slot.
+
+**Teacher (M13).** `S_cond = {k : v_k and c_k != always and c_k(B_t)}`; the chosen slot is the
+highest-priority member of `S_cond` when it is non-empty, else the highest-priority slot among
+`{k : v_k and c_k = always}`, else idle; `y_replace = [chosen != current]`. With the composition state
+(pursue/always at 1.0, evade/on_damage at 0.5) this is exactly M10.
+
+**Splits.** (i) *Held-out wordings*: a fraction of each family's paraphrases never appears in training, the
+reader meets seen meanings in unseen words. (ii) *Held-out skills*: whole intent families (with their
+descriptions) never appear in training catalogues, the reader must match unseen intents to unseen
+descriptions, which only the catalogue-agnostic head can do. (iii) *Held-out catalogue sizes*, as M11.
+Gate G3-NL: skill agreement with M13 >= 0.90 on each.
+
+**Reading modes for the gate.** *Typed*: the slot shows the skill's description embedding `e_skill_k`
+and the texts; the reader must read the condition. *Text-only*: `e_skill_k` is masked to zero and the
+reader must resolve the skill from the intent text through the matching head. Both are reported.
+
+**Follow-up, not now.** The contracts require a typed `skill_id` per goal. The owner's answers imply the
+LLM may name what it wants without knowing the library's ids; the eventual contract is a slot with an
+unresolved skill (lowered index -1) that the matching head resolves. That change touches `contracts.py`,
+the lowering, J0 and the runner, and waits until the text-only mode passes G3-NL on the generator.
+
+Files: `executive/goal_language.py` (families, predicates, catalogues, the sampler, the teacher, the
+splits, a JSONL dump CLI), `tests/.../test_na_goal_language.py`. The row builder that joins generator
+states with belief rows and the per-goal text embedding (M12) lives in `jev/system_one/` and follows §8.9.
 
 ### 8.8 What is deliberately not in J-S1
 
