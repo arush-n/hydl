@@ -47,6 +47,7 @@ from experimental.neural_agent.skill_agent.catalogue import (
     VerbContract,
     build_verb_contract,
     load_catalogue,
+    proof_of_concept_contracts,
     resolve_activities,
     verb_contracts,
 )
@@ -72,6 +73,7 @@ class RegisteredSkill:
     contract: VerbContract
     spec: VerbSpec
     executor: Body | None
+    done_after: int | None = 1
 
     @property
     def verb(self) -> str:
@@ -87,12 +89,15 @@ class RegisteredSkill:
 
     def body(self, layout: str = "gen7") -> Body:
         """The executor, or a placeholder that fills the verb's heads on ``layout`` (built per layout, so one
-        registry serves the gen-5 and gen-7 combiners)."""
+        registry serves the gen-5 and gen-7 combiners) and reports done after ``done_after`` ticks (never
+        when None)."""
 
-        return self.executor if self.executor is not None else placeholder_body(self.contract, layout)
+        if self.executor is not None:
+            return self.executor
+        return placeholder_body(self.contract, layout, self.done_after)
 
 
-def placeholder_body(contract: VerbContract, layout: str = "gen7", done_after: int = 1) -> StubBody:
+def placeholder_body(contract: VerbContract, layout: str = "gen7", done_after: int | None = 1) -> StubBody:
     """A deterministic stand-in that fills the verb's scope heads and reports done after ``done_after`` ticks."""
 
     heads = tuple(head for scope in contract.scopes for head in scope_heads(scope, layout))
@@ -143,12 +148,15 @@ class SkillLibrary:
     # ---- building ----
 
     @classmethod
-    def from_catalogue(cls, path: Any = DEFAULT_CATALOGUE, *,
-                       executors: Mapping[str, Body] | None = None) -> SkillLibrary:
+    def from_catalogue(cls, path: Any = DEFAULT_CATALOGUE, *, executors: Mapping[str, Body] | None = None,
+                       proof_of_concept: bool = False) -> SkillLibrary:
         """Register every catalogue verb and program.
 
         Each verb gets ``executors[verb]`` when given, else a real command script from
-        ``COMMAND_SCRIPTS``, else a placeholder; programs are registered after the verbs.
+        ``COMMAND_SCRIPTS``, else a placeholder; programs are registered after the verbs. With
+        ``proof_of_concept`` the three proof-of-concept skills are registered too
+        (``proof_of_concept_verbs``); their placeholders never report done, because the skills
+        themselves run in-graph and end there.
         """
 
         catalogue = load_catalogue(path)
@@ -157,14 +165,17 @@ class SkillLibrary:
         for contract in verb_contracts(catalogue):
             executor = given.get(contract.verb) or COMMAND_SCRIPTS.get(contract.verb)
             library.register(contract, executor)
+        if proof_of_concept:
+            for contract in proof_of_concept_verbs(catalogue):
+                library.register(contract, given.get(contract.verb), done_after=None)
         programs = {program.activity: program for program in resolve_activities(catalogue)}
         for name in _program_order(programs):
             library.register_program(programs[name])
         return library
 
-    def register(self, contract: VerbContract, executor: Body | None = None, *,
-                 replace: bool = False) -> RegisteredSkill:
-        """Register one verb. Without an executor a placeholder stands in.
+    def register(self, contract: VerbContract, executor: Body | None = None, *, replace: bool = False,
+                 done_after: int | None = 1) -> RegisteredSkill:
+        """Register one verb. Without an executor a placeholder stands in (done after ``done_after`` ticks).
 
         Raises:
             TypeError: If ``contract`` is not a VerbContract or ``executor`` is not callable.
@@ -188,7 +199,7 @@ class SkillLibrary:
             if old.contract.contract.version == contract.contract.version:
                 raise ValueError(f"replacing {verb!r} needs a new version (frozen skills): it is still "
                                  f"{contract.contract.version!r}")
-        skill = RegisteredSkill(contract, verb_spec(contract), executor)
+        skill = RegisteredSkill(contract, verb_spec(contract), executor, done_after)
         self._skills[verb] = skill
         return skill
 
@@ -384,6 +395,30 @@ class SkillLibrary:
         return tuple(head for scope in self[verb].contract.scopes for head in scope_heads(scope, layout))
 
 
+def proof_of_concept_verbs(catalogue: Any) -> tuple[VerbContract, ...]:
+    """The three proof-of-concept skills (idle, pursuit, evader) as the middle layer's executor requests them.
+
+    Their ids, control (commitment, duration, emergency events) and done text come from the catalogue
+    (``catalogue.proof_of_concept_contracts``, tested against the skills themselves). Their arguments and
+    scopes come from the middle layer's request registry (``requests.ARGUMENT_SCHEMAS``: idle nothing,
+    pursuit and evader an entity), which is also what the in-graph parity path grants, so the host
+    statuses and the compiled action name the same heads.
+    """
+
+    built = []
+    for base in proof_of_concept_contracts(catalogue):
+        schema = middle.ARGUMENT_SCHEMAS[base.verb]
+        required = tuple(kind for kind in middle.ARGUMENT_NAMES if getattr(schema, kind))
+        arguments = ArgumentSchema(required, (), (), base.arguments.done, "request registry")
+        control = base.contract
+        built.append(build_verb_contract(
+            base.verb, arguments, schema.scopes, base.kind, base.section, base.description,
+            minimum_commitment_seconds=control.minimum_commitment_seconds,
+            maximum_duration_seconds=control.maximum_duration_seconds,
+            emergency_events=control.emergency_events))
+    return tuple(built)
+
+
 def _program_order(programs: Mapping[str, ActivityProgram]) -> list[str]:
     """Programs ordered so that every nested program is registered before the programs that use it."""
 
@@ -415,5 +450,6 @@ __all__ = [
     "SkillLibrary",
     "hotbar_switch",
     "placeholder_body",
+    "proof_of_concept_verbs",
     "script",
 ]

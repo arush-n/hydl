@@ -287,6 +287,10 @@ aborted, withdrawn or expired. It is re-checked every tick, and a failed check a
 grant stops the body flipping between two requests with nearly equal keys (inferred). This is the same
 reason the proof-of-concept skills carry a minimum commitment.
 
+A verb that owns no scope (idle, which drives nothing) is granted without holding a head. It runs and
+streams its statuses like any request, and never blocks another.
+[test: test_a_request_whose_verb_owns_no_scope_runs_and_never_blocks]
+
 Interrupt mode is the explicit preemption. An interrupt takes heads only from requests granted on an
 earlier tick, so two requests issued on the same tick are ordered by their key alone.
 [test: test_an_interrupt_pre_empts_an_earlier_holder_but_not_a_grant_of_the_same_tick]
@@ -436,6 +440,19 @@ program [ledger].
 - `library.example_args(verb)` — an argument set that satisfies the verb's schema.
 - `library.scope_heads(verb, layout)` — the heads a verb's request owns.
 - The status stream: the reasons, the conflicts and the heads driven.
+
+**Through the scratchpad (B3, with the middle layer).**
+- `scratchpad.combine_from_scratchpad(state, combiner, tick, contexts)` runs the combiner on S_t. It reads
+  each agent's live requests from the `requests` section (`state.requests.for_agent`) and appends every
+  status to the `skills` section's stream, in one write per tick as writer "skills".
+  [test: test_requests_from_the_section_are_combined_and_their_statuses_land_in_the_skills_section]
+- `SkillLibrary.from_catalogue(proof_of_concept=True)` adds idle, pursuit and evader the way the
+  middle layer's program executor requests them.
+  - Their timing and commitment come from the catalogue.
+  - Their arguments and scopes come from the request registry, which the in-graph parity path also
+    grants: pursuit and evader take an entity, idle takes nothing.
+  - Their stand-in bodies never report done, because the skills themselves run in-graph and end there.
+  - [test: test_the_proof_of_concept_skills_register_as_the_executor_requests_them]
 
 The guide in section 1 prints:
 

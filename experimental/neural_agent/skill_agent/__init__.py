@@ -15,4 +15,5 @@ nothing. Import the submodules:
 * ``training.traces``: the loader for native NPC traces from the live server (A7).
 * ``library``: the skill registry: create, register and use verbs and programs.
 * ``programs``: the runner that turns an activity program into requests and reads the statuses back.
+* ``scratchpad``: the combiner on S_t: requests in from the requests section, statuses out to skills.
 """

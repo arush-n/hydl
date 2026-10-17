@@ -111,6 +111,7 @@ class CombinedStep(NamedTuple):
 @dataclass
 class _AgentState:
     holders: dict[str, int] = field(default_factory=dict)
+    unscoped: set[int] = field(default_factory=set)  # granted requests whose verb owns no scope (idle)
     granted_at: dict[int, int] = field(default_factory=dict)
     finished: dict[int, str] = field(default_factory=dict)
     seen: dict[int, ActionRequest] = field(default_factory=dict)
@@ -166,6 +167,7 @@ class Combiner:
             state.finished[request_id] = kind
             for scope in [scope for scope, holder in state.holders.items() if holder == request_id]:
                 del state.holders[scope]
+            state.unscoped.discard(request_id)
 
         for request_id, request in list(state.seen.items()):
             if request_id in state.finished:
@@ -185,12 +187,12 @@ class Combiner:
                          known_entities=context.known_entities, legal_scopes=context.legal_scopes,
                          done_ids=done_ids)
 
-        for request_id in sorted({holder for holder in state.holders.values()}):
+        for request_id in sorted(set(state.holders.values()) | state.unscoped):
             reason = reason_for(live[request_id]) if request_id in live else None
             if reason is not None and protocol.rejection_code(reason) != "predecessor_not_done":
                 finish(request_id, "aborted", reason=reason)
 
-        held = {holder for holder in state.holders.values()}
+        held = set(state.holders.values()) | state.unscoped
         candidates: list[ActionRequest] = []
         for request_id in sorted(live):
             request = live[request_id]
@@ -231,6 +233,8 @@ class Combiner:
                 continue
             for scope in self.specs[request.verb].scopes:
                 state.holders[scope] = request.request_id
+            if not self.specs[request.verb].scopes:
+                state.unscoped.add(request.request_id)
             state.granted_at[request.request_id] = tick
             for head in heads:
                 head_owner[head] = request.request_id
@@ -240,7 +244,7 @@ class Combiner:
         index = {name: position for position, name in enumerate(self.head_names)}
         drivers = dict(state.holders)
         since_grant = {rid: tick - state.granted_at[rid] for rid in set(drivers.values())}
-        for request_id in sorted({holder for holder in state.holders.values()}):
+        for request_id in sorted(set(state.holders.values()) | state.unscoped):
             request = live[request_id]
             body = self.bodies.get(request.verb)
             if body is None:
