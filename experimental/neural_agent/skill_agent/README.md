@@ -40,9 +40,10 @@ library = SkillLibrary.from_catalogue()                     # 122 verbs and 19 p
 context = AgentContext(world_bounds=((-100.0, -64.0, -100.0), (100.0, 320.0, 100.0)),
                        known_entities=frozenset({7}))
 
-# A learned skill: its body is (request, ticks since grant) -> BodyStep(factors, done, outcome, progress).
-def wave_body(request, ticks_since_grant):
-    return BodyStep({"yaw_delta_bins": 8}, done=ticks_since_grant >= 3)
+# A learned skill: its body is (request, ticks since start, observation tokens, belief tokens)
+# -> BodyStep(factors, done, outcome, progress).
+def wave_body(request, ticks_since_start, observation_tokens, belief_tokens):
+    return BodyStep({"yaw_delta_bins": 8}, done=ticks_since_start >= 3)
 
 library.create("wave_at", description="turn to someone and wave", scopes=("gaze",),
                required=("entity",), done="waved", body=wave_body)
@@ -97,13 +98,22 @@ Rules the registry enforces, each covered by a test:
 - **Cancelling.** To cancel a request, stop sending it. The next step aborts it with
   "withdrawn". [test: test_a_request_that_leaves_the_stream_is_aborted_as_withdrawn]
 
-**How a learned body sees.** The combiner gives a body only the request and the ticks since its grant;
-perception is not the combiner's job. A network body is therefore built with a callback,
-`observe(agent) -> token sets`, and calls `observe(request.agent)` on every tick. It keeps its recurrent
-state per `request_id` and resets it when `ticks_since_grant == 0`, because a new grant is a new run of
-the verb (BUILD.md §3.2). Nothing tests this pattern yet: no trained body exists. If the first one shows
-it is awkward, the alternative is an explicit observation argument on the body call, which touches every
-body and the combiner's run step.
+**How a body sees (decided 2026-10-17 with the architecture review).** Every body is called as
+`body(request, ticks_since_start, observation_tokens, belief_tokens)` and returns a `BodyStep`.
+
+- **Where the tokens come from.** The caller builds the agent's `AgentContext` each tick with its
+  observation tokens (the surface token types) and its belief tokens. The combiner hands both to every
+  body it runs for that agent, untouched. [test: test_bodies_receive_the_agents_tokens_unchanged_and_count_ticks_from_the_grant]
+- **Why arguments, not a callback.**
+  - The owner ruled that the state carries everything the neural agent needs.
+  - An argument keeps a body a pure function: the compiled runner can trace it, where a callback has no
+    place, and tests can feed it fixtures.
+  - It matches the request contract: the resolver has already turned references into agent-frame
+    vectors and marked tokens.
+- **Memory.** A body keeps its recurrent state per `request_id` and resets it when
+  `ticks_since_start == 0`, because a new grant is a new run of the verb (BUILD.md §3.2).
+- **Why `BodyStep`, not bare choices.** A body returns its choices together with done, outcome and
+  progress, because the status stream reports them.
 
 ## 2. Why each piece is the way it is
 
@@ -370,6 +380,8 @@ on gen 7. One tick is 0.045 s.
      requests point at entities by handle.
    - Block candidates are matched on (cell, face) exactly; the faces are Hytale's six BlockFace names.
    - The token types are entity, block candidate, inventory slot, geometry, light, self, kit and route.
+   - They reach the bodies as `AgentContext.observation_tokens`, with the belief tokens beside them
+     (section 1).
 3. **The world bounds and the known entity handles** (`AgentContext`). The check rejects points outside
    the bounds and handles it does not know.
 
@@ -441,9 +453,11 @@ done [(0, 'wave_at(friend)', 0, 'accepted'), (1, ..., 'running'), (2, ...), (3, 
   the grant state.
 - **Starvation.** It is bounded only by the middle layer's aging rule.
 - **Gen 7 is unproved.** There is no gen-7 simulator yet. The fidelity ledger's pointer entries
-  (`FIDELITY.md`, 2026-10-17) pass only Dodge. The 32 native NPC traces from the live 0.7.2 server (A7)
-  have one frame per 1/30 s (120 TPS × 4 dilation), not the simulator's 0.045 s tick, so resample them
-  before cloning.
+  (`FIDELITY.md`, 2026-10-17) pass only Dodge.
+- **Traces need resampling.** The 32 native NPC traces from the live 0.7.2 server (A7) have one frame per
+  1/30 s (120 TPS × 4 dilation), not the simulator's 0.045 s tick. Resample them to the tick the training
+  run uses, and record the factor. The engine's time base is an open gen-7 port decision; 1/30 s is the
+  game's own step.
 
 ## 6. References
 

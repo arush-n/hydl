@@ -21,7 +21,9 @@ One tick ``t`` for one agent::
                  its scopes is free. An interrupt request also takes heads from holders granted on an
                  earlier tick, which are aborted("interrupted: by request <id>"); a request whose heads
                  stay taken is deferred(conflict_with=<the holder of its first taken head>).
-    6. run       each granted request's body fills its scopes' heads; every other head is neutral.
+    6. run       each granted request's body, body(request, ticks_since_start, observation_tokens,
+                 belief_tokens) with the tokens of the agent's context, fills its scopes' heads;
+                 every other head is neutral.
     7. stream    accepted on the grant tick and running after, each with the heads it drove;
                  done(outcome) when its body reports done (its scopes are free on the next tick);
                  the tick's head composition (head -> request id).
@@ -66,17 +68,30 @@ class BodyStep(NamedTuple):
     progress: Mapping[str, float] | None = None
 
 
-Body = Callable[[ActionRequest, int], BodyStep]
-"""A body: ``(request, ticks_since_grant) -> BodyStep``. It may fill only its request's scopes' heads."""
+Body = Callable[[ActionRequest, int, Any, Any], BodyStep]
+"""A body: ``(request, ticks_since_start, observation_tokens, belief_tokens) -> BodyStep``.
+
+``ticks_since_start`` counts from the request's grant (0 on the grant tick). The two token arguments are
+the agent's ``AgentContext.observation_tokens`` and ``belief_tokens`` of this tick, passed through
+untouched, so a body is a pure function of its arguments (testable with fixtures; the same contract as
+the compiled runner). A body may fill only its request's scopes' heads.
+"""
 
 
 @dataclass(frozen=True)
 class AgentContext:
-    """What the check needs about one agent on one tick."""
+    """What the check needs about one agent on one tick, and the tokens its bodies read.
+
+    ``observation_tokens`` and ``belief_tokens`` are the agent's token sets for this tick (the surface
+    token types; the belief section's tokens). The combiner does not read them: it hands both to every
+    body it runs for the agent. None means the caller supplied none, and a body that needs them fails.
+    """
 
     world_bounds: tuple[tuple[float, float, float], tuple[float, float, float]]
     known_entities: frozenset[int] = frozenset()
     legal_scopes: frozenset[str] = frozenset(SCOPE_NAMES)
+    observation_tokens: Any = None
+    belief_tokens: Any = None
 
 
 class CombinedStep(NamedTuple):
@@ -233,7 +248,7 @@ class Combiner:
                 drivers = {scope: rid for scope, rid in drivers.items() if rid != request_id}
                 continue
             since = tick - state.granted_at[request_id]
-            result = body(request, since)
+            result = body(request, since, context.observation_tokens, context.belief_tokens)
             allowed = set(self.heads_of(request))
             outside = sorted(set(result.factors) - allowed)
             if outside:
@@ -267,7 +282,8 @@ class StubBody:
     done_after: int | None = None
     heads: tuple[str, ...] | None = None
 
-    def __call__(self, request: ActionRequest, ticks_since_grant: int) -> BodyStep:
+    def __call__(self, request: ActionRequest, ticks_since_start: int, observation_tokens: Any,
+                 belief_tokens: Any) -> BodyStep:
         layout = head_layout(self.layout)
         legal = legal_choices(self.layout)
         names = self.heads if self.heads is not None else ()
@@ -276,8 +292,8 @@ class StubBody:
             if head.name in names:
                 choice = (request.request_id + position) % head.size
                 factors[head.name] = choice if legal[position][choice] else head.neutral
-        done = self.done_after is not None and ticks_since_grant + 1 >= self.done_after
-        return BodyStep(factors, done=done, progress={"ticks": float(ticks_since_grant)})
+        done = self.done_after is not None and ticks_since_start + 1 >= self.done_after
+        return BodyStep(factors, done=done, progress={"ticks": float(ticks_since_start)})
 
 
 def stub_bodies(specs: Mapping[str, VerbSpec], *, layout: str = "gen5",

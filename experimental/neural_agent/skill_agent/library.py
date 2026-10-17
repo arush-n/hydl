@@ -9,7 +9,8 @@ runner (``programs.py``) and the middle layer all read one registry, and a new s
 
 Kinds of skill and their executors::
 
-    learned   a Body: (request, ticks since grant) -> BodyStep (head choices, done, progress).
+    learned   a Body: (request, ticks since start, observation tokens, belief tokens) -> BodyStep
+              (head choices, done, outcome, progress); the tokens come from the agent's context.
               Until a verb's network is trained, a StubBody stands in and ``placeholder`` is True.
     command   a Body as well: an exact script in the same envelope (``script``), so the combiner,
               the status stream and the middle layer treat it like any other verb.
@@ -109,11 +110,12 @@ def script(frames: Sequence[Mapping[str, int] | Callable[[middle.ActionRequest],
     if not steps:
         raise ValueError("a script needs at least one frame")
 
-    def body(request: middle.ActionRequest, ticks_since_grant: int) -> BodyStep:
-        frame = steps[min(ticks_since_grant, len(steps) - 1)]
+    def body(request: middle.ActionRequest, ticks_since_start: int, observation_tokens: Any,
+             belief_tokens: Any) -> BodyStep:
+        frame = steps[min(ticks_since_start, len(steps) - 1)]
         factors = frame(request) if callable(frame) else frame
-        return BodyStep(dict(factors), done=ticks_since_grant + 1 >= len(steps),
-                        progress={"frame": float(ticks_since_grant)})
+        return BodyStep(dict(factors), done=ticks_since_start + 1 >= len(steps),
+                        progress={"frame": float(ticks_since_start)})
 
     return body
 
