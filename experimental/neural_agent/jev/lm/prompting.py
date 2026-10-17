@@ -1,5 +1,9 @@
 """Prompt, JSON Schema and fail-closed parsing for the quick language-model JEV.
 
+DEPRECATED (2026-10-17) with J-LM: superseded by J-S1/J-S2 (only the top LLM may be external); kept for the j_lm arm.
+``validate_skill_ids``, ``_goal_lines`` and ``_fact_lines`` stay live: J-S1 imports them (``system_one/data.py``,
+``instance.py``, ``train_supervised.py``).
+
 ADR-001 D2 says the J-LM reads B_t and E_t and emits one ``ManagedGoal``. This
 module turns those records into text (:func:`build_decision_prompt`), defines the
 JSON Schema the reply must satisfy (:data:`DECISION_JSON_SCHEMA`), and turns the

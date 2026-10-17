@@ -1,5 +1,10 @@
 """Rendering and supervised rows for J-S1 (``docs/SYSTEM_ONE.md`` section 8, FORMULAS (M2), (M5)).
 
+DEPRECATED (2026-10-17), the frozen-text paths only: h_E (the trunk encoding of ``render_executive``) and the per-goal text
+embeddings (``goal_texts``, ``encode_goal_texts``, ``slot_inputs(text_embeddings=, mask_skill=)``, ``goal_language_rows``)
+are superseded by interpret-then-evaluate and J-S2 (SYSTEM_ONE.md 8.13 and 9); kept as the benchmark floor (9.8). The rest
+is live, including ``render_executive`` (the (M11) split hash) and ``goal_language_sets`` (the interpret benchmark's splits).
+
 Two timescales (FORMULAS (M2)). The trunk reads text only on the slow path:
 
     x_E = render_executive(skill_ids, descriptions, E_t)     once per executive version

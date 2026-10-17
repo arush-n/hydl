@@ -1,4 +1,6 @@
-"""Anthropic backend for the quick language-model JEV: one Messages API call per decision.
+"""DEPRECATED (2026-10-17): superseded by J-S1/J-S2 (only the top LLM may be external); kept with J-LM, though no arm offers it.
+
+Anthropic backend for the quick language-model JEV: one Messages API call per decision.
 
 The call follows the installed anthropic SDK (1.15.0). The structured reply is
 requested with ``output_config.format`` ``{"type": "json_schema", "schema": ...}``,

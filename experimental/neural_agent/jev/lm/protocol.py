@@ -1,4 +1,6 @@
-"""Decision language-model protocol and a scripted fake, for the J-LM instance.
+"""DEPRECATED (2026-10-17): superseded by J-S1/J-S2 (only the top LLM may be external); kept because the j_lm experiment arm runs it.
+
+Decision language-model protocol and a scripted fake, for the J-LM instance.
 
 ADR-001 D2 defines the quick language-model instance (J-LM) as a JEV that reads
 B_t and E_t and emits the same ``ManagedGoal`` under the same latency budget.

@@ -604,6 +604,15 @@ about 4-6 hours with the top layers trainable (one overnight run), under an hour
 Stage B: temperature scaling and a Brier check on held-out wordings. Stage C (later, with the lower
 level): outcomes through the harness, RLCR-style with the non-hackable scoring.
 
+**Learner-visited states (added 2026-10-17 night, from the G4 diagnosis).** Behaviour cloning on the
+teacher's own rollouts agreed 1.000 on recorded held-out rows and still composed worse online (0.40
+against the rule's 0.53): the learner under-reacted to the evade transition, then sat in states the
+teacher's traces never contain, because the teacher leaves them on the first tick (ledger "P1d
+shadow"). Stage A therefore trains on the learner's own visited decision states labelled by the teacher
+rule, merged with the teacher's rollouts, in rounds (DAgger), until the online rate meets the bar. The
+teacher is a rule, so the labels are free; the same applies to J-S2's programs once the behaviour
+generator's canonical programs label a learner's states.
+
 ### 9.4 Runtime placement and speed
 
 Slow path, per executive version: render (0.1 ms) + one pass (73 ms, batch 1; int8 dynamic quantisation
@@ -653,6 +662,12 @@ and its views, the typed structured encoder and heads for the per-tick path, the
 code and caches, the LLM prompt vocabulary (§8.12). Retired as a mechanism: per-goal frozen text
 embeddings in the slot vectors (`--goal-language` rows, `--language-mode`), kept only as the floor row of
 the benchmark and as the record of why the design changed.
+
+Deprecation in code (2026-10-17 night, cleanup): the pooled text path (`--text-path on`) and the per-goal
+text embeddings carry `DEPRECATED (2026-10-17)` markers in the docstrings of `train_supervised.py`,
+`data.py` and `heads.py` and in `train_supervised.py --help`; behaviour unchanged, the benchmark floor
+still runs. `jev/lm/` (J-LM over a local model) is marked the same way: an experiment arm, not a component.
+`jev/kev.py` was removed.
 
 ### 9.9 Behaviour programs: the series of actions (owner principle, 2026-10-17 night)
 

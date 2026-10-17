@@ -1,4 +1,6 @@
-"""LanguageModelJev: the quick language-model JEV instance (ADR-001 D2, J-LM).
+"""DEPRECATED (2026-10-17): superseded by J-S1/J-S2 (only the top LLM may be external); kept because the j_lm experiment arm runs it.
+
+LanguageModelJev: the quick language-model JEV instance (ADR-001 D2, J-LM).
 
 Host-mode instance. Each lane b in [0, B) gets one call to a DecisionLM. The
 reply is parsed by ``prompting.parse_decision`` into a skill index k, four

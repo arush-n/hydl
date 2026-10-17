@@ -1,4 +1,6 @@
-"""Quick language-model JEV instance (ADR-001 D2, J-LM), experimental.
+"""DEPRECATED (2026-10-17): superseded by J-S1/J-S2 (only the top LLM may be external); kept because the j_lm experiment arm runs it.
+
+Quick language-model JEV instance (ADR-001 D2, J-LM), experimental.
 
 This package holds the host-mode JEV that reads B_t and E_t and emits one
 ManagedGoal under a latency budget. The concrete backends (Ollama, Anthropic) and

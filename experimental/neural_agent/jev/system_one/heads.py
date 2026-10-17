@@ -1,5 +1,10 @@
 """J-S1 heads in JAX: belief adapter, structured executive encoder, LayerNorm fusion, one GELU layer, parallel heads.
 
+DEPRECATED (2026-10-17), two options only: ``text_path=True`` (h_E, the pooled frozen-trunk text, in the fusion; the
+default) and ``goal_text=True`` (per-goal text embeddings in the slot inputs, (M12)) of ``init_heads``, as ``heads_dims``
+reads them back; superseded by the structured encoder with ``text_path=False``, interpret-then-evaluate and J-S2
+(SYSTEM_ONE.md 8.13 and 9); kept as the benchmark floor (9.8).
+
 Formulas of ``docs/SYSTEM_ONE.md`` sections 8.3, 8.9 and 8.10 and FORMULAS (M2), (M3), (M3b), (M9), (M12); lane i,
 skill j of a catalogue of K skills, P = PARAM_WIDTH::
 

@@ -1201,7 +1201,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         choices=LM_BACKENDS,
         default="fake",
         help=(
-            "j_lm backend: fake (default; FakeDecisionLM answering pursuit, no network) or "
+            "DEPRECATED (2026-10-17) with J-LM: superseded by J-S1/J-S2 (only the top LLM may be external); kept as an "
+            "experiment arm. j_lm backend: fake (default; FakeDecisionLM answering pursuit, no network) or "
             "ollama (qwen3:4b on a local Ollama server)"
         ),
     )

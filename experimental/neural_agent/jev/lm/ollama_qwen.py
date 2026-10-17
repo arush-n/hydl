@@ -1,4 +1,6 @@
-"""Ollama backend for the quick language-model JEV: qwen3:4b over POST /api/chat.
+"""DEPRECATED (2026-10-17): superseded by J-S1/J-S2 (only the top LLM may be external); kept because the j_lm experiment arm runs it.
+
+Ollama backend for the quick language-model JEV: qwen3:4b over POST /api/chat.
 
 Owner measurements, quoted and not checked here: a warm generation of a very short
 output takes about 89 ms, and a cold load of the model takes about 39 s.

@@ -4,12 +4,12 @@ ADR-001's three-level agent, as code. Last updated **2026-10-16**.
 
 | | |
 |---|---|
-| Decision record | [`agents/design/ADR-001-three-level-agent.md`](../../agents/design/ADR-001-three-level-agent.md). Local-only: this clone excludes it through `.git/info/exclude`, and it is not in the repository. Accepted by the project owner on 2026-10-16. sha256 `18fca62bb4ae9ea13fe4eb3ebc0b45d26750916b1ad27eb9e8942c16549a24f0` (modified 20:59:34). The earlier pin `363a7196…` is stale. |
+| Decision record | [`agents/design/ADR-001-three-level-agent.md`](../../agents/design/ADR-001-three-level-agent.md). Local-only: this clone excludes it through `.git/info/exclude`, and it is not in the repository. Accepted by the project owner on 2026-10-16. sha256 `a84215138892b17ad499a43bbec1a72e5a793e1429824c265a87c8f28c4d224a` (modified 20:59:34). The earlier pin `363a7196…` is stale. |
 | Shared interface | [`contracts.py`](contracts.py), sha256 `b412bece90115ea071908cf6c0602386e021d2da42cb15ab8268dc1339b1b050` (modified 20:00:18). The only module that other modules in this package may import from. |
 | Lower layer: the skill agent build plan | [`skill_agent/BUILD.md`](skill_agent/BUILD.md): where the neural skills are built and how (six goal-conditioned bodies over token sets, the request stream and combiner, the catalogue parser), what is reused, the gen-7 verification checklist, the sixteen requirements mapped, and the proofs E1-E14 each component must pass before it is final (owner rulings 2026-10-17 night). |
 | Middle layer: consolidated design and plan | [`docs/MIDDLE_LAYER.md`](docs/MIDDLE_LAYER.md): the entry point for the decision layer (2026-10-17 night): what is measured, built, ruled and designed; the three-layer architecture with the shared scratchpad, the two-timescale System One model (J-S2), behaviour programs, the request stream to the skill library, gates and the ordered plan. |
 | System One decision model | [`docs/SYSTEM_ONE.md`](docs/SYSTEM_ONE.md): what JEV is (TypeSafe's System One model), the open clones and precedents, and the design, formulas (FORMULAS M1-M8) and gates G1-G5 of J-S1, our own System One model for goal reading and decision making. Owner (2026-10-17): nothing external except the top LLM. |
-| Status (2026-10-16) | Every module with a gate passes it. `probes/` and `jev/kev.py` have no gate. Across `tests/experimental/neural_agent/`: 372 passed, 2 skipped (one run, CPU, no network, exit 0). The table under "Modules and gates" gives the count for each module. No module here is measured on decision quality. See Limits. |
+| Status (2026-10-16) | Every module with a gate passes it. `probes/` has no gate. Across `tests/experimental/neural_agent/`: 372 passed, 2 skipped (one run, CPU, no network, exit 0). The table under "Modules and gates" gives the count for each module. No module here is measured on decision quality. See Limits. |
 
 ## Thesis
 
@@ -75,8 +75,7 @@ its own `SKILL.md` with the local facts, gates and gotchas.
 | `jev/` J0 scripted rule, runner | present | `test_na_jev_core.py` | 19 passed | [`jev/SKILL.md`](jev/SKILL.md) |
 | `jev/network.py` (J1 network) | present; no trained result | `test_na_jev_network.py` | 24 passed | [`jev/SKILL.md`](jev/SKILL.md) |
 | `jev/train_j1_ppo.py` (J1 trainer) | present; trains a stand-in MLP on a synthetic environment | `test_na_jev_ppo.py` | 6 passed | [`jev/SKILL.md`](jev/SKILL.md) |
-| `jev/lm/` (J-LM) | present; live Ollama check gated | `test_na_jev_lm.py` | 65 passed, 1 skipped | [`jev/lm/SKILL.md`](jev/lm/SKILL.md) |
-| `jev/kev.py` | reserved stub; raises `NotImplementedError` | none | not applicable | [`jev/SKILL.md`](jev/SKILL.md) |
+| `jev/lm/` (J-LM) | present; DEPRECATED 2026-10-17 (experiment arm only: nothing external but the top LLM); live Ollama check gated | `test_na_jev_lm.py` | 65 passed, 1 skipped | [`jev/lm/SKILL.md`](jev/lm/SKILL.md) |
 | `executive/` (E_t store, reports, scheduler, baselines, harness, API adapter) | present | `test_na_executive.py` | 59 passed | [`executive/SKILL.md`](executive/SKILL.md) |
 | `tasks/` (composition task, flat arena) | present; damage case only | `test_na_tasks.py` | 30 passed | [`tasks/SKILL.md`](tasks/SKILL.md) |
 | `eval/` (arms, metrics, `run_composition` CLI) | present; all five arms wired (`j1` runs untrained until `--j1-params`; `j_lm` needs `--runner eager`) | `test_na_eval.py` | 36 passed, 1 skipped | [`eval/SKILL.md`](eval/SKILL.md) |

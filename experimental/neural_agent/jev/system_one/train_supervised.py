@@ -1,5 +1,9 @@
 """Stage A of J-S1: supervised fit of the heads on decision rows (SYSTEM_ONE.md 8.4, FORMULAS (M5)).
 
+DEPRECATED (2026-10-17), the frozen-text options only: --text-path on (the pooled h_E, the default) and --goal-language,
+--goal-language-eval, --language-mode (per-goal text embeddings in the slots, M12) are superseded by interpret-then-evaluate
+and J-S2 (SYSTEM_ONE.md 8.13 and 9); kept because they are the benchmark floor and the record of why the design changed (9.8).
+
 The trunk is frozen and reads text on the slow path only, so every distinct executive
 text is encoded once (``h_E``, gathered per row) and the catalogue once (``e_j``); only
 the heads train. Loss over a batch of rows, s~ the masked skill logits::
@@ -419,16 +423,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument(
         "--goal-language", type=int, default=0, metavar="N",
-        help="goal-language mode: N generated training states in the LLM's words, structured encoder with goal "
+        help="DEPRECATED (2026-10-17): superseded by interpret-then-evaluate and J-S2; kept as the benchmark floor. "
+        "goal-language mode: N generated training states in the LLM's words, structured encoder with goal "
         "text (gate G3-NL); 0 = off (default)",
     )
     parser.add_argument(
         "--goal-language-eval", type=int, default=DEFAULT_GOAL_LANGUAGE_EVAL, metavar="M",
-        help=f"states per held-out goal-language split (default {DEFAULT_GOAL_LANGUAGE_EVAL})",
+        help=f"DEPRECATED (2026-10-17) with --goal-language. states per held-out goal-language split "
+        f"(default {DEFAULT_GOAL_LANGUAGE_EVAL})",
     )
     parser.add_argument(
         "--language-mode", choices=LANGUAGE_MODES, default=None,
-        help="reading mode of the goal-language rows: typed (default) or text-only; needs --goal-language",
+        help="DEPRECATED (2026-10-17) with --goal-language. reading mode of the goal-language rows: typed (default) "
+        "or text-only; needs --goal-language",
     )
     parser.add_argument(
         "--rows-per-state", type=int, default=DEFAULT_ROWS_PER_STATE,
@@ -436,7 +443,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument(
         "--text-path", choices=("on", "off"), default="on",
-        help="h_E in the fusion (default on); off is the text-off ablation and needs --goal-reading or --goal-language",
+        help="DEPRECATED (2026-10-17) for on, the pooled text path: superseded by the structured encoder (off) and "
+        "J-S2; kept as the benchmark floor; the default is unchanged. h_E in the fusion (default on); off is the "
+        "text-off ablation and needs --goal-reading or --goal-language",
     )
     parser.add_argument("--heldout", type=Path, default=None, help="held-out dataset .npz, scored after training")
     parser.add_argument("--updates", type=int, default=DEFAULT_UPDATES, help=f"Adam updates (default {DEFAULT_UPDATES})")
