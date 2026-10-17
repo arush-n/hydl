@@ -288,6 +288,27 @@ E8, E9 and the combat bodies after P3, E10 as soon as traces are recorded, E12 a
 Per phase: run the gate, record it in the ledger with the command and the numbers, append a dated note
 to `SKILL.md`, commit in one batch, never push.
 
+## 7b. Phase B for the skill-agent session (proposed 2026-10-17, late; the gen-7 simulator is not ready)
+
+Phase A is done (eight commits: catalogue, protocol, combiner, parity, trace loader, fidelity ledger,
+library, README; 122 verbs and 19 programs run on stand-in bodies). Nothing below needs the gen-7
+simulator; everything below is needed before the first body trains on it. Each step keeps the phase-A
+rules: gates recorded before claims, commit per step, never push, stage only changed files.
+
+| # | Step | Gate | Why now |
+|---|---|---|---|
+| B1 | **Body interface and the token-set encoder.** `body(request, ticks_since_start, observation_tokens, belief_tokens) -> factors` as the one signature (no callback); a JAX set encoder over entity, block, inventory, geometry, self and kit tokens with role embeddings and target marking; shape tests on synthetic token sets; per-tick latency at batch 1, 8, 64 | encoder + combiner + resolver p95 <= 15 ms per tick at batch 8 (30 Hz budget with margin); shapes stable for any number of tokens | the bodies' contract must exist before any training; the latency bar is the owner's 30 Hz ruling |
+| B2 | **Behaviour-cloning dataset from the 32 native traces.** Frames are 1/30 s already (no resampling at 30 Hz); map each frame to observation tokens and action factors on the gen-7 layout; held-out traces by world; a tiny BC body on CPU or the Mac GPU as a smoke | the dataset validates; held-out action agreement reported; action jitter reported; the smoke trains in minutes | the only demonstrations we have; proves the trace -> token -> factor pipeline before the simulator exists |
+| B3 | **The combiner path becomes the default for today's three skills.** The composition arms run through parity by default; the middle layer's program executor emits `ActionRequest`s into the `requests` section and the combiner consumes them (joint step with this session) | the four arms' metrics unchanged with the new path on; the executor's requests appear in the scratchpad with statuses | closes the loop the owner described: LLM -> translate -> decode -> requests -> combine -> status |
+| B4 | **Freezing mechanism (E13 on stubs).** Frozen trunk plus per-verb adapters; adding a verb leaves frozen verbs' outputs bit-identical on a fixed input set | bit-identical | requirement 7 is cheapest to prove before real weights exist |
+| B5 | **One catalogue reader.** `skill_agent/catalogue.py` is the reader; `jev/system_one/catalogue_matching.py` imports it instead of parsing again (this session does the import change) | both tests green; the two readers' row-for-row agreement test retired | one source of truth, as the owner asked |
+| B6 | **Per-skill progress and termination reasons in the contract.** From the catalogue's "done" column: the typed progress signals and the stop reasons each verb reports into the status stream | every contract carries them; the stub bodies emit them; the scratchpad shows them | the context the upper layers need to know when to ask for more (owner) |
+| then | E2-E6 of section 6 on the rendered gen-7 locomotion engine (the set encoder against the flat MLP on the baseline task; one body, three verbs; typed arguments; interruption; calibrated status) | section 6 bars | needs the port's phase 2 (locomotion, LOS) |
+
+Owner items outstanding from phase A: pushing the eight commits; reviewing that session's edits to the
+private catalogue (five reworded activity sequences, six added programs); the uncommitted pursuit fix in
+`arena/training/runs/pursuit_run.py`.
+
 ## 8. Interfaces to the middle layer
 
 The middle layer gives: a stream of typed requests (3.3). It takes: the status stream, progress, head
