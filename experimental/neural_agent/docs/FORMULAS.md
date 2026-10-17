@@ -1,6 +1,6 @@
 # experimental/neural_agent: formulas
 
-Status on 2026-10-16; third pass 2026-10-17 (UTC; the local clock read 2026-10-16 evening, CDT), see the verification notes. Every formula the three-level design relies on, with one line on what it means and where it comes from. Sources are the decision record (ADR-001, local-only, SHA-256 `9a327102c89480c938bc92f7a736d99bc10a9390a3e3985a78a832e00dc59e4e`, modified 20:59:34), PLAN v0.2 (`agents/design/PLAN.md`, local-only, SHA-256 `db6413db…`), the repository code named in each entry, and the papers listed in `REFERENCES.md`.
+Status on 2026-10-16; third pass 2026-10-17 (UTC; the local clock read 2026-10-16 evening, CDT), see the verification notes. Every formula the three-level design relies on, with one line on what it means and where it comes from. Sources are the decision record (ADR-001, local-only, SHA-256 `636bdc21139652a8d263a9d557de7fe15b7c3c6c80803ae9484e820c6e7722db`, modified 20:59:34), PLAN v0.2 (`agents/design/PLAN.md`, local-only, SHA-256 `db6413db…`), the repository code named in each entry, and the papers listed in `REFERENCES.md`.
 
 **Labels.** Each formula carries one of four labels.
 

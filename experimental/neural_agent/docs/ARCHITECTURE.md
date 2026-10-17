@@ -217,7 +217,7 @@ SHA-256 values and sizes taken on 2026-10-16 at the snapshot. A reader with a co
 
 | File | SHA-256 | Size and modification time | Used for |
 |---|---|---|---|
-| `agents/design/ADR-001-three-level-agent.md` | `9a327102c89480c938bc92f7a736d99bc10a9390a3e3985a78a832e00dc59e4e` | 83,845 bytes, 2026-10-16 20:59:34 | the decision record (local-only); earlier versions `f5f0fdb9…` (19:58:30) and `6b34c6fe…` (20:56:46) are superseded |
+| `agents/design/ADR-001-three-level-agent.md` | `636bdc21139652a8d263a9d557de7fe15b7c3c6c80803ae9484e820c6e7722db` | 83,845 bytes, 2026-10-16 20:59:34 | the decision record (local-only); earlier versions `f5f0fdb9…` (19:58:30) and `6b34c6fe…` (20:56:46) are superseded |
 | `agents/design/PLAN.md` | `db6413dbd556a714c4193762242c8aabe5723246331f94cf35b62a17bc32a77e` | 114,137 bytes, 2026-08-02 16:46:18 | PLAN v0.2 (local-only) |
 | `experimental/hierarchical_planner/DESIGN.md` | `09ee95ef7f81b6205a94c42089195bbf746f18842f02ead6271e804bccf3247d` | not recorded | the four-arm protocol (section 6) |
 | `agent_skills/training_runs/recipe.py` | `ad96a4a0b0d8a7cc5d49875ac2cd0afdd154314282fba695480706aad557a0f6` | not recorded | `wilson_lower`, advance rule |
