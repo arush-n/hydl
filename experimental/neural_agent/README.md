@@ -4,7 +4,7 @@ ADR-001's three-level agent, as code. Last updated **2026-10-16**.
 
 | | |
 |---|---|
-| Decision record | [`agents/design/ADR-001-three-level-agent.md`](../../agents/design/ADR-001-three-level-agent.md). Local-only: this clone excludes it through `.git/info/exclude`, and it is not in the repository. Accepted by the project owner on 2026-10-16. sha256 `03f8ef2eab3406afee0120641833f4220e1d6a9dfd3df1b702bb69c58193231c` (modified 20:59:34). The earlier pin `363a7196…` is stale. |
+| Decision record | [`agents/design/ADR-001-three-level-agent.md`](../../agents/design/ADR-001-three-level-agent.md). Local-only: this clone excludes it through `.git/info/exclude`, and it is not in the repository. Accepted by the project owner on 2026-10-16. sha256 `73d8779ed5200f93f03b17f2e7363e71ef621a47d0ef98e48fe599b007d1d76d` (modified 20:59:34). The earlier pin `363a7196…` is stale. |
 | Shared interface | [`contracts.py`](contracts.py), sha256 `b0fc994d9f55506ffee29507a5bdfe8b06036b52c96428198679a729bb90dd13` (modified 20:00:18). The only module that other modules in this package may import from. |
 | Status (2026-10-16) | Every module with a gate passes it. `probes/` and `jev/kev.py` have no gate. Across `tests/experimental/neural_agent/`: 372 passed, 2 skipped (one run, CPU, no network, exit 0). The table under "Modules and gates" gives the count for each module. No module here is measured on decision quality. See Limits. |
 

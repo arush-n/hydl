@@ -149,7 +149,7 @@ Each module is IMPLEMENTED only once its tests pass in the Verify stage. A box i
 - [x] `jev/network.py`. J1 learned reactive network. Gate: `test_na_jev_network.py`: 24 passed. Status: present; no trained result is on disk.
 - [x] `jev/train_j1_ppo.py`. PPO over goal decisions for J1. Gate: `test_na_jev_ppo.py`: 6 passed. Status: present; it trains a local stand-in MLP, not the network in `network.py` (TODO at `train_j1_ppo.py:796`; see `jev/SKILL.md`).
 - [x] `jev/lm/`. J-LM (H15): `instance.py`, `prompting.py`, `protocol.py`, `anthropic_quick.py`, `ollama_qwen.py`. Gate: `test_na_jev_lm.py`: 65 passed, 1 skipped (the live Ollama test). Status: present, with its own `SKILL.md`.
-- [ ] `jev/kev.py`. Reserved KEV slot. Gate: none. Status: a stub that raises `NotImplementedError` by design; no definition exists in the record.
+- [x] `jev/kev.py`. KEV, defined by the owner on 2026-10-17 as an example instance, not a requirement: "a JEV clone which is just a quantized Qwen model fine-tuned to focus on quick decision making"; "you do not need to use kev, kev was just an example just like jev". Gate: none. Status: a documented stub; the un-finetuned baseline is the `j_lm` arm with `--lm-backend ollama` (`qwen3:4b`, 471 ms p50 per decision, `LEDGER.md`).
 - [x] `executive/store.py`, `reports.py`, `scheduler.py`, `baselines.py`, `harness.py`. E_t store, report channel, scheduler hooks, deterministic baselines, call ledger. Gate: `test_na_executive.py`: 59 passed. Status: present.
 - [x] `executive/anthropic_backend.py`. API adapter, tested through an injected client. Gate: `test_na_executive.py`: 59 passed (shared). Status: present.
 - [ ] `executive/smoke_anthropic.py`. One real call, only when `ANTHROPIC_API_KEY` is set. It is not a test, and no live call has been made. Its no-key path exits 0 (checked 2026-10-16). Status: present.
@@ -179,7 +179,7 @@ Each module is IMPLEMENTED only once its tests pass in the Verify stage. A box i
 
 Each item is a conflict or gap in the record, the code, or the documents. None is resolved here.
 
-1. **KEV is undefined.** The brief names a "KEV slot". ADR-001, PLAN.md and the repository do not define it. `jev/kev.py` reserves the name and raises on construction.
+1. **KEV is undefined (resolved 2026-10-17).** The owner defined it as an example: a quantized Qwen fine-tuned for quick decisions, not required. `jev/kev.py` documents that and still raises on construction; the Ollama J-LM arm is the baseline of that instance.
 2. **The skill folder name and `.gitignore:189` (resolved 2026-10-17).** The folder is now `skill_library/`, which git does not ignore (section 1). `DEV.md` (lines 13, 141 and 143) still uses the old name, `skills`, and is outside this pass. `test_na_docs_folders.py` names `skill_library` since 22:07 local.
 3. **Skill training: one residual question.** The "What is trained here" paragraph of ADR-001 section 2 no longer lists the skill policies, and "Build ownership" says this build treats them as frozen inputs. D1 and H1 still describe training skill heads on the shared trunk, and the record does not say which system trains them (THESIS section 4).
 4. **Non-negotiable count (resolved).** The version of ADR-001 read at 20:56:46 says in section 6.4 "the six non-negotiables (§2)", which matches section 2.
@@ -217,7 +217,7 @@ SHA-256 values and sizes taken on 2026-10-16 at the snapshot. A reader with a co
 
 | File | SHA-256 | Size and modification time | Used for |
 |---|---|---|---|
-| `agents/design/ADR-001-three-level-agent.md` | `03f8ef2eab3406afee0120641833f4220e1d6a9dfd3df1b702bb69c58193231c` | 83,845 bytes, 2026-10-16 20:59:34 | the decision record (local-only); earlier versions `f5f0fdb9…` (19:58:30) and `6b34c6fe…` (20:56:46) are superseded |
+| `agents/design/ADR-001-three-level-agent.md` | `73d8779ed5200f93f03b17f2e7363e71ef621a47d0ef98e48fe599b007d1d76d` | 83,845 bytes, 2026-10-16 20:59:34 | the decision record (local-only); earlier versions `f5f0fdb9…` (19:58:30) and `6b34c6fe…` (20:56:46) are superseded |
 | `agents/design/PLAN.md` | `db6413dbd556a714c4193762242c8aabe5723246331f94cf35b62a17bc32a77e` | 114,137 bytes, 2026-08-02 16:46:18 | PLAN v0.2 (local-only) |
 | `experimental/hierarchical_planner/DESIGN.md` | `09ee95ef7f81b6205a94c42089195bbf746f18842f02ead6271e804bccf3247d` | not recorded | the four-arm protocol (section 6) |
 | `agent_skills/training_runs/recipe.py` | `ad96a4a0b0d8a7cc5d49875ac2cd0afdd154314282fba695480706aad557a0f6` | not recorded | `wilson_lower`, advance rule |
