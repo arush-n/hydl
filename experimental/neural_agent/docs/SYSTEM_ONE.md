@@ -815,6 +815,39 @@ item 4 without pretending accuracy the measurements refute. Consequences:
 - Gate I1 changes: "intent -> skill >= 0.90" becomes: typed id validity 100 % by schema; the fallback's
   top-3 containment and flag precision are reported, not gated.
 
+### 9.12 Reading words: what three experiments decided (2026-10-17 night)
+
+Measured, in order: G3-NL (frozen text embeddings in the goal slots) failed on unseen wording (0.53-0.58);
+the frozen interpret stage failed the condition-kind bar (0.71 at best, polarity errors); the fine-tune
+pilot (ledger "P2") failed it too (0.75 / 0.82 on two held-out-family draws) while reading the *feature*
+at 0.99: what a sentence embedding loses, frozen or fine-tuned on this data, is the side of a
+comparison and the presence of a negation ("if it's concealed" has no negation word); and matching
+intents to skills by description failed over the real catalogue (§9.11). The exact number reader passed
+(1.000).
+
+Decision. Structure where exactness matters; words as context.
+- The goal schema gains a typed condition beside the words: `condition: {kind, argument}` with `kind`
+  from the nine-predicate vocabulary the LLM is told (§8.12 item 3) and the argument a number. The
+  typed `skill_id` is the selector (§9.11). `intent`, `when` and `note` stay as the LLM's words: context
+  for the LLM itself, the record, and the fallback.
+- The middle layer evaluates typed conditions exactly on B_t and applies the priority rule (M13); no
+  learned reader is on the path when the LLM writes typed fields, which is the case the design asks for.
+- Fallback for a goal that arrives with words only: a deterministic reader beside the number reader,
+  feature words (visible, distance, health, damage, lost) plus comparator and negation words (under,
+  below, within, closer / over, above, past, farther / not, can't, hidden, out of sight), producing
+  (kind, argument, confidence); a low-confidence reading is written to the `decision` section as an
+  information request so the LLM confirms or writes the typed field. Gate: agreement with the generator's
+  meanings >= 0.95 on held-out wordings for the deterministic reader, reported, since the typed path is
+  the contract.
+- J-S2 as a fine-tuned reading backbone (§9.1-§9.4) is not built. What remains to learn in the middle
+  layer: the per-tick replace, params and confidence heads (P1d relabeling), and the composition of
+  behaviour programs from typed goals and the catalogue's activities (§9.9: the executor first, P4;
+  learning from outcomes later). Reading a new executive version therefore costs a schema validation and
+  a handful of predicate constructions, well under a millisecond, with the interpret stage gone.
+
+What this keeps of the owner's intent: the LLM writes freely and keeps its ideas in words; the layer
+below acts on the typed fields the LLM also writes, as Jev's schema-defined outputs do on the way out.
+
 ## References
 
 - [JEV] TypeSafe AI, "Introducing System One Models & Jev", 2026. https://typesafe.ai/blog/introducing-system-one-models-and-jev

@@ -134,7 +134,7 @@ explicit, typed and inspectable, and it is where real LLM wording will be learne
 | G1 pipeline agreement with the scripted rule, recorded rows | >= 0.95 | MEASURED 1.000 |
 | G2b trunk calls per decision; decision latency | 0; << 20 ms | MEASURED 0; 0.29 ms |
 | G3 typed goal reading, unseen states and catalogue sizes | >= 0.90 | MEASURED 0.96 / 0.95 at 4096 |
-| I1 interpretation: condition kind; number; skill id | 0.95; 0.98 (MEASURED 1.000); typed id by schema (description matching FAILED as a selector over the real catalogue, MiniLM 0.42 top-1, SYSTEM_ONE §9.11; kept as the fallback) | kind DESIGNED; number MEASURED; id RULED by schema |
+| I1 reading: condition kind; number; skill id | kind: typed in the schema (fine-tuned encoders FAILED the 0.95 bar at 0.75-0.82, polarity, SYSTEM_ONE §9.12; deterministic fallback reader reported at >= 0.95); number MEASURED 1.000; skill id typed by schema (description matching FAILED, §9.11) | DECIDED: typed fields are the contract, words are context |
 | I2 end to end agreement with M13 via interpret + exact evaluation | >= 0.90 on three splits | DESIGNED (replaces the failed G3-NL) |
 | I3 a new executive version read; backbone calls per decision | <= 150 ms; 0 | DESIGNED |
 | I4 calibration of skill and kind probabilities | ECE <= 0.05 | DESIGNED |
