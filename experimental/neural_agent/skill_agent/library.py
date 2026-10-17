@@ -58,7 +58,7 @@ from experimental.neural_agent.skill_agent.combiner import (
     StubBody,
 )
 from experimental.neural_agent.skill_agent.protocol import VerbSpec, check, verb_spec
-from experimental.neural_agent.skill_agent.surface import TICK_SECONDS, scope_heads
+from experimental.neural_agent.skill_agent.surface import scope_heads, tick_seconds
 
 DEFAULT_HORIZON_SECONDS: float = 60.0
 """Request lifetime when the verb's contract sets no maximum duration (idle-like verbs)."""
@@ -314,10 +314,11 @@ class SkillLibrary:
                 args: middle.RequestArgs | None = None,
                 mode: str = middle.MODE_PARALLEL, urgency: float = 0.5, confidence: float = 0.5,
                 priority: float = 1.0, goal_slot: int = -1, executive_version: int = 0,
-                program_step: int = 0) -> middle.ActionRequest:
+                program_step: int = 0, layout: str = "gen7") -> middle.ActionRequest:
         """Build a request for ``verb``: scalars by name, expiry from the contract's maximum duration.
 
-        ``args`` (a whole RequestArgs) replaces the argument keywords when given.
+        ``args`` (a whole RequestArgs) replaces the argument keywords when given. The expiry counts ticks
+        of ``layout`` (1/30 s on gen 7, 0.045 s on gen 5).
 
         Raises:
             KeyError: If the verb is not registered or a scalar name is not the verb's.
@@ -337,7 +338,7 @@ class SkillLibrary:
             horizon = contract.maximum_duration_seconds
             if math.isinf(horizon):
                 horizon = DEFAULT_HORIZON_SECONDS
-        expires = tick + max(1, math.ceil(horizon / TICK_SECONDS))
+        expires = tick + max(1, math.ceil(horizon / tick_seconds(layout) - 1e-9))
         if args is None:
             args = middle.RequestArgs(position=position, direction=direction, entity=entity,
                                       cell=cell, face=face, scalars=values)

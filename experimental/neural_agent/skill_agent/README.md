@@ -92,8 +92,9 @@ Rules the registry enforces, each covered by a test:
   [test: test_skills_run_through_the_librarys_combiner_and_the_command_script_sets_the_hotbar runs
   gen 5; test_every_verb_is_accepted_drives_only_its_own_heads_and_finishes runs gen 7]
 - **Scalars by name.** `request` takes scalars by name, rejects a name the verb does not have, and sets
-  the expiry from the contract: `expires = tick + max(1, ceil(T / 0.045))`. T is the contract's
-  `maximum_duration_seconds`, or 60 s when that is infinite.
+  the expiry from the contract: `expires = tick + max(1, ceil(T / tick))`. T is the contract's
+  `maximum_duration_seconds`, or 60 s when that is infinite, and the tick is the layout's: 1/30 s on
+  gen 7 (the owner's 30 Hz ruling), 0.045 s on gen 5.
   [test: test_the_request_helper_names_scalars_and_sets_the_expiry_from_the_contract]
 - **Cancelling.** To cancel a request, stop sending it. The next step aborts it with
   "withdrawn". [test: test_a_request_that_leaves_the_stream_is_aborted_as_withdrawn]
@@ -191,8 +192,9 @@ scopes. [test: test_neutral_choices_follow_the_proof_of_concept_rule]
 FiGAR (Sharma, Lakshminarayanan and Ravindran 2017) showed that a learned repetition length helps
 policies whose actions must last. Holds in 0.7.2 run 0.1 to 3 s.
 
-- **The buckets:** 0, 1, 2, 3, 4, 6, 8, 11, 16, 22, 31, 44, 62 and 90 ticks, up to 4.05 s. Above 4 ticks,
-  each bucket is about √2 times the one before.
+- **The buckets:** 0, 1, 2, 3, 4, 6, 8, 11, 16, 22, 31, 44, 62 and 90 ticks, up to 3.0 s at 30 Hz: the
+  ruling's range of 0.1 to 3 s is 3 to 90 ticks, and a longer action (eating, 4 s) chains two holds.
+  Above 4 ticks, each bucket is about √2 times the one before.
 - **The rounding bound:** rounding a hold to the nearest bucket is off by at most (r − 1)/(r + 1) of its
   length. For the widest ratio, r = 1.5, that is 20 %.
 - **What the test checks:** every shortbow draw tier is reachable.
@@ -363,7 +365,9 @@ and order. The nine planned heads, with their choices from `surface.py`, are:
 | `dodge` | 3 | posture_defence | none, left, right |
 
 The full layout is 21 heads and 200 choices. Locomotion choices 33 to 36 (the gen-5 dodges) are illegal
-on gen 7. One tick is 0.045 s.
+on gen 7. One tick is 1/30 s, the game's own step (the owner's 30 Hz ruling, 2026-10-17;
+`surface.tick_seconds("gen7")`); 0.045 s is the gen-5 simulator's tick. The whole per-tick path (belief,
+decision, combiner, bodies) has a budget of p95 <= 15 ms at the deployed batch, inside the 33.3 ms tick.
 
 **What the lower layer needs back, each tick and for each agent:**
 
@@ -454,10 +458,9 @@ done [(0, 'wave_at(friend)', 0, 'accepted'), (1, ..., 'running'), (2, ...), (3, 
 - **Starvation.** It is bounded only by the middle layer's aging rule.
 - **Gen 7 is unproved.** There is no gen-7 simulator yet. The fidelity ledger's pointer entries
   (`FIDELITY.md`, 2026-10-17) pass only Dodge.
-- **Traces need resampling.** The 32 native NPC traces from the live 0.7.2 server (A7) have one frame per
-  1/30 s (120 TPS × 4 dilation), not the simulator's 0.045 s tick. Resample them to the tick the training
-  run uses, and record the factor. The engine's time base is an open gen-7 port decision; 1/30 s is the
-  game's own step.
+- **Trace timing.** The 32 native NPC traces from the live 0.7.2 server (A7) have one frame per 1/30 s
+  (120 TPS × 4 dilation), the gen-7 tick under the 30 Hz ruling, so they need no resampling for gen 7.
+  A run at the gen-5 simulator's 0.045 s tick must resample them and record the factor.
 
 ## 6. References
 

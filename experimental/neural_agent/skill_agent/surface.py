@@ -33,13 +33,14 @@ camera; E7 (walk to a point while looking at an entity) tests the split.
 
 Holds
 -----
-A hold is a number of ticks, not a press and release per tick (``BUILD.md`` 3.1): holds in the
-catalogue run from 0.1 s to 4 s, that is 3 to 89 ticks at 0.045 s. ``DURATION_BUCKET_TICKS`` gives
-the choices of the ``duration`` head (and of ``cast``, for charged casts). Bucket 0 means no hold.
-The buckets place at least one choice inside every shortbow draw tier
-(0.1 / 0.3 / 0.6 / 0.9 / 1.2 s), which E8 needs:
+A hold is a number of ticks, not a press and release per tick (``BUILD.md`` 3.1). The tick is per
+layout (``tick_seconds``): gen 7 runs at the game's 30 Hz, 1/30 s (owner, 2026-10-17); 0.045 s is the
+gen-5 simulator's. At 30 Hz a hold of 0.1 to 3 s is 3 to 90 ticks, which ``DURATION_BUCKET_TICKS``
+spans: it gives the choices of the ``duration`` head (and of ``cast``, for charged casts); bucket 0
+means no hold, and a longer action (eating, 4 s) chains two holds. The buckets place at least one
+choice inside every shortbow draw tier (0.1 / 0.3 / 0.6 / 0.9 / 1.2 s), which E8 needs:
 
-    ticks(t) = ceil(t / TICK_SECONDS); tier k holds the buckets in [ticks(t_k), ticks(t_{k+1}))
+    ticks(t) = ceil(t / tick_seconds(layout)); tier k holds the buckets in [ticks(t_k), ticks(t_{k+1}))
 
 Tokens
 ------
@@ -72,7 +73,10 @@ from hytalegym.jax.combat.observation.v3.policy import (
 )
 
 TICK_SECONDS: float = 0.045
-"""Seconds per simulator tick (``loaded_dt``, measured)."""
+"""Seconds per tick of the gen-5 simulator (``loaded_dt``, measured). Gen 7 runs at 30 Hz: use ``tick_seconds``."""
+
+TICK_SECONDS_BY_LAYOUT: Mapping[str, float] = {"gen5": TICK_SECONDS, "gen7": 1.0 / 30.0}
+"""Seconds per tick by layout: gen 7 steps at the game's tick, 1/30 s (owner's 30 Hz ruling, 2026-10-17)."""
 
 SCOPE_NAMES: tuple[str, ...] = (
     "locomotion",
@@ -264,10 +268,17 @@ def _require_scope(scope: str) -> None:
         raise ValueError(f"unknown scope {scope!r}; expected one of {SCOPE_NAMES}")
 
 
-def hold_ticks(seconds: float) -> int:
-    """Return the ticks a hold of ``seconds`` needs: ``ceil(seconds / TICK_SECONDS)``."""
+def tick_seconds(layout: str = "gen7") -> float:
+    """Return the seconds per tick of ``layout``: 1/30 s on gen 7, 0.045 s on gen 5."""
 
-    return int(math.ceil(_number(seconds, "seconds", 0.0) / TICK_SECONDS - 1e-9))
+    _layout(layout)
+    return TICK_SECONDS_BY_LAYOUT[layout]
+
+
+def hold_ticks(seconds: float, layout: str = "gen7") -> int:
+    """Return the ticks a hold of ``seconds`` needs on ``layout``: ``ceil(seconds / tick_seconds(layout))``."""
+
+    return int(math.ceil(_number(seconds, "seconds", 0.0) / tick_seconds(layout) - 1e-9))
 
 
 # ---- tokens ----
@@ -576,7 +587,7 @@ def surface_dict(layout: str) -> dict[str, Any]:
     heads = _layout(layout)
     return {
         "layout": layout,
-        "tick_seconds": TICK_SECONDS,
+        "tick_seconds": tick_seconds(layout),
         "scopes": {scope: list(scope_heads(scope, layout)) for scope in SCOPE_NAMES},
         "heads": [
             {"name": head.name, "size": head.size, "scope": head.scope, "neutral": head.neutral,
@@ -629,6 +640,7 @@ __all__ = [
     "SCOPE_NAMES",
     "SIGNED_LOOK_HEADS",
     "TICK_SECONDS",
+    "TICK_SECONDS_BY_LAYOUT",
     "TOKEN_TYPES",
     "BlockCandidateToken",
     "EntityToken",
