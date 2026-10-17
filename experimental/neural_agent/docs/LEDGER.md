@@ -174,3 +174,8 @@ verdict: INFO — J1 and J-LM are reclassified as the mechanism proof and the kn
 result:  docs/SYSTEM_ONE.md §8: position in the stack (one more JevInstance, host mode, contract unchanged), inputs (the J-LM rendering + J1's numeric belief vector + the allowed-skill mask), model (frozen pretrained trunk, belief adapter, LayerNorm fusion, one GELU layer, parallel heads: skill, replace, params, confidence, value, optional plan), training stages A supervised / B calibration with frozen heads (Brier, ECE) / C outcomes via the semi-MDP harness, speed budget, gates G1-G5, file layout, exclusions. record_traces.py now writes executive.json; backfilled for the train and heldout recordings. An Opus subagent is scaffolding jev/system_one/ with a weight-free hashed trunk against the spec; G1 (>= 0.95 held-out agreement with J0 through the text pipeline) is its gate.
 verdict: INFO — design COMMITTED; nothing IMPLEMENTED until the scaffold's tests pass under the main session's own run.
 
+## 2026-10-17 — J-S1 formulas (FORMULAS.md section M) and references
+command: JAX_PLATFORMS=cpu .venv/bin/python -m pytest tests/experimental/neural_agent/test_na_docs.py tests/experimental/neural_agent/test_na_docs_folders.py -q
+result:  first run 2 failed (entries without a per-entry label; [RLCR] cited but not defined in REFERENCES sections 1 or 3), fixed: every M entry labelled *COMMITTED*, [RLCR] and [RLCR2] defined in REFERENCES section 3; 11 passed in 0.50s, exit 0
+verdict: PASS — the docs tests enforce per-entry labels and defined citation keys; both rules held.
+

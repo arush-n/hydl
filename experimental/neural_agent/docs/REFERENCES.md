@@ -172,6 +172,9 @@ These entries cover formulas that ADR section 11 does not cite. Each one says wh
 
 ---
 
+- [RLCR] Damani, Slocum, et al. *Beyond Binary Rewards: Training LMs to Reason About Their Uncertainty.* ICLR 2026; arXiv:2507.16806. https://arxiv.org/abs/2507.16806 — cited in FORMULAS (M6) for the Brier-score calibration reward; abstract checked on 2026-10-17 by web search, full paper not read.
+- [RLCR2] *On the effectiveness of reward functions in reinforcement learning for confidence calibration of large language models.* arXiv:2607.04332. https://arxiv.org/abs/2607.04332 — cited in FORMULAS (M6) for the hackability of unconstrained calibration rewards; abstract checked on 2026-10-17 by web search.
+
 ## 4. Keys used, by document
 
 Generated on 2026-10-17 (UTC) from the three documents with the citation pattern of `tests/experimental/neural_agent/test_na_docs.py`, which checks that every key cited in them and in `docs/SKILL.md` has an entry in section 1 or 3.
@@ -183,6 +186,6 @@ Generated on 2026-10-17 (UTC) from the three documents with the citation pattern
 
 Section 1 and section 3 hold 59 entries, and each one is either cited above or marked background.
 
-## Added 2026-10-17: System One decision models
+## System One sources (added 2026-10-17)
 
-The entries [JEV], [JEV-STATUS], [RLCD], [JUL], [ANYJEV], [LAYA], [JEVK5], [LLaRP], [RLCR], [RLCR-HACK], [MTP], [NAR], [ModernBERT], [CPU-DISTILL], [DUAL] and [JEPA-LIB] are listed with URLs in `SYSTEM_ONE.md` (web search of 2026-10-17; the TypeSafe, Laya and JuL numbers are self-reported by their authors).
+The remaining System One sources ([JEV], [JEV-STATUS], [RLCD], [JUL], [ANYJEV], [LAYA], [JEVK5], [LLaRP], [MTP], [NAR], [ModernBERT], [CPU-DISTILL], [DUAL], [JEPA-LIB]) are listed with URLs in `SYSTEM_ONE.md` (web search of 2026-10-17; the TypeSafe, Laya and JuL numbers are self-reported by their authors).

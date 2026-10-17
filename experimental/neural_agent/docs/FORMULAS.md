@@ -346,6 +346,26 @@ Constants: `MAX_GOALS = 4`, `PARAM_WIDTH = 4`, `SKILL_STATE_WIDTH = 128`, `ACTIO
 
 ---
 
+## M. J-S1, our own System One decision model
+
+All entries *COMMITTED* by `SYSTEM_ONE.md` section 8 (2026-10-17); none is *CODE* until `jev/system_one/` exists and its tests pass. Lane index $i$, catalogue size $K$, trunk width $D$.
+
+**(M1) Inputs.** *COMMITTED* (`SYSTEM_ONE.md` §8). Text rendering $x_i = \mathrm{render}(\text{skills}, E_t, \text{current}_i, B_t^i)$ (`jev/lm/prompting.py build_decision_prompt`, stable part first); numeric belief vector $u_i = [\,f_i \odot k_i;\ k_i;\ \ell_i\,] \in \mathbb R^{84}$ with features $f_i$, known flags $k_i$ and latent $\ell_i$ (the pieces of `j1_inputs`); allowed-skill mask $m_i \in \{0,1\}^K$ (`j1_allowed_skills`).
+
+**(M2) Trunk, adapter and fusion.** *COMMITTED* (`SYSTEM_ONE.md` §8). $h_i = f_\theta(x_i) \in \mathbb R^{D}$ with $\theta$ frozen (pooled representation of the rendering); $a_i = W_u u_i + b_u \in \mathbb R^{64}$; $z_i = \mathrm{LayerNorm}([\,h_i;\ a_i;\ \mathrm{onehot}(\text{current}_i)\,])$; $g_i = \mathrm{GELU}(W_g z_i + b_g) \in \mathbb R^{256}$.
+
+**(M3) Parallel heads, one pass.** *COMMITTED* (`SYSTEM_ONE.md` §8). $s_i = W_s g_i + b_s \in \mathbb R^{K}$, $\tilde s_i = \mathrm{where}(m_i, s_i, -10^{9})$; $r_i = w_r^\top g_i + b_r$; $p_i = W_p g_i + b_p \in \mathbb R^{4}$; $c_i = \sigma(w_c^\top g_i + b_c)$; $V_i = w_v^\top g_i + b_v$; optional plan heads $s_i^{(k)} = W_k g_i + b_k$, $k = 1..K_{\text{plan}}$ (independent heads as in multi-token prediction, *HYPOTHESIS*).
+
+**(M4) Decision.** *COMMITTED* (`SYSTEM_ONE.md` §8). $\text{skill}_i = \arg\max_j \tilde s_{ij}$, $\text{replace}_i = [r_i > 0]$, control constants as J0 (`jev/scripted.py`); diagnostics carry $c_i$ and the entropy $-\sum_j \mathrm{softmax}(\tilde s_i)_j \log \mathrm{softmax}(\tilde s_i)_j$.
+
+**(M5) Stage A, supervised.** *COMMITTED* (`SYSTEM_ONE.md` §8). $\mathcal L_A = \mathrm{CE}(\tilde s, y_{\text{skill}}) + \mathrm{BCE}(r, y_{\text{replace}}) + \lambda_p \lVert p - y_{\text{params}} \rVert^2 \;[+ \sum_k \mathrm{CE}(\tilde s^{(k)}, y^{(k)})]$ over recorded decision rows (labels $=$ J0's decisions) and rows under varied executive states (labels $=$ the rule the variant implies, or the top LLM's choice).
+
+**(M6) Stage B, calibration.** *COMMITTED* (`SYSTEM_ONE.md` §8). With $W_s, w_r, W_p$ frozen: $\mathcal L_B = (c - [\arg\max \tilde s = y_{\text{skill}}])^2$ (Brier, a proper scoring rule, [RLCR]); report $\mathrm{ECE} = \sum_b \frac{n_b}{N}\,\lvert \mathrm{acc}_b - \mathrm{conf}_b \rvert$ over 10 bins. Freezing the decision heads is the non-hackable form: confidence cannot rise by changing answers ([RLCR2]).
+
+**(M7) Stage C, outcomes.** The PPO of (E9) and (E11) with $\mathrm{apply\_fn}(\cdot) = (\tilde s_i, V_i)$ on `SimGoalDecisionEnv`, trunk frozen, adapter and heads trained; reward as in (E11). *HYPOTHESIS* as a result; the harness is *CODE*.
+
+**(M8) Speed budget.** *COMMITTED* (`SYSTEM_ONE.md` §8). $T_{\text{decide}} = T_{\text{render}} + T_{\text{trunk}} + T_{\text{heads}}$ per batch of lanes, host mode; a decision is a miss when $T_{\text{decide}} > \text{budget}$ (20 ms default, `eval/arms.py`), and the runner keeps the goal (`jev/runner.py`). Measured today: J1 heads alone about $0.1$ ms compiled; J-LM $471$ ms (`LEDGER.md`). $T_{\text{trunk}}$ is gate G2 of `SYSTEM_ONE.md`.
+
 ## Verification notes
 
 - Read in the repository code during this run: `contracts.py` (signatures, constants, lowering, budget and goal records, read before its 20:00:18 change; after the change, the field and signature lines were re-checked and the import count was re-run), `ppo.py` (loss, GAE, clip, value and entropy coefficients), `types.py` (`PPOConfig` defaults), `recipe.py` (`wilson_lower`, advance rule), `hierarchy.py` and `decision_context.py` (the orchestration rules D1 to D4), `jev/SKILL.md` section F and `jev/scripted.py` (the J0 rule, matched against the code by grep), and `eval/arms.py` (the shuffled arm, matched by grep).
