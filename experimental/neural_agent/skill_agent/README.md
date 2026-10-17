@@ -97,6 +97,14 @@ Rules the registry enforces, each covered by a test:
 - **Cancelling.** To cancel a request, stop sending it. The next step aborts it with
   "withdrawn". [test: test_a_request_that_leaves_the_stream_is_aborted_as_withdrawn]
 
+**How a learned body sees.** The combiner gives a body only the request and the ticks since its grant;
+perception is not the combiner's job. A network body is therefore built with a callback,
+`observe(agent) -> token sets`, and calls `observe(request.agent)` on every tick. It keeps its recurrent
+state per `request_id` and resets it when `ticks_since_grant == 0`, because a new grant is a new run of
+the verb (BUILD.md §3.2). Nothing tests this pattern yet: no trained body exists. If the first one shows
+it is awkward, the alternative is an explicit observation argument on the body call, which touches every
+body and the combiner's run step.
+
 ## 2. Why each piece is the way it is
 
 ### 2.1 A skill is an option with a contract (`catalogue.py`, `library.py`)
