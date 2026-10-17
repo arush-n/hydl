@@ -298,6 +298,10 @@ earlier tick, so two requests issued on the same tick are ordered by their key a
 Mode `after:<p>` defers a request until request p is done; this is skill chaining's link, where one
 option's termination is the next one's start (Konidaris and Barto 2009).
 [test: test_after_chains_run_in_order_and_parallel_sets_co_run]
+A done predecessor is remembered for `done_memory_ticks`, counted back from the oldest live request (default
+900 ticks, 30 s at 30 Hz). A finished request that has left the stream is forgotten. So the combiner's
+memory and work per tick follow the live requests, however long the episode.
+[test: test_done_ids_are_remembered_for_the_configured_window_only]
 
 **The in-graph form.** The active-request table (B agents × S scopes: request id, verb, typed arguments,
 ticks since grant) lowers the host's grants to arrays, so a compiled runner gives the same action as

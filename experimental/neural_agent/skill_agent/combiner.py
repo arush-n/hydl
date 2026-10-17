@@ -112,7 +112,7 @@ class CombinedStep(NamedTuple):
 class _AgentState:
     holders: dict[str, int] = field(default_factory=dict)
     unscoped: set[int] = field(default_factory=set)  # granted requests whose verb owns no scope (idle)
-    done: set[int] = field(default_factory=set)  # ids that finished done: the after:<p> predecessors
+    done: dict[int, int] = field(default_factory=dict)  # id -> finish tick of requests done (after:<p> predecessors)
     granted_at: dict[int, int] = field(default_factory=dict)
     finished: dict[int, str] = field(default_factory=dict)
     seen: dict[int, ActionRequest] = field(default_factory=dict)
@@ -131,9 +131,18 @@ class Combiner:
         specs: Verb id -> VerbSpec (``protocol.verb_specs`` over the catalogue, or a test's own).
         bodies: Verb id -> body. A granted verb without a body is aborted ("no_body: ...").
         layout: The head layout the action covers, ``"gen5"`` (today's twelve heads) or ``"gen7"``.
+        done_memory_ticks: How long a done request is remembered as a predecessor for ``after:<p>``,
+            counted back from the oldest live request's issue tick (from now when none is live). A
+            successor issued within this window of its predecessor's finish always finds it; one issued
+            later names a forgotten predecessor and is rejected ``predecessor_not_done``. The default,
+            900 ticks, is 30 s at 30 Hz, far beyond the middle layer's one-cadence chains.
     """
 
-    def __init__(self, specs: Mapping[str, VerbSpec], bodies: Mapping[str, Body], *, layout: str = "gen5") -> None:
+    def __init__(self, specs: Mapping[str, VerbSpec], bodies: Mapping[str, Body], *, layout: str = "gen5",
+                 done_memory_ticks: int = 900) -> None:
+        if isinstance(done_memory_ticks, bool) or not isinstance(done_memory_ticks, int) or done_memory_ticks < 0:
+            raise ValueError(f"done_memory_ticks must be a non-negative int, got {done_memory_ticks!r}")
+        self.done_memory_ticks = done_memory_ticks
         self.specs = dict(specs)
         self.bodies = dict(bodies)
         self.layout = layout
@@ -171,7 +180,7 @@ class Combiner:
             state.unscoped.discard(request_id)
             state.granted_at.pop(request_id, None)
             if kind == "done":
-                state.done.add(request_id)
+                state.done[request_id] = tick
 
         for request_id, request in list(state.seen.items()):
             if request_id in state.finished:
@@ -272,11 +281,15 @@ class Combiner:
                 finish(request_id, "done", outcome=result.outcome)
         since_grant = {rid: value for rid, value in since_grant.items() if rid in set(drivers.values())}
         # Forget what can never matter again: a finished request that has left the stream (ids are
-        # monotonic per agent and never come back). Done ids stay in ``state.done`` for after-chains, so
-        # the work per tick follows the live requests, not every request the agent ever sent.
+        # monotonic per agent and never come back). Done ids stay in ``state.done`` for after-chains (for
+        # ``done_memory_ticks``), so the work and memory per tick follows the live requests, not every request the agent ever sent.
         for request_id in [rid for rid in state.seen if rid in state.finished and rid not in current]:
             del state.seen[request_id]
             del state.finished[request_id]
+        oldest = min((request.issued_tick for request in live.values()), default=tick)
+        cutoff = min(oldest, tick) - self.done_memory_ticks
+        for request_id in [rid for rid, finished_at in state.done.items() if finished_at < cutoff]:
+            del state.done[request_id]
         return CombinedStep(tuple(factors), tuple(statuses), composition, drivers, since_grant)
 
 
