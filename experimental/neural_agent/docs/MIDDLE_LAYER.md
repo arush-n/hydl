@@ -18,6 +18,9 @@ document. Every statement carries one of four labels:
   layer works in correspondence with that stream.
 - RULED: speed is key; nothing external except the top LLM; no live LLM run until the lower level is
   finished; the current skills are proof of concept; the final architecture must not cheat.
+- RULED (late night): the agent operates at 30 Hz, the game's tick; the whole per-tick path must finish
+  well inside 33.3 ms with margin (p95 <= 15 ms at the deployed batch), so the agent paces itself to the
+  game clock rather than falling behind; horizons restate in 1/30 s ticks (512 ticks = 17.1 s).
 - RULED (night): gen-7 (0.7.2) is the training target, gen-5 is deprecated; training of the neural
   systems is paused until the new lower-layer architecture is proved component by component; the
   skills train next, the middle layer is fine-tuned after. The lower layer's build plan, proofs and

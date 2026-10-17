@@ -64,6 +64,23 @@ assumed, and never at the cost of bit-exactness unless the owner sees the number
 - **the rule from the speed-ups memory**: measure first; only bit-exact opt-in changes while other
   sessions run; a methodology change goes to the owner with the numbers.
 
+## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
+
+Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the
+difference in time manually instead of being behind." Consequences:
+- The gen-7 engine steps at the game's tick, 1/30 s, everywhere: the per-step clock is one value from the
+  profile, not the gen-5 mix of float32(1/30) and 0.045 s per lane; the belief's tick counters already
+  count at 1/30 s (B5), so predicates such as the 40-tick damage window keep their meaning.
+- Horizons, cadences and holds are restated in 30 Hz ticks: a 512-tick horizon is 17.1 s (was 23.0 s at
+  0.045 s); the host cadence of 0.5 s is 15 ticks (was 11); a hold of 0.1 to 3 s is 3 to 90 ticks.
+- The per-tick compute budget is a gate, not a wish: the whole per-tick path (belief update, the fast
+  decision path, the combiner and the skill bodies) must finish well inside 33.3 ms of wall time on the
+  deployment machine for the deployed batch, with margin, so the agent can pace itself to the game clock
+  and absorb jitter rather than fall behind. Bar: p95 of the per-tick path <= 15 ms at the deployed batch
+  (one NPC or one squad), measured with the bench of §2b; the middle layer's own share is 0.3 ms today.
+- The live-server differentials and the NPC traces (one frame per 1/30 s) then need no resampling; the
+  reset-timing probe already measures in engine ticks.
+
 ## 3. Getting there from today
 
 Today the gen-5 numbers are hand-transcribed into the engine's code and 0.7.2 has no profile beyond a

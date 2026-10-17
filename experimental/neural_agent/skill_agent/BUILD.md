@@ -16,6 +16,10 @@ and `TRAINING-0.7.2.md` (the measured 0.7.2 gameplay changes).
 
 ## 0. The rulings this build follows
 
+- RULED (2026-10-17, late): the agent operates at 30 Hz, the game's tick (1/30 s); every "45 ms" or
+  "0.045 s" figure below is the gen-5 simulator's and is superseded: holds of 0.1 to 3 s are 3 to 90 ticks,
+  the host cadence of 0.5 s is 15 ticks, and the per-tick path must finish well inside 33.3 ms with margin
+  (p95 <= 15 ms at the deployed batch) so the agent paces itself to the game clock instead of falling behind.
 - RULED: training of the neural systems is paused because the current architecture (one PPO MLP with
   a GRU per skill over an 8,272-wide vector) is too weak to train the catalogue; the environment
   exists; everything else is finalized first, then the skills are trained, then the middle layer is
