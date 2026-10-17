@@ -62,6 +62,34 @@ Goal reading (SYSTEM_ONE.md 8.9, FORMULAS (M9) to (M11)), independent of the rea
   of the others, a state is held out when ``blake2b(x_E) mod 5 == 0`` (its rendered text, so equal
   content lands on one side), and the rest train.
 
+Goal language (SYSTEM_ONE.md 8.10 and 8.11, FORMULAS (M12), (M13)); states, wordings, catalogues and the
+teacher come from ``executive/goal_language.py``:
+
+* :func:`slot_inputs` with ``text_embeddings`` writes the slot inputs of (M12), float32[MAX_GOALS, 4D + 4 + P]:
+  the (M9) columns, then the embeddings of goal k's ``intent`` and ``when`` (0 for an empty text or a goal
+  without words, so a plain ExecutiveState reads with zero text columns). ``mask_skill`` zeroes e_skill_k:
+  the text-only reading mode.
+* :func:`encode_goal_texts` encodes the distinct non-empty texts not yet cached in one batched trunk call
+  and caches them per string (the run's dict in training, the instance's dict on the slow path).
+* :func:`goal_language_sets` (this module's choices where 8.11 is silent): one wording split
+  (``split_wordings``, 0.25 held out per family) and one intent-family split (``split_families``, 2 held
+  out) per key; each set draws from its own key, so the held-out sets do not depend on the training count.
+  Training: the real catalogue with probability REAL_CATALOGUE_RATE = 1/8, else ``synthetic_catalogue``
+  with K uniform in {3, 4, 5} over the training families; goals from the training families and wordings.
+  Held-out wordings: the same catalogues, texts only from the held-out wordings. Held-out families: K
+  uniform in {3, 4, 5} over all families, redrawn until the catalogue holds a held-out family's
+  description, goals redrawn until a slot uses a held-out family, training wordings. Held-out sizes: K
+  uniform in {6, 7, 8} over the training families, training families and wordings. Version = position + 1,
+  tick 0, ``sample_state``'s defaults otherwise (note rate 0.25, hint rate 0: no typed label hints).
+* :func:`goal_language_rows` pairs each sample with ``rows_per_state`` belief rows drawn uniformly from a
+  recorded dataset (as :func:`goal_reading_rows`), labelled by ``goal_language.teacher`` (M13). Units: the
+  teacher reads physical units and the belief publishes ``ticks_since_damage`` and
+  ``ticks_since_target_seen`` as counter / TICKS_SATURATION, so those two columns are multiplied back first,
+  as J0 does (in float32, exact); the current skill is the catalogue id at the recorded index. y_params = 0
+  (the generator's goals carry no params). ``allowed_mask``: typed mode, idle and the goals' skills
+  (``j1_allowed_skills``); text-only mode, every catalogue skill. The rows carry the embeddings of their
+  texts in ``text_embeddings``.
+
 Rows of several catalogues concatenate with ``allowed_mask`` and ``current_onehot`` padded to the
 widest K (False and 0); each row keeps its E_t and catalogue in ``executives`` for the slot inputs.
 """
@@ -70,7 +98,7 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, NamedTuple
 
 import jax
@@ -89,12 +117,23 @@ from experimental.neural_agent.contracts import (
     executive_arrays,
     feature_index,
 )
+from experimental.neural_agent.executive.goal_language import (
+    INTENT_FAMILIES,
+    REAL_CATALOGUE,
+    SlotMeaning,
+    sample_state,
+    split_families,
+    split_wordings,
+    synthetic_catalogue,
+    teacher,
+)
 from experimental.neural_agent.jev.lm.prompting import _fact_lines, _goal_lines, validate_skill_ids
 from experimental.neural_agent.jev.network import IDLE_SKILL_INDEX, _matching_slot, j1_allowed_skills
 from experimental.neural_agent.jev.scripted import EVADE_DAMAGE_WINDOW_TICKS, _evader_index
 from experimental.neural_agent.jev.system_one.heads import HORIZON_SCALE_SECONDS, SLOT_SCALARS, belief_inputs
 from experimental.neural_agent.jev.system_one.trunk import TrunkEncoder
 from experimental.neural_agent.jev.train_j1 import scripted_target_skill, validate_dataset
+from experimental.neural_agent.shared_state import ExecutiveSection
 
 DROP_PROBABILITY: float = 0.25
 MAX_ADDED_GOALS: int = 2
@@ -125,6 +164,12 @@ _MANNERS: tuple[str, ...] = (
 _ROW_ARRAYS: tuple[str, ...] = ("u", "allowed_mask", "current_onehot", "y_skill", "y_replace", "y_params")
 # Placeholder descriptions (at most len(_ACTIONS) * len(_PLACES) = 144, one per action-place pair).
 DESCRIPTION_POOL_SIZE: int = 24
+LANGUAGE_MODES: tuple[str, ...] = ("typed", "text-only")
+LANGUAGE_TRAIN_SIZES: tuple[int, ...] = (3, 4, 5)
+LANGUAGE_EVAL_SIZES: tuple[int, ...] = (6, 7, 8)
+REAL_CATALOGUE_RATE: float = 1.0 / 8.0
+# The belief columns published as counter / TICKS_SATURATION; the teacher (M13) reads them in ticks.
+_TICK_FEATURES: tuple[str, ...] = ("ticks_since_damage", "ticks_since_target_seen")
 
 
 def _description_pool(size: int) -> tuple[str, ...]:
@@ -151,11 +196,16 @@ _EXECUTIVE_FIELDS: dict[str, str] = {
 
 
 class GoalReadingState(NamedTuple):
-    """One E_t over its own catalogue: the state, the skill ids (idle first) and one description per skill."""
+    """One E_t over its own catalogue: the state, the skill ids (idle first) and one description per skill.
 
-    state: ExecutiveState
+    ``state`` is an ExecutiveState, or for goal language the ExecutiveSection whose goals carry their words.
+    ``mask_skill`` marks the text-only reading mode (SYSTEM_ONE.md 8.11): its slot inputs leave e_skill out.
+    """
+
+    state: ExecutiveState | ExecutiveSection
     skill_ids: tuple[str, ...]
     descriptions: tuple[str, ...]
+    mask_skill: bool = False
 
 
 class SupervisedRows(NamedTuple):
@@ -163,7 +213,8 @@ class SupervisedRows(NamedTuple):
     executive_index int32[N] (row -> text), u float32[N, 84], allowed_mask bool[N, K],
     current_onehot float32[N, K], y_skill int32[N], y_replace bool[N], y_params float32[N, P],
     executives tuple[GoalReadingState] (V, the E_t and catalogue of each text; K is the widest
-    catalogue, narrower ones padded)."""
+    catalogue, narrower ones padded), and text_embeddings (text -> float32[D] for every goal text of
+    the executives, :func:`goal_language_rows`; None for rows without goal text)."""
 
     executive_texts: tuple[str, ...]
     executive_index: np.ndarray
@@ -174,6 +225,7 @@ class SupervisedRows(NamedTuple):
     y_replace: np.ndarray
     y_params: np.ndarray
     executives: tuple[GoalReadingState, ...]
+    text_embeddings: Mapping[str, np.ndarray] | None = None
 
 
 class ExecutiveVariant(NamedTuple):
@@ -413,7 +465,8 @@ def variant_rows(
 
 def concat_rows(parts: Sequence[SupervisedRows]) -> SupervisedRows:
     """Concatenate one or more row sets; each part's executive indices are offset past the earlier texts,
-    and ``allowed_mask`` and ``current_onehot`` are padded to the widest catalogue (False and 0).
+    ``allowed_mask`` and ``current_onehot`` are padded to the widest catalogue (False and 0), and the parts'
+    ``text_embeddings`` merge (None when no part has any).
 
     Raises:
         ValueError: If ``parts`` is empty.
@@ -434,7 +487,11 @@ def concat_rows(parts: Sequence[SupervisedRows]) -> SupervisedRows:
 
     arrays = {name: np.concatenate([padded(part, name) for part in parts], axis=0) for name in _ROW_ARRAYS}
     executives = tuple(item for part in parts for item in part.executives)
-    return SupervisedRows(executive_texts=texts, executive_index=index, **arrays, executives=executives)
+    tables = [part.text_embeddings for part in parts if part.text_embeddings is not None]
+    text_embeddings = {text: vector for table in tables for text, vector in table.items()} if tables else None
+    return SupervisedRows(
+        executive_texts=texts, executive_index=index, **arrays, executives=executives, text_embeddings=text_embeddings
+    )
 
 
 def _numpy_rng(key: jax.Array) -> np.random.Generator:
@@ -443,24 +500,50 @@ def _numpy_rng(key: jax.Array) -> np.random.Generator:
     return np.random.default_rng(int(jax.random.randint(key, (), 0, np.iinfo(np.int32).max)))
 
 
+def goal_texts(goals: Iterable[Any]) -> set[str]:
+    """Return the distinct non-empty ``intent`` and ``when`` texts of ``goals`` (a GoalSpec carries none)."""
+
+    return {text for goal in goals for text in (getattr(goal, "intent", ""), getattr(goal, "when", "")) if text}
+
+
+def encode_goal_texts(trunk: TrunkEncoder, texts: Iterable[str], cache: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    """Add e = trunk.encode([text])[0] for every non-empty text of ``texts`` not in ``cache``, all in one
+    batched trunk call (none when every text is cached), and return ``cache`` (FORMULAS (M12): cached per
+    distinct text). An empty text is never encoded: :func:`slot_inputs` writes zeros for it."""
+
+    new = sorted({text for text in texts if text} - set(cache))
+    if new:
+        cache.update(zip(new, np.asarray(trunk.encode(new), dtype=np.float32)))
+    return cache
+
+
 def slot_inputs(
-    executive: ExecutiveState,
+    executive: ExecutiveState | ExecutiveSection,
     skill_ids: Sequence[str],
     skill_embeddings: Any,
     label_embeddings: Mapping[str, Any],
+    *,
+    text_embeddings: Mapping[str, Any] | None = None,
+    mask_skill: bool = False,
 ) -> np.ndarray:
-    """Return the slot inputs x_k of (M9), float32[MAX_GOALS, 2D + 4 + P] (module docstring and
-    ``heads.py``): goal k of ``executive`` fills row k, an empty slot is all zeros.
+    """Return the slot inputs x_k of (M9), float32[MAX_GOALS, 2D + 4 + P], or with ``text_embeddings``
+    those of (M12), float32[MAX_GOALS, 4D + 4 + P] (module docstring and ``heads.py``): goal k of
+    ``executive`` fills row k, an empty slot is all zeros.
 
     Args:
-        executive: The E_t.
+        executive: The E_t: an ExecutiveState, or an ExecutiveSection whose goals carry ``intent`` and ``when``.
         skill_ids: The catalogue that ``skill_embeddings`` describes.
         skill_embeddings: float32[K, D], e_j of each catalogue skill (``catalogue_embeddings``).
         label_embeddings: label -> float32[D], one trunk embedding per constraint label; every
             label of ``executive`` must be present.
+        text_embeddings: text -> float32[D], one trunk embedding per distinct intent or condition text
+            (:func:`encode_goal_texts`); every non-empty text of ``executive`` must be present. None
+            (default) leaves the two text columns out; given, goal k's ``intent`` and ``when`` fill them,
+            and an empty text or a goal without words (a GoalSpec) leaves zeros.
+        mask_skill: Zero the e_skill columns of every slot (the text-only reading mode).
 
     Raises:
-        KeyError: If a goal names a skill outside the catalogue, or a label has no embedding.
+        KeyError: If a goal names a skill outside the catalogue, or a label or a text has no embedding.
         ValueError: If the catalogue is invalid or ``skill_embeddings`` is not float32[K, D].
     """
 
@@ -470,7 +553,8 @@ def slot_inputs(
         raise ValueError(f"skill_embeddings must have shape ({len(catalogue)}, D), got {table.shape}")
     index_of = {skill: position for position, skill in enumerate(catalogue)}
     dim = table.shape[1]
-    out = np.zeros((MAX_GOALS, 2 * dim + SLOT_SCALARS), dtype=np.float32)
+    labels = dim + SLOT_SCALARS
+    out = np.zeros((MAX_GOALS, (2 if text_embeddings is None else 4) * dim + SLOT_SCALARS), dtype=np.float32)
     for slot, goal in enumerate(executive.goals):
         if goal.skill_id not in index_of:
             raise KeyError(f"goal {slot} names unknown skill id {goal.skill_id!r}; it is not in skill_ids")
@@ -481,9 +565,15 @@ def slot_inputs(
         out[slot, dim + 2 + PARAM_WIDTH] = goal.horizon_seconds / HORIZON_SCALE_SECONDS
         out[slot, dim + 3 + PARAM_WIDTH] = float(goal.deadline_tick is not None)
         if goal.constraints:
-            out[slot, dim + SLOT_SCALARS :] = np.mean(
+            out[slot, labels : labels + dim] = np.mean(
                 [np.asarray(label_embeddings[label], dtype=np.float32) for label in goal.constraints], axis=0
             )
+        if text_embeddings is not None:
+            for start, text in ((labels + dim, getattr(goal, "intent", "")), (labels + 2 * dim, getattr(goal, "when", ""))):
+                if text:
+                    out[slot, start : start + dim] = np.asarray(text_embeddings[text], dtype=np.float32)
+    if mask_skill:
+        out[:, :dim] = 0.0
     return out
 
 
@@ -636,6 +726,175 @@ def goal_reading_split(
     return tuple(train), tuple(held), tuple(sizes)
 
 
+class GoalLanguageSample(NamedTuple):
+    """One generated goal-language state (``goal_language.sample_state``): the section in the LLM's words,
+    one SlotMeaning per goal, and its catalogue (skill id -> description, idle first)."""
+
+    section: ExecutiveSection
+    meanings: tuple[SlotMeaning, ...]
+    catalogue: Mapping[str, str]
+
+
+class GoalLanguageSets(NamedTuple):
+    """The G3-NL sets of SYSTEM_ONE.md 8.11 (:func:`goal_language_sets`) and the held-out intent family ids."""
+
+    train: tuple[GoalLanguageSample, ...]
+    heldout_wordings: tuple[GoalLanguageSample, ...]
+    heldout_families: tuple[GoalLanguageSample, ...]
+    heldout_sizes: tuple[GoalLanguageSample, ...]
+    heldout_family_ids: tuple[str, ...]
+
+
+def goal_language_sets(
+    key: jax.Array,
+    n_train: int,
+    n_eval: int,
+    *,
+    catalogue_sizes_train: Sequence[int] = LANGUAGE_TRAIN_SIZES,
+    catalogue_sizes_eval: Sequence[int] = LANGUAGE_EVAL_SIZES,
+    heldout_wordings: float = 0.25,
+    heldout_families: int = 2,
+) -> GoalLanguageSets:
+    """Return ``n_train`` training samples and ``n_eval`` samples in each held-out split of G3-NL (module
+    docstring: training, held-out wordings, held-out families, held-out sizes), deterministic in ``key``.
+
+    Raises:
+        ValueError: If a count is negative, or as ``split_wordings``, ``split_families`` and
+            ``synthetic_catalogue`` (a catalogue size larger than its family pool allows).
+    """
+
+    for name, count in (("n_train", n_train), ("n_eval", n_eval)):
+        if isinstance(count, bool) or not isinstance(count, (int, np.integer)) or count < 0:
+            raise ValueError(f"{name} must be a non-negative integer, got {count!r}")
+    split_key, train_key, wordings_key, families_key, sizes_key = jax.random.split(key, 5)
+    rng = _numpy_rng(split_key)
+    train_words, held_words = split_wordings(rng, heldout_wordings)
+    train_ids, held_ids = split_families(rng, heldout_families)
+    train_pool = tuple(family for family in INTENT_FAMILIES if family.family_id in train_ids)
+    held_descriptions = {family.description for family in INTENT_FAMILIES if family.family_id in held_ids}
+
+    def draw(key, count, sizes, wordings, pool, real_rate, families, novel):
+        """``count`` samples; ``novel`` redraws until the catalogue and a goal hold a held-out family."""
+
+        rng = _numpy_rng(key)
+        samples: list[GoalLanguageSample] = []
+        while len(samples) < int(count):
+            if real_rate and rng.random() < real_rate:
+                catalogue = dict(REAL_CATALOGUE)
+            else:
+                catalogue = synthetic_catalogue(rng, int(rng.choice(sizes)), pool)
+            if novel and not held_descriptions & set(catalogue.values()):
+                continue
+            while True:
+                section, meanings = sample_state(
+                    rng, catalogue, wordings, version=len(samples) + 1, intent_families=families
+                )
+                if not novel or any(meaning.intent_family in held_ids for meaning in meanings):
+                    break
+            samples.append(GoalLanguageSample(section, meanings, catalogue))
+        return tuple(samples)
+
+    return GoalLanguageSets(
+        train=draw(train_key, n_train, catalogue_sizes_train, train_words, train_pool, REAL_CATALOGUE_RATE, train_ids, False),
+        heldout_wordings=draw(
+            wordings_key, n_eval, catalogue_sizes_train, held_words, train_pool, REAL_CATALOGUE_RATE, train_ids, False
+        ),
+        heldout_families=draw(families_key, n_eval, catalogue_sizes_train, train_words, INTENT_FAMILIES, 0.0, None, True),
+        heldout_sizes=draw(sizes_key, n_eval, catalogue_sizes_eval, train_words, train_pool, 0.0, train_ids, False),
+        heldout_family_ids=tuple(held_ids),
+    )
+
+
+def goal_language_rows(
+    samples: Sequence[GoalLanguageSample],
+    belief_dataset: Mapping[str, Any],
+    key: jax.Array,
+    rows_per_state: int,
+    *,
+    trunk_or_text_embeddings: TrunkEncoder | Mapping[str, Any],
+    mode: str,
+) -> SupervisedRows:
+    """Return ``rows_per_state`` rows per sample labelled by the teacher (M13) (module docstring), one x_E
+    per sample, padded to the widest catalogue. Deterministic in ``key``.
+
+    Args:
+        samples: ``(section, meanings, catalogue)`` triples (:class:`GoalLanguageSample`).
+        belief_dataset: A recorded ``train_j1`` dataset; its belief rows (features, known flags, latent,
+            current skill) are drawn uniformly, without replacement when it has enough rows.
+        key: PRNG key of the draws.
+        rows_per_state: Belief rows per sample.
+        trunk_or_text_embeddings: A trunk, which encodes the samples' distinct texts in one batched call,
+            or a mapping text -> float32[D] that holds every text (the run's cache).
+        mode: ``"typed"`` or ``"text-only"`` (``allowed_mask`` and ``GoalReadingState.mask_skill``).
+
+    Raises:
+        KeyError: If a mapping lacks a text of the samples.
+        ValueError: If ``samples`` is empty, ``mode`` is unknown, ``rows_per_state`` is not positive, the
+            dataset is invalid, a recorded current skill lies outside the smallest catalogue, or a goal
+            names a skill outside its catalogue.
+    """
+
+    if not samples:
+        raise ValueError("goal_language_rows needs at least one sample")
+    if mode not in LANGUAGE_MODES:
+        raise ValueError(f"mode must be one of {LANGUAGE_MODES}, got {mode!r}")
+    if isinstance(rows_per_state, bool) or not isinstance(rows_per_state, (int, np.integer)) or rows_per_state < 1:
+        raise ValueError(f"rows_per_state must be a positive integer, got {rows_per_state!r}")
+    validate_dataset(belief_dataset)
+    columns = {name: np.asarray(belief_dataset[name]) for name in ("features", "feature_known", "latent", "current_skill")}
+    total = columns["current_skill"].shape[0]
+    smallest = min(len(sample.catalogue) for sample in samples)
+    if int(columns["current_skill"].max()) >= smallest:
+        raise ValueError(f"a recorded current skill lies outside the smallest catalogue ({smallest} skills)")
+    texts = goal_texts(goal for sample in samples for goal in sample.section.goals)
+    source = trunk_or_text_embeddings
+    table = encode_goal_texts(source, texts, {}) if isinstance(source, TrunkEncoder) else source
+    text_embeddings = {text: np.asarray(table[text], dtype=np.float32) for text in sorted(texts)}
+    per_state, width = int(rows_per_state), max(len(sample.catalogue) for sample in samples)
+    count = len(samples) * per_state
+    ticks = [feature_index(name) for name in _TICK_FEATURES]
+    rng = _numpy_rng(key)
+    index = np.empty((count,), dtype=np.int64)
+    allowed = np.zeros((count, width), dtype=np.bool_)
+    y_skill = np.empty((count,), dtype=np.int32)
+    y_replace = np.empty((count,), dtype=np.bool_)
+    rendered: list[str] = []
+    executives: list[GoalReadingState] = []
+    for position, sample in enumerate(samples):
+        start = position * per_state
+        drawn = rng.choice(total, size=per_state, replace=per_state > total)
+        index[start : start + per_state] = drawn
+        skill_ids, descriptions = tuple(sample.catalogue), tuple(sample.catalogue.values())
+        rendered.append(render_executive(skill_ids, descriptions, sample.section.to_executive_state()))
+        column_of = {skill: column for column, skill in enumerate(skill_ids)}
+        physical = columns["features"][drawn].astype(np.float32)
+        physical[:, ticks] *= np.float32(TICKS_SATURATION)
+        rows = zip(physical.tolist(), columns["feature_known"][drawn].tolist(), columns["current_skill"][drawn].tolist())
+        for offset, (values, known, current) in enumerate(rows):
+            chosen, replace = teacher(sample.section, sample.meanings, values, known, skill_ids[current])
+            y_skill[start + offset], y_replace[start + offset] = column_of[chosen], replace
+        if mode == "text-only":
+            allowed[start : start + per_state, : len(skill_ids)] = True
+        else:
+            for column in {IDLE_SKILL_INDEX, *(column_of[goal.skill_id] for goal in sample.section.goals)}:
+                allowed[start : start + per_state, column] = True
+        executives.append(GoalReadingState(sample.section, skill_ids, descriptions, mode == "text-only"))
+    current_onehot = np.zeros((count, width), dtype=np.float32)
+    current_onehot[np.arange(count), columns["current_skill"][index]] = 1.0
+    return SupervisedRows(
+        executive_texts=tuple(rendered),
+        executive_index=np.repeat(np.arange(len(samples), dtype=np.int32), per_state),
+        u=np.asarray(belief_inputs(columns["features"][index], columns["feature_known"][index], columns["latent"][index])),
+        allowed_mask=allowed,
+        current_onehot=current_onehot,
+        y_skill=y_skill,
+        y_replace=y_replace,
+        y_params=np.zeros((count, PARAM_WIDTH), dtype=np.float32),
+        executives=tuple(executives),
+        text_embeddings=text_embeddings,
+    )
+
+
 __all__ = [
     "CATALOGUE_SIZES",
     "CONSTRAINT_VOCABULARY",
@@ -643,20 +902,30 @@ __all__ = [
     "DESCRIPTION_POOL_SIZE",
     "DROP_PROBABILITY",
     "ExecutiveVariant",
+    "GoalLanguageSample",
+    "GoalLanguageSets",
     "GoalReadingState",
     "HELDOUT_MODULUS",
     "HORIZON_SCALES",
     "LABEL_PROBABILITY",
+    "LANGUAGE_EVAL_SIZES",
+    "LANGUAGE_MODES",
+    "LANGUAGE_TRAIN_SIZES",
     "MAX_ADDED_GOALS",
+    "REAL_CATALOGUE_RATE",
     "SupervisedRows",
     "TRAIN_MAX_CATALOGUE_SIZE",
     "catalogue_embeddings",
     "concat_rows",
+    "encode_goal_texts",
     "executive_variants",
     "generic_rule_labels",
+    "goal_language_rows",
+    "goal_language_sets",
     "goal_reading_rows",
     "goal_reading_split",
     "goal_reading_states",
+    "goal_texts",
     "render_executive",
     "rows_from_dataset",
     "skill_descriptions_of",

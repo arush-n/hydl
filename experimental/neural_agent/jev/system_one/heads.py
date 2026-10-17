@@ -1,6 +1,6 @@
 """J-S1 heads in JAX: belief adapter, structured executive encoder, LayerNorm fusion, one GELU layer, parallel heads.
 
-Formulas of ``docs/SYSTEM_ONE.md`` sections 8.3 and 8.9 and FORMULAS (M2), (M3), (M3b), (M9); lane i,
+Formulas of ``docs/SYSTEM_ONE.md`` sections 8.3, 8.9 and 8.10 and FORMULAS (M2), (M3), (M3b), (M9), (M12); lane i,
 skill j of a catalogue of K skills, P = PARAM_WIDTH::
 
     u_i  = [ where(known_i, features_i, 0) ; known_i ; latent_i ]     width 10 + 10 + 64 = 84 (j1_inputs pieces)
@@ -30,6 +30,10 @@ head only). It reads E_t slot by slot, k = 1..G (G = MAX_GOALS), from the slot i
     x_k   = [ e_skill_k ; priority_k ; valid_k ; params_k ; horizon_k / H ; has_deadline_k ; c_k ]
             width X = 2D + 4 + P; e_skill_k the slot skill's description embedding, c_k the mean
             embedding of the slot's constraint labels, both 0 in an empty slot; H = 30 s
+    with goal text ((M12), SYSTEM_ONE.md 8.10 and 8.11, ``goal_text=True``):
+    x_k   = [ e_skill_k ; priority_k ; valid_k ; params_k ; horizon_k / H ; has_deadline_k ; c_k ; e_intent_k ; e_when_k ]
+            width X = 4D + 4 + P; e_intent_k and e_when_k the trunk embeddings of the slot's natural-language
+            intent and condition, 0 for an empty text, an empty slot or a goal without words
     q_k   = W_slot x_k + b_slot                                         S = 64
     alpha = softmax_k(w_a . q_k + log valid_k)                          0 on an invalid slot; all 0 without a valid slot
     g_E   = sum_k alpha_k q_k
@@ -48,7 +52,7 @@ matching head carries the current skill's own embedding e_current instead, the c
 code of the same input. The fixed head keeps the spec's onehot. What a HeadsParams holds is read
 from its shapes (:func:`heads_dims`): the fixed head has w_q, w_k with d_k = 0 columns, the matching
 head has w_s, b_s with 0 skills; a head without the encoder has w_slot with S = 0 columns; the
-fusion width tells whether h_E is in it.
+fusion width tells whether h_E is in it; w_slot with 4D + 4 + P rows (not 2D + 4 + P) carries the goal text.
 
 LayerNorm: Ba, Kiros, Hinton, arXiv:1607.06450. GELU: Hendrycks, Gimpel,
 arXiv:1606.08415. Scaled dot product: Vaswani et al., arXiv:1706.03762.
@@ -56,7 +60,8 @@ Initialisation (this module's choice, J1's where J1 has the same head): LeCun no
 (std sqrt(1/fan_in)) for W_u, W_s, W_q, W_k, w_r, W_slot and the plan heads; He normal
 (std sqrt(2/fan_in)) for W_g; zeros for every bias, for w_a (uniform attention over the valid
 slots at first) and for the params, confidence and value heads, so c_i = 0.5 until stage B fits it.
-The encoder's key is ``fold_in(key, 7)``, so a head without the encoder draws the same weights as before.
+The encoder's key is ``fold_in(key, 7)``, so a head without the encoder draws the same weights as before;
+a head with goal text draws its W_slot [4D + 4 + P, S] from the same key (not an extension of the 2D + 4 + P draw).
 """
 
 from __future__ import annotations
@@ -85,8 +90,8 @@ SKILL_HEADS: tuple[str, ...] = ("matching", "fixed")
 class HeadsParams(NamedTuple):
     """J-S1 head parameters, float32. U belief width, D trunk width, D_a adapter width, H hidden
     width, P = PARAM_WIDTH, K_p plan length (0 = no plan head), S slot width (0 = no structured
-    encoder), X = 2D + 4 + P. Matching head: d_k >= 1, K = 0, code width C = D. Fixed head: K >= 1
-    skills, d_k = 0, C = K, S = 0. F = D [text path] + 2S + D_a + C.
+    encoder), X = 2D + 4 + P (4D + 4 + P with goal text). Matching head: d_k >= 1, K = 0, code
+    width C = D. Fixed head: K >= 1 skills, d_k = 0, C = K, S = 0. F = D [text path] + 2S + D_a + C.
 
     Shapes: w_u [U, D_a], b_u [D_a]; ln_scale [F], ln_bias [F]; w_g [F, H], b_g [H];
     w_s [H, K], b_s [K]; w_q [H, d_k], w_k [D, d_k]; w_r [H], b_r []; w_p [H, P], b_p [P];
@@ -119,11 +124,7 @@ class HeadsParams(NamedTuple):
     w_a: jax.Array
 
 
-class HeadsDims(NamedTuple):
-    """The sizes a HeadsParams fixes: trunk width D, the fixed head's K (0 for the matching
-    head), the matching head's d_k (0 for the fixed head), the plan length, the head kind, the
-    structured encoder's slot width S (0 = no encoder) and whether h_E is in the fusion."""
-
+class _HeadsSizes(NamedTuple):
     trunk_dim: int
     num_skills: int
     key_width: int
@@ -131,6 +132,35 @@ class HeadsDims(NamedTuple):
     skill_head: str
     slot_width: int
     text_path: bool
+
+
+class HeadsDims(_HeadsSizes):
+    """The sizes a HeadsParams fixes: trunk width D, the fixed head's K (0 for the matching
+    head), the matching head's d_k (0 for the fixed head), the plan length, the head kind, the
+    structured encoder's slot width S (0 = no encoder) and whether h_E is in the fusion; and
+    ``goal_text``, whether the slot inputs carry the per-goal texts ((M12), X = 4D + 4 + P).
+
+    ``goal_text`` is an attribute beside the seven tuple fields, not an eighth field, so code that
+    unpacks or slices the tuple reads what it read before the goal-text stage. Tuple equality and
+    ``_replace`` do not see it.
+    """
+
+    goal_text: bool = False
+
+    def __new__(
+        cls,
+        trunk_dim: int,
+        num_skills: int,
+        key_width: int,
+        plan: int,
+        skill_head: str,
+        slot_width: int,
+        text_path: bool,
+        goal_text: bool = False,
+    ) -> HeadsDims:
+        dims = super().__new__(cls, trunk_dim, num_skills, key_width, plan, skill_head, slot_width, text_path)
+        dims.goal_text = bool(goal_text)
+        return dims
 
 
 class HeadsOutput(NamedTuple):
@@ -175,6 +205,7 @@ def init_heads(
     plan: int = 0,
     slot_width: int = 0,
     text_path: bool = True,
+    goal_text: bool = False,
 ) -> HeadsParams:
     """Return freshly initialised heads (initialisation in the module docstring).
 
@@ -192,11 +223,14 @@ def init_heads(
         slot_width: S, the width of q_k in the structured executive encoder ((M9); ``SLOT_WIDTH``
             = 64 is J-S1's); 0 (default) builds no encoder.
         text_path: Whether h_E is in the fusion (default True); False is the "text off" ablation.
+        goal_text: Whether the slot inputs carry each goal's intent and condition embeddings ((M12),
+            X = 4D + 4 + P); default False (X = 2D + 4 + P). Needs the encoder.
 
     Raises:
         ValueError: If a width is not a positive integer, ``plan`` or ``slot_width`` is negative,
             ``skill_head`` is unknown, the fixed head has no ``num_skills`` or the matching head is
-            given one, the fixed head is given the encoder, or ``text_path`` is False without it.
+            given one, the fixed head is given the encoder, or ``text_path`` is False or
+            ``goal_text`` True without it.
     """
 
     dim = _count(trunk_dim, "trunk_dim")
@@ -219,8 +253,10 @@ def init_heads(
         raise ValueError(f"skill_head must be one of {SKILL_HEADS}, got {skill_head!r}")
     if not text_path and not slot:
         raise ValueError("text_path=False leaves no executive input; it needs the structured encoder (slot_width >= 1)")
+    if goal_text and not slot:
+        raise ValueError("goal_text=True puts the goal texts in the slot inputs; it needs the structured encoder (slot_width >= 1)")
     fused = (dim if text_path else 0) + 2 * slot + width_a + code
-    slot_inputs = 2 * dim + SLOT_SCALARS
+    slot_inputs = (4 if goal_text else 2) * dim + SLOT_SCALARS
     key_u, key_g, key_s, key_q, key_k, key_r, key_plan = jax.random.split(key, 7)
     key_slot = jax.random.fold_in(key, 7)
     f32 = jnp.float32
@@ -258,10 +294,13 @@ def init_heads(
 def heads_dims(params: HeadsParams) -> HeadsDims:
     """Return the sizes of ``params`` after checking every shape against the others.
 
+    ``goal_text`` is read from the rows of w_slot: 2D + 4 + P without goal text, 4D + 4 + P with it.
+
     Raises:
         TypeError: If ``params`` is not a HeadsParams.
         ValueError: If a shape is inconsistent, the params hold both skill heads or neither, the
-            fixed head holds the encoder, or the fusion has neither h_E nor the encoder.
+            fixed head holds the encoder, the fusion has neither h_E nor the encoder, or w_slot
+            carries goal text without the encoder.
     """
 
     if not isinstance(params, HeadsParams):
@@ -275,6 +314,9 @@ def heads_dims(params: HeadsParams) -> HeadsDims:
     dim, width_k = jnp.shape(params.w_k)
     steps = jnp.shape(params.w_plan)[0] if jnp.ndim(params.w_plan) == 3 else -1
     slot = jnp.shape(params.w_slot)[1]
+    goal_text = jnp.shape(params.w_slot)[0] == 4 * dim + SLOT_SCALARS
+    if goal_text and not slot:
+        raise ValueError("HeadsParams.w_slot carries goal text (4D + 4 + P rows) without the encoder (S = 0 columns)")
     if (skills > 0) == (width_k > 0) or dim < 1 or steps < 0:
         raise ValueError(
             "HeadsParams must hold exactly one skill head (fixed: w_s with K >= 1 columns; matching: "
@@ -307,14 +349,15 @@ def heads_dims(params: HeadsParams) -> HeadsDims:
         "b_v": (),
         "w_plan": (steps, width_h, width_k or skills),
         "b_plan": (steps, skills),
-        "w_slot": (2 * dim + SLOT_SCALARS, slot),
+        "w_slot": ((4 if goal_text else 2) * dim + SLOT_SCALARS, slot),
         "b_slot": (slot,),
         "w_a": (slot,),
     }
     for name, shape in expected.items():
         _require_shape(getattr(params, name), shape, f"HeadsParams.{name}")
     return HeadsDims(
-        int(dim), int(skills), int(width_k), int(steps), "matching" if width_k else "fixed", int(slot), bool(text)
+        int(dim), int(skills), int(width_k), int(steps), "matching" if width_k else "fixed", int(slot), bool(text),
+        bool(goal_text),
     )
 
 

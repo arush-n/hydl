@@ -454,6 +454,91 @@ Files: `executive/goal_language.py` (families, predicates, catalogues, the sampl
 splits, a JSONL dump CLI), `tests/.../test_na_goal_language.py`. The row builder that joins generator
 states with belief rows and the per-goal text embedding (M12) lives in `jev/system_one/` and follows §8.9.
 
+**Status 2026-10-17 (night).** Built and verified (ledger "goal-language generator built"; commit 9039f3f):
+10 intent families (pursue, evade, hold name today's skills; reach_point, patrol, retreat_to_cover,
+guard_position, search_target, flank, follow_ally stand in for future skills and populate the synthetic
+catalogues, K up to 10) with 15-16 paraphrases each, 53-67 % of them sharing no content word with the
+family's description; 9 condition families with 14 templates each, numeric arguments on grids (blocks 2-12,
+ticks 20-200, fractions 0.20-0.80) rendered as digits, words, units or percentages. A slot is unconditional
+with probability 1/3; `always` is written as "" half the time; `target_lost_for` is written in ticks only
+(an LLM may say seconds: known limit). Unit trap for the row builder: the teacher takes raw ticks while the
+belief publishes the tick columns as counter / 256. The G3-NL stage (text columns in the slot vectors, rows,
+modes, splits; task #28) is built in `jev/system_one/` against this section and FAILS its gate in
+every mode and trunk (ledger "G3-NL ... FAIL"): held-out wordings 0.53-0.58, held-out families 0.52-0.66,
+held-out sizes 0.76-0.84 (typed and text-only; hashed and ModernBERT-base). See §8.13.
+
+### 8.12 Owner rulings on the open questions (2026-10-17, night)
+
+Asked after the scratchpad and the generator landed; answers verbatim where short.
+1. *Who owns commitment and duration?* "stay with skill, you only call the skill and the feedback to the
+   shared state when done." Consequence: the decision layer emits skill, params and replace only. The
+   skill's contract owns `minimum_commitment_seconds`, `maximum_duration_seconds` and the emergency
+   events that may interrupt it; the runner and every JEV instance take the control fields from a
+   per-skill table built from the contracts, not from the JEV's constants (today J0's constants in
+   `jev/scripted.py`, copied by `network.py` and `system_one/instance.py`). The skill reports when it is
+   done; that report is the feedback into the scratchpad (already: `GoalReport` -> `skills.outcomes`).
+2. *One NPC or a group per LLM?* "there are both options." Consequence: a goal needs an addressee (the
+   agents it applies to; default all), the lowering needs a per-lane allowed mask from it, and the LLM
+   view needs per-skill aggregation across agents plus per-agent detail on request. Design to follow;
+   nothing in reading depends on it.
+3. *Can the LLM be told the condition vocabulary?* "yes." Consequence: the system prompt lists the
+   predicates the layer can evaluate (the condition families of §8.11, one example each) and tells the
+   LLM to write conditions in its own words using them; the reader still handles any wording. Offline
+   change to `executive/anthropic_backend.build_system_prompt`; no live call.
+4. *An intent that names something the library cannot do?* "then we have to choose the best possible
+   choice." Consequence: no refusal and no fall-through. The matching head always picks the nearest
+   skill by description; the confidence head's value, written to the `decision` section, is the LLM's
+   signal that the match was weak. The generator gets a nearest-real-skill teacher for intents whose
+   family is absent from the catalogue (an "absent families" evaluation beside the three splits of
+   §8.11); until it exists, this is a design commitment, not a measured property.
+
+### 8.13 Reading words: interpret, then evaluate (proposal after the G3-NL failure, 2026-10-17 night)
+
+**What failed.** Putting each goal's text embedding into its slot and letting slot attention + an MLP learn
+the rule end to end (M9 + M12) does not generalise: on unseen wording the trained reader scores below
+the rule "take the top-priority unconditional goal" (0.53 vs 0.63), agreement falls with every added
+conditional goal even on training rows (0.99 -> 0.90 for 1 -> 4 goals), and mixing goal-language rows in
+dragged the recorded-rule agreement under G1's bar (0.88). Two causes, both structural: (1) a pooled slot
+code never meets the belief slot by slot, so "which condition holds now" has to be re-derived after
+pooling; (2) a frozen pooled text embedding (hashed bag, or ModernBERT mean pool) neither carries an unseen
+paraphrase to its predicate nor preserves a number ("seventy-five percent", "7 blocks") precisely enough
+to compare with the belief. More data would not fix (1); no frozen pooled trunk fixes (2).
+
+**Proposal.** Split reading into the two things the owner named: *interpret* ("our job to interpret it")
+and *decide fast*.
+- *Interpret, once per executive version (slow path, off the tick).* For each goal, read the words into
+  the vocabulary the layer can evaluate: `when` -> (predicate kind from the §8.11 families, numeric
+  argument), `intent` -> the matching skill (the catalogue-agnostic head of M3b, on the intent text and
+  the skill descriptions). The kind comes from a text encoder plus a small classifier; the argument from
+  a deterministic number reader (digits, number words, units, percentages) beside the encoder, because
+  numbers must be exact. The interpretation is typed, so it is written into the `decision` section and
+  the LLM can see how its words were read (and correct them in its next version).
+- *Evaluate, per decision (fast path).* The predicates are evaluated on B_t exactly, the priority rule
+  (M13) picks the slot, and the learned heads keep replace, params, confidence and value over the typed
+  slot code of M9. Nothing about the words happens on the tick, so the 0.3 ms decision stands.
+
+**Why this is still a System One model.** The LLM writes free text; the layer produces typed,
+calibrated decisions in one pass per tick. The interpretation stage is the "reasoning within" the owner
+asked for, made explicit and inspectable, and it is the part that benefits from learning on real LLM
+wording later. It is also what the owner's rulings assume: the LLM is told the predicate vocabulary
+(§8.12 item 3), and an intent that matches nothing is read as the nearest skill (item 4).
+
+**Gate for the interpret stage (replaces G3-NL's end-to-end form).** On held-out wordings and held-out
+families from the generator: predicate-kind accuracy >= 0.95, argument exact-match >= 0.98 where the
+family is numeric, intent -> skill accuracy >= 0.90 (held-out families: nearest description); then the
+end-to-end agreement with M13 follows from these and is reported for the record.
+
+**The owner's call: the text encoder for the kind and the skill match.**
+(a) A frozen sentence-embedding model (a small open-weights encoder trained for sentence similarity,
+    about 20-30M parameters, a few ms per sentence on CPU) with a trained classifier on top; local,
+    no fine-tuning, the quickest test of whether paraphrases land together.
+(b) Fine-tuning ModernBERT-base (or the small encoder) contrastively on the generator's
+    paraphrase-to-predicate and intent-to-description pairs, M12's own fallback: the first trainable
+    trunk, more work, most likely to pass, and the natural place to add the real LLM's wording later.
+Recommendation: (a) first because it is a one-day test with the harness already built; (b) if (a) misses
+the kind-accuracy bar on held-out wordings. Both keep the two-timescale design: encode once per
+version, never per decision.
+
 ### 8.8 What is deliberately not in J-S1
 
 No text generation, no tool use, no chain of thought at decision time (System One). No external

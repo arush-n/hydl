@@ -1,4 +1,4 @@
-"""SystemOneJev: J-S1 as a host-mode JEV instance on two timescales (FORMULAS (M2), (M4), (M8), (M9)).
+"""SystemOneJev: J-S1 as a host-mode JEV instance on two timescales (FORMULAS (M2), (M4), (M8), (M9), (M12)).
 
 Slow path, off the tick (the only trunk calls)::
 
@@ -6,12 +6,18 @@ Slow path, off the tick (the only trunk calls)::
     set_executive_state:    h_E = trunk.encode([render_executive(skill_ids, descriptions, E_t)])[0]
                                                                          with the text path only
                             c_l = trunk.encode([l])[0] for each constraint label l not seen before
-                            x   = data.slot_inputs(E_t, skill_ids, E, c)                  with the structured encoder
+                            e_t = trunk.encode(new texts) for the goals' intent and when texts not seen
+                                  before, one batched call                        heads with goal text (M12)
+                            x   = data.slot_inputs(E_t, skill_ids, E, c, text_embeddings=e) with the structured encoder
                             x_E = encode_executive(params, x) = [g_E ; q_top]             (M9), compiled
                             cached by E_t.version: the same version again costs no trunk call
+    set_shared_state:       the same, reading the scratchpad's ``executive`` section, whose goals carry
+                            their words; set_executive_state reads a goal without words (zero text columns)
 
-The label embeddings are cached for the instance's life (one catalogue), so with the structured
-encoder alone (``text_path`` False) a new E_t whose labels were seen before costs no trunk call.
+The label and text embeddings are cached for the instance's life (one catalogue), so with the structured
+encoder alone (``text_path`` False) a new E_t whose labels and texts were seen before costs no trunk call.
+The instance reads in the typed mode (e_skill in the slots, the allowed mask from the goals' skills); the
+text-only mode of SYSTEM_ONE.md 8.11 is a training and evaluation mode of ``train_supervised``.
 
 Fast path, every decision (``__call__``): no text and no trunk call. One compiled call::
 
@@ -68,6 +74,8 @@ from experimental.neural_agent.jev.scripted import (
 )
 from experimental.neural_agent.jev.system_one.data import (
     catalogue_embeddings,
+    encode_goal_texts,
+    goal_texts,
     render_executive,
     skill_descriptions_of,
     slot_inputs,
@@ -80,7 +88,7 @@ from experimental.neural_agent.jev.system_one.heads import (
     heads_dims,
 )
 from experimental.neural_agent.jev.system_one.trunk import TrunkEncoder
-from experimental.neural_agent.shared_state import SharedState
+from experimental.neural_agent.shared_state import ExecutiveSection, SharedState
 
 JEV_NAME: str = "js1"
 _encode_executive = jax.jit(encode_executive)
@@ -182,6 +190,8 @@ class SystemOneJev:
         self._skill_table = None if dims.skill_head == "fixed" else catalogue_embeddings(trunk, catalogue, descriptions)
         self.skill_embeddings = None if self._skill_table is None else jnp.asarray(self._skill_table)
         self._label_embeddings: dict[str, np.ndarray] = {}
+        self._text_embeddings: dict[str, np.ndarray] = {}
+        self._words: tuple[tuple[str, str], ...] = ()
         self._executive: ExecutiveState | None = None
         self._h_executive: jax.Array | None = None
         self._executive_code: jax.Array | None = None
@@ -189,7 +199,8 @@ class SystemOneJev:
 
     def set_executive_state(self, state: ExecutiveState) -> None:
         """Slow path: set E_t and read it once per version: its stable text (text path) and its
-        slots (structured encoder; new constraint labels are encoded once and cached).
+        slots (structured encoder; new constraint labels are encoded once and cached). An
+        ExecutiveState carries no words, so heads with goal text read zero text columns here.
 
         The same version with the same content again is a no-op (no trunk call).
 
@@ -201,9 +212,34 @@ class SystemOneJev:
 
         if not isinstance(state, ExecutiveState):
             raise TypeError("state must be an ExecutiveState")
+        self._read(state, state)
+
+    def set_shared_state(self, shared: SharedState) -> None:
+        """Slow path from the scratchpad S_t: read its ``executive`` section (SYSTEM_ONE.md §8.10).
+
+        As :meth:`set_executive_state` on the section's typed fields (once per E_t version); heads with
+        goal text also read each slot's ``intent`` and ``when`` (M12): the texts not seen before are
+        encoded in one batched trunk call and cached for the instance's life. With goal text, the same
+        version with other words is other content.
+
+        Raises:
+            TypeError: If ``shared`` is not a SharedState.
+            KeyError: If a goal names a skill outside the catalogue.
+            ValueError: If the section reuses the version of the E_t in force with different content.
+        """
+
+        if not isinstance(shared, SharedState):
+            raise TypeError("shared must be a SharedState")
+        section = shared.executive
+        self._read(section.to_executive_state(), section)
+
+    def _read(self, state: ExecutiveState, source: ExecutiveState | ExecutiveSection) -> None:
+        """Read E_t = ``state`` once per version; ``source`` is the record whose goals carry the words (or none)."""
+
         executive_arrays(state, self._skill_ids, 1)
+        words = tuple((getattr(goal, "intent", ""), getattr(goal, "when", "")) for goal in source.goals)
         if self._executive is not None and state.version == self._executive.version:
-            if state != self._executive:
+            if state != self._executive or (self._dims.goal_text and words != self._words):
                 raise ValueError(f"executive version {state.version} is already set with different content")
             return
         h_executive = code = None
@@ -214,25 +250,14 @@ class SystemOneJev:
             new = sorted({label for goal in state.goals for label in goal.constraints} - set(self._label_embeddings))
             if new:
                 self._label_embeddings.update(zip(new, np.asarray(self._trunk.encode(new), dtype=np.float32)))
-            slots = slot_inputs(state, self._skill_ids, self._skill_table, self._label_embeddings)
+            texts = None
+            if self._dims.goal_text:
+                texts = encode_goal_texts(self._trunk, goal_texts(source.goals), self._text_embeddings)
+            slots = slot_inputs(source, self._skill_ids, self._skill_table, self._label_embeddings, text_embeddings=texts)
             code = _encode_executive(self.params, jnp.asarray(slots))
         self._h_executive, self._executive_code = h_executive, code
-        self._executive = state
+        self._executive, self._words = state, words
         self._lowered = {}
-
-    def set_shared_state(self, shared: SharedState) -> None:
-        """Slow path from the scratchpad S_t: read its ``executive`` section (SYSTEM_ONE.md §8.10).
-
-        The typed fields go through :meth:`set_executive_state` (once per E_t version). The per-slot
-        texts (``intent``, ``when``) enter the slot vectors in the G3-NL stage (M12); not read yet.
-
-        Raises:
-            TypeError: If ``shared`` is not a SharedState.
-        """
-
-        if not isinstance(shared, SharedState):
-            raise TypeError("shared must be a SharedState")
-        self.set_executive_state(shared.executive.to_executive_state())
 
     def initial_state(self, batch: int) -> jax.Array:
         """Return int32[batch] zeros: the decisions made per lane."""

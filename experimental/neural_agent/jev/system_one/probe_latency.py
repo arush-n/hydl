@@ -14,7 +14,11 @@ i.e. the time from a new E_t to a ready cache, for three untrained matching head
 * ``structured``: the structured encoder alone (``slot_width=SLOT_WIDTH, text_path=False``): slot
   inputs and the compiled ``encode_executive``; a warm-up version before timing compiles it and caches the label;
 * ``text``: the text path alone (the scaffold's head): render and one trunk call;
-* ``both``: the structured encoder and the text path, J-S1's configuration.
+* ``both``: the structured encoder and the text path, J-S1's configuration;
+* ``goal_text``: the structured encoder with goal text and no text path (``goal_text=True``, (M12), the
+  G3-NL configuration), read through ``set_shared_state`` from a scratchpad whose executive section is that
+  E_t with an intent and a condition per goal that are new in every version (three new texts per version,
+  encoded in one batched trunk call).
 
 ``reading_trunk_calls_per_version`` gives the trunk calls per timed new version for each.
 
@@ -54,6 +58,7 @@ from adk.architecture.inputs import ActorPolicyInput
 from experimental.neural_agent.contracts import (
     ACTION_HEADS,
     PARAM_WIDTH,
+    ExecutiveState,
     GoalPayload,
     SharedBeliefState,
     executive_arrays,
@@ -63,13 +68,17 @@ from experimental.neural_agent.jev.system_one.heads import SLOT_WIDTH, init_head
 from experimental.neural_agent.jev.system_one.instance import SystemOneJev, fast_path
 from experimental.neural_agent.jev.system_one.train_supervised import DEFAULT_SKILL_IDS, load_executive, make_trunk
 from experimental.neural_agent.jev.train_j1 import synthetic_dataset
+from experimental.neural_agent.shared_state import ExecutiveSection, SharedState
 
 BATCHES: tuple[int, ...] = (1, 8, 64)
 READINGS: dict[str, dict[str, Any]] = {
     "structured": {"slot_width": SLOT_WIDTH, "text_path": False},
     "text": {},
     "both": {"slot_width": SLOT_WIDTH},
+    "goal_text": {"slot_width": SLOT_WIDTH, "text_path": False, "goal_text": True},
 }
+# (intent, when) of the CompositionTask goals (pursuit, then evader); each version appends its own number.
+WORDS: tuple[tuple[str, str], ...] = (("Go after the target and close in", ""), ("Get away from the enemy", "if you get hit"))
 
 
 class _CountingTrunk:
@@ -83,6 +92,17 @@ class _CountingTrunk:
     def encode(self, texts: Sequence[str]) -> np.ndarray:
         self.calls += 1
         return self._inner.encode(texts)
+
+
+def _worded(executive: ExecutiveState, version: int) -> SharedState:
+    """A scratchpad whose executive section is ``executive`` at ``version`` with WORDS new to that version."""
+
+    section = ExecutiveSection.from_executive_state(dataclasses.replace(executive, version=version))
+    goals = tuple(
+        dataclasses.replace(goal, intent=f"{intent}, plan {version}.", when=when and f"{when} during plan {version}")
+        for goal, (intent, when) in zip(section.goals, WORDS)
+    )
+    return SharedState(executive=dataclasses.replace(section, goals=goals))
 
 
 def _time_ms(call: Callable[[], Any], repeats: int) -> dict[str, float]:
@@ -113,10 +133,15 @@ def probe(trunk_spec: str, repeats: int) -> dict[str, Any]:
     reading_calls: dict[str, float] = {}
     for name, options in READINGS.items():
         reader = SystemOneJev(trunk, init_heads(jax.random.key(0), trunk.dim, **options), DEFAULT_SKILL_IDS)
-        versions = iter([dataclasses.replace(executive, version=version) for version in range(1, repeats + 3)])
-        reader.set_executive_state(next(versions))  # compiles encode_executive and caches the label embedding
+        if options.get("goal_text"):
+            versions = iter([_worded(executive, version) for version in range(1, repeats + 3)])
+            read = reader.set_shared_state
+        else:
+            versions = iter([dataclasses.replace(executive, version=version) for version in range(1, repeats + 3)])
+            read = reader.set_executive_state
+        read(next(versions))  # compiles encode_executive and caches the label embedding
         before = trunk.calls
-        reading[name] = _time_ms(lambda: reader.set_executive_state(next(versions)), repeats)
+        reading[name] = _time_ms(lambda: read(next(versions)), repeats)
         reading_calls[name] = (trunk.calls - before) / (repeats + 1)
     jev = SystemOneJev(trunk, init_heads(jax.random.key(0), trunk.dim, slot_width=SLOT_WIDTH), DEFAULT_SKILL_IDS)
     jev.set_executive_state(executive)

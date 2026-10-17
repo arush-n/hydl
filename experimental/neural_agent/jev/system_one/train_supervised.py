@@ -34,6 +34,19 @@ catalogue embeddings padded to the widest K; the encoder runs inside the loss, s
 train with the heads. Printed after training: train, held-out recorded rows (``--heldout``),
 held-out states and held-out catalogue sizes, each with skill and replace agreement.
 
+Goal language (gate G3-NL, SYSTEM_ONE.md 8.10 and 8.11, FORMULAS (M12), (M13)): ``--goal-language N``
+draws N training states in the LLM's words and ``--goal-language-eval M`` states per held-out split
+(``data.goal_language_sets``: held-out wordings, held-out intent families, held-out catalogue sizes),
+pairs each with ``--rows-per-state`` belief rows (as goal reading), labels them with the teacher (M13)
+(``data.goal_language_rows``), and trains heads whose slot inputs carry each goal's intent and condition
+embeddings (``goal_text``, X = 4D + 4 + P). Every distinct text of the four sets is encoded once, in one
+batched trunk call (the run's table). ``--language-mode typed`` (default) keeps e_skill in the slots and
+allows the goals' skills; ``text-only`` masks e_skill on the goal-language rows and allows every catalogue
+skill, so the matching head must resolve the skill from the intent text. The other sources stay typed and
+read zero text columns. ``--goal-reading 0`` means no goal-reading states and is accepted with
+``--goal-language`` only. Printed after training, one line per split: held-out wordings, held-out
+families, held-out sizes (NL).
+
 Commands (CPU)::
 
     python -m experimental.neural_agent.jev.system_one.train_supervised \\
@@ -44,6 +57,11 @@ Commands (CPU)::
         --data experimental/neural_agent/eval/out/traces/train/dataset.npz \\
         --heldout experimental/neural_agent/eval/out/traces/heldout/dataset.npz \\
         --trunk hashed --goal-reading 256 --text-path off --out /tmp/js1_g3/heads_struct.npz
+    python -m experimental.neural_agent.jev.system_one.train_supervised \\
+        --data experimental/neural_agent/eval/out/traces/train/dataset.npz \\
+        --heldout experimental/neural_agent/eval/out/traces/heldout/dataset.npz \\
+        --trunk hashed --goal-reading 0 --goal-language 4096 --goal-language-eval 1024 --rows-per-state 32 \\
+        --language-mode typed --text-path off --out /tmp/js1_nl/typed/heads.npz
 """
 
 from __future__ import annotations
@@ -61,13 +79,20 @@ import optax
 from experimental.neural_agent.contracts import ExecutiveState
 from experimental.neural_agent.jev.lm.prompting import validate_skill_ids
 from experimental.neural_agent.jev.system_one.data import (
+    LANGUAGE_EVAL_SIZES,
+    LANGUAGE_MODES,
+    LANGUAGE_TRAIN_SIZES,
     SupervisedRows,
     catalogue_embeddings,
     concat_rows,
+    encode_goal_texts,
     executive_variants,
+    goal_language_rows,
+    goal_language_sets,
     goal_reading_rows,
     goal_reading_split,
     goal_reading_states,
+    goal_texts,
     rows_from_dataset,
     slot_inputs,
     variant_rows,
@@ -99,14 +124,15 @@ DEFAULT_UPDATES: int = 4000
 DEFAULT_BATCH: int = 256
 DEFAULT_LR: float = 3.0e-4
 DEFAULT_ROWS_PER_STATE: int = 32
+DEFAULT_GOAL_LANGUAGE_EVAL: int = 1024
 _ROW_ARRAYS: tuple[str, ...] = ("u", "allowed_mask", "current_onehot", "y_skill", "y_replace", "y_params")
 
 
 class EncodedRows(NamedTuple):
     """Rows after the frozen trunk: h float32[N, D] (the row's h_E; None without the text path),
-    the SupervisedRows arrays, and for the structured encoder slots float32[N, G, 2D + 4 + P] (the
-    row's slot inputs, ``data.slot_inputs``) and skill_embeddings float32[N, K, D] (the row's
-    catalogue, zero rows past its size); both None otherwise."""
+    the SupervisedRows arrays, and for the structured encoder slots float32[N, G, X] (the row's slot
+    inputs, ``data.slot_inputs``; X = 2D + 4 + P, or 4D + 4 + P with goal text) and skill_embeddings
+    float32[N, K, D] (the row's catalogue, zero rows past its size); both None otherwise."""
 
     h: np.ndarray | None
     u: np.ndarray
@@ -119,12 +145,16 @@ class EncodedRows(NamedTuple):
     skill_embeddings: np.ndarray | None = None
 
 
-def encode_rows(rows: SupervisedRows, trunk: TrunkEncoder, *, structured: bool = False, text: bool = True) -> EncodedRows:
+def encode_rows(
+    rows: SupervisedRows, trunk: TrunkEncoder, *, structured: bool = False, text: bool = True, goal_text: bool = False
+) -> EncodedRows:
     """Encode each distinct executive text once (slow path) and give every row its h_E.
 
     With ``structured``, also give every row its slot inputs and its catalogue's embeddings: each
     distinct catalogue and each distinct constraint label is encoded once. Without ``text`` the
-    texts are not encoded and h is None.
+    texts are not encoded and h is None. With ``goal_text``, the slot inputs carry each goal's intent
+    and condition embeddings from ``rows.text_embeddings`` (zeros for goals without words), and an
+    executive marked ``mask_skill`` (the text-only mode) reads with e_skill zeroed.
     """
 
     arrays = [getattr(rows, name) for name in _ROW_ARRAYS]
@@ -136,6 +166,7 @@ def encode_rows(rows: SupervisedRows, trunk: TrunkEncoder, *, structured: bool =
         return EncodedRows(h, *arrays)
     labels = sorted({label for item in rows.executives for goal in item.state.goals for label in goal.constraints})
     label_table = dict(zip(labels, np.asarray(trunk.encode(labels), dtype=np.float32))) if labels else {}
+    text_table = (rows.text_embeddings or {}) if goal_text else None
     width = rows.allowed_mask.shape[1]
     catalogues: dict[tuple[tuple[str, ...], tuple[str, ...]], np.ndarray] = {}
     skill_tables, slot_tables = [], []
@@ -144,7 +175,9 @@ def encode_rows(rows: SupervisedRows, trunk: TrunkEncoder, *, structured: bool =
         if key not in catalogues:
             catalogues[key] = catalogue_embeddings(trunk, item.skill_ids, item.descriptions)
         skill_tables.append(np.pad(catalogues[key], ((0, width - len(item.skill_ids)), (0, 0))))
-        slot_tables.append(slot_inputs(item.state, item.skill_ids, catalogues[key], label_table))
+        slot_tables.append(slot_inputs(
+            item.state, item.skill_ids, catalogues[key], label_table, text_embeddings=text_table, mask_skill=item.mask_skill
+        ))
     index = rows.executive_index
     return EncodedRows(h, *arrays, slots=np.stack(slot_tables)[index], skill_embeddings=np.stack(skill_tables)[index])
 
@@ -214,6 +247,7 @@ def train_heads(
     skill_embeddings: Any = None,
     slot_width: int = 0,
     text_path: bool = True,
+    goal_text: bool = False,
 ) -> tuple[HeadsParams, list[dict[str, float]]]:
     """Fit fresh heads to ``encoded`` with Adam on :func:`supervised_loss`.
 
@@ -228,6 +262,8 @@ def train_heads(
             unless the rows carry their own (``encode_rows(..., structured=True)``).
         slot_width: S of the structured encoder, 0 for none (``init_heads``).
         text_path: Whether h_E is in the fusion (``init_heads``).
+        goal_text: Whether the slot inputs carry the goal texts (``init_heads``; rows encoded with
+            ``encode_rows(..., goal_text=True)``).
 
     Returns:
         ``(params, history)``; ``history`` has one dict per update (``update`` 1-based,
@@ -253,7 +289,7 @@ def train_heads(
     skills = int(encoded.allowed_mask.shape[1])
     params = init_heads(
         init_key, dim, skills if skill_head == "fixed" else None, skill_head=skill_head,
-        slot_width=slot_width, text_path=text_path,
+        slot_width=slot_width, text_path=text_path, goal_text=goal_text,
     )
     embeddings = None if skill_head == "fixed" or skill_embeddings is None else jnp.asarray(skill_embeddings, dtype=jnp.float32)
     optimizer = optax.chain(optax.clip_by_global_norm(MAX_GRADIENT_NORM), optax.adam(float(lr), eps=ADAM_EPSILON))
@@ -378,15 +414,29 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--variants", type=int, default=0, help="executive variants added as source 2 (default 0)")
     parser.add_argument(
         "--goal-reading", type=int, default=None, metavar="N",
-        help="goal-reading mode: N generated states over placeholder catalogues, structured encoder (gate G3)",
+        help="goal-reading mode: N generated states over placeholder catalogues, structured encoder (gate G3); "
+        "0 = none, accepted with --goal-language only",
+    )
+    parser.add_argument(
+        "--goal-language", type=int, default=0, metavar="N",
+        help="goal-language mode: N generated training states in the LLM's words, structured encoder with goal "
+        "text (gate G3-NL); 0 = off (default)",
+    )
+    parser.add_argument(
+        "--goal-language-eval", type=int, default=DEFAULT_GOAL_LANGUAGE_EVAL, metavar="M",
+        help=f"states per held-out goal-language split (default {DEFAULT_GOAL_LANGUAGE_EVAL})",
+    )
+    parser.add_argument(
+        "--language-mode", choices=LANGUAGE_MODES, default=None,
+        help="reading mode of the goal-language rows: typed (default) or text-only; needs --goal-language",
     )
     parser.add_argument(
         "--rows-per-state", type=int, default=DEFAULT_ROWS_PER_STATE,
-        help=f"belief rows per goal-reading state (default {DEFAULT_ROWS_PER_STATE})",
+        help=f"belief rows per goal-reading or goal-language state (default {DEFAULT_ROWS_PER_STATE})",
     )
     parser.add_argument(
         "--text-path", choices=("on", "off"), default="on",
-        help="h_E in the fusion (default on); off is the text-off ablation and needs --goal-reading",
+        help="h_E in the fusion (default on); off is the text-off ablation and needs --goal-reading or --goal-language",
     )
     parser.add_argument("--heldout", type=Path, default=None, help="held-out dataset .npz, scored after training")
     parser.add_argument("--updates", type=int, default=DEFAULT_UPDATES, help=f"Adam updates (default {DEFAULT_UPDATES})")
@@ -397,14 +447,25 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.variants < 0:
         parser.error("--variants must be non-negative")
-    structured = args.goal_reading is not None
+    language = args.goal_language
+    if language < 0 or args.goal_language_eval < 1:
+        parser.error("--goal-language must be non-negative and --goal-language-eval positive")
+    if args.language_mode is not None and not language:
+        parser.error("--language-mode needs --goal-language")
+    if args.goal_reading is not None and (args.goal_reading < 0 or (args.goal_reading == 0 and not language)):
+        parser.error("--goal-reading must be positive (0, no goal-reading states, is accepted with --goal-language only)")
+    reading_count = args.goal_reading or 0
+    structured = reading_count > 0 or language > 0
     text = args.text_path == "on"
-    if structured and (args.goal_reading < 1 or args.rows_per_state < 1):
-        parser.error("--goal-reading and --rows-per-state must be positive")
+    if structured and args.rows_per_state < 1:
+        parser.error("--rows-per-state must be positive")
     if structured and args.skill_head == "fixed":
-        parser.error("--goal-reading needs the matching head: the fixed head cannot score other catalogue sizes")
+        parser.error(
+            "--goal-reading and --goal-language need the matching head and the structured encoder: the fixed head "
+            "cannot score other catalogue sizes"
+        )
     if not text and not structured:
-        parser.error("--text-path off needs the structured encoder of --goal-reading")
+        parser.error("--text-path off needs the structured encoder of --goal-reading or --goal-language")
     try:
         trunk = make_trunk(args.trunk)
     except (ImportError, ValueError) as error:
@@ -423,7 +484,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if train_variants:
         parts.append(variant_rows(dataset, train_variants, args.skills))
     reading: dict[str, tuple[int, SupervisedRows]] = {}
-    if structured:
+    if reading_count:
         states_key, rows_key = jax.random.split(jax.random.fold_in(jax.random.key(args.seed), 1))
         train_states, heldout_states, heldout_sizes = goal_reading_split(goal_reading_states(states_key, args.goal_reading))
         train_rows_key, heldout_rows_key, sizes_rows_key = jax.random.split(rows_key, 3)
@@ -441,12 +502,39 @@ def main(argv: Sequence[str] | None = None) -> int:
         ):
             if chosen:
                 reading[label] = (len(chosen), goal_reading_rows(chosen, beliefs, rows_key_split, args.rows_per_state))
-    train = encode_rows(concat_rows(parts), trunk, structured=structured, text=text)
+    if language:
+        sets_key, language_rows_key = jax.random.split(jax.random.fold_in(jax.random.key(args.seed), 2))
+        sets = goal_language_sets(sets_key, language, args.goal_language_eval)
+        mode = args.language_mode or "typed"
+        # The run's table: every distinct text of the four sets, encoded once in one batched call.
+        goals = (goal for split in sets[:4] for sample in split for goal in sample.section.goals)
+        texts = encode_goal_texts(trunk, goal_texts(goals), {})
+        print(
+            f"goal language: {language} train states (K in {LANGUAGE_TRAIN_SIZES[0]}..{LANGUAGE_TRAIN_SIZES[-1]}, "
+            f"about 1 in 8 the real catalogue), {args.goal_language_eval} states per held-out split (wordings, "
+            f"families {', '.join(sets.heldout_family_ids)}, sizes K in {LANGUAGE_EVAL_SIZES[0]}..{LANGUAGE_EVAL_SIZES[-1]}), "
+            f"{args.rows_per_state} rows per state, {len(texts)} distinct texts, mode {mode}, text path {args.text_path}"
+        )
+        train_language_key, *split_keys = jax.random.split(language_rows_key, 4)
+        parts.append(goal_language_rows(
+            sets.train, dataset, train_language_key, args.rows_per_state, trunk_or_text_embeddings=texts, mode=mode
+        ))
+        beliefs = dataset if heldout is None else heldout
+        for label, chosen, split_key in zip(
+            ("held-out wordings", "held-out families", "held-out sizes (NL)"),
+            (sets.heldout_wordings, sets.heldout_families, sets.heldout_sizes),
+            split_keys,
+        ):
+            reading[label] = (len(chosen), goal_language_rows(
+                chosen, beliefs, split_key, args.rows_per_state, trunk_or_text_embeddings=texts, mode=mode
+            ))
+    goal_text = language > 0
+    train = encode_rows(concat_rows(parts), trunk, structured=structured, text=text, goal_text=goal_text)
 
     params, history = train_heads(
         train, updates=args.updates, batch=args.batch, lr=args.lr, key=train_key,
         skill_head=args.skill_head, skill_embeddings=embeddings,
-        slot_width=SLOT_WIDTH if structured else 0, text_path=text,
+        slot_width=SLOT_WIDTH if structured else 0, text_path=text, goal_text=goal_text,
     )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     save_heads(args.out, params)
@@ -458,21 +546,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"skill_accuracy {last['skill_accuracy']:.3f}, replace_accuracy {last['replace_accuracy']:.3f}, "
         f"params_loss {last['params_loss']:.6f}"
     )
-    states_note = f" + {len(train_states)} goal-reading states" if structured else ""
+    states_note = f" + {len(train_states)} goal-reading states" if reading_count else ""
+    states_note += f" + {language} goal-language states" if language else ""
     print(_agreement_line(
         f"train (source 1 + {len(train_variants)} training variants{states_note})", evaluate_heads(params, train, embeddings)
     ))
     if heldout is not None:
-        scored = encode_rows(rows_from_dataset(heldout, executive, args.skills), trunk, structured=structured, text=text)
+        scored = encode_rows(
+            rows_from_dataset(heldout, executive, args.skills), trunk, structured=structured, text=text, goal_text=goal_text
+        )
         print(_agreement_line(f"heldout {args.heldout}", evaluate_heads(params, scored, embeddings)))
     if test_variants:
         rows = variant_rows(dataset if heldout is None else heldout, test_variants, args.skills)
         print(_agreement_line(
             f"held-out variants ({len(test_variants)})",
-            evaluate_heads(params, encode_rows(rows, trunk, structured=structured, text=text), embeddings),
+            evaluate_heads(params, encode_rows(rows, trunk, structured=structured, text=text, goal_text=goal_text), embeddings),
         ))
     for label, (count, rows) in reading.items():
-        scored = encode_rows(rows, trunk, structured=True, text=text)
+        scored = encode_rows(rows, trunk, structured=True, text=text, goal_text=goal_text)
         print(_agreement_line(f"{label} ({count} states)", evaluate_heads(params, scored)))
     print(f"heads {args.out}, metrics {metrics_path}")
     return 0
