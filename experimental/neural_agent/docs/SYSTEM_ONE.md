@@ -865,6 +865,31 @@ wordings for the best size at or below 1.7B; latency per goal and per four-goal 
 and on CPU. The typed-fields contract above stands regardless: a decoder reader that passes becomes the
 reader for goals that arrive with words, replacing the deterministic fallback where it is better.
 
+### 9.13 How the LLM communicates, restated (owner, 2026-10-17, late)
+
+Owner: "all we need to do is decode the intent properly, this can take time but the intention here is
+that we are accurate and effective." Two timescales, stated plainly so the earlier wording ("nothing
+linguistic on the tick") is not misread:
+- **The LLM speaks in language.** Its goals, intents, conditions, notes and objectives are written in
+  its own words into the scratchpad's executive section; typed fields may accompany them but are not
+  required of it.
+- **The reading stage decodes that language into typed intent, once per executive version, with a
+  model large enough to be accurate.** Decoding may take seconds: the LLM writes every few seconds, so
+  a reader of a few hundred milliseconds to a few seconds per version is inside the budget. Its outputs
+  are the typed records the rest of the layer acts on: the skill per goal, the condition as a predicate
+  kind and a number, the goal's target, and, for a high-level intent, a program of steps. When the LLM
+  also wrote typed fields, decoding verifies them; when it did not, decoding produces them. The decoded
+  interpretation is written to the `decision` section so the LLM sees how it was understood and corrects
+  it in its next version: the loop that makes decoding robust rather than a single guess.
+- **The tick path executes the decoded intent.** Every 45 ms the fast path evaluates the decoded
+  predicates on the belief, applies the priority rule, advances the program and emits requests. No
+  language is read there, because nothing linguistic changes between two executive versions.
+- **What the measurements changed** is only the size of the reader: cheap readers (frozen or small
+  fine-tuned encoders) were not accurate enough; the owner's guidance is to use a decoder large enough
+  to be, and to spend the time. Experiment P6 measures Qwen3 at 0.6B, 1.7B and 4B with schema-constrained
+  output, and 8B and 14B if the 4B misses a bar; bars kind 0.95, number exact 0.98, skill 0.90 over the
+  real catalogue given in the prompt; latency reported, not traded against accuracy.
+
 ## References
 
 - [JEV] TypeSafe AI, "Introducing System One Models & Jev", 2026. https://typesafe.ai/blog/introducing-system-one-models-and-jev
