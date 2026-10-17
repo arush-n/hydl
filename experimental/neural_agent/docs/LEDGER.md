@@ -193,3 +193,8 @@ command: JAX_PLATFORMS=cpu .venv/bin/python -m pytest tests/experimental/neural_
 result:  export tests 3 passed after two test-side fixes (GoalSpec is not a NamedTuple; the second version reuses the first state's goals), docs tests pass; ruff clean
 verdict: PASS — the LLM's goal states can leave the store as training rows for the System One model.
 
+## 2026-10-17 — G2: one forward pass of two pretrained trunks on the real decision rendering, CPU, torch float32, 6 threads
+command: .venv/bin/python <job tmp>/trunk_latency_probe.py (AutoModel, mean pooling, 20 timed passes after 3 warm-ups; weights downloaded locally from the Hub: answerdotai/ModernBERT-base, Qwen/Qwen3-0.6B)
+result:  rendering 1,097 chars. ModernBERT-base (149M params, hidden 768): 330 tokens; batch 1 p50 544 ms, p95 852; batch 8 p50 1,774 ms. Qwen3-0.6B (596M, hidden 1024): 316 tokens; batch 1 p50 1,529 ms, p95 2,781; batch 8 p50 7,438 ms. Measured while three whole combat test trees ran concurrently, so these are contended numbers; an uncontended rerun follows when the suites finish.
+verdict: INFO, decisive for the design — even divided by a generous contention factor, a per-decision pass over the full text is 10-100x the 20 ms budget, and batch scales about linearly on CPU. Consequence (SYSTEM_ONE.md §8.3 and §8.5, revised now): two timescales. The trunk encodes the stable rendering (skill catalogue + E_t) once per executive version and the skill descriptions once per catalogue change; every decision runs only the heads over that cached embedding plus the numeric belief, which is J1's cost (0.1 ms). Backbone candidate: the ModernBERT-base class encoder (about 3x cheaper than the 0.6B decoder at the same input); Qwen3-0.6B is rejected for this role.
+

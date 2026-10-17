@@ -67,12 +67,25 @@ The owner's intended instance is the combination. Name here: **J-S1**, our own S
 
 ## 5. Design of J-S1
 
-**Input.** The rendering the J-LM arm already produces (`jev/lm/prompting.py`): skill catalogue with
-descriptions, the executive state E_t (goals with priority, params, constraints, horizon, deadline;
-facts), the current skill, the belief B_t feature lines. One rendering per lane. Later: raw belief
-latent as extra tokens through a small adapter, as LLaRP feeds observations.
+**Input.** The stable rendering (skill catalogue with descriptions, the executive state E_t: goals with
+priority, params, constraints, horizon, deadline; facts), produced by the stable part of
+`jev/lm/prompting.py`'s renderer, one per executive version, not per lane and not per tick; plus, per lane
+and per decision, the numeric belief vector and the current skill (revised 2026-10-17; the earlier per-lane
+text rendering of the belief was measured too slow, see "Two timescales").
 
-**Backbone.** A small pretrained transformer run in process on CPU (Metal later), frozen at first.
+**Two timescales (revised 2026-10-17 after G2).** Measured on this machine (CPU, contended by three test
+suites): one pass of ModernBERT-base over the 330-token rendering takes about 0.5 s per lane, Qwen3-0.6B about
+1.5 s (`LEDGER.md`). Reading the text every decision is therefore never the fast path. J-S1 splits in two:
+the *slow path* encodes the stable rendering, the skill catalogue with descriptions and the executive state
+E_t, once per executive version, and each skill description once per catalogue change (`h_E = f_theta(render(skills, E_t))`,
+`e_j = f_theta(desc_j)`, both cached, computed between steps when the LLM writes); the *fast path* runs every
+decision over the cached `h_E`, the numeric belief `u_i` through the adapter, and the current skill, through
+the heads only, which is J1's cost (about 0.1 ms for 64 lanes). The belief enters numerically, not as text.
+This is exactly "share a state with the LLM": the LLM's state is digested into an embedding when it changes,
+and decisions are instant. Gate G2 is therefore split: G2a the slow path per E_t version (seconds are fine,
+it runs off the tick), G2b the fast path per decision (must match J1's order of magnitude).
+
+**Backbone.** A small pretrained encoder run in process on CPU (Metal later), frozen at first, for the slow path only.
 Two candidates to measure before choosing: an encoder (ModernBERT-base class, about 150M) and a
 small decoder used as an encoder by pooling (Qwen3-0.6B class). The measurement is one forward pass on
 the real rendering length, batch 1 and batch 8, on this machine. Target: well under the 0.5 s decision
@@ -206,7 +219,8 @@ cadence is 0.5 s, the host budget 20 ms (`eval/arms.py J0_LATENCY_BUDGET_MS`), a
 | Gate | Pass condition | Depends on |
 |---|---|---|
 | G1 pipeline | with a deterministic fake trunk (hashed bag of tokens, no weights), stage A reaches >= 0.95 skill agreement with J0 on the 737 held-out rows (J1 reached 0.996 with numeric input only) | nothing new |
-| G2 latency | one forward pass of each backbone class on the real rendering, batch 1 and 8, CPU, in process; numbers in `LEDGER.md` | a weight loader (`transformers`; owner's call) |
+| G2a slow path | one forward pass of the encoder over the stable rendering per executive version, CPU, in process; measured 2026-10-17 under contention: ModernBERT-base 544 ms, Qwen3-0.6B 1,529 ms at batch 1 (`LEDGER.md`); uncontended rerun pending | `transformers` (installed 2026-10-17) |
+| G2b fast path | per-decision heads over the cached embedding and the numeric belief: p50 under 1 ms for 64 lanes compiled, the same order as J1 | the scaffold |
 | G3 goal reading | on a held-out split of E_t variants (goal order, sets, constraints never seen in training), skill agreement >= 0.90 with the rule the variant implies; J1 is the control and is expected to fail this split | stage A on source (2) |
 | G4 online | four arms plus `js1` at 512 ticks on held-out seeds: J-S1 composed rate not below J0's Wilson lower bound; interrupts answered; 0 misses at the measured latency | G1-G3 |
 | G5 calibration | ECE <= 0.05 on the held-out rows after stage B | G1 |

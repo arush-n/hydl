@@ -352,7 +352,7 @@ All entries *COMMITTED* by `SYSTEM_ONE.md` section 8 (2026-10-17); none is *CODE
 
 **(M1) Inputs.** *COMMITTED* (`SYSTEM_ONE.md` §8). Text rendering $x_i = \mathrm{render}(\text{skills}, E_t, \text{current}_i, B_t^i)$ (`jev/lm/prompting.py build_decision_prompt`, stable part first); numeric belief vector $u_i = [\,f_i \odot k_i;\ k_i;\ \ell_i\,] \in \mathbb R^{84}$ with features $f_i$, known flags $k_i$ and latent $\ell_i$ (the pieces of `j1_inputs`); allowed-skill mask $m_i \in \{0,1\}^K$ (`j1_allowed_skills`).
 
-**(M2) Trunk, adapter and fusion.** *COMMITTED* (`SYSTEM_ONE.md` §8). $h_i = f_\theta(x_i) \in \mathbb R^{D}$ with $\theta$ frozen (pooled representation of the rendering); $a_i = W_u u_i + b_u \in \mathbb R^{64}$; $z_i = \mathrm{LayerNorm}([\,h_i;\ a_i;\ \mathrm{onehot}(\text{current}_i)\,])$; $g_i = \mathrm{GELU}(W_g z_i + b_g) \in \mathbb R^{256}$.
+**(M2) Trunk, adapter and fusion.** *COMMITTED* (`SYSTEM_ONE.md` §8, two timescales revised 2026-10-17). Slow path, once per executive version $v$: $h_E = f_\theta(x_E)$ with $x_E = \mathrm{render}(\text{skills}, E_t)$ and $\theta$ frozen, cached until $E_t$ changes; skill embeddings $e_j = f_\theta(\text{desc}_j)$ cached per catalogue. Fast path, every decision, with $h_i := h_E$ for every lane $i$; $a_i = W_u u_i + b_u \in \mathbb R^{64}$; $z_i = \mathrm{LayerNorm}([\,h_i;\ a_i;\ \mathrm{onehot}(\text{current}_i)\,])$; $g_i = \mathrm{GELU}(W_g z_i + b_g) \in \mathbb R^{256}$.
 
 **(M3) Parallel heads, one pass.** *COMMITTED* (`SYSTEM_ONE.md` §8). $s_i = W_s g_i + b_s \in \mathbb R^{K}$, $\tilde s_i = \mathrm{where}(m_i, s_i, -10^{9})$; $r_i = w_r^\top g_i + b_r$; $p_i = W_p g_i + b_p \in \mathbb R^{4}$; $c_i = \sigma(w_c^\top g_i + b_c)$; $V_i = w_v^\top g_i + b_v$; optional plan heads $s_i^{(k)} = W_k g_i + b_k$, $k = 1..K_{\text{plan}}$ (independent heads as in multi-token prediction, *HYPOTHESIS*).
 
@@ -366,7 +366,7 @@ All entries *COMMITTED* by `SYSTEM_ONE.md` section 8 (2026-10-17); none is *CODE
 
 **(M7) Stage C, outcomes.** The PPO of (E9) and (E11) with $\mathrm{apply\_fn}(\cdot) = (\tilde s_i, V_i)$ on `SimGoalDecisionEnv`, trunk frozen, adapter and heads trained; reward as in (E11). *HYPOTHESIS* as a result; the harness is *CODE*.
 
-**(M8) Speed budget.** *COMMITTED* (`SYSTEM_ONE.md` §8). $T_{\text{decide}} = T_{\text{render}} + T_{\text{trunk}} + T_{\text{heads}}$ per batch of lanes, host mode; a decision is a miss when $T_{\text{decide}} > \text{budget}$ (20 ms default, `eval/arms.py`), and the runner keeps the goal (`jev/runner.py`). Measured today: J1 heads alone about $0.1$ ms compiled; J-LM $471$ ms (`LEDGER.md`). $T_{\text{trunk}}$ is gate G2 of `SYSTEM_ONE.md`.
+**(M8) Speed budget.** *COMMITTED* (`SYSTEM_ONE.md` §8, revised 2026-10-17). Per decision $T_{\text{decide}} = T_{\text{heads}}$ (the fast path); per executive version $T_{\text{update}} = T_{\text{render}} + T_{\text{trunk}}$ (the slow path, off the tick). Measured slow path on this CPU under contention: ModernBERT-base 544 ms, Qwen3-0.6B 1,529 ms per pass over 330 tokens; a decision is a miss when $T_{\text{decide}} > \text{budget}$ (20 ms default, `eval/arms.py`), and the runner keeps the goal (`jev/runner.py`). Measured today: J1 heads alone about $0.1$ ms compiled; J-LM $471$ ms (`LEDGER.md`). $T_{\text{trunk}}$ is gate G2 of `SYSTEM_ONE.md`.
 
 ## Verification notes
 
