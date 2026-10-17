@@ -1,0 +1,415 @@
+"""One continuous run of the three-level stack: executive seam, JEV, skills.
+
+This is the glue no single layer owns. It drives
+:func:`experimental.neural_agent.eval.eager_loop.run_eager` with a host hook
+that does, after every environment step:
+
+1. advance a virtual clock by one tick (``tick_seconds``, 0.045 s by default,
+   the gym's ``loaded_dt``);
+2. turn goal switches into :class:`~experimental.neural_agent.contracts.GoalReport`
+   records for the executive's report channel;
+3. step the executive seam at the current tick and, when it proposes a new
+   E_t version, write it into the manager state through ``executive_writer``;
+4. for a host-mode decision model, decide in Python at the JEV cadence or when
+   a known event is active, time the decision, and on success write the new
+   ``ManagedGoal`` into the carried hierarchy state. A decision slower than the
+   budget leaves the previous goal in force and counts a miss (ADR-001 D2).
+
+The ADK core calls its manager inside ``jax.lax.cond``, so a Python or
+network-backed decision model can never run in the manager slot. Host-mode
+instances therefore run here, between steps, while the in-graph manager holds
+the current goal. In-graph instances (J0, J1) run in the manager slot as usual
+and need no host decider.
+
+Everything written back into the hierarchy state keeps the PyTree structure of
+``initial_state``; the eager loop rejects anything else.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import math
+import statistics
+import time
+from collections.abc import Callable, Sequence
+from typing import Any, NamedTuple, Protocol, runtime_checkable
+
+import jax
+import jax.numpy as jnp
+import numpy as np
+
+from adk.architecture.hierarchy import (
+    HierarchicalAgentCore,
+    HierarchicalCoreState,
+    ManagedGoal,
+)
+from adk.runtime.hierarchical import HierarchicalLoopTransition
+
+from experimental.neural_agent.contracts import (
+    ExecutiveState,
+    GoalPayload,
+    GoalReport,
+    SkillOutcome,
+)
+from experimental.neural_agent.eval.eager_loop import run_eager
+
+TICK_SECONDS = 0.045
+
+_FAILED = object()
+"""Sentinel for a host decider that raised; distinct from None, which means keep the goal."""
+"""Seconds per environment tick: the gym's ``loaded_dt``. ADK comments that say
+30 ticks per second are stale; the memory note horizon-ticks-to-seconds and the
+pursuit contract agree on 0.045."""
+
+
+@runtime_checkable
+class ExecutiveSeam(Protocol):
+    """What the session needs from an executive harness.
+
+    ``step(tick)`` returns a new :class:`ExecutiveState` when the executive
+    proposed one at this tick, else ``None``. It must never block the caller
+    for longer than a step budget; asynchronous harnesses return the latest
+    completed proposal.
+    """
+
+    def step(self, tick: int, /) -> ExecutiveState | None: ...
+
+
+ExecutiveWriter = Callable[[Any, ExecutiveState], Any]
+"""``(manager_state, executive_state) -> manager_state`` with identical PyTree
+structure. For an in-graph JEV this is ``JevRunner.set_executive``."""
+
+
+@runtime_checkable
+class HostDecider(Protocol):
+    """A host-mode decision model adapter.
+
+    ``decide`` receives the transition just recorded, the carried hierarchy
+    state after autoreset, and the latest executive state (``None`` before the
+    first proposal). It returns a batched :class:`ManagedGoal` with the same
+    PyTree structure as ``initial_state.carry.goal``, or ``None`` to keep the
+    current goal. Exceptions are caught and counted as misses.
+    """
+
+    def decide(
+        self,
+        transition: HierarchicalLoopTransition,
+        hierarchy_state: HierarchicalCoreState,
+        executive: ExecutiveState | None,
+        /,
+    ) -> ManagedGoal | None: ...
+
+
+class ReportSink(Protocol):
+    def push_goal_report(self, report: GoalReport, /) -> None: ...
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class SessionConfig:
+    """Timing knobs for one session."""
+
+    steps: int
+    tick_seconds: float = TICK_SECONDS
+    host_cadence_ticks: int = 11
+    host_budget_ms: float = 20.0
+    host_on_events: bool = True
+
+    def __post_init__(self) -> None:
+        if isinstance(self.steps, bool) or not isinstance(self.steps, int) or self.steps < 1:
+            raise ValueError("SessionConfig.steps must be a positive int")
+        if not (math.isfinite(self.tick_seconds) and self.tick_seconds > 0):
+            raise ValueError("SessionConfig.tick_seconds must be positive")
+        if self.host_cadence_ticks < 1:
+            raise ValueError("SessionConfig.host_cadence_ticks must be >= 1")
+        if not (math.isfinite(self.host_budget_ms) and self.host_budget_ms > 0):
+            raise ValueError("SessionConfig.host_budget_ms must be positive")
+
+
+class HostStats(NamedTuple):
+    """Host-mode decision accounting (ADR-001 §9 metrics).
+
+    ``misses`` counts decisions over the latency budget plus decisions that
+    raised. A decider returning ``None`` kept the goal on purpose and is not a
+    miss.
+    """
+
+    decisions: int
+    misses: int
+    errors: int
+    latency_ms_p50: float
+    latency_ms_p95: float
+
+
+class SessionMetrics(NamedTuple):
+    ticks: int
+    virtual_seconds: float
+    goal_switches_per_lane: tuple[int, ...]
+    goal_reports: int
+    executive_versions_applied: int
+    host: HostStats
+    wall_seconds: float
+
+
+class SessionResult(NamedTuple):
+    final_state: Any
+    records: Any
+    metrics: SessionMetrics
+    reports: tuple[GoalReport, ...]
+
+
+def default_record(transition: HierarchicalLoopTransition) -> dict[str, jax.Array]:
+    """Arrays worth keeping per step. Only array leaves, as the loops require."""
+
+    step = transition.hierarchy_step
+    payload = step.active_goal.payload
+    record: dict[str, jax.Array] = {
+        "action_factors": transition.action_factors,
+        "reward": transition.reward,
+        "done": transition.done,
+        "goal_switched": step.goal_switched,
+        "manager_due": step.manager_due,
+        "goal_age_seconds": step.goal_runtime.age_seconds,
+        "emergency_interrupt": step.goal_runtime.emergency_interrupt,
+        "timed_out": step.goal_runtime.timed_out,
+        "events_active": step.goal_runtime.active_events,
+    }
+    if isinstance(payload, GoalPayload):
+        record["skill_index"] = payload.skill_index
+        record["executive_version"] = payload.executive_version
+        record["goal_slot"] = payload.goal_slot
+    return record
+
+
+def _percentile(values: Sequence[float], q: float) -> float:
+    if not values:
+        return float("nan")
+    ordered = sorted(values)
+    position = (len(ordered) - 1) * q
+    low = math.floor(position)
+    high = math.ceil(position)
+    if low == high:
+        return float(ordered[low])
+    weight = position - low
+    return float(ordered[low] * (1.0 - weight) + ordered[high] * weight)
+
+
+def _outcome_for_switch(step: Any, lane: int) -> SkillOutcome:
+    """Classify why a lane's goal ended, from the goal runtime facts."""
+
+    runtime = step.goal_runtime
+    if bool(runtime.timed_out[lane]):
+        return SkillOutcome.TIMEOUT
+    if bool(runtime.emergency_interrupt[lane]):
+        return SkillOutcome.INTERRUPTED
+    if bool(runtime.actor_termination_requested[lane]):
+        return SkillOutcome.COMPLETED
+    return SkillOutcome.INTERRUPTED
+
+
+def run_session(
+    built: Any,
+    core: HierarchicalAgentCore,
+    initial_state: HierarchicalCoreState,
+    key: jax.Array,
+    config: SessionConfig,
+    *,
+    skill_ids: Sequence[str],
+    executive: ExecutiveSeam | None = None,
+    executive_writer: ExecutiveWriter | None = None,
+    host_decider: HostDecider | None = None,
+    report_sink: ReportSink | None = None,
+    record_fn: Callable[[HierarchicalLoopTransition], Any] = default_record,
+) -> SessionResult:
+    """Run the stack for ``config.steps`` ticks with the executive in the loop.
+
+    ``skill_ids`` is the dispatcher's registry order; it labels reports. When
+    ``executive`` is given, ``executive_writer`` is required: it is how a new
+    E_t reaches the manager. ``host_decider`` is only for host-mode JEV
+    instances; in-graph instances live inside ``core``.
+    """
+
+    if executive is not None and executive_writer is None:
+        raise ValueError("executive_writer is required when an executive is given")
+    if not isinstance(initial_state, HierarchicalCoreState):
+        raise TypeError("initial_state must be a HierarchicalCoreState")
+    ids = tuple(str(s) for s in skill_ids)
+    if not ids:
+        raise ValueError("skill_ids must not be empty")
+
+    batch = int(jnp.asarray(initial_state.carry.previous_action).shape[0])
+    goal_structure = jax.tree.structure(initial_state.carry.goal)
+
+    clock_tick = 0
+    latest_executive: ExecutiveState | None = None
+    executive_versions_applied = 0
+    switches = np.zeros((batch,), dtype=np.int64)
+    reports: list[GoalReport] = []
+    host_latencies: list[float] = []
+    host_misses = 0
+    host_errors = 0
+    host_decisions = 0
+    goal_started_tick = np.zeros((batch,), dtype=np.int64)
+
+    def hook(
+        step_index: int,
+        transition: HierarchicalLoopTransition,
+        hierarchy_state: HierarchicalCoreState,
+    ) -> HierarchicalCoreState | None:
+        nonlocal clock_tick, latest_executive, executive_versions_applied
+        nonlocal host_misses, host_errors, host_decisions
+
+        clock_tick += 1
+        step = transition.hierarchy_step
+        new_state = hierarchy_state
+        changed = False
+
+        # 2. goal switches -> reports. A lane whose goal was not yet valid
+        # adopts its first goal; that is not a switch and produces no report.
+        valid_before = np.asarray(transition.hierarchy_state.goal_valid, dtype=bool)
+        switched = np.asarray(step.goal_switched, dtype=bool) & valid_before
+        if switched.any():
+            payload_before = transition.hierarchy_state.carry.goal.payload
+            previous_index = (
+                np.asarray(payload_before.skill_index)
+                if isinstance(payload_before, GoalPayload)
+                else np.zeros((batch,), dtype=np.int64)
+            )
+            previous_version = (
+                np.asarray(payload_before.executive_version)
+                if isinstance(payload_before, GoalPayload)
+                else np.zeros((batch,), dtype=np.int64)
+            )
+            for lane in np.flatnonzero(switched):
+                switches[lane] += 1
+                index = int(previous_index[lane])
+                report = GoalReport(
+                    tick=clock_tick,
+                    lane=int(lane),
+                    skill_id=ids[index] if 0 <= index < len(ids) else f"skill_{index}",
+                    executive_version=int(previous_version[lane]),
+                    outcome=_outcome_for_switch(step, int(lane)),
+                    duration_ticks=int(clock_tick - goal_started_tick[lane]),
+                    detail="",
+                )
+                goal_started_tick[lane] = clock_tick
+                reports.append(report)
+                if report_sink is not None:
+                    report_sink.push_goal_report(report)
+
+        # 3. executive seam
+        if executive is not None:
+            proposal = executive.step(clock_tick)
+            if proposal is not None:
+                if not isinstance(proposal, ExecutiveState):
+                    raise TypeError("executive.step must return an ExecutiveState or None")
+                manager_state = executive_writer(new_state.carry.manager_state, proposal)  # type: ignore[misc]
+                if jax.tree.structure(manager_state) != jax.tree.structure(
+                    new_state.carry.manager_state
+                ):
+                    raise ValueError("executive_writer changed the manager_state structure")
+                new_state = new_state._replace(
+                    carry=new_state.carry._replace(manager_state=manager_state)
+                )
+                latest_executive = proposal
+                executive_versions_applied += 1
+                changed = True
+
+        # 4. host-mode decision model
+        if host_decider is not None:
+            due = (step_index % config.host_cadence_ticks) == 0
+            if config.host_on_events and not due:
+                due = bool(np.asarray(step.goal_runtime.active_events).any())
+            if due:
+                host_decisions += 1
+                started = time.perf_counter()
+                try:
+                    goal = host_decider.decide(transition, new_state, latest_executive)
+                except Exception:  # noqa: BLE001 - a host failure keeps the goal, by contract
+                    goal = _FAILED
+                    host_errors += 1
+                elapsed_ms = (time.perf_counter() - started) * 1000.0
+                host_latencies.append(elapsed_ms)
+                if elapsed_ms > config.host_budget_ms or goal is _FAILED:
+                    # Over budget, or the decider raised: the previous goal stands.
+                    host_misses += 1
+                elif goal is None:
+                    # The decider chose to keep the current goal; not a miss.
+                    pass
+                else:
+                    if not isinstance(goal, ManagedGoal) or jax.tree.structure(goal) != goal_structure:
+                        raise ValueError("host_decider returned a goal with the wrong structure")
+                    new_state = new_state._replace(
+                        carry=new_state.carry._replace(
+                            goal=goal,
+                            goal_age=jnp.zeros((batch,), dtype=jnp.float32),
+                        ),
+                        goal_valid=jnp.ones((batch,), dtype=jnp.bool_),
+                    )
+                    changed = True
+
+        return new_state if changed else None
+
+    started = time.perf_counter()
+    final_state, records = run_eager(
+        built,
+        core,
+        record_fn,
+        key,
+        config.steps,
+        initial_state=initial_state,
+        host_hook=hook,
+    )
+    wall = time.perf_counter() - started
+
+    metrics = SessionMetrics(
+        ticks=clock_tick,
+        virtual_seconds=clock_tick * config.tick_seconds,
+        goal_switches_per_lane=tuple(int(x) for x in switches),
+        goal_reports=len(reports),
+        executive_versions_applied=executive_versions_applied,
+        host=HostStats(
+            decisions=host_decisions,
+            misses=host_misses,
+            errors=host_errors,
+            latency_ms_p50=_percentile(host_latencies, 0.5),
+            latency_ms_p95=_percentile(host_latencies, 0.95),
+        ),
+        wall_seconds=wall,
+    )
+    return SessionResult(final_state=final_state, records=records, metrics=metrics, reports=tuple(reports))
+
+
+def summarize(metrics: SessionMetrics) -> dict[str, Any]:
+    """Flat dict for CSV or JSON reporting."""
+
+    switches = metrics.goal_switches_per_lane
+    return {
+        "ticks": metrics.ticks,
+        "virtual_seconds": round(metrics.virtual_seconds, 3),
+        "goal_switches_total": int(sum(switches)),
+        "goal_switches_mean_per_lane": float(statistics.fmean(switches)) if switches else 0.0,
+        "goal_reports": metrics.goal_reports,
+        "executive_versions_applied": metrics.executive_versions_applied,
+        "host_decisions": metrics.host.decisions,
+        "host_misses": metrics.host.misses,
+        "host_errors": metrics.host.errors,
+        "host_latency_ms_p50": metrics.host.latency_ms_p50,
+        "host_latency_ms_p95": metrics.host.latency_ms_p95,
+        "wall_seconds": round(metrics.wall_seconds, 3),
+    }
+
+
+__all__ = [
+    "TICK_SECONDS",
+    "ExecutiveSeam",
+    "ExecutiveWriter",
+    "HostDecider",
+    "HostStats",
+    "ReportSink",
+    "SessionConfig",
+    "SessionMetrics",
+    "SessionResult",
+    "default_record",
+    "run_session",
+    "summarize",
+]
