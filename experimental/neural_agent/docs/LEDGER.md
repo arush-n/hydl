@@ -166,3 +166,7 @@ command: JAX_PLATFORMS=cpu .venv/bin/python -m pytest tests/experimental/neural_
 result:  433 passed, 2 skipped in 275.62s, exit 0; docs tests 11 passed in 1.84s, exit 0. Total 444 passing against the 426 passed / 2 skipped baseline: +4 (record_traces, eval_j1), +14 (sim_goal_env, actor-critic, seeding), 0 regressions.
 verdict: PASS — the phase's package work is gated; the simulator batch awaits the whole combat tree.
 
+## 2026-10-17 — JEV defined; direction set: our own System One model
+result:  owner pointed to https://typesafe.ai/blog/introducing-system-one-models-and-jev. Jev = TypeSafe's System One model (typed calibrated decisions in one parallel pass, 70-500 ms, RLCD). Owner: no external component except the top LLM; build our own System One model for goal reading and decision making. Web survey written to docs/SYSTEM_ONE.md (open clones: JuL, AnyJev, Laya, JevK5-Lite; precedents: LLaRP, RLCR, multi-token prediction, ModernBERT, dual-system robotics). ADR D2, THESIS, ARCHITECTURE, REFERENCES corrected; pin refreshed; docs tests pass.
+verdict: INFO — J1 and J-LM are reclassified as the mechanism proof and the knowledge comparison; the intended primary instance J-S1 is not built yet. First step proposed: in-process latency probe of two backbone classes on the real rendering (needs a weight loader; `transformers` not installed).
+
