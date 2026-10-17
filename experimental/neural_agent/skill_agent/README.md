@@ -385,6 +385,43 @@ context = Dense(concat(mean, max, marked mean, self token))     tokens[t] = the 
 These were measured on 2026-10-17 at a machine load of about 21 on 18 cores [ledger: B1]. The bodies
 were stand-ins, so a trained body's own heads come on top of the encoder's cost.
 
+### 2.8 Behaviour cloning from the native traces (`training/bc_dataset.py`, `training/bc_smoke.py`, B2)
+
+**The dataset.** The 32 native 0.7.2 traces become 21,088 rows, one per native-controlled frame, at the
+game's 1/30 s (11,104 on flat, 9,984 on the generated world). Each row holds:
+- the NPC's self token and the opponent as a marked enemy token, both in the agent frame;
+- labels on the 21-head gen-7 layout.
+
+**Labels match arena's own projection exactly.** They follow `arena.training.imitation.native_npc_demonstrations`
+(`project_attack_execution=True`), mirrored here without importing arena. A differential test finds every one
+of the 84,352 labelled cells equal on all 32 traces [test: test_sa_bc_dataset.py]. Four heads carry labels:
+- the movement compass, from body steering;
+- yaw and pitch deltas, from head steering;
+- attack, only from an executed Primary interaction.
+Every other head is neutral and unsupervised.
+
+**The smoke** trains the B1 trunk plus one linear head per labelled head on one world, and reports on the
+other. 1,500 steps take about 6 s on CPU. Held-out agreement against the majority-class baseline:
+
+| head | gen held out, seed 0 | seed 1 | flat held out | native jitter |
+|---|---|---|---|---|
+| locomotion compass | 0.648 (base 0.593) | 0.670 | 0.771 (base 0.745) | 0.047 / 0.023 |
+| yaw delta | 0.891 (base 0.905) | 0.880 | 0.908 (base 0.885) | 0.039 / 0.032 |
+| pitch delta | 0.927 (base 0.934) | 0.922 | 0.981 (base 0.983) | 0.055 / 0.030 |
+| attack | 0.988 (base 0.988) | 0.988 | 0.988 (base 0.989) | 0.024 / 0.022 |
+
+**Reading.**
+- **Plumbing:** run as a skill's body through the combiner, the trained network gives exactly its own
+  choices (0 mismatches in every run).
+- **Competence:** not shown. Train agreement is about 0.97 to 0.99, but held out it stays near the
+  baselines. Only the compass beats its baseline every time, by 2.6 to 7.7 points. Attack, 1.1 % of the
+  rows, is never learned.
+- **Why:** a self token and an opponent token cannot show terrain or the NPC's own internal state.
+
+**Not labelled.** Body turning: 13,593 of the 21,088 frames request a body yaw, and arena's projection has
+no rule for it, so a cloned body learns no body turning. Adding that rule is a reviewed projection change,
+left open.
+
 ## 3. For the agent building the gen-7 simulator
 
 **What you receive.** Each tick you get one choice per head per agent, in this order. A head no request

@@ -13,6 +13,8 @@ nothing. Import the submodules:
 * ``combiner``: the fixed greedy combiner, stub bodies and the in-graph active-request table (A5).
 * ``parity``: today's one goal per lane as one request through the combiner path (A6).
 * ``training.traces``: the loader for native NPC traces from the live server (A7).
+* ``training.bc_dataset`` and ``training.bc_smoke``: the behaviour-cloning dataset from those traces and its
+  smoke (B2).
 * ``library``: the skill registry: create, register and use verbs and programs.
 * ``programs``: the runner that turns an activity program into requests and reads the statuses back.
 * ``scratchpad``: the combiner on S_t: requests in from the requests section, statuses out to skills.
