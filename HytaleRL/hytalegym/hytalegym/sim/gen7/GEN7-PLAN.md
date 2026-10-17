@@ -55,9 +55,11 @@ stub. The migration, in order, each step gated:
 3. **Gen-7 profile and constructs.** `sim/gen7/profile.py` points at `sim/gen7/data/` and sets the
    switches; constructs new in 0.7.2 are implemented behind their fields: hit interrupt, stun and the
    0.5 s flinch on the flagged attacks; mana with the refill rate and the rune casts (fireball,
-   wind strike, chain hook, ground slam, charged frost shot, enrage, poison); hookshot; two-direction
-   dodge; the 0.7.2 line-of-sight rule; climbing, doors, swimming, gliding, riding as the skills need
-   them. Each construct names its differential before it is wired. Order follows the skills: locomotion
+   wind strike, chain hook, ground slam, charged frost shot, enrage, poison); hookshot; the 0.7.2
+   line-of-sight rule (occlusion only where a block's detail hitbox is hit, not whole opaque cells);
+   slope 30° and wall 15° walking limits; climbing, doors, swimming, gliding, riding as the skills need
+   them. (Dodge is not new: the 0.5.10 assets already allow left and right only and the simulator
+   matches; only the action head's size changes.) Each construct names its differential before it is wired. Order follows the skills: locomotion
    and LOS (P2), combat and mana (P3), crafting (P4), the rest.
 4. **World on 0.7.2.** Region recapture (500/500 sections), path tables, biome table, suites and
    catch-time horizons rebuilt; audit worlds re-selected and kept unseen; reset timing measured.
@@ -67,6 +69,23 @@ stub. The migration, in order, each step gated:
 6. **Cutover (P6).** The stamp changes with the ruleset bytes and the content sha; every checkpoint
    retrains on gen 7; one skill checkpoint transfers natively (`execution_valid`); the default version
    flips; gen 5 remains selectable until the owner retires it.
+
+## 3b. What the fidelity check measured (2026-10-17, `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md`)
+
+The live 0.7.2 server ran for 46 minutes under the bridge. Of 36 mechanic rows: 5 MATCH, 14 MISMATCH,
+9 ABSENT, 8 UNMEASURED. None of the eleven source pins passes on 0.7.2 (four crash on removed or moved
+classes and assets; seven drift). Locomotion constants all equal the 0.7.2 MovementConfig; the slope and
+wall limits are new keys; flat walking and a ledge drop match to 1.1e-5 m but every jump differential
+fails (4e-3 m in place, 0.3-0.7 m with forward motion; the suspected cause is which tick's duration
+gravity uses, unconfirmed). The skills train with the "player" motion model while the bridge body is an
+NPC at 5.0 m/s, so that model has no live oracle at all, on either generation. Melee: three sword
+swings' knockback stale (6/7/12 should be 4.3/5.0/10.8 with the upward component 1 to 0.2), dagger
+damage 3.0 against 5.0 live, the guard-cancels-attack rule removed in 0.7.2, 139 durability rows differ,
+the agent's own hits land one to two ticks late; hit interrupt, stun and flinch absent (Trork and
+Kweebec cannot be interrupted by their role files; skeletons and goblins can). Crafting: 2,047 recipes
+against a table capacity of 1,947, 22 bench ids, campfire 2.0 s. All staged Region libraries were
+captured on 0.5.7. Of the catalogue's 86 learned skills: 27 need a new construct, 44 need recalibration
+first, 12 are unmeasured, 1 matches. Nothing trains on gen 7 before phases 1 and 2 land.
 
 ## 4. Phases and gates
 
