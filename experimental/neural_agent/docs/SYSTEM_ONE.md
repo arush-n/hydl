@@ -244,6 +244,34 @@ tests/experimental/neural_agent/test_na_system_one.py
 `eval/arms.py` gains the `js1` arm (host decider, like `j_lm`), `run_composition.py` the choice.
 `record_traces.py` writes the run's `executive.json` next to the traces so rows can be re-rendered.
 
+### 8.7b Status after the scaffold (2026-10-17, main-session gates)
+
+IMPLEMENTED: `jev/system_one/` (`trunk.py` with `HashedBagTrunk` and the lazy `TorchTransformerTrunk`,
+`heads.py`, `data.py`, `instance.py` (`SystemOneJev`, host mode, two timescales, version-keyed cache),
+`train_supervised.py`, `calibrate.py`, `probe_latency.py`), the `js1` arm and `--js1-heads`, 24 tests in
+`test_na_system_one.py` (`75 passed, 1 skipped` with `test_na_eval.py`), ruff clean. Built by an Opus
+subagent; every gate below was re-run by the main session (`LEDGER.md`).
+
+| Gate | Status |
+|---|---|
+| G1 pipeline | PASS: held-out skill agreement 1.0000 (737 of 737) with the matching head and the hashed trunk; train 0.9993; replace agreement 0.9932; seeds 1 and 2 (subagent) 0.9973 and 0.9986; fixed-head ablation 1.0000 |
+| G2a slow path | contended numbers only (ModernBERT-base 544 ms, Qwen3-0.6B 1,529 ms per pass); uncontended rerun pending; runs off the tick |
+| G2b fast path | PASS: hashed trunk, no trunk call per decision (counted: 0); full decision p50 0.175 / 0.206 / 0.292 ms at batch 1 / 8 / 64, compiled pass alone 0.047 / 0.141 / 0.208 ms |
+| G3 goal reading | NOT MET with the hashed trunk, as expected for a bag of words: 0.8069 on 10 held-out executive variants (0.7769 under the earlier per-decision-text design); needs the pretrained trunk |
+| G3b growing library | mechanism shown (a skill appended after initialisation is scored and can be chosen, test (b)); the quality threshold waits for the pretrained trunk |
+| G4 online | not run |
+| G5 calibration | degenerate: stage A is 99.9% correct on the fit rows, so the confidence head saturates at 1.0 and ECE 0.0 says nothing; needs harder rows (variants, outcomes) |
+
+Design decisions taken in the scaffold and kept: (1) the current skill enters the fast path as its
+description embedding, not a one-hot, so no weight depends on K (FORMULAS M2 amended); (2) the stable text
+excludes the executive's version and issue tick, so an identical state re-issued keeps its encoding; (3)
+every non-idle goal gets J0's 0.5 s commitment, 10 s horizon and emergency mask; J0's 2 s evade commitment
+is not reproduced (known difference against J0 in the online comparison; follow-up: per-skill controls);
+(4) the replace label is the recorded core switch, as for J1 (61 of 2,966 rows differ from J0's proposal
+because a commitment held the goal). No skill description texts exist yet, so skills are described by
+their ids; writing descriptions is the first step towards G3b quality. The subagent's own caveat stands:
+its latency figures were taken on a loaded machine; the main session's rerun above was quieter.
+
 ### 8.8 What is deliberately not in J-S1
 
 No text generation, no tool use, no chain of thought at decision time (System One). No external

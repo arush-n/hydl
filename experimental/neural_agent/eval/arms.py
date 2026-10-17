@@ -27,6 +27,11 @@ The arms follow the composition brief and
   arm runs only through ``session.run_session`` (the eager runner). Its backend
   is ``FakeDecisionLM`` scripted to answer pursuit (``fake``, the default, no
   network) or ``OllamaQwenBackend`` with ``qwen3:4b`` (``ollama``).
+* ``js1``: a host-mode arm wired like ``j_lm``. ``SystemOneJev``
+  (``jev/system_one/instance.py``) over ``HashedBagTrunk`` decides through
+  :class:`LanguageModelHostDecider`. Without ``--js1-heads`` its heads are
+  ``init_heads`` with the run seed and the report labels the arm ``js1-untrained``;
+  ``--js1-heads PATH`` loads them (``jev/system_one/train_supervised.load_heads``).
 
 Every manager in this module returns ``diagnostics=()``. The core runs the
 manager inside ``jax.lax.cond``, and both branches must have the same PyTree
@@ -103,6 +108,7 @@ class ArmContext(NamedTuple):
             the ``j_lm`` decider keys its calls with it.
         lm_backend: The ``j_lm`` backend, one of :data:`LM_BACKENDS`.
         j1_params: Path of trained J1 parameters (``.npz``), or None for ``init_j1``.
+        js1_heads: Path of trained J-S1 heads (``.npz``), or None for ``init_heads``.
     """
 
     skill_ids: tuple[str, ...]
@@ -112,6 +118,7 @@ class ArmContext(NamedTuple):
     seed: int = 0
     lm_backend: str = "fake"
     j1_params: Path | None = None
+    js1_heads: Path | None = None
 
 
 def build_arm_context(
@@ -123,6 +130,7 @@ def build_arm_context(
     seed: int = 0,
     lm_backend: str = "fake",
     j1_params: str | Path | None = None,
+    js1_heads: str | Path | None = None,
 ) -> ArmContext:
     """Validate the arm inputs and return an :class:`ArmContext`.
 
@@ -135,6 +143,7 @@ def build_arm_context(
         seed: The run seed, a non-negative int.
         lm_backend: The ``j_lm`` backend, one of :data:`LM_BACKENDS`.
         j1_params: Path of trained J1 parameters, or None.
+        js1_heads: Path of trained J-S1 heads, or None.
 
     Returns:
         The validated ArmContext.
@@ -180,6 +189,7 @@ def build_arm_context(
         seed=int(seed),
         lm_backend=lm_backend,
         j1_params=None if j1_params is None else Path(j1_params),
+        js1_heads=None if js1_heads is None else Path(js1_heads),
     )
 
 
@@ -731,6 +741,29 @@ def _lm_host_decider(ctx: ArmContext, steps: int) -> LanguageModelHostDecider:
     return LanguageModelHostDecider(instance, ctx.executive, ctx.batch, seed=ctx.seed)
 
 
+def _js1_host_decider(ctx: ArmContext, steps: int) -> LanguageModelHostDecider:
+    """Return the ``js1`` host decider: ``SystemOneJev`` over ``HashedBagTrunk``.
+
+    The heads are ``init_heads(key(ctx.seed))``, a random initialization of the
+    catalogue-agnostic matching head, unless ``ctx.js1_heads`` names a file. The skills
+    are described by their ids. ``steps`` is unused: the instance needs no script.
+    """
+
+    from experimental.neural_agent.jev.system_one.heads import init_heads
+    from experimental.neural_agent.jev.system_one.instance import SystemOneJev
+    from experimental.neural_agent.jev.system_one.train_supervised import load_heads
+    from experimental.neural_agent.jev.system_one.trunk import HashedBagTrunk
+
+    del steps
+    trunk = HashedBagTrunk()
+    if ctx.js1_heads is None:
+        heads = init_heads(jax.random.key(ctx.seed), trunk.dim)
+    else:
+        heads = load_heads(ctx.js1_heads)
+    instance = SystemOneJev(trunk, heads, ctx.skill_ids)
+    return LanguageModelHostDecider(instance, ctx.executive, ctx.batch, seed=ctx.seed)
+
+
 def arm_label(name: str, ctx: ArmContext) -> str:
     """Return the report label of an arm.
 
@@ -740,6 +773,8 @@ def arm_label(name: str, ctx: ArmContext) -> str:
 
     if name == "j1" and ctx.j1_params is None:
         return "j1-untrained"
+    if name == "js1" and ctx.js1_heads is None:
+        return "js1-untrained"
     if name == "j_lm":
         return f"j_lm-{ctx.lm_backend}"
     return name
@@ -765,13 +800,14 @@ class Arm(NamedTuple):
     make_host_decider: Callable[[ArmContext, int], Any] | None = None
 
 
-#: The arms by command-line name. ``j_lm`` is the one host-mode arm.
+#: The arms by command-line name. ``j_lm`` and ``js1`` are the host-mode arms.
 ARMS: dict[str, Arm] = {
     "flat": Arm("flat", _flat_manager, _skill_dispatcher, _shared_belief),
     "j0": Arm("j0", _scripted_manager, _skill_dispatcher, _shared_belief),
     "shuffled": Arm("shuffled", _shuffled_manager, _skill_dispatcher, _shared_belief),
     "j1": Arm("j1", _network_manager, _skill_dispatcher, _shared_belief),
     "j_lm": Arm("j_lm", _hold_manager, _skill_dispatcher, _shared_belief, _lm_host_decider),
+    "js1": Arm("js1", _hold_manager, _skill_dispatcher, _shared_belief, _js1_host_decider),
 }
 
 

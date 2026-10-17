@@ -295,14 +295,15 @@ def load_context(
     seed: int = 0,
     lm_backend: str = "fake",
     j1_params: str | Path | None = None,
+    js1_heads: str | Path | None = None,
 ) -> tuple[ArmContext, Any]:
     """Return the arm context and the composition task, built from the siblings.
 
     The executive is the one that ``CompositionTask.initial_executive_state``
     returns for the registry's catalogue. The task's tick budget is ``ticks``,
-    which is the arena horizon as well. ``seed``, ``lm_backend`` and
-    ``j1_params`` are passed to :func:`build_arm_context` for the ``j1`` and
-    ``j_lm`` arms.
+    which is the arena horizon as well. ``seed``, ``lm_backend``, ``j1_params``
+    and ``js1_heads`` are passed to :func:`build_arm_context` for the ``j1``,
+    ``j_lm`` and ``js1`` arms.
 
     Returns:
         ``(ctx, task)``.
@@ -326,6 +327,7 @@ def load_context(
         seed=seed,
         lm_backend=lm_backend,
         j1_params=j1_params,
+        js1_heads=js1_heads,
     )
     return ctx, task
 
@@ -1140,8 +1142,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=_parse_arms,
         default=DEFAULT_ARMS,
         help=(
-            "comma-separated arms from: flat, j0, shuffled, j1, j_lm (default flat,j0,shuffled); "
-            "j_lm runs on the host and needs --runner eager"
+            "comma-separated arms from: flat, j0, shuffled, j1, j_lm, js1 (default flat,j0,shuffled); "
+            "j_lm and js1 run on the host and need --runner eager"
         ),
     )
     parser.add_argument(
@@ -1196,6 +1198,15 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help=(
             "trained J1 parameters, an .npz keyed by the J1Params field names; without it the j1 "
             "arm uses init_j1 random parameters and is labelled j1-untrained"
+        ),
+    )
+    parser.add_argument(
+        "--js1-heads",
+        type=Path,
+        default=None,
+        help=(
+            "trained J-S1 heads, an .npz keyed by the HeadsParams field names; without it the js1 "
+            "arm uses init_heads random parameters and is labelled js1-untrained"
         ),
     )
     parser.add_argument(
@@ -1272,6 +1283,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         seed=args.seed,
         lm_backend=args.lm_backend,
         j1_params=args.j1_params,
+        js1_heads=args.js1_heads,
     )
     arena = load_arena(args.arena, args.batch, args.seed, args.ticks)
     run = run_arm if args.runner == "compiled" else run_arm_eager
@@ -1310,6 +1322,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             else {}
         ),
         **({"j_lm backend": args.lm_backend} if "j_lm" in args.arms else {}),
+        **(
+            {"js1 heads": "init_heads random (js1-untrained)" if args.js1_heads is None else str(args.js1_heads)}
+            if "js1" in args.arms
+            else {}
+        ),
         "evade trigger window W (ticks)": EVADE_TRIGGER_WINDOW_TICKS,
         **(
             {
