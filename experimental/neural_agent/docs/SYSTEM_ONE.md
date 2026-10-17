@@ -123,6 +123,8 @@ trunk without the goal text, autoregressive decoding instead of parallel heads (
 
 ## 8. Design specification of J-S1 (2026-10-17, owner: "start designing it now")
 
+Owner's statement of the goal (2026-10-17): "the simple goal is that the model can share a state with llm / read the inputs and be able to create outputs very quickly for the neural components, note that the library will increase over time". Every design choice below serves those three clauses: shared state (E_t and B_t as inputs), speed (one pass, parallel heads), and a growing library (catalogue-agnostic scoring).
+
 Labels as in ADR-001: IMPLEMENTED / COMMITTED / HYPOTHESIS. Everything in this section is COMMITTED
 unless marked; nothing is IMPLEMENTED until `jev/system_one/` exists and its tests pass.
 
@@ -159,6 +161,15 @@ Heads, all evaluated in the same pass (System One):
   confidence `c_i = sigmoid(w_c . g_i + b_c)`      probability that the chosen skill is the right one
   value      `V_i = w_v . g_i + b_v`                critic for stage C only
   plan (flag, HYPOTHESIS) `s_i^{(k)} = W_k g_i + b_k`, k = 1..K_plan, the next K_plan skill calls, independent heads as in [MTP].
+**Catalogue-agnostic skill scoring (owner, 2026-10-17: "the library will increase over time").** The
+fixed softmax head `W_s` ties the model to the training-time catalogue size K. The primary skill head is
+therefore a matching head: each skill j has a description embedding `e_j = f_theta(desc_j)` from the same
+trunk (computed once per catalogue change and cached), and
+  `s_ij = (W_q g_i) . (W_k e_j) / sqrt(d_k)`,  masked by `m_ij` as before.
+Adding a skill adds a row `e_j`; no head weight changes shape and no retraining is required for the
+head to produce a score for the new skill (its quality on the new skill is a separate question, gate G3b
+below). The fixed head stays available behind a flag as the ablation.
+
 Decision: `skill_i = argmax s~_i`, `replace_i = r_i > 0`, control constants as J0 (`jev/scripted.py`:
 commitment, horizon, emergency mask). Diagnostics carry `c_i` and the entropy of `softmax(s~_i)`.
 
@@ -198,6 +209,7 @@ cadence is 0.5 s, the host budget 20 ms (`eval/arms.py J0_LATENCY_BUDGET_MS`), a
 | G3 goal reading | on a held-out split of E_t variants (goal order, sets, constraints never seen in training), skill agreement >= 0.90 with the rule the variant implies; J1 is the control and is expected to fail this split | stage A on source (2) |
 | G4 online | four arms plus `js1` at 512 ticks on held-out seeds: J-S1 composed rate not below J0's Wilson lower bound; interrupts answered; 0 misses at the measured latency | G1-G3 |
 | G5 calibration | ECE <= 0.05 on the held-out rows after stage B | G1 |
+| G3b growing library | with the matching head, a skill added after training (unseen description) receives sensible scores: on rows where the rule selects it, agreement >= 0.80 without any retraining of the head; the fixed softmax head cannot be evaluated here at all | G1 |
 
 ### 8.7 Files (to build)
 

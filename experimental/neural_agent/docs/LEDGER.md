@@ -179,3 +179,12 @@ command: JAX_PLATFORMS=cpu .venv/bin/python -m pytest tests/experimental/neural_
 result:  first run 2 failed (entries without a per-entry label; [RLCR] cited but not defined in REFERENCES sections 1 or 3), fixed: every M entry labelled *COMMITTED*, [RLCR] and [RLCR2] defined in REFERENCES section 3; 11 passed in 0.50s, exit 0
 verdict: PASS — the docs tests enforce per-entry labels and defined citation keys; both rules held.
 
+## 2026-10-17 — whole combat test tree on the final simulator code (working tree, which also carries other sessions' uncommitted changes)
+command: JAX_PLATFORMS=cpu .venv/bin/python -m pytest HytaleRL/hytalegym/tests/jax/combat -q -rf --deselect <the three-world test>
+result:  73 failed, 996 passed, 1 skipped, 15 xfailed in 2968.37s; exit 1. Visible tail of the failure list: observation/v3/policy/test_standard_input_arbitration.py (2), test_standard_root_distribution.py (3), test_checkpoint_contract.py (2), test_contract_publication.py (4), test_import_order.py (1), test_target_memory.py::test_hidden_target_fails_closed_at_unimplemented_search_boundary (1); the other 60 names were not captured.
+verdict: FAIL, NOT YET ATTRIBUTED — the working tree holds about 17 simulator files modified by other sessions (events.py, item_programs.py, contracts/publication.py, mechanics/*, runtime/*, combat/types.py, v3 schema/types.py, policy/layout.py) besides my four. The simulator switch is not committed until an isolated run attributes the failures: clean worktrees at HEAD, with and without my four files, same test copy, full failure lists.
+
+## 2026-10-17 — owner: transformers approved; goal restated; growing library
+result:  owner: "yes that is fine, remember the simple goal is that the model can share a state with llm/read the inputs and be able to create outputs very quickly for the neural components, note that the library will increase over time". `.venv/bin/pip install transformers` -> transformers 5.20.1, tokenizers 0.23.3, safetensors 0.8.0 (undo: `.venv/bin/pip uninstall transformers`). Design: the primary skill head becomes catalogue-agnostic matching (SYSTEM_ONE.md §8.3, FORMULAS M3b), new gate G3b (a skill added after training is scored without head retraining). The scaffold subagent was told. G2 probe launched: one forward pass of answerdotai/ModernBERT-base and Qwen/Qwen3-0.6B (open weights downloaded locally) on the real rendering, batch 1 and 8, CPU.
+verdict: INFO — docs tests 11 passed after the edits.
+

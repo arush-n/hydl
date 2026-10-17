@@ -356,6 +356,8 @@ All entries *COMMITTED* by `SYSTEM_ONE.md` section 8 (2026-10-17); none is *CODE
 
 **(M3) Parallel heads, one pass.** *COMMITTED* (`SYSTEM_ONE.md` §8). $s_i = W_s g_i + b_s \in \mathbb R^{K}$, $\tilde s_i = \mathrm{where}(m_i, s_i, -10^{9})$; $r_i = w_r^\top g_i + b_r$; $p_i = W_p g_i + b_p \in \mathbb R^{4}$; $c_i = \sigma(w_c^\top g_i + b_c)$; $V_i = w_v^\top g_i + b_v$; optional plan heads $s_i^{(k)} = W_k g_i + b_k$, $k = 1..K_{\text{plan}}$ (independent heads as in multi-token prediction, *HYPOTHESIS*).
 
+**(M3b) Catalogue-agnostic skill scoring.** *COMMITTED* (`SYSTEM_ONE.md` §8.3; owner 2026-10-17: the library grows). With $e_j = f_\theta(\text{desc}_j)$ the trunk's embedding of skill $j$'s description, cached per catalogue, $s_{ij} = (W_q g_i)^\top (W_k e_j) / \sqrt{d_k}$, then masked as in (M3). The head's shapes do not depend on $K$, so a new skill is a new row $e_j$ and nothing is retrained for the head to score it (quality on it is gate G3b).
+
 **(M4) Decision.** *COMMITTED* (`SYSTEM_ONE.md` §8). $\text{skill}_i = \arg\max_j \tilde s_{ij}$, $\text{replace}_i = [r_i > 0]$, control constants as J0 (`jev/scripted.py`); diagnostics carry $c_i$ and the entropy $-\sum_j \mathrm{softmax}(\tilde s_i)_j \log \mathrm{softmax}(\tilde s_i)_j$.
 
 **(M5) Stage A, supervised.** *COMMITTED* (`SYSTEM_ONE.md` §8). $\mathcal L_A = \mathrm{CE}(\tilde s, y_{\text{skill}}) + \mathrm{BCE}(r, y_{\text{replace}}) + \lambda_p \lVert p - y_{\text{params}} \rVert^2 \;[+ \sum_k \mathrm{CE}(\tilde s^{(k)}, y^{(k)})]$ over recorded decision rows (labels $=$ J0's decisions) and rows under varied executive states (labels $=$ the rule the variant implies, or the top LLM's choice).
