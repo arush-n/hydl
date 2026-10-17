@@ -498,3 +498,16 @@ class ArsenalRuntimeConfig(NamedTuple):
     player_backed_actor_mask: Array
     item_durability_eligible_actor_mask: Array
     opponent_controller_mask: Array
+    # Legal observation (2026-10-17). False, the default: the privileged behaviour
+    # every existing consumer and test expects (an agent allowed to cheat, such as
+    # a Learning by Cheating teacher): line-of-sight ability legality on the
+    # geometric selector validity, which carries target existence, and every
+    # entity row published. True, opt-in (``arsenal_runtime_config(...,
+    # legal_observation=True)``; the neural_agent arenas set it through their
+    # scene): the learner sees only what the actor may perceive. The environment
+    # then fills ``selector_line_of_sight_valid`` with the perception ray to a
+    # living target, and ``observation/v3/encoding/encoder.py`` blanks the
+    # defense, resource and status rows of entities the actor cannot perceive.
+    # The default stayed False after an isolated run of the combat tree: four
+    # tests assert the privileged semantics (see HytaleRL/hytalegym/README.md).
+    legal_observation: bool = False

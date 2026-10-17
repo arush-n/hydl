@@ -1392,6 +1392,11 @@ def _requirements_available(
             REQUIRE_STATIC_AREA_PLACEMENT,
             world.static_area_placement & finite_center,
         )
+        # Since 2026-10-17 ``selector_line_of_sight_valid`` is the legal perception
+        # ray to a living target by default, or the privileged selector validity
+        # when the runtime config's ``legal_observation`` is off (arsenal/environment.py).
+        # The privileged form carries ``target_valid``, so it told the actor whether a
+        # live target stood behind a wall (three-world negative control, A against B).
         & available(
             REQUIRE_LINE_OF_SIGHT,
             world.selector_line_of_sight_valid,

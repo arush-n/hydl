@@ -195,11 +195,18 @@ def arsenal_runtime_config(
     opponent_controller_mask: jax.Array | None = None,
     item_durability_eligible_actor_mask: jax.Array | bool | None = None,
     player_backed_actor_mask: jax.Array | bool | None = None,
+    legal_observation: bool = False,
 ) -> ArsenalRuntimeConfig:
-    """Build episode-pinned rules, targeting, and specialized execution shape."""
+    """Build episode-pinned rules, targeting, and specialized execution shape.
+
+    ``legal_observation`` (2026-10-17) selects the legal observation mode of
+    ``ArsenalRuntimeConfig``; False keeps the privileged behaviour.
+    """
 
     if not isinstance(specialize, bool):
         raise TypeError("specialize must be a bool")
+    if not isinstance(legal_observation, bool):
+        raise TypeError("legal_observation must be a bool")
     validation_failure_bits = _compiled_validate_ability_loadout(loadout)
     terminal_event = jnp.asarray(loadout.event_mask, dtype=jnp.bool_) & (
         (
@@ -435,6 +442,7 @@ def arsenal_runtime_config(
         player_backed_actor_mask=player_backed,
         item_durability_eligible_actor_mask=durability_eligible,
         opponent_controller_mask=controller_mask,
+        legal_observation=legal_observation,
     )
 
 

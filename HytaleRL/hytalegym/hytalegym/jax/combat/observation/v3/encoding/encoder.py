@@ -547,16 +547,32 @@ def project_learner_observation_v3_actor_evidence(
         ),
         axis=2,
     )
+    # Legal observation (2026-10-17): the per-entity mechanics rows (defense,
+    # resources, statuses) are built from raw state above. Rows of entities the
+    # actor cannot perceive, or that are not living, publish nothing, so a live
+    # enemy behind a wall is not told apart from no enemy (three-world negative
+    # control; an absent slot reads as perceptible, hence the living test, which
+    # reveals nothing because hidden rows are blank either way). The actor's own
+    # row is always evidence. ``config.legal_observation`` False publishes every
+    # row: the privileged behaviour before this date, kept for agents allowed to cheat.
+    entity_evidence = (
+        world_capabilities.target_candidate_perceptible
+        & world_capabilities.target_candidate_perception_valid
+    )[:, AGENT_ENTITY] & (observable_combat.health > jnp.float32(0.0))
+    entity_evidence = jnp.where(
+        jnp.asarray(config.legal_observation), entity_evidence, True
+    )
+    entity_evidence = entity_evidence.at[:, AGENT_ENTITY].set(True)
     return LearnerObservationV3ActorEvidence(
         base=base,
         weapon_i32=weapon_i32,
-        resource_f32=resource_f32,
+        resource_f32=jnp.where(entity_evidence[:, :, None], resource_f32, 0.0),
         resource_mask=resource_mask,
-        defense_f32=defense_f32,
-        status_f32=status_f32,
-        status_i32=status_i32,
-        status_flags=status_flags,
-        status_mask=status_mask,
+        defense_f32=jnp.where(entity_evidence[:, :, None], defense_f32, 0.0),
+        status_f32=jnp.where(entity_evidence[:, :, None, None], status_f32, 0.0),
+        status_i32=jnp.where(entity_evidence[:, :, None, None], status_i32, 0),
+        status_flags=jnp.where(entity_evidence[:, :, None], status_flags, jnp.uint32(0)),
+        status_mask=status_mask & entity_evidence[:, :, None],
         ability_f32=ability_f32,
         ability_i32=ability_i32,
         ability_mask=ability_mask,

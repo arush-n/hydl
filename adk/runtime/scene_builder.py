@@ -67,6 +67,9 @@ RUNTIME_CONFIG_ARGUMENTS: tuple[str, ...] = (
     "backpack_capacity",
     "entity_role_ids",
     "opponent_controller_mask",
+    # Legal observation mode of the Gym (2026-10-17): False by default; a scene
+    # whose learner must not cheat sets it to True.
+    "legal_observation",
 )
 
 

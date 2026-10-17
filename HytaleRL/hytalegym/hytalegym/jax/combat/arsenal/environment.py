@@ -461,10 +461,19 @@ class ArsenalEnvironmentInfo(NamedTuple):
 
 
 class ArsenalResetBatch(NamedTuple):
-    """Exact actor/target coordinates selected from one reset-key batch."""
+    """Exact actor/target coordinates selected from one reset-key batch.
 
-    agent_position: jax.Array
-    target_position: jax.Array
+    Either ``agent_position`` and ``target_position`` ([B, 3] each), or the full
+    per-entity layout ``entity_position`` ([B, E, 3]) with ``entity_health``
+    ([B, E]; zero marks an absent slot), as ``reset_arsenal_batch`` accepts.
+    The entity form was added on 2026-10-17 so a world without an enemy can be
+    built through this seam (three-world leakage gate, World B).
+    """
+
+    agent_position: jax.Array | None = None
+    target_position: jax.Array | None = None
+    entity_position: jax.Array | None = None
+    entity_health: jax.Array | None = None
 
 
 @dataclass(frozen=True)
@@ -1632,6 +1641,12 @@ def make_arsenal_environment(
             ),
             target_position=(
                 None if reset_batch is None else reset_batch.target_position
+            ),
+            entity_position=(
+                None if reset_batch is None else reset_batch.entity_position
+            ),
+            entity_health=(
+                None if reset_batch is None else reset_batch.entity_health
             ),
             initial_inventory=initial_inventory,
             projectile_capacity=compiled_projectile_capacity,
@@ -2888,7 +2903,19 @@ def geometry_arsenal_world_capabilities(
         line_of_sight=perception.visible & target_valid,
         line_of_sight_valid=perception_valid & target_valid,
         selector_line_of_sight=selector.clear & target_valid,
-        selector_line_of_sight_valid=selector_valid & target_valid,
+        # Legal observation (2026-10-17): this is the predicate a line-of-sight
+        # ability gates on (programs/ability.py) and that line-of-sight events read
+        # (effects/events.py). By default it is the perception ray to a living
+        # target, which is what the actor may know. With the config's
+        # ``legal_observation`` False it is the privileged selector validity, which
+        # carries target existence and told the actor whether a live target stood
+        # behind a wall. The schema is unchanged on purpose: adding a field would
+        # change the policy contract hash and refuse every trained checkpoint.
+        selector_line_of_sight_valid=jnp.where(
+            jnp.asarray(config.legal_observation),
+            perception.visible & perception_valid & target_valid,
+            selector_valid & target_valid,
+        ),
         clear_projectile_flight=clear_projectile_flight,
         projectile_world_collision_available=(projectile_world_collision_available),
         deployable_intended_graph_available=(
