@@ -24,6 +24,14 @@ Three rules make the guarantee exact rather than approximate:
 ``params_sha256`` hashes a parameter tree, so a test can show that a frozen verb's weights, or the trunk's, did not
 change.
 
+The trunk runs once per tick (owner ruling 2026-10-18; ``bench_bodies.py``). ``verb_logits`` runs the trunk inside
+every verb's program, and the combiner calls each granted body once per agent, so a tick of B agents with k skills
+each would run the trunk B * k times. ``encode_contexts`` (or ``encode_agents``) runs it once for every agent and
+hands each agent an ``EncodedObservation``: its token sets, its context row and the trunk that produced the row.
+``VerbBody`` is a trained verb as a combiner body. On an ``EncodedObservation`` it runs only ``adapter_logits``, the
+verb's adapter on the context, compiled per verb like ``verb_logits`` and never stacked, so the rules above still
+hold. On raw token sets it falls back to ``verb_logits``.
+
 This module proves the weights side of requirement 7. The contract side (a frozen skill never changes under the same
 version) is enforced by ``library.py``.
 """
@@ -41,14 +49,27 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
-from experimental.neural_agent.skill_agent.encoder import EncoderConfig, EncoderParams, apply_encoder, init_encoder
+from experimental.neural_agent.skill_agent.combiner import BodyStep
+from experimental.neural_agent.skill_agent.encoder import (
+    EncoderConfig,
+    EncoderParams,
+    apply_encoder,
+    encoder_apply_jit,
+    init_encoder,
+    stack_batch,
+)
 from experimental.neural_agent.skill_agent.surface import head_layout
 
 __all__ = [
     "AdapterParams",
     "DenseLayer",
+    "EncodedObservation",
     "SkillNetwork",
+    "VerbBody",
+    "adapter_logits",
     "add_verb",
+    "encode_agents",
+    "encode_contexts",
     "freeze",
     "new_network",
     "params_sha256",
@@ -196,12 +217,17 @@ def _rows(batch: Mapping[str, tuple[Any, Any]]) -> int:
     return int(jnp.shape(next(iter(batch.values()))[0])[0])
 
 
+def _adapter_heads(adapter: AdapterParams, context: jax.Array) -> dict[str, jax.Array]:
+    """The adapter on trunk contexts float32[B, O]: the one formula both compiled paths use."""
+
+    hidden = jax.nn.gelu(context @ adapter.hidden.weight + adapter.hidden.bias)
+    return {name: hidden @ layer.weight + layer.bias for name, layer in adapter.heads.items()}
+
+
 def _adapter_logits(
     trunk: EncoderParams, adapter: AdapterParams, batch: Mapping[str, tuple[Any, Any]], config: EncoderConfig
 ) -> dict[str, jax.Array]:
-    context = apply_encoder(trunk, batch, config).context
-    hidden = jax.nn.gelu(context @ adapter.hidden.weight + adapter.hidden.bias)
-    return {name: hidden @ layer.weight + layer.bias for name, layer in adapter.heads.items()}
+    return _adapter_heads(adapter, apply_encoder(trunk, batch, config).context)
 
 
 @functools.lru_cache(maxsize=None)
@@ -225,6 +251,95 @@ def verb_logits(network: SkillNetwork, verb: str, batch: Mapping[str, tuple[Any,
 
     adapter = _adapter_of(network, verb)
     return _verb_program(verb, network.config, tuple(adapter.heads))(network.trunk, adapter, batch)
+
+
+class EncodedObservation(NamedTuple):
+    """One agent's token sets with this tick's trunk context, computed once for every agent (``encode_agents``).
+
+    Attributes:
+        tokens: The agent's token sets, type name -> (features, mask), as ``encoder.pack_tokens`` gives them.
+        context: float32[O], the trunk's context for this agent on this tick, a row of one host copy of the batch's
+            contexts (one read back per tick, not one device slice per agent).
+        trunk: The trunk parameters that produced ``context``. A body checks it is its own network's trunk.
+    """
+
+    tokens: Mapping[str, tuple[Any, Any]]
+    context: np.ndarray
+    trunk: EncoderParams
+
+
+def encode_agents(network: SkillNetwork, tokens: Sequence[Mapping[str, tuple[Any, Any]]]) -> list[EncodedObservation]:
+    """Run the trunk once over every agent's token sets, and wrap each agent's tokens with its context row.
+
+    Raises:
+        ValueError: If ``tokens`` is empty.
+    """
+
+    if not tokens:
+        raise ValueError("encode_agents needs at least one agent's token sets")
+    context = np.asarray(encoder_apply_jit(network.config)(network.trunk, stack_batch(list(tokens))).context)
+    return [EncodedObservation(row, context[index], network.trunk) for index, row in enumerate(tokens)]
+
+
+def encode_contexts(network: SkillNetwork, contexts: Mapping[int, Any]) -> dict[int, Any]:
+    """Agent -> its ``combiner.AgentContext`` for this tick, with one trunk call over every agent that has tokens.
+
+    Each context that carries ``observation_tokens`` gets them back as an ``EncodedObservation``. A context without
+    tokens is returned unchanged. Call it once per tick, after the contexts are built and before the combiner runs.
+
+    Raises:
+        ValueError: If a context's tokens are already encoded.
+    """
+
+    agents = [agent for agent in sorted(contexts) if contexts[agent].observation_tokens is not None]
+    if any(isinstance(contexts[agent].observation_tokens, EncodedObservation) for agent in agents):
+        raise ValueError("a context's observation tokens are already encoded; encode once per tick")
+    encoded = encode_agents(network, [contexts[agent].observation_tokens for agent in agents]) if agents else []
+    out = dict(contexts)
+    for agent, observation in zip(agents, encoded):
+        out[agent] = replace(contexts[agent], observation_tokens=observation)
+    return out
+
+
+@functools.lru_cache(maxsize=None)
+def _adapter_program(verb: str, heads: tuple[str, ...]) -> Callable[..., dict[str, jax.Array]]:
+    """The cached jitted adapter of one verb on trunk contexts; ``verb`` and ``heads`` key it, as in ``_verb_program``."""
+
+    return jax.jit(_adapter_heads)
+
+
+def adapter_logits(network: SkillNetwork, verb: str, context: jax.Array) -> dict[str, jax.Array]:
+    """The verb's head logits from trunk contexts float32[B, O]: head -> float32[B, size]. Reads only the verb's adapter.
+
+    Raises:
+        ValueError: If the verb is unknown.
+    """
+
+    adapter = _adapter_of(network, verb)
+    return _adapter_program(verb, tuple(adapter.heads))(adapter, context)
+
+
+@dataclass(frozen=True)
+class VerbBody:
+    """A trained verb as a combiner body: each head's argmax choice. It never reports done; the middle layer withdraws
+    the request.
+
+    On an ``EncodedObservation`` it runs only the verb's adapter on the agent's context row (the trunk ran once this
+    tick, in ``encode_contexts``). On raw token sets it runs the whole verb program (``verb_logits``), trunk included.
+    """
+
+    network: SkillNetwork
+    verb: str
+
+    def __call__(self, request: Any, ticks_since_start: int, observation_tokens: Any, belief_tokens: Any) -> BodyStep:
+        if isinstance(observation_tokens, EncodedObservation):
+            if observation_tokens.trunk is not self.network.trunk:
+                raise ValueError(f"the observation of {self.verb!r} was encoded by another trunk than its network's")
+            logits = adapter_logits(self.network, self.verb, observation_tokens.context[None])
+        else:
+            logits = verb_logits(self.network, self.verb, stack_batch([observation_tokens]))
+        host = jax.device_get(logits)
+        return BodyStep({head: int(np.argmax(values[0])) for head, values in host.items()})
 
 
 @functools.lru_cache(maxsize=None)

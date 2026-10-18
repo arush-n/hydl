@@ -105,6 +105,14 @@ Rules the registry enforces, each covered by a test:
 - **Where the tokens come from.** The caller builds the agent's `AgentContext` each tick with its
   observation tokens (the surface token types) and its belief tokens. The combiner hands both to every
   body it runs for that agent, untouched. [test: test_bodies_receive_the_agents_tokens_unchanged_and_count_ticks_from_the_grant]
+- **The trunk runs once per tick (owner ruling 2026-10-18).** When trained verbs are in the library,
+  the caller passes the tick's contexts through `freezing.encode_contexts(network, contexts)` before
+  the combiner runs. Each agent's observation tokens then arrive as an `EncodedObservation`: the
+  tokens, the agent's context row and the trunk that produced it.
+  - A trained verb's body (`freezing.VerbBody`) runs only its adapter on that row.
+  - On raw tokens the same body runs the whole verb program, so the trunk runs once per body call.
+  - The signature is unchanged; placeholders and scripts ignore the tokens either way.
+  [test: test_the_encoded_body_chooses_what_the_raw_body_chooses; test_a_body_refuses_an_observation_encoded_by_another_trunk]
 - **Why arguments, not a callback.**
   - The owner ruled that the state carries everything the neural agent needs.
   - An argument keeps a body a pure function: the compiled runner can trace it, where a callback has no
@@ -389,14 +397,14 @@ context = Dense(concat(mean, max, marked mean, self token))     tokens[t] = the 
 These were measured on 2026-10-17 at a machine load of about 21 on 18 cores [ledger: B1]. The bodies
 were stand-ins, so a trained body's own heads come on top of the encoder's cost.
 
-**Trained bodies, as built, cost about 1 ms per agent per skill** (`bench_bodies.py`, 2026-10-18
-[ledger]). A trained body is a freezing verb (section 2.9): the trunk and the verb's adapter in one
-compiled program. The combiner calls each granted body once per agent per tick, so every call runs the
-trunk again on one agent. The bench times that path against two batched layouts that choose the same
-factors [test: test_sa_bench_bodies.py]. Batch 8, p95 per tick in ms, with every agent holding the same
-skills (shared) or its own (distinct):
+**Trained bodies with the trunk in every call cost about 1 ms per agent per skill** (`bench_bodies.py`,
+2026-10-18 [ledger]). That was the design until the owner's ruling later that day. A trained body was a
+freezing verb (section 2.9): the trunk and the verb's adapter in one compiled program. The combiner calls
+each granted body once per agent per tick, so every call ran the trunk again on one agent. The bench times
+that path against two batched layouts that choose the same factors [test: test_sa_bench_bodies.py].
+Batch 8, p95 per tick in ms, with every agent holding the same skills (shared) or its own (distinct):
 
-| skills per agent | as built (shared / distinct) | trunk once per tick, adapter per agent and skill | trunk once, adapters batched per skill (shared) |
+| skills per agent | trunk per call (shared / distinct) | trunk once per tick, adapter per agent and skill | trunk once, adapters batched per skill (shared) |
 |---|---|---|---|
 | 1 | 7.1 / 7.7 | 2.8 + 0.3 | 2.7 + 0.3 |
 | 2 | 8.4 / 8.6 | 4.4 + 0.3 | 1.5 + 0.4 |
@@ -405,12 +413,22 @@ skills (shared) or its own (distinct):
 
 The first column includes the combiner. The other two are the bodies' work plus the combiner's
 bookkeeping alone (`StubBody`), measured separately and summed.
-- **As built, the bar holds up to three skills per agent at 8 agents**, and leaves little room for the
-  belief and the decision. At six it fails, and with distinct skills it exceeds the 33.3 ms tick.
+- **With the trunk per call, the bar holds up to three skills per agent at 8 agents**, and leaves little
+  room for the belief and the decision. At six it fails, and with distinct skills it exceeds the 33.3 ms
+  tick.
 - **One trunk pass per tick keeps every measured case within the bar** (worst 10.0 ms). Each verb's
   adapter stays compiled alone and never stacked, so freezing's guarantee is unchanged.
-- **Not changed:** where the trunk runs. Taking it out of the body changes the body contract, which was
-  decided with the architecture review session.
+- **Changed by the owner's ruling (2026-10-18, late).** The trunk runs once per tick:
+  `freezing.encode_contexts`, then `VerbBody` runs the adapter alone (section 1). The bench's `encoded`
+  layout times that path through the combiner.
+  - Its first run was at a machine load of 20 to 59, which inflated every layout about tenfold, so its
+    absolute numbers are not used.
+  - In that run, at 8 agents the encoded path's median was 2.5 to 7.5 times below the trunk-per-call
+    path's: 4.9 to 7.5 times at 3 and 6 skills (6 skills, shared: 25.9 against 171.3 ms).
+  - With one agent holding one skill it was slightly slower (0.8 times as fast), because it makes two
+    calls where the old path made one.
+  - Its quiet-machine number is still to be measured. The table's middle column is the same work without
+    the combiner.
 
 Caveats: freezing's default sizes (trunk width 64, two layers, context 128; adapter hidden 64), random
 weights, CPU, one run at a load of about 6 on 18 cores.
@@ -514,6 +532,11 @@ skill's weights untouched is the strongest guard against catastrophic forgetting
   their weights' and the trunk's fingerprints are unchanged.
 - **The negative control:** the same run with the trunk not frozen moves the frozen verbs' logits by up to
   3.87 through the trunk, while their adapters stay unchanged. So the gate can fail.
+- **The encoded path (trunk once per tick, 2026-10-18).**
+  - With the trunk frozen, adding and training swing leaves walk's and look's adapter logits on the
+    encoded contexts bit-identical, and the contexts themselves too.
+  - The encoded and raw paths choose the same factors on all 64 agents, with logits within 1e-5.
+  - A body refuses a context that another trunk encoded.
 - [test: test_sa_freezing.py]
 
 **Assumption.** Bit-identity is shown on CPU for these shapes. Another backend or JAX version should be

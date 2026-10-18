@@ -21,6 +21,8 @@ nothing. Import the submodules:
 * ``joint_check``: the composition arms with and without the combiner on S_t behind the program executor (B3).
 * ``encoder``: the token-set encoder, the one trunk every body reads its tokens through (B1).
 * ``bench_tick``: the per-tick latency bench of resolver, combiner and encoder (the 30 Hz gate).
-* ``freezing``: one frozen trunk and one adapter per verb; adding a verb never changes a frozen one (B4).
+* ``bench_bodies``: the per-tick cost of trained bodies, with the trunk per call or once per tick.
+* ``freezing``: one frozen trunk and one adapter per verb; adding a verb never changes a frozen one (B4); the trunk
+  once per tick (``encode_contexts``) and the trained verb as a body (``VerbBody``).
 * ``sim_adapter``: the combiner's choices onto the heads a simulator implements; drops counted.
 """

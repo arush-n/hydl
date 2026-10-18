@@ -40,6 +40,15 @@ and `TRAINING-0.7.2.md` (the measured 0.7.2 gameplay changes).
 - RULED: nothing external except the top LLM; the final architecture must not cheat (legal observation
   only; the privileged simulator mode is opt-in for proof-of-concept runs only).
 - RULED: the catalogue is the skill list, and more skills will be added later.
+- RULED (2026-10-18, late): the trunk runs once per tick for every agent, not inside every body call ("sure").
+  BUILT in `freezing.encode_contexts` / `VerbBody`; the body signature is unchanged
+  (`bench_bodies.py`, README 2.7).
+- RULED (2026-10-18, late): skills train on the base NPC model, the body the bridge drives ("the base npc model
+  is best (npc walking should just be an animation of it)"): the simulator's `npc_walk` motion model, with
+  walking as one of its movement states and not a separate model. The `player` model is not a training target.
+- RULED (2026-10-18, late): training starts only from a clear plan the owner has approved ("depends, you need
+  to have a clear plan"): `TRAINING_PLAN.md`. The dataset smoke (`bc_smoke`, seconds) may be used where it
+  helps ("your choice if it helps").
 
 ## 1. Where it is built
 

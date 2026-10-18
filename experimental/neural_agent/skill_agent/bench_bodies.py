@@ -1,22 +1,23 @@
-"""The per-tick cost of trained skill bodies, as the combiner calls them and batched two ways.
+"""The per-tick cost of trained skill bodies: the trunk per call, the trunk once per tick, and two batched layouts.
 
 ``bench_tick`` (B1) timed the resolver, the combiner with placeholder bodies and one encoder call over all agents:
-p95 2.29 ms at batch 8, against the 15 ms bar of the 30 Hz ruling. A trained body is a verb of a
-``freezing.SkillNetwork``: the shared trunk (``encoder.py``) and the verb's own adapter, compiled per verb
-(``freezing.verb_logits``), with the trunk inside every verb's program. The combiner calls each granted body once per
-agent per tick (``Combiner.step``, step 6). So as built, a tick of B agents that each hold k skills runs B * k
-compiled programs at batch 1, and each runs the trunk again. This bench times that path and two batched layouts that
-compute the same choices, over the same agents and weights:
+p95 2.29 ms at batch 8, against the 15 ms bar of the 30 Hz ruling. A trained body is ``freezing.VerbBody``, a verb of
+a ``freezing.SkillNetwork``: the shared trunk (``encoder.py``) and the verb's own adapter. The combiner calls each
+granted body once per agent per tick (``Combiner.step``, step 6). On raw token sets a body runs its whole verb program
+(``freezing.verb_logits``), so a tick of B agents that each hold k skills runs the trunk B * k times. With
+``freezing.encode_contexts`` the trunk runs once per tick and each body runs only its adapter (owner ruling
+2026-10-18). This bench times both through the combiner, and two batched layouts outside it, over the same agents
+and weights. All four neural layouts choose the same factors (``test_sa_bench_bodies.py``):
 
 * ``combiner_stub``: ``Combiner.step`` for every agent with ``StubBody`` bodies that never finish, the bookkeeping
   alone.
-* ``as_built``: ``Combiner.step`` for every agent with trained-shape bodies. Each body calls ``verb_logits`` on its
-  agent's tokens at batch 1, reads the logits back and takes one choice per head.
+* ``as_built``: ``Combiner.step`` for every agent, the bodies on raw token sets: every body call runs the trunk.
+* ``encoded``: ``encode_contexts`` once, then ``Combiner.step`` for every agent: every body call runs its adapter on
+  the agent's context row.
 * ``per_verb``: the bodies' work without the combiner, one ``verb_logits`` call per verb over the agents holding it.
   The trunk still runs once per verb.
-* ``shared_trunk``: one trunk call over all B agents, then one adapter-only program per verb over its agents' context
-  rows, so the trunk runs once per tick. Like ``verb_logits``, an adapter program is compiled per verb and never
-  stacked with another verb's, so adding a verb does not change it.
+* ``shared_trunk``: ``encode_agents`` once, then one ``adapter_logits`` call per verb over its agents' context rows,
+  without the combiner.
 
 Each agent holds one verb in each of its first k scopes (``SCOPE_ORDER``), and a verb owns every gen-7 head of its
 scope. With ``--verbs shared`` every agent holds the same verb in a scope, so the batched layouts batch across agents;
@@ -35,7 +36,6 @@ Run from the repository root, with JAX_PLATFORMS=cpu::
 from __future__ import annotations
 
 import argparse
-import functools
 import json
 import os
 import random
@@ -48,27 +48,27 @@ import jax
 import numpy as np
 
 from experimental.neural_agent.skill_agent import bench_tick
-from experimental.neural_agent.skill_agent.combiner import AgentContext, BodyStep, StubBody
-from experimental.neural_agent.skill_agent.encoder import EncoderConfig, encoder_apply_jit, stack_batch
-from experimental.neural_agent.skill_agent.freezing import AdapterParams, SkillNetwork, new_network, verb_logits
+from experimental.neural_agent.skill_agent.combiner import AgentContext, StubBody
+from experimental.neural_agent.skill_agent.encoder import EncoderConfig, stack_batch
+from experimental.neural_agent.skill_agent.freezing import (
+    VerbBody,
+    adapter_logits,
+    encode_agents,
+    encode_contexts,
+    new_network,
+    verb_logits,
+)
 from experimental.neural_agent.skill_agent.library import SkillLibrary
-from experimental.neural_agent.skill_agent.surface import head_layout
+from experimental.neural_agent.skill_agent.surface import scope_heads
 
-__all__ = ["LAYOUTS", "SCOPE_ORDER", "layout_choices", "main"]
+__all__ = ["LAYOUTS", "SCOPE_ORDER", "VERB_MODES", "layout_choices", "main"]
 
 SCOPE_ORDER: tuple[str, ...] = ("locomotion", "gaze", "hands", "posture_defence", "abilities_magic", "interaction")
 """The scopes an agent's k skills occupy, first k in this order."""
 
-LAYOUTS: tuple[str, ...] = ("combiner_stub", "as_built", "per_verb", "shared_trunk")
+LAYOUTS: tuple[str, ...] = ("combiner_stub", "as_built", "encoded", "per_verb", "shared_trunk")
 HORIZON_SECONDS: float = 3600.0
 VERB_MODES: tuple[str, ...] = ("shared", "distinct")
-
-
-def _scope_heads() -> dict[str, tuple[str, ...]]:
-    heads: dict[str, list[str]] = {}
-    for head in head_layout("gen7"):
-        heads.setdefault(head.scope, []).append(head.name)
-    return {scope: tuple(names) for scope, names in heads.items()}
 
 
 def _choices(logits: Mapping[str, jax.Array]) -> list[dict[str, int]]:
@@ -79,36 +79,10 @@ def _choices(logits: Mapping[str, jax.Array]) -> list[dict[str, int]]:
     return [{head: int(np.argmax(values[row])) for head, values in host.items()} for row in range(rows)]
 
 
-@dataclass(frozen=True)
-class _TrainedShapeBody:
-    """A body shaped like a trained one: ``verb_logits`` on its agent's tokens at batch 1, one choice per head."""
-
-    network: SkillNetwork
-    verb: str
-
-    def __call__(self, request: Any, ticks_since_start: int, observation_tokens: Any, belief_tokens: Any) -> BodyStep:
-        (factors,) = _choices(verb_logits(self.network, self.verb, stack_batch([observation_tokens])))
-        return BodyStep(factors)
-
-
-@functools.lru_cache(maxsize=None)
-def _adapter_program(verb: str, heads: tuple[str, ...]) -> Callable[[AdapterParams, jax.Array], dict[str, jax.Array]]:
-    """The jitted adapter of one verb on trunk contexts float32[B, O]; ``verb`` keys the cache, as in freezing."""
-
-    def run(adapter: AdapterParams, context: jax.Array) -> dict[str, jax.Array]:
-        hidden = jax.nn.gelu(context @ adapter.hidden.weight + adapter.hidden.bias)
-        return {name: hidden @ layer.weight + layer.bias for name, layer in adapter.heads.items()}
-
-    return jax.jit(run)
-
-
 @dataclass
 class _Setup:
-    """One configuration: the agents, the verbs each holds, the network and the four layouts' callables."""
+    """One configuration: the number of calls per tick and the callable of each layout."""
 
-    batch: int
-    skills: int
-    verbs: str
     calls: dict[str, int]
     run: dict[str, Callable[[int], list[dict[str, int]]]]
 
@@ -121,37 +95,36 @@ def _setup(batch: int, skills: int, verbs: str, seed: int) -> _Setup:
     rng = random.Random(seed)
     agents = [bench_tick._build_agent(rng) for _ in range(batch)]
     scopes = SCOPE_ORDER[:skills]
-    scope_heads = _scope_heads()
     held = [tuple(f"bench_{scope}" if verbs == "shared" else f"bench_{scope}_{index}" for scope in scopes)
             for index in range(batch)]
     verb_scope = {verb: scope for row in held for verb, scope in zip(row, scopes)}
-    network = new_network(jax.random.PRNGKey(seed), EncoderConfig(), {verb: scope_heads[scope]
-                                                                        for verb, scope in verb_scope.items()})
+    network = new_network(jax.random.PRNGKey(seed), EncoderConfig(),
+                          {verb: scope_heads(scope) for verb, scope in verb_scope.items()})
     trained, stub = SkillLibrary(), SkillLibrary()
     for verb, scope in sorted(verb_scope.items()):
         trained.create(verb, description=f"a trained-shape {scope} skill", scopes=(scope,),
-                       body=_TrainedShapeBody(network, verb))
+                       body=VerbBody(network, verb))
         stub.create(verb, description=f"a stub {scope} skill", scopes=(scope,),
-                    body=StubBody(layout="gen7", heads=scope_heads[scope]))
+                    body=StubBody(layout="gen7", heads=scope_heads(scope)))
     requests = [[trained.request(verb, agent=index, request_id=number + 1, tick=0, horizon_seconds=HORIZON_SECONDS)
                  for number, verb in enumerate(row)] for index, row in enumerate(held)]
-    contexts = [AgentContext(world_bounds=bench_tick.WORLD_BOUNDS, known_entities=bench_tick.KNOWN_ENTITIES,
-                             observation_tokens=agent.packed) for agent in agents]
+    contexts = {index: AgentContext(world_bounds=bench_tick.WORLD_BOUNDS, known_entities=bench_tick.KNOWN_ENTITIES,
+                                    observation_tokens=agent.packed) for index, agent in enumerate(agents)}
     rows = [agent.packed for agent in agents]
     groups = {verb: tuple(index for index, row in enumerate(held) if verb in row) for verb in sorted(verb_scope)}
-    trunk = encoder_apply_jit(network.config)
 
-    def combined(library: SkillLibrary) -> Callable[[int], list[dict[str, int]]]:
+    def combined(library: SkillLibrary, encode: bool) -> Callable[[int], list[dict[str, int]]]:
         combiner = library.combiner("gen7")
         names = combiner.head_names
 
         def step(tick: int) -> list[dict[str, int]]:
+            current = encode_contexts(network, contexts) if encode else contexts
             out = []
             for index in range(batch):
-                result = combiner.step(tick, index, requests[index], contexts[index])
+                result = combiner.step(tick, index, requests[index], current[index])
                 if any(status.kind not in ("accepted", "running") for status in result.statuses):
                     raise RuntimeError(f"agent {index} tick {tick}: {[s.kind for s in result.statuses]}")
-                owned = {head for verb in held[index] for head in scope_heads[verb_scope[verb]]}
+                owned = {head for verb in held[index] for head in scope_heads(verb_scope[verb])}
                 out.append({name: int(choice) for name, choice in zip(names, result.factors) if name in owned})
             return out
 
@@ -168,25 +141,24 @@ def _setup(batch: int, skills: int, verbs: str, seed: int) -> _Setup:
 
     def shared_trunk(tick: int) -> list[dict[str, int]]:
         out: list[dict[str, int]] = [{} for _ in range(batch)]
-        context = trunk(network.trunk, stack_batch(rows)).context
+        context = np.stack([observation.context for observation in encode_agents(network, rows)])
         for verb, members in groups.items():
             selected = context if len(members) == batch else context[np.asarray(members)]
-            program = _adapter_program(verb, tuple(network.adapters[verb].heads))
-            for member, choice in zip(members, _choices(program(network.adapters[verb], selected))):
+            for member, choice in zip(members, _choices(adapter_logits(network, verb, selected))):
                 out[member].update(choice)
         return out
 
     neural = batch * skills
     return _Setup(
-        batch=batch, skills=skills, verbs=verbs,
-        calls={"combiner_stub": 0, "as_built": neural, "per_verb": len(groups), "shared_trunk": 1 + len(groups)},
-        run={"combiner_stub": combined(stub), "as_built": combined(trained), "per_verb": per_verb,
-             "shared_trunk": shared_trunk},
+        calls={"combiner_stub": 0, "as_built": neural, "encoded": 1 + neural, "per_verb": len(groups),
+               "shared_trunk": 1 + len(groups)},
+        run={"combiner_stub": combined(stub, encode=False), "as_built": combined(trained, encode=False),
+             "encoded": combined(trained, encode=True), "per_verb": per_verb, "shared_trunk": shared_trunk},
     )
 
 
 def layout_choices(batch: int, skills: int, verbs: str, seed: int = 0) -> dict[str, list[dict[str, int]]]:
-    """Each layout's choices on tick 0, per agent: head -> choice. The three neural layouts must agree."""
+    """Each layout's choices on tick 0, per agent: head -> choice. The four neural layouts must agree."""
 
     setup = _setup(batch, skills, verbs, seed)
     return {layout: setup.run[layout](0) for layout in LAYOUTS}
@@ -229,7 +201,7 @@ def _print_report(results: Sequence[dict[str, Any]]) -> None:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Per-tick cost of trained skill bodies: as built and batched.")
+    parser = argparse.ArgumentParser(description="Per-tick cost of trained skill bodies: trunk per call, once, batched.")
     parser.add_argument("--batch", default="1,8", help="agents per tick, comma-separated (default 1,8)")
     parser.add_argument("--skills", default="1,2,3,6", help="skills each agent holds, comma-separated (default 1,2,3,6)")
     parser.add_argument("--verbs", default="shared,distinct", help="shared, distinct or both (default both)")
