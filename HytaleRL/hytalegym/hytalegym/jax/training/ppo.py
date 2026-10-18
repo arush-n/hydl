@@ -71,6 +71,10 @@ class PPOEnvironment:
     spec: EnvironmentSpec
     episode_outcome: Callable[[Any, jax.Array], EpisodeOutcome] | None = None
     step_detailed: Callable | None = None
+    # Optional fidelity-only transition path.  Training callers continue to
+    # use ``step``/``step_detailed``; environments that can replay measured
+    # engine timing may expose this sibling without changing that contract.
+    step_detailed_fidelity: Callable | None = None
 
 
 def combat_episode_outcome(

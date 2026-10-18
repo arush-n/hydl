@@ -105,6 +105,12 @@ from hytalegym.jax.combat.inventory import (
 
 ARSENAL_POLICY_SCHEMA = "hytalerl_combat_arsenal_policy_v14"
 ARSENAL_POLICY_VERSION = 14
+# Stable contract for the layout and action meanings consumed by the JVM port.
+# The full policy digest may change with compatible environment semantics;
+# bump this ABI only when the JVM projection or action mapping must change.
+ARSENAL_POLICY_JVM_PROJECTION_ABI = (
+    "hytalerl_arsenal_jvm_projection_abi_v1"
+)
 
 ARSENAL_POLICY_EXCLUDED_LEGACY_COMBAT_FLOAT_FEATURES = (
     "target_phase_idle",
@@ -1136,6 +1142,7 @@ __all__ = [
     "ARSENAL_POLICY_PLANNED_NON_TARGET_HEADS",
     "ARSENAL_POLICY_PLANNED_NON_TARGET_HEAD_SIZES",
     "ARSENAL_POLICY_SCHEMA",
+    "ARSENAL_POLICY_JVM_PROJECTION_ABI",
     "ARSENAL_POLICY_TARGET_RADIX_BUDGET",
     "ARSENAL_POLICY_VERSION",
     "action_target_radix_budget",

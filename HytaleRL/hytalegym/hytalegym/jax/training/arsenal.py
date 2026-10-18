@@ -217,18 +217,35 @@ def make_arsenal_ppo_environment(
             state.action_mask,
         )
 
-    def step_detailed(state, _policy_observation, action_ids, keys):
+    def _step_detailed(
+        state,
+        _policy_observation,
+        action_ids,
+        keys,
+        *,
+        motion_delta_seconds=None,
+    ):
+        if motion_delta_seconds is None:
+            transition = environment.step_factors(
+                _environment_carry(state),
+                action_ids,
+                keys,
+            )
+        else:
+            transition = environment.step_factors_with_params(
+                _environment_carry(state),
+                action_ids,
+                keys,
+                params,
+                motion_delta_seconds=motion_delta_seconds,
+            )
         (
             next_state,
             next_observation,
             reward,
             done,
             info,
-        ) = environment.step_factors(
-            _environment_carry(state),
-            action_ids,
-            keys,
-        )
+        ) = transition
         next_state = _ppo_state(next_state, next_observation)
         return (
             next_state,
@@ -243,6 +260,26 @@ def make_arsenal_ppo_environment(
             done,
             next_state.action_mask,
             info,
+        )
+
+    def step_detailed(state, _policy_observation, action_ids, keys):
+        return _step_detailed(state, _policy_observation, action_ids, keys)
+
+    def step_detailed_fidelity(
+        state,
+        _policy_observation,
+        action_ids,
+        keys,
+        motion_delta_seconds,
+    ):
+        """Step once using measured engine timing for sim-to-server replay."""
+
+        return _step_detailed(
+            state,
+            _policy_observation,
+            action_ids,
+            keys,
+            motion_delta_seconds=motion_delta_seconds,
         )
 
     def step(state, policy_observation, action_ids, keys):
@@ -268,6 +305,7 @@ def make_arsenal_ppo_environment(
         spec=_arsenal_ppo_environment_spec(token_config),
         episode_outcome=episode_outcome,
         step_detailed=step_detailed,
+        step_detailed_fidelity=step_detailed_fidelity,
     )
 
 

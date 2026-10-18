@@ -24,6 +24,7 @@ from hytalegym.jax.combat.mechanics.runtime.kernel import (
     damp_applied_motion,
     damage_resistance_modifiers,
     guard_resource_available,
+    native_client_configured_force_velocity,
     native_npc_null_config_force_velocity,
     project_applied_motion_velocity,
     resolve_applied_motion_velocity,

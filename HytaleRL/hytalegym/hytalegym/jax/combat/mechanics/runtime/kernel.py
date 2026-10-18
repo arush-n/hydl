@@ -46,6 +46,7 @@ from hytalegym.jax.combat.mechanics.runtime.motion import (  # noqa: F401
     apply_defense_commands,
     damp_applied_velocity,
     damp_applied_motion,
+    native_client_configured_force_velocity,
     native_npc_null_config_force_velocity,
     project_applied_motion_velocity,
     resolve_applied_motion_velocity,

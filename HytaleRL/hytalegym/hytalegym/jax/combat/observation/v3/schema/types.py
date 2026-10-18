@@ -114,9 +114,11 @@ class LearnerArsenalAction(NamedTuple):
     ``gait`` and ``dodge_direction`` are decoded from one published locomotion
     head because they are physically exclusive, so at most one of them is ever
     non-idle. ``gait`` is idle/walk/run/sprint/sneak and scales the speed the
-    walk controller is asked for; ``world_move_direction`` stays the compass
-    choice it has always been. ``recipe_candidate_index`` is retained for the
-    world-action executor but is no longer published, and decodes to -1.
+    walk controller is asked for; ``world_move_direction`` retains its wire
+    name for compatibility but is a body-relative direction ring (forward,
+    forward-right, right, and so on). ``recipe_candidate_index`` is retained
+    for the world-action executor but is no longer published, and decodes to
+    -1.
     """
 
     skill_id: Array

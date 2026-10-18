@@ -7,6 +7,11 @@ from typing import NamedTuple
 import jax
 import jax.numpy as jnp
 
+try:
+    from jax.extend.core import concrete_or_error as _concrete_or_error
+except ImportError:  # JAX 0.9.x does not export this guard from jax.extend.core.
+    from jax.core import concrete_or_error as _concrete_or_error
+
 from hytalegym.jax.combat import TargetNavigationProvider
 from hytalegym.jax.combat.runtime.reset import observe_batch
 from hytalegym.jax.combat.arsenal.environment import (
@@ -186,8 +191,7 @@ def step_multi_actor_arena(
     that scan. Callers cannot silently train on a different control cadence.
     """
 
-    # ``jax.extend.core`` does not export this guard on JAX 0.9.x.
-    microticks = jax.core.concrete_or_error(
+    microticks = _concrete_or_error(
         int,
         params.microticks,
         "multi-actor microticks must be statically known",
