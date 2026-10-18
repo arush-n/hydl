@@ -572,7 +572,9 @@ planned mount head and the gen-5 mask drops it]
 **What still speaks the old contract:**
 
 - `parity.py` and the ADK proof-of-concept skills (idle, pursuit, evader): twelve heads.
-- The JAX environment's action decoder (0.5.7): twelve heads.
+- The JAX environment's action decoder: twelve heads, on gen 5 and on the gen-7 render alike. The overlay
+  adds none of the nine planned heads, its dodge-head construct is a stub, and the policy layout publishes
+  no recipe head (`observation/v3/policy/layout.py`: "Crafting is out of scope for a combat agent").
 - The 0.7.2 NPC traces: these use the server's NPC state (14 columns) and control (9 columns) layouts,
   not policy heads.
 
@@ -666,8 +668,10 @@ done [(0, 'wave_at(friend)', 0, 'accepted'), (1, ..., 'running'), (2, ...), (3, 
 - **The combiner is a snapshot.** Register skills first, then build one combiner per episode; it holds
   the grant state.
 - **Starvation.** It is bounded only by the middle layer's aging rule.
-- **Gen 7 is unproved.** There is no gen-7 simulator yet. The fidelity ledger's pointer entries
-  (`FIDELITY.md`, 2026-10-17) pass only Dodge.
+- **Gen 7 is partly proved.** The gen-7 simulator is a render of HEAD's engine with the `sim/gen7`
+  overlay. Since 2026-10-18 (late) it and the bridge belong to the peer session
+  (`sim/gen7/GEN7-PLAN.md` section 2b). In the fidelity ledger's current status (`FIDELITY.md`) only
+  Dodge passes, so a verb that needs any other mechanic cannot count a gen-7 training result yet (E14).
 - **Trace timing.** The 32 native NPC traces from the live 0.7.2 server (A7) have one frame per 1/30 s
   (120 TPS × 4 dilation), the gen-7 tick under the 30 Hz ruling, so they need no resampling for gen 7.
   A run at the gen-5 simulator's 0.045 s tick must resample them and record the factor.

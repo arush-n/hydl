@@ -195,10 +195,14 @@ the choice is final. No other criterion.
 
 ## 4. The gen-7 environment and its verification
 
-**Status.** The bridge to the live 0.7.2 server is done. The JAX simulator still models 0.5.7; the
-recalibration is a plan (P0 diff inventory, P1 version plumbing, P2 locomotion and world, P3 combat
-content, P4 crafting, P5 source-pin certifications, P6 contracts and cutover). Until P2 lands no
-skill can be trained on gen-7 in the simulator; until then the live server is the environment for
+**Status (2026-10-18, late).** The bridge to the live 0.7.2 server is done. The gen-7 simulator is a
+render of HEAD's engine with the `sim/gen7` overlay (`HytaleRL/hytalegym/hytalegym/sim/`, `PORTING.md`),
+and the identity gate keeps gen 5 bit-identical. The content layer, the locomotion rows, line of sight,
+and constructs for the NPC jump arc, dodge timing, dagger damage, the guard window, the crossbow reload
+binding, mana and crafting (1,168 of 2,047 recipes) are in. The rest of `SIMULATOR-0.7.2.md`'s P2 to P6
+is open; each mechanic's status is the roll-up in `FIDELITY.md`. Since 2026-10-18 (late) the simulator
+and the bridge belong to the peer session (`sim/gen7/GEN7-PLAN.md` section 2b). No skill trains on
+gen 7 yet (section 7b says what that waits on). Until then the live server is the environment for
 demonstrations and differentials, and sections 1 to 3 are built and proved with stub bodies.
 
 **What this layer needs the simulator to reproduce, and how each is verified.** Every mechanic gets a
@@ -278,7 +282,7 @@ E8, E9 and the combat bodies after P3, E10 as soon as traces are recorded, E12 a
 
 | Phase | Work | Needs | Gate |
 |---|---|---|---|
-| A, now | `surface.py`, `catalogue.py` (contracts, descriptions, activities from the 139 rows), `requests.py`, `references.py`, `combiner.py` with stub bodies; the fidelity ledger; record NPC traces on the live 0.7.2 server | nothing | E1, E7 (stubs), R1-R6, traces on disk |
+| A (done) | `surface.py`, `catalogue.py` (contracts, descriptions, activities from the 139 rows), `requests.py`, `references.py`, `combiner.py` with stub bodies; the fidelity ledger; record NPC traces on the live 0.7.2 server | nothing | E1, E7 (stubs), R1-R6, traces on disk |
 | B | the set encoder and `body.py`; E11 framework decision; the locomotion body on the baseline task | simulator P2 (locomotion, LOS, Regions) | E2, E3, E4, E5, E6, E12, E13 |
 | C | gaze and posture bodies; combination gates with real bodies | B | E7 with real bodies |
 | D | hands, abilities, interaction bodies: melee kits, ranged with lead and arc, runes with mana, interrupts, mining and placing | simulator P3 (combat), world edits executor | E8, E9, per-verb gates |
@@ -288,7 +292,7 @@ E8, E9 and the combat bodies after P3, E10 as soon as traces are recorded, E12 a
 Per phase: run the gate, record it in the ledger with the command and the numbers, append a dated note
 to `SKILL.md`, commit in one batch, never push.
 
-## 7b. Phase B for the skill-agent session (proposed 2026-10-17, late; the gen-7 simulator is not ready)
+## 7b. Phase B for the skill-agent session (proposed 2026-10-17, late; done 2026-10-18)
 
 Phase A is done (eight commits: catalogue, protocol, combiner, parity, trace loader, fidelity ledger,
 library, README; 122 verbs and 19 programs run on stand-in bodies). Nothing below needs the gen-7
@@ -304,6 +308,25 @@ rules: gates recorded before claims, commit per step, never push, stage only cha
 | B5 | **One catalogue reader.** `skill_agent/catalogue.py` is the reader; `jev/system_one/catalogue_matching.py` imports it instead of parsing again (this session does the import change) | both tests green; the two readers' row-for-row agreement test retired | one source of truth, as the owner asked |
 | B6 | **Per-skill progress and termination reasons in the contract.** From the catalogue's "done" column: the typed progress signals and the stop reasons each verb reports into the status stream | every contract carries them; the stub bodies emit them; the scratchpad shows them | the context the upper layers need to know when to ask for more (owner) |
 | then | E2-E6 of section 6 on the rendered gen-7 locomotion engine (the set encoder against the flat MLP on the baseline task; one body, three verbs; typed arguments; interruption; calibrated status) | section 6 bars | needs the port's phase 2 (locomotion, LOS) |
+
+**Status (2026-10-18, late).** B1 to B6 are built and committed:
+- B1 `11acfc5`;
+- B2 `baff062`, with the body-yaw label (`cbd4e00`) and terrain, meters and visibility (`5286797`);
+- B3 `14db188`, `e62f654` and `9b6c571` (the combiner on every tick; `test_sa_joint.py` forces the
+  rejected path);
+- B4 `0f17bc8`;
+- B5, done on the middle layer's side (`jev/system_one/catalogue_matching.py` imports
+  `catalogue.parse_catalogue`);
+- B6 `3439c67`;
+- also `sim_adapter.py` (`19c642f`).
+
+The joint check matches at 512 ticks at a 200 ms and at the default 20 ms host budget (ledger,
+2026-10-18). The `then` row waits on three things:
+- the simulator's locomotion phase: the walk resume after landing, and the Region library recaptured
+  on 0.7.2;
+- the owner's go-ahead for training runs (phase A's rule: none);
+- the owner's choice of the motion model the skills train on. The `player` model has no live oracle
+  while the bridge body is an NPC (`FIDELITY-0.7.2.md` (e), P2 item 1).
 
 B2's observation, recorded as the owner asked (ruling 2026-10-17, "go ahead"). The cloned body reads three
 token types the body contract already carries:
@@ -321,9 +344,12 @@ network. Next for this observation (not started):
 - choose obstacle and height-change cells over the floor (the nearest 64 are mostly floor);
 - record traces on more worlds before judging the token.
 
-Owner items outstanding from phase A: pushing the eight commits; reviewing that session's edits to the
-private catalogue (five reworded activity sequences, six added programs); the uncommitted pursuit fix in
-`arena/training/runs/pursuit_run.py`.
+Owner items outstanding (2026-10-18, late):
+- pushing: nothing is pushed, and main is 148 commits ahead of origin across all sessions;
+- reviewing the lower layer's edits to the private catalogue (five reworded activity sequences, six
+  added programs);
+- the uncommitted pursuit fix in `arena/training/runs/pursuit_run.py`;
+- for the `then` row, the training go-ahead and the motion-model choice.
 
 ## 8. Interfaces to the middle layer
 

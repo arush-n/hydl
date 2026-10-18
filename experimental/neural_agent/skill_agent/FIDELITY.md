@@ -3,8 +3,34 @@
 This ledger records every native differential on the live Hytale 0.7.2 server that calibrates a simulator
 mechanic, with its receipt. A verb's training result counts only after the mechanics it depends on have
 passed their rows in BUILD.md section 4. Entries are appended, never edited or deleted; a later entry
-supersedes an earlier one for the same mechanic. Created 2026-10-17 with every seed row `pending`; nothing
-has passed.
+supersedes an earlier one for the same mechanic. Created 2026-10-17 with every seed row `pending`; where each
+mechanic stands now is the roll-up below.
+
+## Current status (roll-up, 2026-10-18 late)
+
+This summarises the latest entry for each mechanic. It is not an entry: refresh it in the commit that appends one.
+Since 2026-10-18 (late) the gen-7 simulator and the bridge belong to the peer session
+(`HytaleRL/hytalegym/hytalegym/sim/gen7/GEN7-PLAN.md` section 2b), whose receipts are in
+`HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md`. A verb counts a gen-7 training result only when every
+mechanic it depends on reads pass here (BUILD.md E14). Only Dodge passes.
+
+| Mechanic | Latest entry | What passes | What is open |
+|---|---|---|---|
+| Movement | 2026-10-18, fail | NPC flat walk and the 3-block ledge (<= 1.85e-5 m); on the render, jump in place, jump held and jump held with forward (<= 1.5e-5 m, two seeds) | single jump then forward (0.96-1.03 m: native walks again only on the third tick after landing); slopes and stairs (no fixture); the `player` motion model the skills train with has no live oracle |
+| Line of sight | 2026-10-17, fail | the three full-cube fixture rays; since then the render carries the 0.7.2 detail-hitbox rule and the rays agree under it (FIDELITY-0.7.2.md (g), not an entry here) | no fixture puts a partial-hitbox block in a ray |
+| Terrain | 2026-10-17, fail | nothing | the Region library recaptured on 0.7.2: all three staged libraries are still 0.5.7 captures (manifests rechecked 2026-10-18) |
+| Reset timing | 2026-10-18, pending | the offset is documented (4 engine ticks on the first step) | applying it in the session clock |
+| Melee | 2026-10-18, fail | on the render: the guard cancel window (13 of 13 attacks), dagger damage (15 of 15 materials), the Trork battleaxe hit ticks and three seeded contacts | the agent's own hit timing (native minus engine: battleaxe -1, daggers +1, mace 0, sword +2 ticks; kunai one tick longer per slot); the 0.7.2 sword wind-up and hold times (not applied); knockback (no live test); hit interrupt and flinch (absent) |
+| Ranged | 2026-10-18, fail | the crossbow reload on Ability4 runs on the render; the Primary reload and two Big Arrow contacts; the iron spear throw; the fire-trap placement | the 0.7.2 shortbow tier speeds and damage and the crossbow combo damage (not applied); native projectiles register fewer hits than the simulator predicts; the crossbow combo, signature and interrupt cases (bridge side) |
+| Mana and runes | 2026-10-17, fail | since then, mana 100 / 100 and +1 per 0.3 s on the render (native 0.2982 s; FIDELITY-0.7.2.md (j), not an entry here) | runes (absent) |
+| Stamina, oxygen, signature energy, durability tables | 2026-10-18, fail | the shield bash stamina cost and regeneration phase | the 0.7.2 durability tables (57 maximum and 82 loss rows of 143, not applied); stamina, oxygen and signature rates (unmeasured live); the shield bash regeneration delay (Set -1.5 to Min -1) |
+| Dodge | 2026-10-18, pass | the lifecycle on the render (accepted on tick 2, force on tick 3, stamina on tick 4); the overlapping hit, natively | the render keeps four dodge slots (forward and back masked) |
+| Climbing, doors, swimming, gliding, riding | 2026-10-17, fail | nothing | four mechanics absent; doors unmeasured (the door audit crashes on 0.7.2) |
+| Crafting | 2026-10-18, fail | 1,168 of 2,047 recipes are offered and commit on the render (an offline count against the live catalog) | bench tiers above 1, memories levels, timed and processing recipes, the structural output's one-tick landing; the policy surface publishes no recipe head |
+| Source-pin audits | 2026-10-17, fail | nothing | 0 of 11 on 0.7.2 (four crash on removed classes) |
+| Contracts and checkpoints | 2026-10-17, pending | nothing | no gen-7 checkpoint |
+| Legal observation | 2026-10-17, pending | nothing | the three-world leakage test on skill inputs (lower-layer work, not built) |
+| Guard (added 2026-10-18) | 2026-10-18, fail | the release-tick mask on the render | the 0.35 s wait before a new guard (needs engine state); the shield bash never offered during a held guard (bridge item #61) |
 
 ## Seed rows (2026-10-17)
 
