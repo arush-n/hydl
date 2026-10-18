@@ -426,3 +426,36 @@ All under `R/` = `/Users/arush/.claude/jobs/31947bd7/tmp/fidelity072/`.
 | `live/03h_pytest_combat.{log,xml}` | `tests/fidelity/combat` native tests |
 | `live/03i_pytest_selected.{log,xml}`, `live/03j_door_compare.out` | selected combat compares, door compare |
 | `scripts/` | every script used |
+
+## (g) Phase 3 on the gen-7 render (2026-10-18; `sim/gen7` overlay)
+
+Render: `hytalegym/sim/gen7/engine`, rendered from commit 8707eec (its `jax/`, `world/`, `geometry/`
+and `rulesets/` are unchanged to HEAD 97539bf). Bridge: 0.7.2 jar SHA-256 686BC4BC...0012 on
+127.0.0.1:5556, started by `tools/launch_bridge_072.py` after the native lease was acquired and
+released (the port was free); no other process was stopped. Receipts (JSON, command, inputs, numbers):
+`~/.claude/jobs/31947bd7/tmp/phase3/receipts/` (`r2_live_gen7_motion_and_geometry.json`,
+`r3_los_probe_full_cubes.json`, `r4_jump_control.json`, `locomotion_rows_head_vs_render.json`).
+
+| Row | Gen-7 differential (what ran) | Measured | Bar | Status |
+|---|---|---|---|---|
+| 1b | motion, ledge fixture (flat floor and three-block trench), 30 steps, JAX = gen-7 render | max position error 1.1444e-05 m; velocity 3.4e-04 | <= 5e-4 m | MATCH on the gen-7 render |
+| 2a | native_geometry_compare probes on the gen-7 render with hook 2b active: LOS wall, diagonal graze, diagonal block | 3 of 3 rays agree with native under both rules (gen-5 rule and detail rule) | every fixture ray | MATCH (full cubes; partial blocks not measured, see 2b) |
+| 1c | NPC jump: one jump in place over 12 steps; single jump with forward over 30 steps | gen 5 2.384 m and 2.415 m; gen 7 2.418 m; the JAX side applies 11.8 (player impulse), native 5.099 | <= 5e-4 m | MISMATCH, unchanged. Cause: committed `jax/combat/types.py` gives the NPC learner `PLAYER_JUMP_FORCE` on purpose; the uncommitted working tree uses 5.099. The earlier 0.0044 m receipt was measured on that working tree |
+| 1d | slope fixture, motion differential | not run: no slope fixture on the bridge; the 0.7.2 server jar reads neither key (scan of 38,436 classes: `MovementConfig` and the client struct `MovementSettings` only) | <= 5e-4 m | UNMEASURED |
+| 2b | partial-box LOS ray (slab, stair or fence in the ray) | not run: `half_block` runs only under `native_fidelity`, which has no target and no `target_los` | every fixture ray | UNMEASURED (construct implemented, `sim/gen7/mechanics/line_of_sight.py`) |
+| 1e | walk descent (minimum descent rate) | not run; the premise (TRAINING-0.7.2.md item 8, "(code)") was not located in the walk controller's fall-speed method | <= 5e-4 m | UNMEASURED; switch not hooked |
+
+Also measured on the same bridge: the native half-block probe (`HALF_BLOCK_DIFFERENTIAL_PASS`, its own
+2e-3 m tolerance, not the 5e-4 bar) and the ceiling and unloaded-chunk probes pass on the gen-7 render.
+
+Locomotion audit at the 0.7.2 baseline (`tests/fidelity/surrogate_locomotion_source_audit.py`, 2026-10-18):
+0.7.2 semantic SHA-256 `db3dc468...`, server `23f71f03...` (matches the ground truth above);
+`matches_0_5_7_baseline` False: 14 class files drift (among them `MotionControllerWalk`, `MovementConfig`,
+`PhysicsMath`) and 6 assets drift (`MovementConfig/Default.json`, `GameplayConfigs/Default.json`). The
+0.5.10 control matches its 0.5.7 pin (`7f7ce39d...`). The semantic hash covers only those hashes and the
+script's hard-coded `SOURCE_CONTRACT`, so it does not verify the 0.7.2 locomotion semantics. Baseline
+recorded here; the pins are not changed (P5).
+
+Gaps that remain: row 1c (committed jump impulse; an engine change for every generation, so an owner
+decision with these numbers), rows 1d, 1e and 2b (no fixture or no reader), and the production
+perception line of sight (`jax/world/perception/los.py`), which hook 2b does not cover.

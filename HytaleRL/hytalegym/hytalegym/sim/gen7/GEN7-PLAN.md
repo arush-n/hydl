@@ -89,7 +89,35 @@ identical, timing deltas noise under load 28-39): `sim/BASELINES.md` section 5. 
 (`sim/gen5/overlay.py` `OPTIMIZED`: the damage-resistance walk, thunk events 6,718 -> 4,200 per step at
 batch 64, +6 % throughput); four more hot spots proposed, not implemented. A methodology question for the
 owner: the planned (production) compile and the general compile are not bit-identical (6 of 315 arrays, max
-2.4e-7 over 64 steps), so moving callers to the planned path is a decision, not a free speed-up.
+2.4e-7 over 64 steps), so moving callers to the planned path is a decision, not a free speed-up. Ruled 2026-10-18:
+acceptable (the difference is far below the native differential bars); gates compare like with like and a mode
+change re-baselines the fingerprints (`sim/BASELINES.md` section 5).
+
+**Phase 3 status (2026-10-18; receipts `~/.claude/jobs/31947bd7/tmp/phase3/receipts/`, ledger `FIDELITY-0.7.2.md`
+section g).** Activated: 16 swap-plan rows (15 `PLAYER_*` locomotion constants from `movement.json`, 1 sprint
+multiplier 1.273); gen-5 and gen-7 tables agree on all 63 shared MovementConfig keys, so the rendered literals
+equal HEAD in value and type, and only `MaxSlopeAngleDegrees` 30 and `MaxWallAngleDegrees` 15 are new. Render: 41
+rows applied (13 clock, 16 locomotion, 11 patches, 1 hook), 73 pending. Line of sight, hook 2b
+(`Constructs.line_of_sight = detail_hitbox`, `sim/gen7/mechanics/line_of_sight.py`): per opaque cell with detail
+boxes the ray must meet a valid box; full cubes reduce to the gen-5 slab test; gen 5 returns the original function;
+300-ray comparison with a float64 gen-5 reference, 0 mismatches. Differentials against a live 0.7.2 bridge
+(`tools/launch_bridge_072.py`, port 5556, no process killed): motion on the flat floor with a ledge, max position
+error 1.14e-05 m against the 5e-4 bar, PASS; geometry compare, all eight stages PASS; LOS on full cubes 3 of 3
+fixtures match native. Locomotion audit at the 0.7.2 baseline recorded (14 class files and 6 assets drift from
+0.5.7; pins unchanged). Identity gate on gen 5 still bit-identical (4 passed, 24 min); tests/sim 86 passed.
+**Not met, with the reason:** slope and wall limits have no reader anywhere in the 0.7.2 server (a scan of 38,436
+classes finds them only in MovementConfig and the protocol; engine contact normals are axis-aligned), so the
+construct is a no-op: decision, set `slope_limits` False and record that gen 7 matches gen 5 on this field, the
+two parameters stay as rendered data; slope motion and partial-block LOS differentials need fixtures that do not
+exist (a slope case in `NativeEnvironmentSession.java` changes the bridge jar and its pin); NPC jump: HEAD gives the
+NPC learner `PLAYER_JUMP_FORCE` 11.8 while the native NPC first-step vertical speed is 5.099 (jump height 2.4 m
+against the 5e-4 bar, on gen 5 and gen 7 alike): decision by the ADR's rule that Hytale is right where the two
+disagree, gen 7 adopts the native NPC jump force behind its profile and gen 5 stays frozen; the production
+perception LOS (`jax/world/perception/los.py`) is not yet hooked, only `world/geometry` is; `walk_descent`'s
+premise is unverified; Region recapture not started (it writes shared world artifacts: it goes ahead into
+gen-7-specific artifact paths, never over the gen-5 ones). Two defects for the content layer: the swap plan's
+sprint record names the dict key, not the value (the overlay re-targets it); `sim/gen5/data` is a 0.5.10
+extraction while `gen5/profile.py` certifies 0.5.7 (relabel, or re-extract from a 0.5.7 archive if one exists).
 
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 

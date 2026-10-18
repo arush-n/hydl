@@ -164,6 +164,8 @@ receipt `~/.claude/jobs/31947bd7/tmp/render_bench/bench-20261018T010007Z.json`):
 "Planned" is what production training compiles; "general" (no compile flags) is how `rollout_arsenal_batch` and
 `step_learner_arsenal_batch` call the step. Planned meets the 15 ms per-tick target; general is over it at 8 NPCs
 (under the 33.3 ms budget). Planned and general are not bit-identical (6 of 315 arrays, max 2.4e-7, 64-step
-sword-vs-battleaxe rollout): switching callers is the owner's methodology decision. Opt-in `OPTIMIZED` gen-5
+sword-vs-battleaxe rollout). Owner ruling 2026-10-18: a compile-mode difference far below the native differential
+bars (5e-4 per step for motion) is acceptable, so callers may use the planned compile; bit-exactness gates keep
+comparing like with like (same compile mode on both sides), and a change of mode re-baselines the fingerprints. Opt-in `OPTIMIZED` gen-5
 overlay (damage-resistance walk): bit-exact on the identity rollouts and on 10,240 random inputs; thunk events
 6,718 -> 4,200 per step at batch 64; un-profiled step 3.46 -> 2.40 ms; +6 % throughput under load.

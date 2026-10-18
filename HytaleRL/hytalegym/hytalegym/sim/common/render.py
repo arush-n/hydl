@@ -194,6 +194,9 @@ def _content_value(tables: Any, redirect, profile: Any) -> Any:
     if redirect.family == "adapter":
         adapter = getattr(importlib.import_module("hytalegym.sim.common.content.adapters"), redirect.row)
         output = adapter(tables)
+        if not isinstance(output, dict):
+            # a scalar adapter (walk_steering_sprint_multiplier) returns its value itself
+            return output
         if redirect.field not in output:
             raise RenderError(f"redirect {redirect.id}: adapter {redirect.row} has no {redirect.field!r}")
         return output[redirect.field]

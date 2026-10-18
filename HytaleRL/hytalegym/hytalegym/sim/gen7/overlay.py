@@ -33,7 +33,10 @@ unexplained live offsets first); durability (a JSON table: content redirect).
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from hytalegym.sim.common.overlay import (
+    Redirect,
     Hook,
     Overlay,
     Patch,
@@ -46,7 +49,27 @@ PROFILE_JAX = "combat/arsenal/profiles/hytale_0_5_7.py"
 
 _SWAP_PLAN = load_swap_plan()
 STEP_CLOCK, STEP_CLOCK_SITES = step_clock_redirects(_SWAP_PLAN)
-CONTENT_TODO, UNREACHABLE_RECORDS = swap_plan_redirects(_SWAP_PLAN, status="todo")
+CONTENT_ROWS, UNREACHABLE_RECORDS = swap_plan_redirects(_SWAP_PLAN, status="todo")
+#: Locomotion adapters, active from phase 3 (2026-10-18). Their 0.7.2 values equal the
+#: 0.5.10 values on every MovementConfig key the two tables share (only MaxSlopeAngleDegrees
+#: and MaxWallAngleDegrees are new; A2 and tests/sim/test_locomotion_rows.py), so these rows
+#: render the same numbers today and make the table the source for later versions.
+LOCOMOTION_ADAPTERS = ("player_locomotion", "walk_steering_sprint_multiplier")
+
+def _sprint_value_row(row: Redirect) -> Redirect:
+    """The swap plan's record for walk_steering_sprint_multiplier names the dict KEY text
+    "installed_default_forward_multiplier" on locomotion.py:177; the value is the literal 1.273 on
+    that line. Re-target the value (found 2026-10-18 when the render rewrote the key). The swap
+    plan generator should record the value token for inline literals (content agent)."""
+    if row.line != 177 or row.expression != "installed_default_forward_multiplier":
+        raise ValueError(f"unexpected sprint record: {row.line} {row.expression!r}")
+    return replace(row, expression="1.273")
+
+CONTENT_LOCOMOTION = tuple(
+    replace(_sprint_value_row(r) if r.row == "walk_steering_sprint_multiplier" else r, status="active")
+    for r in CONTENT_ROWS if r.row in LOCOMOTION_ADAPTERS
+)
+CONTENT_TODO = tuple(r for r in CONTENT_ROWS if r.row not in LOCOMOTION_ADAPTERS)
 
 _SWORD_KNOCKBACK = (
     "knockback displacement differential on 0.7.2 (TRAINING-0.7.2.md: Trork 0.19 m vs 0.44 m on "
@@ -118,12 +141,13 @@ PATCHES = (
           "PLAYER_SPRINT_REQUIRES_FORWARD_DOMINANT_TRAVEL = True\n\n"
           "#: 0.7.2 ``MovementConfig/Default.json`` adds ``MaxSlopeAngleDegrees`` and\n"
           "#: ``MaxWallAngleDegrees`` (absent in 0.5.x; sim/gen7/data/movement.json\n"
-          "#: config:Default). Rendered gen-7 parameters: nothing reads them until the\n"
-          "#: slope/wall construct lands (FIDELITY-0.7.2.md row 1d, P2).\n"
+          "#: config:Default). No 0.7.2 server class reads them (jar scan, 2026-10-18; the\n"
+          "#: keys sit in MovementConfig and the client protocol struct); sim/gen7/SKILL.md.\n"
           "PLAYER_MAX_SLOPE_ANGLE_DEGREES = 30.0\n"
           "PLAYER_MAX_WALL_ANGLE_DEGREES = 15.0\n",
           "1d", "a new stairs/slope bridge fixture and the motion differential (<= 5e-4 m per step)",
-          "new parameters only; no consumer and no Constructs switch exists yet"),
+          "new parameters only: the 0.7.2 server reads neither key (2026-10-18 scan of 38,436 classes: "
+          "MovementConfig and MovementSettings only); slope_limits stays a stub pending the owner's decision"),
     Patch("crafting_table_capacity", "crafting/contract.py",
           "# Installed 0.5.7 has 403 explicit plus 1,544 item-generated recipes.\n"
           "RECIPE_TABLE_CAPACITY = 1947\n",
@@ -154,9 +178,10 @@ HOOKS = (
          "one differential per rune: cost, cooldown, cast time, flight, effect",
          "7 ability runes plus Rune_Empty and 11 modifier runes under Server/Item/Items/Rune/"),
     Hook("detail_hitbox_line_of_sight", "world/geometry/__init__.py", "line_of_sight_result",
-         f"{_MECHANICS}.line_of_sight:construct", "line_of_sight", "stub", "2b",
-         "a bridge fixture with a slab, stair or fence in the target ray, compared like "
-         "tests/fidelity/native_geometry_compare.py's three rays"),
+         f"{_MECHANICS}.line_of_sight:construct", "line_of_sight", "active", "2b",
+         "full-cube rays (native_geometry_compare probes: los_wall, diagonal graze and block) must still "
+         "agree; a partial-box ray that the bridge can place is NOT available (no slab fixture aims through "
+         "the empty half of Rock_Stone_Half; status open)"),
     Hook("dodge_action_head", "combat/observation/v3/policy/layout.py", "split_locomotion_choice",
          f"{_MECHANICS}.dodge:construct", "dodge_action_head", "stub", "9",
          "test_native_policy_dodge_boundary_matches_advertised_capability and "
@@ -172,7 +197,7 @@ OVERLAY = Overlay(
     generation="gen7",
     profile="hytalegym.sim.gen7.profile:PROFILE",
     modules=("combat/",),
-    redirects=STEP_CLOCK + CONTENT_TODO,
+    redirects=STEP_CLOCK + CONTENT_LOCOMOTION + CONTENT_TODO,
     hooks=HOOKS,
     patches=PATCHES,
     audit=(

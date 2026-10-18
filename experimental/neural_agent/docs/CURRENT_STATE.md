@@ -62,7 +62,7 @@ for the gen-7 simulator), and the gen-7 simulator itself (phase 3 of 6 running).
 |---|---|
 | 1 Content layer: extractors on both versions, typed tables, adapters, the swap plan, `PORTING.md` | built `93418ae` |
 | 2a Renderer: overlay spec, `render.py` from the pinned commit, bench; identity gate on gen 5 | measured `e09c496`: bit-identical (2,307 arrays, 0 mismatched), negative control caught, identical HLO, existing suite unchanged; gen-7 skeleton 24 rows applied, 90 pending, 1/30 s clock; **no 0.7.2 fidelity claimed** |
-| 3 Locomotion and line-of-sight constructs with their differentials, locomotion audit, Region recapture if a server is reachable | running (agent launched 2026-10-18) |
+| 3 Locomotion and line-of-sight constructs with their differentials, locomotion audit | measured 2026-10-18: 16 locomotion rows active (value-identical to gen 5), the detail-hitbox line-of-sight construct built; motion on a ledge floor 1.14e-05 m against the 5e-4 bar PASS, geometry compare 8/8 PASS, LOS on full cubes 3/3 MATCH, all against a live 0.7.2 bridge; identity gate on gen 5 still bit-identical. Open: slope/wall limits have no reader in the 0.7.2 server (set to no-op), NPC jump force (gen 7 adopts the native 5.099), partial-block LOS and slope fixtures, production perception LOS hook, Region recapture (not started) |
 | 4 to 6 Combat and mana constructs, crafting and source-pin baselines, stamp and cutover | designed (`GEN7-PLAN.md` section 4) |
 | Open for the owner | the planned compile and the general compile are not bit-identical (6 of 315 arrays, max 2.4e-7): moving callers to planned is a methodology decision; one opt-in bit-exact speed-up exists (`OPTIMIZED`), four hot spots proposed |
 

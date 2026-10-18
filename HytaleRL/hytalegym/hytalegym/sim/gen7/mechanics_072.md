@@ -60,3 +60,28 @@ fidelity patch in the gen-7 overlay. Every value below is in the gen-7 tables an
   generation, gated by the gen-5 identity check, not behind a gen-7 switch.
 - F5f the agent's own hits land 1-2 ticks later on 0.7.2: cause not isolated; the sword gate change
   above is the first lead to test.
+
+## Status after phase 3 (2026-10-18)
+
+- **Line of sight (hook 2b): implemented.** `mechanics/line_of_sight.py` tests each opaque cell's detail
+  boxes (`GeometryState.collision_boxes`) and keeps the gen-5 cell rule for opaque cells that carry no
+  boxes. The full-cube rays agree with native on the live bridge under both rules
+  (`FIDELITY-0.7.2.md` section (g), row 2a). The partial-box differential has no runnable fixture, so
+  row 2b is unmeasured.
+- **Slope and wall limits (`slope_limits`): stub, owner decision.** The 0.7.2 server jar reads neither
+  `MaxSlopeAngleDegrees` nor `MaxWallAngleDegrees` (scan of 38,436 class files; the names appear only in
+  `MovementConfig` and the client struct `MovementSettings`). The engine's contact normals are
+  axis-aligned, so no angle threshold can change a contact. Options for the owner: (a) set the switch to
+  False with this evidence (the gen-7 server then matches the gen-5 server on this field); (b) keep the
+  switch and accept a documented no-op; (c) measure the player body, which needs a player-client oracle
+  that the bridge does not provide.
+- **Walk descent (`minimum_descent_rate`): not hooked, premise unverified.** TRAINING-0.7.2.md item 8 states
+  it from code reading; a static check of the walk controller's fall-speed method found the 0.5 min/max
+  form only. The whole walk update was not checked.
+- **Step-up and climbing: no engine branch.** `jax/combat/runtime/agent.py` has no climb move. The 0.7.2
+  NPC walk controller has `computeClimbMove` and `computeClimbSpeed` (javap). A 0.5 m slab is not climbed
+  on either side (`half_block` probe: y 65.0 and z -0.5 after 60 steps). Stairs are unmeasured.
+- **Jump impulse (row 1c): an engine decision for every generation.** The committed NPC learner jumps with
+  `PLAYER_JUMP_FORCE` 11.8, where native NPCs jump with 5.099. The uncommitted working tree already uses 5.099.
+  Measured on HEAD: 2.38 m error (gen 5), 2.42 m (gen 7). Not changed here.
+
