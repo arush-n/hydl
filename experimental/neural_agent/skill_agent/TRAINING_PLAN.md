@@ -159,6 +159,45 @@ What each check catches:
 A teacher need not be perfect, because stage 3's practice can go past it. But a systematic teacher error is copied
 into the student, which is why nothing teaches before its certificate.
 
+## 2d. How the teachers are configured
+
+**What a teacher is.** A pure JAX function, `teacher(full_state, request) -> choices on the 21 heads`, filling only the
+request's scope heads, plus its done signal. It runs inside the simulator for every lane at once, so it can label
+millions of ticks, including the states the student visits (DAgger).
+
+Each teacher is one entry in a registry, as skills are in `library.py`. The entry records:
+- the verbs it teaches;
+- its kind (scripted, trained or native);
+- the privileged information it reads;
+- its parameters;
+- its version and its certificate (section 2c).
+
+**Three kinds, by skill family.**
+
+| Kind | Used where | How it decides |
+|---|---|---|
+| Scripted planner and controller | the game's rules give an exact answer: navigation (walk_to, run_to, sneak_to, step_and_hop, go_around, come_here); gaze (look_at, track); ranged aim and draw; world interaction (mine, place, use) | navigation: a shortest path over the native traversal graph (`worldgen/region/traversal.py`, every edge certified by the live server's NPC walk controller), then each tick steer at a waypoint ahead, pick the nearest compass direction, take the gait from the request's pace, jump at step-up edges (timing from the measured NPC jump arc), and stop inside the radius. Gaze: exact yaw and pitch from true positions, with lead. Ranged: a ballistic solution from the kit's launch speed and gravity, held for the tier asked. Interaction: move into reach, aim at the marked face, hold for the break time |
+| Trained in the simulator's cheat mode | no exact rule: fighting decisions (spacing, when to attack, guard and dodge timing), pursuit of an evader, evasion | PPO with `legal_observation=False`, the simulator's documented privileged mode "for a Learning by Cheating teacher" (`jax/combat/arsenal/schema/types.py`): exact opponent state and wind-up timers, dense rewards, one skill each, with the recipe-bench lessons |
+| Native NPC recordings | how real game creatures move and fight | the reference for T2 and a warm start; not the main teacher, because an NPC is not optimal at our requests |
+
+**Settings, and how they are chosen.**
+- *What it may see:* the full state by default. It is restricted when T5 shows the student cannot follow: search_for's
+  teacher may not know a hidden target's position, so it scans from the last-seen position instead.
+- *The request:* it reads the same request as the student (target, pace, radius, entity), so every label belongs to
+  one request.
+- *Parameters* (waypoint distance, jump trigger, aim lead, attack spacing): tuned on development worlds only, judged by
+  T1 and T2, never on the report worlds.
+- *Variety for data:* small random action noise and parameter jitter while generating data (Laskey et al. 2017,
+  DART), so the data shows recoveries and more than one valid style.
+- *Versions:* changing a teacher makes a new version that needs a new certificate. Both go in the ledger.
+
+**Order.**
+1. walk_to on flat (a straight line, then stop inside the radius) and look_at: proof A2's two teachers.
+2. step_and_hop and go_around: these wait for the traversal graph rebuilt on 0.7.2 (today's graphs come from the 0.5.7
+   Region captures) and for the walk resume after landing.
+3. Pursuit: the planner plus target prediction, then RL against the scripted evader.
+4. The combat teachers, after the simulator's combat rows pass.
+
 ## 3. Build before any run (stage 1; no training)
 
 | Step | What | Gate |
@@ -219,6 +258,8 @@ into the student, which is why nothing teaches before its certificate.
 - Guo, C., Pleiss, G., Sun, Y., and Weinberger, K. Q. (2017). On calibration of modern neural networks. ICML.
   arXiv:1706.04599.
 - Henderson, P., et al. (2018). Deep reinforcement learning that matters. AAAI. arXiv:1709.06560.
+- Laskey, M., Lee, J., Fox, R., Dragan, A., and Goldberg, K. (2017). DART: noise injection for robust imitation
+  learning. CoRL. arXiv:1703.09327.
 - Lee, J., et al. (2019). Set Transformer. ICML. arXiv:1810.00825.
 - Ng, A. Y., Harada, D., and Russell, S. (1999). Policy invariance under reward transformations: theory and
   application to reward shaping. ICML, 278-287.
