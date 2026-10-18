@@ -426,6 +426,31 @@ other. 1,500 steps take about 6 s on CPU. Held-out agreement against the majorit
 no rule for it, so a cloned body learns no body turning. Adding that rule is a reviewed projection change,
 left open.
 
+### 2.9 Freezing: adding a skill never changes a frozen one (`freezing.py`, B4, proof E13)
+
+**The mechanism.** One shared trunk (the B1 encoder) and one small adapter per verb:
+`logits_v = Adapter_v(Encoder(x))`. A verb's compiled program takes only the trunk and its own adapter as
+arguments, and is cached per verb. Adapters are never stacked across verbs, so a verb's program does not
+depend on how many verbs exist.
+- Training a verb differentiates only its adapter, plus the trunk while the trunk is not frozen.
+- A frozen verb cannot be trained.
+- `params_sha256` fingerprints the weights.
+
+This is the weights half of requirement 7; `library.py`'s version rule is the contract half. It is the
+frozen-trunk-plus-adapters pattern of parameter-efficient transfer (Houlsby et al. 2019). Keeping a frozen
+skill's weights untouched is the strongest guard against catastrophic forgetting (McCloskey and Cohen 1989).
+
+**The proof.**
+- **The gate:** walk and look are trained, then frozen with the trunk. Swing is added and trained 50 steps.
+  Walk's and look's logits on a fixed input set are bit-identical (largest difference exactly 0.0), and
+  their weights' and the trunk's fingerprints are unchanged.
+- **The negative control:** the same run with the trunk not frozen moves the frozen verbs' logits by up to
+  3.87 through the trunk, while their adapters stay unchanged. So the gate can fail.
+- [test: test_sa_freezing.py]
+
+**Assumption.** Bit-identity is shown on CPU for these shapes. Another backend or JAX version should be
+re-checked with the same test.
+
 ## 3. For the agent building the gen-7 simulator
 
 **What you receive.** Each tick you get one choice per head per agent, in this order. A head no request
@@ -566,11 +591,13 @@ done [(0, 'wave_at(friend)', 0, 'accepted'), (1, ..., 'running'), (2, ...), (3, 
 - Colledanchise, M., & Ögren, P. (2018). Behavior Trees in Robotics and AI: An Introduction. CRC Press. — recalled.
 - Erol, K., Hendler, J., & Nau, D. S. (1994). HTN planning: Complexity and expressivity. AAAI. — recalled.
 - Fan, L., et al. (2022). MineDojo: Building open-ended embodied agents with internet-scale knowledge. NeurIPS Datasets and Benchmarks. Action space: https://docs.minedojo.org/sections/core_api/action_space.html — search summary 2026-10-17 (the action-space page).
+- Houlsby, N., et al. (2019). Parameter-efficient transfer learning for NLP. ICML. — recalled.
 - Isla, D. (2005). Handling complexity in the Halo 2 AI. Game Developers Conference. — recalled.
 - Jakobi, N., Husbands, P., & Harvey, I. (1995). Noise and the reality gap: The use of simulation in evolutionary robotics. ECAL. — recalled.
 - Konidaris, G., & Barto, A. (2009). Skill discovery in continuous reinforcement learning domains using skill chaining. NeurIPS. — recalled.
 - Lee, J., et al. (2019). Set Transformer. ICML. — recalled.
 - Liang, J., et al. (2023). Code as Policies: Language model programs for embodied control. ICRA. arXiv:2209.07753. — recalled.
+- McCloskey, M., & Cohen, N. J. (1989). Catastrophic interference in connectionist networks: The sequential learning problem. Psychology of Learning and Motivation 24, 109-165. — recalled.
 - McKeeman, W. M. (1998). Differential testing for software. Digital Technical Journal 10(1), 100-107. — recalled.
 - Meyer, B. (1992). Applying "design by contract". IEEE Computer 25(10), 40-51. — recalled.
 - Pirjanian, P. (1999). Behavior coordination mechanisms: State-of-the-art. Tech. Report IRIS-99-375, Institute for Robotics and Intelligent Systems, University of Southern California. https://robotics.usc.edu/publications/319 — search summary 2026-10-17 (the USC publications page).

@@ -20,4 +20,5 @@ nothing. Import the submodules:
 * ``scratchpad``: the combiner on S_t: requests in from the requests section, statuses out to skills.
 * ``encoder``: the token-set encoder, the one trunk every body reads its tokens through (B1).
 * ``bench_tick``: the per-tick latency bench of resolver, combiner and encoder (the 30 Hz gate).
+* ``freezing``: one frozen trunk and one adapter per verb; adding a verb never changes a frozen one (B4).
 """
