@@ -2,8 +2,9 @@
 
 **Provisional (owner, 2026-10-18 late).** The architecture may move away from pure PPO with per-verb adapters, toward
 one generalist, request-conditioned policy, "similar to a vla model". Section 2's body and algorithm are therefore
-provisional until the architecture research lands. The method (section 2b), the staging, the gates and the
-dependencies stand either way.
+provisional. The research has landed (`ARCHITECTURE_RESEARCH.md`): it recommends one request-conditioned generalist
+trained by teacher distillation (DAgger) and KL-anchored RL, pending the owner's decision. The method (section 2b),
+the staging, the gates and the dependencies stand either way.
 
 Nothing in this plan runs until the owner approves it (BUILD.md section 0). It answers the owner's condition for
 training: what trains, on what, for how long, what counts as success, what happens on failure, and what each step
