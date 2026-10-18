@@ -2329,11 +2329,24 @@ def open_flat_arsenal_world_capabilities(
     params: CombatParams,
     *,
     config: ArsenalRuntimeConfig | None = None,
+    legal_observation_sensor_range: bool = False,
 ) -> ArsenalWorldCapabilities:
-    """Explicit permissive control fixture; never the production default."""
+    """Explicit permissive control fixture; never the production default.
 
+    ``legal_observation_sensor_range=True`` (two-entity path only) blanks the
+    agent's entry for an opponent beyond ``params.sensor_range``, as the
+    perception does. The fixture has clear sight lines at every range, so the
+    sensor range alone decides there.
+    """
+
+    if not isinstance(legal_observation_sensor_range, bool):
+        raise TypeError("legal_observation_sensor_range must be a bool")
     world = fail_closed_arsenal_world_capabilities(state, params)
     entity_shape = state.combat.health.shape
+    if legal_observation_sensor_range and entity_shape[1] != ENTITY_COUNT:
+        raise ValueError(
+            "legal_observation_sensor_range is implemented for the two-entity path only"
+        )
     clear = jnp.ones(entity_shape, dtype=jnp.bool_)
     if entity_shape[1] == ENTITY_COUNT:
         area_center = world.area_center
@@ -2360,6 +2373,14 @@ def open_flat_arsenal_world_capabilities(
             ),
             state.combat.position,
         )
+    candidate_perceptible = jnp.ones(
+        (entity_shape[0], entity_shape[1], entity_shape[1]),
+        dtype=jnp.bool_,
+    )
+    if legal_observation_sensor_range:
+        candidate_perceptible = candidate_perceptible.at[
+            :, AGENT_ENTITY, TARGET_ENTITY
+        ].set(_pair_agent_sensor_range(state.combat, params))
     return world._replace(
         actor_world_state_available=jnp.ones((entity_shape[0],), dtype=jnp.bool_),
         actor_controller_medium_available=jnp.ones(
@@ -2369,10 +2390,7 @@ def open_flat_arsenal_world_capabilities(
         actor_submersion_available=jnp.ones((entity_shape[0],), dtype=jnp.bool_),
         actor_drop_available=jnp.ones((entity_shape[0],), dtype=jnp.bool_),
         actor_drop_support_found=jnp.ones((entity_shape[0],), dtype=jnp.bool_),
-        target_candidate_perceptible=jnp.ones(
-            (entity_shape[0], entity_shape[1], entity_shape[1]),
-            dtype=jnp.bool_,
-        ),
+        target_candidate_perceptible=candidate_perceptible,
         target_candidate_perception_valid=jnp.ones(
             (entity_shape[0], entity_shape[1], entity_shape[1]),
             dtype=jnp.bool_,
@@ -2410,6 +2428,7 @@ def geometry_arsenal_world_capabilities(
     config: ArsenalRuntimeConfig,
     role_opaque_mask: jax.Array | None = None,
     view_sector_full_angle_radians: jax.Array | float | None = None,
+    legal_observation_sensor_range: bool = False,
 ) -> ArsenalWorldCapabilities:
     """Bind candidate perception, projectile contact, force, and dodge.
 
@@ -2419,7 +2438,15 @@ def geometry_arsenal_world_capabilities(
     Multi-entity callers must supply one native full-width horizontal view
     angle per source. Missing view evidence fails every candidate closed.
     Candidate FOV and perception LOS are both evaluated before distance
-    ranking; the certified two-entity path stays unchanged.
+    ranking. The certified two-entity path is unchanged unless a finite
+    ``view_sector_full_angle_radians`` below tau is passed (opt-in, 2026-10-18):
+    the agent's perceptible entry then takes a sector centred on the agent's
+    head yaw. An engagement target outside that sector is no target for the agent
+    (id -1, mask False), so every target-dependent predicate sees the no-opponent
+    state. ``legal_observation_sensor_range=True`` (two-entity path only) applies
+    the same masking beyond ``params.sensor_range``, on the agent's entry too.
+    The opponent's entry is never gated by either option, and neither option
+    depends on ``legal_observation``.
 
     Entity-only area support is derived from independent per-event asset
     flags; a future unflagged area program keeps its entire source closed.
@@ -2434,6 +2461,12 @@ def geometry_arsenal_world_capabilities(
     world = fail_closed_arsenal_world_capabilities(state, params)
     combat = state.combat
     batch, entity_count = combat.health.shape
+    if not isinstance(legal_observation_sensor_range, bool):
+        raise TypeError("legal_observation_sensor_range must be a bool")
+    if legal_observation_sensor_range and entity_count != ENTITY_COUNT:
+        raise ValueError(
+            "legal_observation_sensor_range is implemented for the two-entity path only"
+        )
     agent_offset = _broadcast_los_offset(
         geometry.agent_los_offset,
         batch,
@@ -2453,6 +2486,7 @@ def geometry_arsenal_world_capabilities(
         .set(agent_offset)
     )
     source_eye_position = combat.position + source_offset
+    pair_agent_los_gate = None
     if entity_count == ENTITY_COUNT:
         targeting = combat_target_selection(combat, params, config)
         candidate_perception = None
@@ -2531,6 +2565,52 @@ def geometry_arsenal_world_capabilities(
         )
     target_id = targeting.engagement_target_id
     target_valid = targeting.engagement_target_mask
+    pair_agent_engage_gate = None
+    if entity_count == ENTITY_COUNT and view_sector_full_angle_radians is not None:
+        # Opt-in agent sector on the certified pair (2026-10-18), centred on the
+        # agent's head yaw (perception is head-frame), with the native sector test
+        # and the validity rules of the multi-entity branch. A full circle (tau)
+        # gates nothing: jnp.where keeps the certified bits.
+        pair_view_angle = _broadcast_view_angle(
+            view_sector_full_angle_radians,
+            batch,
+            entity_count,
+        )[:, AGENT_ENTITY]
+        pair_view_valid = (
+            jnp.isfinite(pair_view_angle)
+            & (pair_view_angle >= jnp.float32(0.0))
+            & (pair_view_angle <= jnp.float32(math.tau))
+        )
+        pair_full_circle = pair_view_angle == jnp.float32(math.tau)
+        pair_sector_ok = (
+            _pair_agent_in_view(
+                combat,
+                source_eye_position,
+                pair_view_angle,
+            )
+            & pair_view_valid
+        )
+        pair_agent_los_gate = jnp.where(pair_full_circle, True, pair_sector_ok)
+        pair_agent_engage_gate = pair_agent_los_gate
+    if entity_count == ENTITY_COUNT and legal_observation_sensor_range:
+        pair_range_ok = _pair_agent_sensor_range(combat, params)
+        pair_agent_engage_gate = (
+            pair_range_ok
+            if pair_agent_engage_gate is None
+            else pair_agent_engage_gate & pair_range_ok
+        )
+    if pair_agent_engage_gate is not None:
+        # Opt-in (2026-10-18): an engagement target outside the agent's sector or
+        # beyond params.sensor_range is no target. Its id becomes -1 and its mask
+        # False, the state an absent opponent gives, so the projectile, area and
+        # line-of-sight predicates see no opponent. Independent of legal_observation.
+        outside = target_valid[:, AGENT_ENTITY] & ~pair_agent_engage_gate
+        target_id = target_id.at[:, AGENT_ENTITY].set(
+            jnp.where(outside, jnp.int32(-1), target_id[:, AGENT_ENTITY])
+        )
+        target_valid = target_valid.at[:, AGENT_ENTITY].set(
+            target_valid[:, AGENT_ENTITY] & ~outside
+        )
     target_offset_by_id = jnp.where(
         (target_id == AGENT_ENTITY)[..., None],
         agent_offset[:, None, :],
@@ -2743,6 +2823,29 @@ def geometry_arsenal_world_capabilities(
         candidate_valid = candidate_valid.at[:, TARGET_ENTITY, AGENT_ENTITY].set(
             pair_perception_valid
         )
+        if view_sector_full_angle_radians is not None:
+            # The agent's perceptible entry takes the sector computed above; a full
+            # circle keeps the certified bits.
+            agent_visible = candidate_perceptible[:, AGENT_ENTITY, TARGET_ENTITY]
+            candidate_perceptible = candidate_perceptible.at[
+                :, AGENT_ENTITY, TARGET_ENTITY
+            ].set(
+                jnp.where(
+                    pair_full_circle,
+                    agent_visible,
+                    agent_visible & pair_sector_ok & pair_perception_valid,
+                )
+            )
+        if legal_observation_sensor_range:
+            # Opt-in sensor range on the agent's entry (2026-10-18): the target
+            # block hides an opponent beyond params.sensor_range (reset.py); the
+            # same range blanks the agent's per-entity rows. Two-entity path only.
+            candidate_perceptible = candidate_perceptible.at[
+                :, AGENT_ENTITY, TARGET_ENTITY
+            ].set(
+                candidate_perceptible[:, AGENT_ENTITY, TARGET_ENTITY]
+                & _pair_agent_sensor_range(combat, params)
+            )
     else:
 
         def selected_candidate_result(value: jax.Array) -> jax.Array:
@@ -2888,6 +2991,31 @@ def geometry_arsenal_world_capabilities(
             target_position,
         )
 
+    line_of_sight_value = perception.visible & target_valid
+    if pair_agent_los_gate is not None:
+        line_of_sight_value = line_of_sight_value.at[:, AGENT_ENTITY].set(
+            line_of_sight_value[:, AGENT_ENTITY] & pair_agent_los_gate
+        )
+    # Legal observation (2026-10-17): this is the predicate a line-of-sight
+    # ability gates on (programs/ability.py) and that line-of-sight events read
+    # (effects/events.py). By default it is the perception ray to a living
+    # target, which is what the actor may know. With the config's
+    # ``legal_observation`` False it is the privileged selector validity, which
+    # carries target existence and told the actor whether a live target stood
+    # behind a wall. The schema is unchanged on purpose: adding a field would
+    # change the policy contract hash and refuse every trained checkpoint.
+    selector_los_valid = jnp.where(
+        jnp.asarray(config.legal_observation),
+        perception.visible & perception_valid & target_valid,
+        selector_valid & target_valid,
+    )
+    if pair_agent_los_gate is not None:
+        # Opt-in sector (2026-10-18): the agent's line-of-sight ability gate follows
+        # the same in-view mask, so a sector-limited agent cannot select a target it
+        # cannot see. This applies whatever ``legal_observation`` is.
+        selector_los_valid = selector_los_valid.at[:, AGENT_ENTITY].set(
+            selector_los_valid[:, AGENT_ENTITY] & pair_agent_los_gate
+        )
     return world._replace(
         actor_world_state_available=actor_state.available,
         actor_controller_medium_available=(actor_state.controller_medium_available),
@@ -2900,22 +3028,10 @@ def geometry_arsenal_world_capabilities(
         actor_drop_height=actor_state.drop_height,
         target_candidate_perceptible=candidate_perceptible,
         target_candidate_perception_valid=candidate_valid,
-        line_of_sight=perception.visible & target_valid,
+        line_of_sight=line_of_sight_value,
         line_of_sight_valid=perception_valid & target_valid,
         selector_line_of_sight=selector.clear & target_valid,
-        # Legal observation (2026-10-17): this is the predicate a line-of-sight
-        # ability gates on (programs/ability.py) and that line-of-sight events read
-        # (effects/events.py). By default it is the perception ray to a living
-        # target, which is what the actor may know. With the config's
-        # ``legal_observation`` False it is the privileged selector validity, which
-        # carries target existence and told the actor whether a live target stood
-        # behind a wall. The schema is unchanged on purpose: adding a field would
-        # change the policy contract hash and refuse every trained checkpoint.
-        selector_line_of_sight_valid=jnp.where(
-            jnp.asarray(config.legal_observation),
-            perception.visible & perception_valid & target_valid,
-            selector_valid & target_valid,
-        ),
+        selector_line_of_sight_valid=selector_los_valid,
         clear_projectile_flight=clear_projectile_flight,
         projectile_world_collision_available=(projectile_world_collision_available),
         deployable_intended_graph_available=(
@@ -3137,6 +3253,55 @@ def _broadcast_view_angle(
         "view_sector_full_angle_radians must be scalar or have shape "
         f"[{entity_count}] or [{batch},{entity_count}]"
     )
+
+
+def _pair_agent_in_view(
+    combat: CombatState,
+    source_eye_position: jax.Array,
+    view_angle: jax.Array,
+) -> jax.Array:
+    """Return the agent's sector test on the two-entity path, shape [batch].
+
+    The sector is centred on the agent's head yaw (``CombatState.agent_head_yaw``,
+    since perception is head-frame) and measured from the agent's eye to the
+    opponent's eye with the native sector test of the multi-entity branch. The
+    multi-entity branch keeps ``combat.yaw``; ``native_view_sector`` takes no pitch.
+    """
+
+    head_yaw_radians = jnp.deg2rad(combat.agent_head_yaw)
+    forward_xz = jnp.stack(
+        (
+            -jnp.sin(head_yaw_radians),
+            -jnp.cos(head_yaw_radians),
+        ),
+        axis=1,
+    )
+    horizontal_position = source_eye_position[
+        ..., jnp.asarray((0, 2), dtype=jnp.int32)
+    ]
+    horizontal_delta = (
+        horizontal_position[:, TARGET_ENTITY, :]
+        - horizontal_position[:, AGENT_ENTITY, :]
+    )
+    return native_view_sector(horizontal_delta, forward_xz, view_angle)
+
+
+def _pair_agent_sensor_range(
+    combat: CombatState,
+    params: CombatParams,
+) -> jax.Array:
+    """Return [batch] True where the opponent is within ``params.sensor_range``.
+
+    The planar (x, z) distance between the bodies, the measure the target block
+    uses (``runtime/reset.py`` ``target_evidence``; ``math.py`` ``_target_distance``).
+    On the two-entity path ``params.sensor_range`` alone hides the target row.
+    """
+
+    offset = (
+        combat.position[:, TARGET_ENTITY, (0, 2)]
+        - combat.position[:, AGENT_ENTITY, (0, 2)]
+    )
+    return jnp.linalg.norm(offset, axis=1) <= params.sensor_range
 
 
 def _broadcast_los_offset(
