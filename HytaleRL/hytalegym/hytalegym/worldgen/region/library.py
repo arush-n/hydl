@@ -99,7 +99,13 @@ class RegionArtifactLibrary:
         manifest_path: str | Path,
         *,
         artifact_capacity: int | None = None,
+        verify_artifacts: bool = True,
     ) -> "RegionArtifactLibrary":
+        """Validate the catalog, auditing every artifact by default.
+
+        Runtime selectors may defer artifact I/O with ``verify_artifacts=False``;
+        subsequent selection loaders still verify each selected file and content.
+        """
         source = Path(manifest_path)
         manifest = _load_json_object(source)
         _require_fields(manifest, _MANIFEST_FIELDS, "Region library manifest")
@@ -154,8 +160,9 @@ class RegionArtifactLibrary:
             manifest=_json_copy(manifest),
             entries=entries,
         )
-        for entry in entries:
-            result._load_entry(entry, capture)
+        if verify_artifacts:
+            for entry in entries:
+                result._load_entry(entry, capture)
         return result
 
     @property

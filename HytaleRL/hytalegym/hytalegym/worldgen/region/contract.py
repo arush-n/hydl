@@ -8,6 +8,8 @@ import json
 import operator
 from typing import Any, Mapping
 
+from hytalegym.server_versions import is_supported_server_version
+
 CHUNK_API_SCHEMA = "hytalerl_chunk_api_v1"
 CHUNK_API_VERSION = 1
 HYTALE_SERVER_VERSION = "0.5.7"
@@ -15,7 +17,8 @@ CHUNK_API_CLASS = "com.hypixel.hytale.math.util.ChunkUtil"
 
 # These are compiled JAX shapes, not unverified world assumptions. Java
 # reflects and exhaustively checks the runtime API before emitting this
-# manifest; Python accepts only that exact versioned fingerprint.
+# manifest; Python accepts only that exact fingerprint within a supported
+# release line (``hytalegym.server_versions``).
 CHUNK_BITS = 5
 CHUNK_SIZE = 32
 CHUNK_SIZE_SQUARED = 1024
@@ -76,7 +79,7 @@ class UnsupportedChunkApiError(ValueError):
 
 @dataclass(frozen=True)
 class ChunkApiContract:
-    """Validated runtime manifest for the Hytale 0.5.7 ``ChunkUtil`` API."""
+    """Validated runtime manifest for the Hytale 0.5.x ``ChunkUtil`` API."""
 
     server_version: str
     bits: int
@@ -98,11 +101,14 @@ class ChunkApiContract:
             raise UnsupportedChunkApiError(
                 "Hytale chunk API manifest must be a mapping"
             )
-        mismatches = {
-            name: (expected, manifest.get(name))
-            for name, expected in _EXPECTED_FIELDS.items()
-            if not _same_manifest_value(manifest.get(name), expected)
-        }
+        mismatches = {}
+        for name, expected in _EXPECTED_FIELDS.items():
+            actual = manifest.get(name)
+            if name == "server_version":
+                if not is_supported_server_version(actual):
+                    mismatches[name] = ("a supported release line", actual)
+            elif not _same_manifest_value(actual, expected):
+                mismatches[name] = (expected, actual)
         if mismatches:
             details = ", ".join(
                 f"{name}={actual!r} (expected {expected!r})"
@@ -125,7 +131,9 @@ class ChunkApiContract:
     def manifest(self) -> dict[str, Any]:
         """Return the canonical manifest stored in native region artifacts."""
 
-        return dict(_EXPECTED_FIELDS)
+        result = dict(_EXPECTED_FIELDS)
+        result["server_version"] = self.server_version
+        return result
 
     def chunk_coordinate(self, block_coordinate: int) -> int:
         return _exact_int(block_coordinate, "block coordinate") // self.size
@@ -160,6 +168,19 @@ def certified_chunk_api_manifest() -> dict[str, Any]:
     """Canonical expected output of Java's runtime-reflected API check."""
 
     return dict(_EXPECTED_FIELDS)
+
+
+def is_supported_hytale_05_release(value: object) -> bool:
+    """Return whether a version belongs to the supported Hytale 0.5.x line."""
+
+    if not isinstance(value, str):
+        return False
+    components = value.split(".")
+    return (
+        len(components) >= 2
+        and components[0] == "0"
+        and components[1] == "5"
+    )
 
 
 def native_section_aggregate_contract() -> dict[str, Any]:

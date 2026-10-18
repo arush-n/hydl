@@ -18,6 +18,7 @@ from hytalegym.geometry.contract import (
     FLAG_HAS_FLUID_MOVEMENT_SETTINGS,
     FLAG_HAS_MOVEMENT_SETTINGS,
 )
+from hytalegym.server_versions import server_profile
 from hytalegym.worldgen.region.contract import (
     CAPTURE_CHUNK_COUNT,
     CAPTURE_CHUNKS_PER_AXIS,
@@ -30,7 +31,7 @@ from hytalegym.worldgen.region.snapshot import NativeRegionSnapshot
 # Canonical pin for the currently deployed native evidence bridge.
 # Historical fixture manifests retain their own capture hashes.
 CURRENT_NATIVE_EVIDENCE_JAR_SHA256 = (
-    "21C4B1FAA9087F6AAED0151078BF985F1196B02767669ABF35DFE2A801F25D3D"
+    "7700D112F8BCE9A6AFFE5EEB765867E83138F67070FA82408D08E5AB948F8D7B"
 )
 _SHA256_PATTERN = re.compile(r"^[0-9A-F]{64}$")
 REGION_SEED_PROJECTION_SCHEMA = "hytalerl_region_seed_projection_contract_v2"
@@ -56,12 +57,16 @@ _IDENTITY_FIELDS = (
 )
 
 
-def current_native_evidence_jar_sha256() -> str:
-    """Return the single current bridge hash used by active native gates."""
+def current_native_evidence_jar_sha256(server_version: str | None = None) -> str:
+    """Return the current bridge hash active native gates use for a server line."""
 
-    if _SHA256_PATTERN.fullmatch(CURRENT_NATIVE_EVIDENCE_JAR_SHA256) is None:
+    pin = (
+        server_profile(server_version).bridge_jar_sha256
+        or CURRENT_NATIVE_EVIDENCE_JAR_SHA256
+    )
+    if _SHA256_PATTERN.fullmatch(pin) is None:
         raise RuntimeError("current native evidence JAR SHA-256 is malformed")
-    return CURRENT_NATIVE_EVIDENCE_JAR_SHA256
+    return pin
 
 
 def require_current_native_runtime_bridge(
@@ -71,7 +76,10 @@ def require_current_native_runtime_bridge(
 ) -> str:
     """Fail if a live observation came from stale loaded bridge bytecode."""
 
-    target = expected or current_native_evidence_jar_sha256()
+    reported = info.get("native_server_version")
+    target = expected or current_native_evidence_jar_sha256(
+        reported if isinstance(reported, str) else None
+    )
     actual = info.get("bridge_sha256")
     if not isinstance(actual, str) or _SHA256_PATTERN.fullmatch(actual.upper()) is None:
         raise RuntimeError("native observation lacks a valid runtime bridge SHA-256")
