@@ -31,6 +31,7 @@ from hytalegym.jax.combat.observation.v3.schema.spec import (
     learner_observation_v3_contract_sha256,
 )
 from hytalegym.rulesets import combat_ruleset_sha256
+from hytalegym.server_versions import server_profile
 from hytalegym.worldgen.region import current_native_evidence_jar_sha256
 from hytalegym.worldgen.region.recertification import derive_contract_cascade
 
@@ -253,12 +254,10 @@ def verify_combat_bridge_artifact_identity(
     built_path = (
         Path(built_bridge)
         if built_bridge is not None
-        else (
-            Path(repository_root)
-            / "hytale-plugin"
-            / "build"
-            / "libs"
-            / "HytaleRLBridge-0.1.0.jar"
+        else Path(repository_root)
+        / (
+            server_profile().bridge_jar
+            or "hytale-plugin/build/libs/HytaleRLBridge-0.1.0.jar"
         )
     )
     if not built_path.is_file():

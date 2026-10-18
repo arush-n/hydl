@@ -1,5 +1,11 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+# setuptools>=77 because `license = "MIT"` below is the PEP 639 STRING form,
+# which older setuptools does not accept. The floor was >=68, so whether the
+# build succeeded depended on whichever setuptools the environment happened to
+# resolve -- it builds here on 70.2.0 and was reported failing elsewhere. A
+# build that passes or fails on the toolchain rather than on this file is the
+# same defect the ruff pin fixed.
+requires = ["setuptools>=77.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]

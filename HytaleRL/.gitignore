@@ -43,6 +43,25 @@ test-results-*/
 pytest-report*/
 junit*.xml
 
+# Keep the shared pytest setup and GPU-gated population CLI tests versioned so
+# the opt-in --jax-cpu test path is available to other checkouts. Other local
+# test suites and their fixtures remain excluded below.
+!hytalegym/tests/
+hytalegym/tests/**
+!hytalegym/tests/conftest.py
+!hytalegym/tests/jax/
+hytalegym/tests/jax/**
+!hytalegym/tests/jax/training/
+hytalegym/tests/jax/training/**
+!hytalegym/tests/jax/training/multi_actor/
+hytalegym/tests/jax/training/multi_actor/**
+!hytalegym/tests/jax/training/multi_actor/conftest.py
+!hytalegym/tests/jax/training/multi_actor/cli_test.py
+# The simulator port's tests (hytalegym/sim/, generation-agnostic engine) are versioned in full: they are the
+# identity gate and the differentials the port's fidelity claims rest on (owner, 2026-10-18).
+!hytalegym/tests/sim/
+!hytalegym/tests/sim/**
+
 # Test suites are developer material and are not published. Confirmed
 # 2026-08-19: the published set is code a user needs to run the project, and the
 # suites plus their fixtures were 265 files / 149,862 lines of it -- including a
@@ -51,8 +70,9 @@ junit*.xml
 # The Java suite under hytale-plugin/src/test was already excluded by **/test/
 # above; these negations were the only reason the Python suites still shipped.
 #
-# Consequence to keep in mind: nothing published can run a test. Any CI job must
-# either add these back deliberately or test against a source checkout.
+# The population CLI test is a narrow exception for CPU-only backend validation;
+# the broader Python suites and fixtures remain developer-only. Any general CI
+# test job must still restore the rest deliberately or test against a source checkout.
 
 # IDE
 .idea/
