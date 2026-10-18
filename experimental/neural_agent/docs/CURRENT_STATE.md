@@ -104,8 +104,11 @@ Region step, the processing and diagram actions, the fieldcraft `Weapon_Axe_Crud
 the eleven source-pin audits on 0.7.2 (#68, phase 5,
 bridge 5556), the timing items 2 to 4 measured with the learner-row harness plus the tick-0 head read of #75 (#73, bridge
 5560, measurement first; constructs after the timed-crafts commit frees the overlay), and the phase 4n test follow-ups
-(#74, bridge 5558: the duel harness pitch, the expectations 13 and 82; the ancient-steel scalar construct as a spec). Queued: the simulator half of #71, the processing and diagram actions (stage 5 on the
-simulator), the terrain recapture itself, the stub mechanics (#69).
+(#74, bridge 5558: the duel harness pitch, the expectations 13 and 82; the ancient-steel scalar construct as a spec), and
+stage 5 on the simulator (processing benches and the Armory click-craft as constructs replaying the six `v6_*` receipts; no
+bridge). Concurrent construct lanes share four overlay files under the lock protocol of `sim/PORTING.md` (`80d3bbd`:
+`.overlay.lock`, noclobber, wait and retry; one lane committed at a time). Queued: the simulator half of #71, the terrain recapture itself, the stub mechanics (#69), a live Region-step run of the
+timed executor path.
 Committed earlier: the
 crafting oracle stage 3 (`274aaec`, timed bench crafts with probe events; pin `5FE609E2`), phase 4j (`a534e83`: the Trork
 target no longer gets a headless Player, which the PvP-off filter used to cancel the agent's damage; the iron combo and
