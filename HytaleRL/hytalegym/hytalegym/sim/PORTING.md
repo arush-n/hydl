@@ -1,11 +1,83 @@
 # Porting the simulator to Hytale version N+1 (runbook, 2026-10-17)
 
+## Version bump checklist (learned from the 0.7.2 port)
+
+Variables as in the block under "The runbook" below: `ROOT=/Users/arush/hydl`, `PY=$ROOT/.venv/bin/python`, `NEW` the game
+install. `$SCRATCH` is any directory outside the repository. Run pytest from `$ROOT/HytaleRL/hytalegym` (first pitfall).
+Each step ends with its gate, a command with a pass bar.
+
+1. **Profile (a).** Add `server_versions/vN_M.py` (`ServerProfile`: bridge jar and its SHA-256, `crafting_recipe_count`,
+   `checkpoint_rulesets`). Copy `sim/gen7/profile.py` to `sim/genN/` (`__init__.py`, `profile.py`) and set its fields; add
+   the `GENERATION_MODULES` entry in `sim/common/content/registry.py`. Gate: `$PY -m pytest tests/sim/test_registry.py -q`.
+2. **Extract (a).** `cd $ROOT/HytaleRL/hytalegym/tools && $PY -m content_extract extract --assets "$NEW/Assets.zip" --out ../hytalegym/sim/genN/data`.
+   The game version comes from `Server/HytaleServer.jar` beside the archive (`--game-version` overrides). Gate:
+   `$PY -m pytest tests/sim/test_extractors.py tests/sim/test_schema.py -q`.
+3. **Diff (a).** From `tools`: `$PY -m content_extract diff ../hytalegym/sim/genPREV/data ../hytalegym/sim/genN/data --json $SCRATCH/diff.json --markdown $SCRATCH/diff.md`.
+   Read it against the release notes and the live measurements; encode each measured change as an assertion beside
+   `tests/sim/test_a2_diff.py`. Gate: those assertions pass.
+4. **Swap plan (b).** After every commit that touches a module under `hytalegym/jax/` (a comment counts), from `tools`:
+   `$PY -m sim_port.regen_swap_plan --dry-run` reports the new head, the record counts, every moved `head_line` and the pin.
+   Then `$PY -m sim_port.regen_swap_plan` writes `sim/common/content/redirects.json` and re-pins
+   `test_step_clock_rows_are_the_swap_plan_source_sites` in `tests/sim/test_render.py` if the counts changed. Gate: the
+   dry run then shows no moves, and `$PY -m pytest tests/sim/test_render.py -q` passes.
+5. **Gates before every commit (c).** Quick gate: `$PY -m pytest tests/sim -q --ignore=tests/sim/test_render_identity.py`.
+   Identity gate: `$PY -m pytest tests/sim/test_render_identity.py -q`; it renders gen 5 from a `git archive` of HEAD and
+   compares every array byte for byte. Pass bar: 4 passed.
+6. **Gen-5 identity record (d), only when the gen-5 engine changes.** Export HEAD with
+   `git archive HEAD HytaleRL/hytalegym/hytalegym | tar -x -C $SCRATCH/head`. Then, twice, from `tools`:
+   `JAX_PLATFORMS=cpu PYTHONPATH=$SCRATCH/head/HytaleRL/hytalegym:. $PY -m sim_bench.rollout --batches 8,64 --steps 64 --out $SCRATCH/run1.json`, then the same with `run2.json`
+   (the `command` field of `sim/gen5/identity.json`). Pass bar: identical fingerprints in both runs. Then move the old
+   values to `committed_engine.previous`, record the new ones and update `sim/BASELINES.md`. Procedure: commits
+   baacdc9 and ede9a39.
+7. **Construct (e).** One module per construct under `sim/genN/mechanics/` with `SWITCH` and `IMPLEMENTED`, registered in
+   `CONSTRUCT_MODULES` (`mechanics/__init__.py`). Its function takes `(original, profile)` and returns `original` when the
+   switch is off; the overlay's `Hook` names it as `module:function`. Each `Hook`, `Patch` or `Redirect` entry in
+   `sim/genN/overlay.py` carries the fidelity row and the differential text. Add the switch to `IMPLEMENTED_SWITCHES` in
+   `tests/sim/test_constructs.py`. Gate: step 5, before every commit.
+8. **Content values (f).** Compare the old and new tables side by side with the swap-plan adapters
+   (`hytalegym.sim.common.content.adapters`; the adapter command is item 1 of section 4 below). Where the plan names the
+   site, use a `Redirect`; otherwise a `Patch` anchored on the exact literal. Pin each new literal in
+   `tests/sim/test_render.py`, as `test_gen7_overlay_applies_its_patches_and_step_clock` does. Gate: step 5.
+9. **Live differentials (g).** Use a private bridge: `$PY $ROOT/HytaleRL/hytale-plugin-0.7.2/tools/launch_bridge_072.py`
+   (details in `HytaleRL/hytale-plugin-0.7.2/BRIDGE-PORTING.md`, section 7). One port pair per session or agent, never a
+   peer's; one launch per scenario when native state persists across resets. Gate: the pass bars of section 6 below.
+10. **Record (h).** A `FIDELITY-N.md` section per phase, with a table whose status is MATCH, OPEN, NOT MET or UNMEASURED;
+    receipts outside the repository, with their paths named; a status paragraph in `GEN7-PLAN.md` section 2b. Then
+    `$PY $ROOT/HytaleRL/hytale-plugin-0.7.2/tools/fidelity_index.py` (it reads `FIDELITY-0.7.2.md`; copy it for N+1).
+11. **Lanes (i).** One owner per tree: the simulator (`sim/`) and the bridge (the plugin folder). Neither session edits the
+    other's files (GEN7-PLAN section 6). Before a commit that moves HEAD under a renderer, post a hold notice; after it, a
+    release notice that names the HEAD to render from. The owner asked for this protocol; no file in the repository
+    defines the notice format.
+
+**Pitfalls**
+
+- Repo-root shim: under `python -m pytest` run from `HytaleRL/`, `hytalegym` resolves to the shim
+  `HytaleRL/hytalegym/__init__.py`, so run from `HytaleRL/hytalegym`. Render anchors relocate onto `hytalegym.envs` for the
+  same reason (RENDER.md; `tests/sim/test_render_anchors.py`).
+- Uncommitted work: renders read `git show HEAD:`, but the renderer and the overlays are working-tree Python. An
+  uncommitted engine or overlay edit changes what a render means. Check `git status -- HytaleRL/hytalegym` before reading
+  a difference as a finding (BASELINES.md section 1 measured different fingerprints from the working tree).
+- A commit of an engine module without the regeneration fails `test_overlays_validate_against_head` and the step-clock
+  identity test (commit 5cb738c: "expression must occur once on combat/types.py:604"). A comment-only edit moved the
+  anchors too (commit 6c30ba9).
+- Check an engine commit on a clean `git archive` of HEAD: commit ede9a39 did not import until commit 879321e added three
+  files that it needed.
+- The engine's own tests under `tests/jax` are gitignored (`HytaleRL/.gitignore`) and partly stale: commit ede9a39
+  records one failure that predates its batch.
+- Gate times follow machine load. Recorded identity-gate times: 5 min 25 s to 7 min 42 s in most commit messages of
+  2026-10-18; 28 min 17 s and 49 min 54 s (the latter at load 85 to 105); 24 and 36 min in GEN7-PLAN 2b. Gates run on the
+  shared working tree, so other sessions' uncommitted test edits change the result.
+- The gen-7 tools name gen 7: `sim_port.regen_swap_plan` checks `hytalegym.sim.gen7.overlay`, and `fidelity_index.py`
+  reads `FIDELITY-0.7.2.md`.
+
+## The runbook: the model and sections 1 to 8
+
 The engine is the committed gen-5 source and is never edited. A generation is a profile
 (`sim/genN/profile.py`), its extracted content tables (`sim/genN/data/`) and an overlay: the
 redirect list (`sim/common/content/redirects.json`: which engine symbol reads which table field),
 the construct switches and hooks (`sim/genN/mechanics/`), and the fidelity patches. A generation's
-simulator is rendered from `git show HEAD:<path>` plus that overlay (the renderer is phase 2 and
-not built yet). The next port is therefore: profile, extract, diff and review, overlay delta,
+simulator is rendered from `git show HEAD:<path>` plus that overlay (the renderer is
+`sim/common/render.py`, described in `sim/common/RENDER.md`). The next port is therefore: profile, extract, diff and review, overlay delta,
 render, differentials, stamp, retrain, flip. Commands assume the repository root `/Users/arush/hydl`
 and the local install only (nothing external). Measured costs of each step: `BASELINES.md`.
 
@@ -92,7 +164,7 @@ interrupting Primary, dodge unchanged).
 3. Patches. Numbers the gen-5 engine encodes structurally (a guard root's interrupt mask) become
    patches in the overlay, each tied to a table field (0.7.2 list: `gen7/mechanics_072.md`).
 
-## 5. Render (phase 2; not built)
+## 5. Render (`sim/common/render.py`; built 2026-10-17, RENDER.md)
 
 Read every module with `git show HEAD:<path>` (never the working tree, so no uncommitted work is
 baked in), copy, apply the redirects, insert the construct hooks and patches. Identity gate: the

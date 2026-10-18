@@ -37,3 +37,27 @@ starts a 0.7.2 server with the jar in a scratch directory.
 Read [`../protocol/README.md`](../protocol/README.md) for the transport
 contract and [`../hytalegym/README.md`](../hytalegym/README.md) for the Python
 consumer.
+
+## Porting to a new server version
+
+- [BRIDGE-PORTING.md](BRIDGE-PORTING.md): the runbook (order of work, wire and component rules, live protocol,
+  gates, pin).
+- [CRAFTING-ORACLE.md](CRAFTING-ORACLE.md): the crafting probe contract and its answers.
+- [FIDELITY-0.7.2.md](FIDELITY-0.7.2.md): measurements by section. [`tools/fidelity_index.py`](tools/fidelity_index.py)
+  regenerates the index at its top; run it after each section change.
+- [`tools/pin_bridge.py`](tools/pin_bridge.py): `--check` and `--build` for the jar pin (below).
+
+## Pin and build
+
+`hytalegym/hytalegym/server_versions/v0_7.py` pins the SHA-256 (upper case) of
+`build/libs/HytaleRLBridge072-0.1.0.jar`. Check it with `python3 tools/pin_bridge.py --check`; exit 0 means equal.
+
+Intermediate builds go to a scratch copy. Copy this folder outside the repository, run
+`./gradlew jar --offline --no-build-cache` there, and pass that jar to
+[`tools/launch_bridge_072.py`](tools/launch_bridge_072.py) with `--jar`. Only the final build runs
+`python3 tools/pin_bridge.py --build` in this folder; it rebuilds `build/libs`, rewrites the pin line, runs
+`HytaleRL/hytalegym/tests/test_server_versions.py` and prints the old and new hash.
+
+Reason: the native reset compares the hash that a running bridge reports with the pin
+(`bridge_sha256`, `worldgen/region/stability.py`), and other sessions run bridges from `build/libs` (FIDELITY-0.7.2.md
+section (n)). A pin that moves to a jar that is later rebuilt breaks their live runs and their checks.
