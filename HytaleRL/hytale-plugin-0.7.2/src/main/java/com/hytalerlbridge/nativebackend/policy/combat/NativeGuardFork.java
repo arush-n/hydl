@@ -9,6 +9,7 @@ import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Roo
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.client.ChargingInteraction;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.operation.Operation;
 import com.hytalerlbridge.nativebackend.model.NativeInteractionBinding;
+import com.hytalerlbridge.nativebackend.support.InteractionSupport;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -57,10 +58,12 @@ public final class NativeGuardFork {
      * {@code applyRules}. While a Secondary chain runs, the root replay refuses
      * a Primary root without a bypass tag, because the default {@code blockedBy}
      * for Primary includes Secondary; FIDELITY-0.7.2.md, shield bash under a
-     * held guard. Null means the root replay decides: the Wielding is not
-     * active, or the guard does not route this ability. Otherwise the answer is
-     * the gates of {@code requestNativeAbility}: a running guard chain, the input
-     * held, and no ability in flight.</p>
+     * held guard. Null means the root replay decides: the guard does not route
+     * this ability, or the ability is an item root and no guard runs. Otherwise
+     * the answer is the gates of {@code requestNativeAbility}: a running guard
+     * chain, the input held, and no ability in flight. A bridge probe root that
+     * the guard routes is refused while no guard runs: the item's own root does
+     * not carry that ability, so only the guard's fork admits it (section (x)).</p>
      */
     public static Boolean admittedWhileRunning(
         NativeInteractionBinding guard,
@@ -70,13 +73,42 @@ public final class NativeGuardFork {
         boolean held,
         boolean busy
     ) {
-        if (!wielding || forkType(guard, ability) == null) {
+        if (forkType(guard, ability) == null) {
             return null;
+        }
+        return forkAdmission(
+            ability.root() != null && isBridgeProbe(ability.root().getId()),
+            guardChain,
+            wielding,
+            held,
+            busy
+        );
+    }
+
+    /** The fork decision without asset lookups, so the contract test can pin it. */
+    static Boolean forkAdmission(
+        boolean bridgeProbe,
+        InteractionChain guardChain,
+        boolean wielding,
+        boolean held,
+        boolean busy
+    ) {
+        if (!wielding) {
+            return bridgeProbe ? Boolean.FALSE : null;
         }
         return guardChain != null
             && guardChain.getServerState() == InteractionState.NotFinished
             && held
             && !busy;
+    }
+
+    /**
+     * True for the wrapper that {@link InteractionSupport} binds when the item
+     * root does not carry the ability.
+     */
+    static boolean isBridgeProbe(String rootId) {
+        return rootId != null
+            && rootId.startsWith(InteractionSupport.NATIVE_COMBAT_PROBE_ROOT_PREFIX);
     }
 
     /** {@link #resolveType} without the fail-closed warning, for per-tick capture. */
