@@ -22,4 +22,5 @@ nothing. Import the submodules:
 * ``encoder``: the token-set encoder, the one trunk every body reads its tokens through (B1).
 * ``bench_tick``: the per-tick latency bench of resolver, combiner and encoder (the 30 Hz gate).
 * ``freezing``: one frozen trunk and one adapter per verb; adding a verb never changes a frozen one (B4).
+* ``sim_adapter``: the combiner's choices onto the heads a simulator implements; drops counted.
 """

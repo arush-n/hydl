@@ -516,10 +516,16 @@ decision, combiner, bodies) has a budget of p95 <= 15 ms at the deployed batch, 
 **When a planned head lands:** turn its `HeadSpec.status` to `published` in the same commit that adds its
 `FIDELITY.md` row with the differential's receipt. The pass bars are in `BUILD.md` §4.
 
-**Not built yet, and needed at the first integration:** the adapter from the combiner's 21 choices to
-the simulator. It must write neutral for heads the simulator does not implement, and count every
-non-neutral choice it drops. Without the count, a skill that depends on a missing head would look like
-a skill that fails.
+**The adapter between the combiner and the simulator** (`sim_adapter.HeadAdapter`, 2026-10-17).
+- Build it from the simulator's mask (`HeadAdapter.from_mask`): the heads the mask names are the
+  implemented ones.
+- `adapt`, or `adapt_batch` for B agents, writes neutral for every head the simulator does not implement.
+  It counts each non-neutral choice it drops in `dropped`, per head, so a skill that depends on a missing
+  head shows up instead of looking like a skill that fails.
+- `HeadAdapter.legal_scopes(mask)` gives the scopes legal under the mask, by the rule above.
+- Implemented heads pass through unchanged; checking each choice against the mask is still to do.
+[test: test_sa_sim_adapter.py, including a combiner round trip in which walk_to's placeholder fills the
+planned mount head and the gen-5 mask drops it]
 
 **What still speaks the old contract:**
 
