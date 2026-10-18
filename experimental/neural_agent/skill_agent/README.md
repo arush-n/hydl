@@ -629,6 +629,28 @@ min(5, 10 k / 30) on tick k, so it reaches 5.0 at tick 15). [test: test_sa_simpl
 **Simulator note** (passed to the simulator lane): reset sets the head to yaw 0, not to the spawn's body heading,
 despite its comment (`runtime/reset.py`:158-161). The head catches up in about 2 ticks.
 
+### 2.13 The request-conditioned generalist (`generalist.py`, `bench_generalist.py`, 2026-10-18)
+
+**What it is.** The working design of `ARCHITECTURE_RESEARCH.md`, built and untrained: one policy for every learned
+verb.
+- *Inputs.* Each granted request becomes a token: a verb embedding, plus its typed arguments (agent-frame position and
+  direction, 4 scalars, mode, urgency, age), with absent argument groups masked, plus the granted scope's embedding,
+  plus the trunk tokens its entity or block pointer names. Six learned scope queries join them.
+- *Layers.* Each block is self-attention over [requests; queries], with invalid requests masked as keys, then
+  cross-attention into the trunk's token sets, then an MLP.
+- *Outputs.* Every head's logits come from its scope's query; status (done, stuck, success) and progress come from
+  each request token.
+- *Size.* 125,900 parameters, beside the trunk's 131,136.
+
+**Proved** [test: test_sa_generalist.py, 21 tests, checked with mutants]:
+- invalid requests and absent arguments change nothing (bit-identical);
+- removing a padded request slot changes nothing (within 1e-5);
+- pointers gather the named token;
+- outputs are deterministic.
+
+**Speed (A1): not settled.** At batch 8, p95 of trunk plus generalist was 15.08 ms against the 15 ms bar (trunk
+10.4, generalist 3.8; median total 6.0), at a machine load of 53 to 75 on 18 cores. A quiet-machine run decides it.
+
 ## 3. For the agent building the gen-7 simulator
 
 **What you receive.** Each tick you get one choice per head per agent, in this order. A head no request

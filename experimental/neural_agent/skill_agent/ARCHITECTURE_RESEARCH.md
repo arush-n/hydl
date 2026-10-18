@@ -188,6 +188,14 @@ skills); the simulator adapter; the benches.
 
 Then TRAINING_PLAN's C-steps run on the generalist instead of on per-verb bodies.
 
+Status (2026-10-18, late):
+- The generalist is built (`generalist.py`, README 2.13).
+- A1 is measured once under load: 15.08 ms p95 at batch 8 against the bar, at load 53 to 75. It is not settled; a
+  quiet-machine re-run decides.
+- A2's two teachers exist (`teachers.py`), and so do its flat tasks (`simple_tasks.py`).
+- Still missing for A2: the observation adapter (simulator state to tokens, legal only) and the teachers' full
+  certificates.
+
 ## 5. Decisions for the owner (answered 2026-10-18, late; BUILD.md section 0)
 
 1. **The request-conditioned generalist** is the working design. The owner gave the green light, on the grounds that
