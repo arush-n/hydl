@@ -287,6 +287,15 @@ the ancient-steel values in the shared `weapon_variants` module are simulator-si
 1,168 at a fresh bench, 1,264 at tier 8 and level 6). Open: timed recipes (row 11j, progress in seconds at 1/30 s) and the
 processing and diagram actions.
 
+**Timed bench crafts on gen 7 (2026-10-18; FIDELITY-0.7.2.md section (ac)).** Row 11j is built as the construct
+`timed_crafting` (`Constructs.crafting_time`: `instant` on gen 5, `timed_job` on gen 7): a timed recipe starts a job in seven
+`CombatState` leaves, its inputs leave on the first progress tick, the output lands when the progress in seconds at 1/30 s reaches
+the recipe's time (R+90 for 3.0 s; the native 87 to 89 after the first progress tick is tick jitter), a second request queues one
+deep, more than 7 blocks from the bench cancels with the refund to the original slots. All seven stage-3 receipts replay; the
+render admits 1,485 recipes (1,446 commit alone, 1,305 at a fresh bench; all 211 timed commits finish). Open: the processing and
+diagram actions (stage 5, 447 timed rows need processing benches), a live Region-step run of the executor path, and the fieldcraft
+timed recipe `Weapon_Axe_Crude` (no bench requirement; native timing unmeasured).
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the

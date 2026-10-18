@@ -220,6 +220,14 @@ _MEMORIES = (
     "tests/sim/test_crafting_memories.py for the thresholds 10/25/50/100/200"
 )
 
+_TIMED_CRAFTING = (
+    "tests/sim/test_crafting_oracle_replay.py (timed section): the stage 3 receipts replayed on the gen-7 render (FIDELITY-0.7.2.md "
+    "section (t)): the plain craft (inputs out on request+1, output on request+90: 122 for the request at 32, native 120 in that run "
+    "and 122 in the second); the reach-out cancel on request+11 with the refund to the original slots; the second request queued and "
+    "consumed on the first job's completion, with and without stock; damage on request+11 without a cancel; the no-window control; "
+    "the fieldcraft refusal; the queue depth of one; the gen-5 original"
+)
+
 PATCHES = (
     Patch("sword_swing_left_knockback", PROFILE_JAX,
           "    push = (0.0, 1.0, -1.0, 6.0)\n",
@@ -464,6 +472,62 @@ PATCHES = (
           "        _fieldcraft_context(batch, 1),\n",
           "        _fieldcraft_context(batch, 1, assets.memories_level),\n",
           "11m", _MEMORIES, "the commit re-checks the same level as the provider (a commit at another level would not match its candidate)"),
+    # Row 11j, timed crafting (construct timed_crafting): the controlled actor's job leaves and their zero state.
+    Patch("timed_job_fields", "combat/types.py",
+          "    agent_locomotion_stamina_regen_delay: Array\n",
+          "    agent_locomotion_stamina_regen_delay: Array\n"
+          "    # Gen 7 (row 11j, timed crafting): the controlled actor's bench job (timed_crafting.py), per lane.\n"
+          "    craft_job_recipe: Array\n"
+          "    craft_job_elapsed_seconds: Array\n"
+          "    craft_job_inputs_pending: Array\n"
+          "    craft_queued_recipe: Array\n"
+          "    craft_bench_position: Array\n"
+          "    craft_refund_quantity: Array\n"
+          "    craft_refund_item_id: Array\n",
+          "11j", _TIMED_CRAFTING,
+          "the job leaves the timed_crafting construct reads and writes (gen 5 applies no patch, so it has none)"),
+    Patch("timed_job_init", "combat/runtime/reset.py",
+          "        agent_locomotion_stamina_regen_delay=zeros_f,\n",
+          "        agent_locomotion_stamina_regen_delay=zeros_f,\n"
+          "        craft_job_recipe=jnp.full((batch_size,), -1, dtype=i32),\n"
+          "        craft_job_elapsed_seconds=zeros_f,\n"
+          "        craft_job_inputs_pending=zeros_b,\n"
+          "        craft_queued_recipe=jnp.full((batch_size,), -1, dtype=i32),\n"
+          "        craft_bench_position=jnp.zeros((batch_size, 3), dtype=i32),\n"
+          "        # 76 slots: the default inventory layout (combat/inventory/schema/contract.py DEFAULT_CONTAINER_CAPACITIES)\n"
+          "        craft_refund_quantity=jnp.zeros((batch_size, 76), dtype=i32),\n"
+          "        craft_refund_item_id=jnp.full((batch_size, 76), -1, dtype=i32),\n",
+          "11j", _TIMED_CRAFTING,
+          "every job leaf starts idle (recipe -1, no queue, no refund, no progress) at reset"),
+    Patch("timed_resolved_time", "combat/arsenal/world_actions/crafting.py",
+          "        time_seconds=0.0,\n    )\n",
+          "        time_seconds=recipe.time_seconds,\n    )\n",
+          "11j", _TIMED_CRAFTING,
+          "the resolved recipe keeps the recipe's time (the packed table's time column); gen 5 writes 0.0 for every recipe"),
+    Patch("timed_executor_import", "combat/arsenal/world_actions/executor.py",
+          "import numpy as np\n",
+          "import numpy as np\n\nfrom hytalegym.sim.gen7.mechanics.timed_crafting import start as timed_crafting_start\n",
+          "11j", _TIMED_CRAFTING, "the start function the craft-verb patch calls"),
+    Patch("timed_executor_start", "combat/arsenal/world_actions/executor.py",
+          "            craft_rechecked = craft.target_rechecked\n"
+          "            craft_accepted = craft.accepted\n"
+          "            next_state = next_state._replace(inventory=craft.state)\n",
+          "            craft_rechecked = craft.target_rechecked\n"
+          "            # Gen 7 (row 11j): an accepted timed craft starts or queues a job in the CombatState leaves; its inputs\n"
+          "            # leave on the next tick and its output at completion (timed_crafting.start).\n"
+          "            craft_accepted, next_state = timed_crafting_start(\n"
+          "                execute_region_fieldcraft,\n"
+          "                next_state,\n"
+          "                craft,\n"
+          "                candidates,\n"
+          "                next_world,\n"
+          "                crafting_assets,\n"
+          "                inventory_layout,\n"
+          "            )\n"
+          "            next_state = next_state._replace(inventory=craft.state)\n",
+          "11j", _TIMED_CRAFTING,
+          "a timed craft is accepted when it starts or queues (refused with a running job and a queued one, and when no bench "
+          "candidate makes the recipe legal); the zero-time acceptance is unchanged"),
 )
 
 _MECHANICS = "hytalegym.sim.gen7.mechanics"
@@ -590,6 +654,17 @@ HOOKS = (
          f"{_MECHANICS}.crafting_memories:construct", "crafting_memories", "active", "11m", _MEMORIES,
          "the scenario's memories level (memories_level=, 1 to 6; default 1); a caller passes the bridge's "
          "native_memories_level when the bridge reports one (none does yet)"),
+    Hook("timed_crafting_admission", "combat/arsenal/world_actions/crafting.py", "_lossless_region_crafting",
+         f"{_MECHANICS}.timed_crafting:admission", "crafting_time", "active", "11j", _TIMED_CRAFTING,
+         "a timed recipe (time_seconds > 0) passes the zero-time gate with its time removed; its other gates are the original's"),
+    Hook("timed_crafting_execution", "combat/arsenal/world_actions/crafting.py", "execute_region_fieldcraft",
+         f"{_MECHANICS}.timed_crafting:execution", "crafting_time", "active", "11j", _TIMED_CRAFTING,
+         "an accepted timed craft is accepted but not committed and not finished; the job starts in the executor patch"),
+    Hook("timed_crafting_executor", "combat/arsenal/world_actions/executor.py",
+         "make_region_block_action_surface_executor",
+         f"{_MECHANICS}.timed_crafting:executor", "crafting_time", "active", "11j", _TIMED_CRAFTING,
+         "each executor step first advances the running jobs (first progress tick: inputs out; completion: output; queued start; "
+         "reach cancel with refund), then runs the verbs as before"),
 )
 
 OVERLAY = Overlay(

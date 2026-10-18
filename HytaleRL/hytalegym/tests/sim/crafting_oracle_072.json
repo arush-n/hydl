@@ -211,6 +211,48 @@
    "recipe_id": "Cloth_Block_Wool_Black_Stairs_Recipe_Generated_0",
    "required_memories_level": 1,
    "time_seconds": 0.0
+  },
+  {
+   "bench_requirements": [
+    {
+     "id": "Armor_Bench",
+     "required_tier_level": 0,
+     "type": 0
+    }
+   ],
+   "inputs": [
+    {
+     "excluded_item_asset_ids": [],
+     "item_asset_id": "Ingredient_Bar_Copper",
+     "item_tag_present": false,
+     "metadata_json_sha256": "",
+     "quantity": 11,
+     "resource_type_id": ""
+    },
+    {
+     "excluded_item_asset_ids": [],
+     "item_asset_id": "Ingredient_Fibre",
+     "item_tag_present": false,
+     "metadata_json_sha256": "",
+     "quantity": 4,
+     "resource_type_id": ""
+    }
+   ],
+   "knowledge_required": false,
+   "outputs": [
+    {
+     "excluded_item_asset_ids": [],
+     "item_asset_id": "Armor_Copper_Chest",
+     "item_tag_present": false,
+     "metadata_json_sha256": "",
+     "quantity": 1,
+     "resource_type_id": ""
+    }
+   ],
+   "primary_output_item_asset_id": "Armor_Copper_Chest",
+   "recipe_id": "Armor_Copper_Chest_Recipe_Generated_0",
+   "required_memories_level": 1,
+   "time_seconds": 3.0
   }
  ],
  "scenarios": [
@@ -536,5 +578,267 @@
   }
  ],
  "schema": "hytalerl_sim_crafting_oracle_fixture_v1",
- "source": "FIDELITY-0.7.2.md section (s) (stages 1, 2, 4; jar A6C310DD) and the receipts repo_*.json under ~/.claude/jobs/31947bd7/tmp/phase4i/receipts/; recipe records copied from fidelity072/live/03e_crafting_manifest_072.json"
+ "source": "FIDELITY-0.7.2.md section (s) (stages 1, 2, 4; jar A6C310DD) and the receipts repo_*.json under ~/.claude/jobs/31947bd7/tmp/phase4i/receipts/; recipe records copied from fidelity072/live/03e_crafting_manifest_072.json",
+ "timed_source": "FIDELITY-0.7.2.md section (t) (stage 3, jar 5FE609E2): receipts ~/.claude/jobs/31947bd7/tmp/phase4k/receipts/fin_*.json (seed 570057 unless named); the recipe record is copied from fidelity072/live/03e_crafting_manifest_072.json. Sim ticks: request R; inputs leave on R+1 (the first progress tick); output on R+90 (the 90th progress tick, 3.0 s at 1/30 s); native ticks in native_*.",
+ "timed_scenarios": [
+  {
+   "name": "timed_plain",
+   "receipt": "fin_arm_base_seed570057.json",
+   "request_tick": 32,
+   "bench": {
+    "bench_id": "Armor_Bench",
+    "block_id": "Bench_Armour",
+    "tier": 1,
+    "type": 0,
+    "cell": [
+     -2,
+     65,
+     0
+    ]
+   },
+   "stock": [
+    {
+     "item_asset_id": "Ingredient_Bar_Copper",
+     "quantity": 11
+    },
+    {
+     "item_asset_id": "Ingredient_Fibre",
+     "quantity": 4
+    }
+   ],
+   "events": [],
+   "last_tick": 130,
+   "expect": {
+    "accepted": true,
+    "inputs_out_tick": 33,
+    "output_tick": 122,
+    "native_output_tick": 120,
+    "cancelled": false,
+    "output_slot": 0
+   }
+  },
+  {
+   "name": "timed_reach_out",
+   "receipt": "fin_arm_reach_t10_seed570057.json",
+   "request_tick": 33,
+   "bench": {
+    "bench_id": "Armor_Bench",
+    "block_id": "Bench_Armour",
+    "tier": 1,
+    "type": 0,
+    "cell": [
+     -2,
+     65,
+     0
+    ]
+   },
+   "stock": [
+    {
+     "item_asset_id": "Ingredient_Bar_Copper",
+     "quantity": 11
+    },
+    {
+     "item_asset_id": "Ingredient_Fibre",
+     "quantity": 4
+    }
+   ],
+   "events": [
+    {
+     "tick": 44,
+     "kind": "reach_out"
+    }
+   ],
+   "last_tick": 60,
+   "expect": {
+    "accepted": true,
+    "inputs_out_tick": 34,
+    "cancel_tick": 44,
+    "cancel_reason": "bench_window_closed_out_of_reach",
+    "refund_slots": [
+     0,
+     1
+    ],
+    "output_tick": null,
+    "native_cancel_tick": 44
+   }
+  },
+  {
+   "name": "timed_second_stocked",
+   "receipt": "fin_arm_second_stock2_seed570057.json",
+   "request_tick": 32,
+   "bench": {
+    "bench_id": "Armor_Bench",
+    "block_id": "Bench_Armour",
+    "tier": 1,
+    "type": 0,
+    "cell": [
+     -2,
+     65,
+     0
+    ]
+   },
+   "stock": [
+    {
+     "item_asset_id": "Ingredient_Bar_Copper",
+     "quantity": 22
+    },
+    {
+     "item_asset_id": "Ingredient_Fibre",
+     "quantity": 8
+    }
+   ],
+   "events": [
+    {
+     "tick": 43,
+     "kind": "second_craft"
+    }
+   ],
+   "last_tick": 215,
+   "expect": {
+    "accepted": true,
+    "second_queued_tick": 43,
+    "inputs_out_tick": 33,
+    "output_tick": 122,
+    "second_inputs_out_tick": 122,
+    "second_output_tick": 211,
+    "native_output_tick": 122,
+    "native_second_output_tick": 210
+   }
+  },
+  {
+   "name": "timed_second_no_stock",
+   "receipt": "fin_arm_second_t10_seed570057.json",
+   "request_tick": 32,
+   "bench": {
+    "bench_id": "Armor_Bench",
+    "block_id": "Bench_Armour",
+    "tier": 1,
+    "type": 0,
+    "cell": [
+     -2,
+     65,
+     0
+    ]
+   },
+   "stock": [
+    {
+     "item_asset_id": "Ingredient_Bar_Copper",
+     "quantity": 11
+    },
+    {
+     "item_asset_id": "Ingredient_Fibre",
+     "quantity": 4
+    }
+   ],
+   "events": [
+    {
+     "tick": 43,
+     "kind": "second_craft"
+    }
+   ],
+   "last_tick": 130,
+   "expect": {
+    "accepted": true,
+    "second_queued_tick": null,
+    "output_tick": 122,
+    "native_output_tick": 122,
+    "second_output_tick": null,
+    "native_note": "native queues the second request and drops it at its start (no inputs); the sim refuses it at the request, the inventory outcome is the same"
+   }
+  },
+  {
+   "name": "timed_damage",
+   "receipt": "fin_arm_damage_t10_seed570057.json",
+   "request_tick": 33,
+   "bench": {
+    "bench_id": "Armor_Bench",
+    "block_id": "Bench_Armour",
+    "tier": 1,
+    "type": 0,
+    "cell": [
+     -2,
+     65,
+     0
+    ]
+   },
+   "stock": [
+    {
+     "item_asset_id": "Ingredient_Bar_Copper",
+     "quantity": 11
+    },
+    {
+     "item_asset_id": "Ingredient_Fibre",
+     "quantity": 4
+    }
+   ],
+   "events": [
+    {
+     "tick": 44,
+     "kind": "damage"
+    }
+   ],
+   "last_tick": 130,
+   "expect": {
+    "accepted": true,
+    "cancelled": false,
+    "output_tick": 123,
+    "native_output_tick": 122
+   }
+  },
+  {
+   "name": "timed_no_window_control",
+   "receipt": "fin_arm_nowindow_seed570057.json",
+   "request_tick": 32,
+   "bench": {
+    "bench_id": "Armor_Bench",
+    "block_id": "Bench_Armour",
+    "tier": 1,
+    "type": 0,
+    "cell": [
+     -2,
+     65,
+     0
+    ]
+   },
+   "stock": [
+    {
+     "item_asset_id": "Ingredient_Bar_Copper",
+     "quantity": 11
+    },
+    {
+     "item_asset_id": "Ingredient_Fibre",
+     "quantity": 4
+    }
+   ],
+   "events": [],
+   "last_tick": 130,
+   "expect": {
+    "accepted": true,
+    "cancelled": false,
+    "output_tick": 122,
+    "native_output_tick": 121
+   }
+  },
+  {
+   "name": "timed_fieldcraft_refused",
+   "receipt": "fin_field_armor_chest_seed570057.json",
+   "request_tick": 28,
+   "context": "fieldcraft",
+   "stock": [
+    {
+     "item_asset_id": "Ingredient_Bar_Copper",
+     "quantity": 11
+    },
+    {
+     "item_asset_id": "Ingredient_Fibre",
+     "quantity": 4
+    }
+   ],
+   "expect": {
+    "accepted": false,
+    "reject_reason": "craft_recipe_not_available_in_fieldcraft",
+    "native_status": "refused"
+   }
+  }
+ ]
 }

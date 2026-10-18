@@ -53,6 +53,7 @@ PROFILE = SimProfile(
         landing_walk_resume="third_tick",
         crafting_bench_tier="placed_bench",
         crafting_memories="recorded_count",
+        crafting_time="timed_job",
     ),
     # Owner ruling 2026-10-17: the agent operates at 30 Hz; one step duration.
     step_duration=StepDuration(nominal_seconds=1.0 / 30.0, loaded_seconds=1.0 / 30.0, timing_profile_count=1),

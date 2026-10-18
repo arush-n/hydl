@@ -112,6 +112,10 @@ class Constructs:
     # recorded count sets the level, 1 to 6; recipes up to level 6 admitted). Owner: sim/gen7/mechanics/crafting_memories.py
     # (row 11m, stage 4).
     crafting_memories: str = "level_one"
+    # Region timed bench crafts: "instant" (HEAD: a craft commits on its request tick) or "timed_job" (a recipe with
+    # time_seconds > 0 starts a job: inputs leave on the next tick, the output at completion, cancelled out of reach).
+    # Owner: sim/gen7/mechanics/timed_crafting.py (row 11j, stage 3).
+    crafting_time: str = "instant"
 
 
 @dataclass(frozen=True)
