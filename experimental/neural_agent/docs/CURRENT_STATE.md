@@ -82,10 +82,15 @@ generated index in FIDELITY-0.7.2.md); the 13 content values as Redirects (`ec9c
 row matches live, the iron sword hit tick stays open); the shield bash under a held guard (`fc80707`, pin `56D2B532`,
 section (x); the plain-root bash with no guard held is queued as #71); potions and durability (`6b98ee3`, section (y):
 the 0.7.2 stamina drink is a 30 s interaction cooldown with no status, the durability table served through a hook).
-Running: the attribution of the world-verb suite failures on the damage-fix jar, the ancient-steel crossbow rows (#70),
-and the timing constructs with state (#66: landing walk resume, guard cooldown, attack start, shortbow ammo at reset).
-Queued: #71, the session-file split for ratchet headroom (#72), simulator crafting from the oracle (#67), the terrain
-recapture and audits (#68), the stub mechanics (#69), the stale engine-test fixtures (#62). Committed since the last update: the
+Since then: the damage-fix jar verified against the previous jar across the native suites, 49 failures on both and no
+regression (`7d3c2d5`, (u) addendum); the landing walk resume construct (`580e37b`, section (z): after a jump the gen-7
+NPC walks on the third tick after touchdown, within 1.5e-5 m of native on two seeds, closing the locomotion half of the
+lower layer's Phase C blocker; guard cooldown, attack start and shortbow reset ammo re-filed as #73 with findings); the
+ancient-steel crossbow rows settled as a harness pitch gap and two stale 0.5.7 expectations (`02ff098`, section (aa);
+follow-ups #74). Running: crafting on the simulator side from the oracle (#67: bench tiers, memories level, timed
+recipes, harness helpers) and the plain-root bash withdrawal on the bridge (#71). Queued: the session-file split (#72),
+#73, #74, the terrain recapture and audits (#68), the stub mechanics (#69), the stale engine-test fixtures (#62).
+Committed earlier: the
 crafting oracle stage 3 (`274aaec`, timed bench crafts with probe events; pin `5FE609E2`), phase 4j (`a534e83`: the Trork
 target no longer gets a headless Player, which the PvP-off filter used to cancel the agent's damage; the iron combo and
 signature rows now land; pin `CAFAD9B7`), and the crafting oracle stage 5 (`7374b76`: processing benches advance once the
@@ -193,7 +198,8 @@ stage 1, `0e45fc6` section (o). Later this session: `8758cb3` docs; `b4be1fe` se
 (q) recheck; `84f1a83` CRAFTING-ORACLE.md; `cb01a31` phase 4h; `25ad61f` swap plan; `76839c5` crafting oracle stages 1, 2, 4; `9750283` (s) note closed; `b4be1fe`,
 `274aaec` stage 3; `5c523a8` the handoff; `a534e83` phase 4j; `7374b76` stage 5; `dc517df` docs; `deb8694` runbooks and
 tools; `8b6e284` the peer's state corrections; `ec9c6da` content values; `fc80707` shield bash; `6b98ee3` potions and
-durability. Peer, before stopping: `0218d69` guard
+durability; `4034a10` docs; `7d3c2d5` the no-regression verification; `580e37b` landing walk resume; `02ff098` and
+`f9e79ba` phase 4n and the index tool. Peer, before stopping: `0218d69` guard
 release mask, `025ee62` structural crafting (1,168 recipes), `325f938` type 3 on the 0.7 line, `8b3b2ac` last.
 
 ## 9. Layout
