@@ -20,6 +20,7 @@ from experimental.neural_agent.shared_state import (
     DecisionSection,
     EventsSection,
     GoalInForce,
+    GoalReading,
     InformationRequest,
     SharedState,
     SkillsSection,
@@ -75,6 +76,30 @@ def information_request_record(item: Any, tick: int) -> InformationRequest:
     raise TypeError(f"not an information request: {type(item).__name__}")
 
 
+def goal_reading(item: Any) -> GoalReading:
+    """Return the :class:`GoalReading` for one entry of a host decider's ``readings``: a GoalReading (kept) or a
+    ``jev/typed_rule.py`` SlotReading (slot, predicate, source, confidence) read under an executive version the
+    decider exposes as ``executive_version`` on the item or, failing that, 0.
+
+    Raises:
+        TypeError: For any other form.
+    """
+
+    if isinstance(item, GoalReading):
+        return item
+    if hasattr(item, "predicate") and hasattr(item, "source") and hasattr(item, "slot"):
+        predicate = item.predicate
+        return GoalReading(
+            executive_version=int(getattr(item, "executive_version", 0)),
+            slot=int(item.slot),
+            kind=None if predicate is None else predicate.kind,
+            argument=None if predicate is None else predicate.argument,
+            source=str(item.source),
+            confidence=float(item.confidence),
+        )
+    raise TypeError(f"not a goal reading: {type(item).__name__}")
+
+
 class SessionScribe:
     """Writes what the session loop knows into S_t, as each section's owner.
 
@@ -99,7 +124,12 @@ class SessionScribe:
         return self._state
 
     def record_tick(
-        self, tick: int, transition: Any, hierarchy_state: Any, information_requests: Sequence[Any] = ()
+        self,
+        tick: int,
+        transition: Any,
+        hierarchy_state: Any,
+        information_requests: Sequence[Any] = (),
+        readings: Sequence[Any] | None = None,
     ) -> None:
         """Write the belief, events, skills and decision sections for ``tick``.
 
@@ -111,6 +141,9 @@ class SessionScribe:
             information_requests: What the host decider appended to its ``information_requests`` since
                 the last write, in any of the forms :func:`information_request_record` accepts; they join
                 the decision section's bounded list of questions to the LLM.
+            readings: The host decider's readings of the executive version in force (its ``readings``
+                attribute: ``jev/typed_rule.py`` SlotReading records, or GoalReading records), or None to
+                keep the section's current readings.
         """
 
         step = transition.hierarchy_step
@@ -171,6 +204,7 @@ class SessionScribe:
                 recent_limit=decision.recent_limit,
                 information_requests=questions,
                 information_limit=decision.information_limit,
+                readings=decision.readings if readings is None else tuple(goal_reading(item) for item in readings),
             ),
             tick,
         )

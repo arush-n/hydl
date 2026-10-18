@@ -24,6 +24,7 @@ from experimental.neural_agent.executive.store import validate_against_schema
 from .._common import (
     DECISION_HISTORY,
     INFORMATION_HISTORY,
+    _bounded,
     _flag,
     _instances,
     _optional_bounded,
@@ -142,6 +143,49 @@ class InformationRequest:
 
 
 @dataclass(frozen=True)
+class GoalReading:
+    """How the decision layer understood one goal of an executive version (SYSTEM_ONE 9.13: the decoded
+    interpretation is written back so the LLM sees how it was read).
+
+    Attributes:
+        executive_version: The E_t version the reading belongs to.
+        slot: The goal slot.
+        kind: The condition kind read, or None when the slot is ineligible (nothing readable).
+        argument: The condition's number, or None.
+        source: Where the reading came from: ``typed`` (the LLM's typed field), ``label`` (a constraint
+            label), ``words`` (the fallback reader), ``always`` (no condition written).
+        confidence: The reader's confidence in [0, 1], 1.0 for typed fields.
+    """
+
+    executive_version: int
+    slot: int
+    kind: str | None
+    argument: float | None
+    source: str
+    confidence: float
+
+    def __post_init__(self) -> None:
+        """Validate the fields."""
+
+        object.__setattr__(self, "executive_version", _non_negative_int(self.executive_version, "GoalReading.executive_version"))
+        object.__setattr__(self, "slot", _non_negative_int(self.slot, "GoalReading.slot"))
+        if self.kind is not None:
+            _text(self.kind, "GoalReading.kind")
+        if self.argument is not None:
+            object.__setattr__(self, "argument", _finite_number(self.argument, "GoalReading.argument"))
+        _text(self.source, "GoalReading.source")
+        object.__setattr__(self, "confidence", _bounded(self.confidence, "GoalReading.confidence", 1.0))
+
+    @property
+    def condition(self) -> str:
+        """The reading as one token: ``always``, ``distance_below 3``, or ``unreadable``."""
+
+        if self.kind is None:
+            return "unreadable"
+        return self.kind if self.argument is None else f"{self.kind} {self.argument:g}"
+
+
+@dataclass(frozen=True)
 class DecisionSection:
     """The JEV's section: the goal in force per lane and the last decisions.
 
@@ -153,6 +197,8 @@ class DecisionSection:
         information_requests: The questions to the LLM, newest last; only the newest
             ``information_limit`` are kept.
         information_limit: Their bound, at least 1. Default ``INFORMATION_HISTORY`` (8).
+        readings: How each goal of the executive version in force was understood, one per slot, in
+            slot order; empty before the first read.
     """
 
     in_force: tuple[GoalInForce, ...] = ()
@@ -160,6 +206,7 @@ class DecisionSection:
     recent_limit: int = DECISION_HISTORY
     information_requests: tuple[InformationRequest, ...] = ()
     information_limit: int = INFORMATION_HISTORY
+    readings: tuple[GoalReading, ...] = ()
 
     def __post_init__(self) -> None:
         """Validate the records and keep the newest ``recent_limit`` decisions and ``information_limit`` questions."""
@@ -173,6 +220,7 @@ class DecisionSection:
         object.__setattr__(self, "information_limit", bound)
         questions = _instances(self.information_requests, InformationRequest, "DecisionSection.information_requests")
         object.__setattr__(self, "information_requests", questions[-bound:])
+        object.__setattr__(self, "readings", _instances(self.readings, GoalReading, "DecisionSection.readings"))
 
     def to_dict(self) -> dict[str, Any]:
         """Return the JSON-shaped mapping."""
@@ -183,6 +231,7 @@ class DecisionSection:
             "recent_limit": self.recent_limit,
             "information_requests": [dataclasses.asdict(item) for item in self.information_requests],
             "information_limit": self.information_limit,
+            "readings": [dataclasses.asdict(item) for item in self.readings],
         }
 
     @classmethod
@@ -196,5 +245,6 @@ class DecisionSection:
             recent_limit=mapping["recent_limit"],
             information_requests=tuple(InformationRequest(**item) for item in mapping["information_requests"]),
             information_limit=mapping["information_limit"],
+            readings=tuple(GoalReading(**item) for item in mapping["readings"]),
         )
 

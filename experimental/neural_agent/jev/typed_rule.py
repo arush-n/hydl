@@ -35,6 +35,7 @@ the commitment (evader 2 s) is the skill contract's, applied by the session's se
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -80,6 +81,7 @@ class SlotReading:
     source: str
     confidence: float
     when: str = ""
+    executive_version: int = 0
 
 
 def read_goal(slot: int, goal: GoalSpec, when: str = "") -> SlotReading:
@@ -180,7 +182,10 @@ class TypedRuleDecider:
         section = None if self.scratchpad is None else getattr(self.scratchpad, "executive", None)
         if section is not None and section.version == executive.version and len(section.goals) == len(executive.goals):
             words = tuple(str(getattr(goal, "when", "")) for goal in section.goals)
-        readings = tuple(read_goal(k, goal, when) for k, (goal, when) in enumerate(zip(executive.goals, words)))
+        readings = tuple(
+            dataclasses.replace(read_goal(k, goal, when), executive_version=executive.version)
+            for k, (goal, when) in enumerate(zip(executive.goals, words))
+        )
         for reading in readings:
             if reading.source == SOURCE_WORDS and reading.confidence < CLEAR:
                 self.unsure += 1

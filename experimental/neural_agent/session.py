@@ -452,7 +452,11 @@ def run_session(
             if isinstance(pending, list) and len(pending) > information_consumed:
                 questions = tuple(pending[information_consumed:])
                 information_consumed = len(pending)
-            scribe.record_tick(clock_tick, transition, new_state, information_requests=questions)
+            readings = None if host_decider is None else getattr(host_decider, "readings", None)
+            scribe.record_tick(
+                clock_tick, transition, new_state, information_requests=questions,
+                readings=None if readings is None else tuple(readings),
+            )
 
         # 6. a host decider's per-tick observer, after the sections of this tick are written: the lower
         #    layer's combiner runs here when its wrapper defines ``on_tick`` (skill_agent/scratchpad.py), so

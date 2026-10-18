@@ -108,6 +108,7 @@ from .sections.belief import (
     BeliefSection,
 )
 from .sections.decision import (
+    GoalReading,
     DecisionRecord,
     DecisionSection,
     GoalInForce,
@@ -131,6 +132,14 @@ from .sections.skills import (
 from .views.jev import (
     JevView,
     view_for_jev,
+)
+from .views.briefing import (
+    briefing,
+)
+from .views.render import (
+    ViewOptions,
+    estimate_tokens,
+    render,
 )
 from .views.llm import (
     view_for_llm,
@@ -171,5 +180,10 @@ __all__ = [
     "validate",
     "view_for_jev",
     "view_for_llm",
+    "GoalReading",
+    "ViewOptions",
+    "briefing",
+    "estimate_tokens",
+    "render",
     "view_for_skills",
 ]

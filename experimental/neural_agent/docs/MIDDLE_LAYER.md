@@ -30,7 +30,7 @@ document. Every statement carries one of four labels:
 
 | Piece | Status | Evidence |
 |---|---|---|
-| Shared scratchpad S_t: executive / belief / decision / skills / events, one writer each, versioned, JSON schema, a view per reader | BUILT `00a8fc7` | wired into the harness (LLM writes), the session (belief, events, skills, decisions, outcomes), the eager runner (writes `scratchpad_<arm>.json` and the LLM view), J-S1 (`set_shared_state`); 12 tests |
+| Shared scratchpad S_t: executive / belief / decision / skills / events, one writer each, versioned, JSON schema, a view per reader | BUILT `00a8fc7`; a package with the briefing view (markdown / json / compact, goal readings, the delta since the LLM's version) 2026-10-18 | wired into the harness (LLM writes), the session (belief, events, skills, decisions, outcomes), the eager runner (writes `scratchpad_<arm>.json` and the LLM view), J-S1 (`set_shared_state`); 12 tests |
 | Decision speed, per decision | MEASURED | J-S1 0.29 ms at batch 64 (0.21 compiled), J1 0.10 ms, J0 7 us; budget 20 ms; zero text encoded per decision |
 | Typed goal reading (structured, catalogue-agnostic encoder): unseen states and unseen catalogue sizes | MEASURED, BUILT `93defae` | 0.9599 / 0.9489 at 4096 generated training states; memorises at 256 (0.79 / 0.63); reads a new executive version in 0.16 ms |
 | Goal-language generator: 10 intent families (3 real skills, 7 future), 9 condition families, teacher rule M13, splits by wording / skill family / catalogue size | BUILT `9039f3f` | 29 tests; M13 reproduces the composition rule M10 |

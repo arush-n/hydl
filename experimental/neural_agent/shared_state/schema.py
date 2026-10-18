@@ -127,6 +127,19 @@ _DECISION_SECTION_SCHEMA = _object_schema(
             ),
         },
         "information_limit": _count_schema(1),
+        "readings": {
+            "type": "array",
+            "items": _object_schema(
+                {
+                    "executive_version": _count_schema(),
+                    "slot": _count_schema(),
+                    "kind": {"type": ["string", "null"]},
+                    "argument": {"type": ["number", "null"]},
+                    "source": {"type": "string", "minLength": 1},
+                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                }
+            ),
+        },
     }
 )
 def _triple_schema(item: dict[str, Any]) -> dict[str, Any]:

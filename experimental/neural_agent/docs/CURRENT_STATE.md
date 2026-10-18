@@ -25,6 +25,7 @@ for the gen-7 simulator), and the gen-7 simulator itself (phase 3 of 6 running).
 | Scratchpad S_t with one writer per section, versioned, closed schema, LLM view | built (`00a8fc7`, grown since) |
 | Typed goal `condition` (nine kinds, enum in the schema), the vocabulary and units in the system prompt | built `1b76c0e` |
 | Questions from the decision layer to the LLM (`DecisionSection.information_requests`, shown in the LLM view) | built `59d2047`; the LLM's answering loop is not exercised (no live call) |
+| The LLM's view as a briefing (per-NPC rows in words, goals with how they were read, questions, rejections, the delta since the LLM's version; markdown / json / compact; 8 lanes in 943 estimated tokens) and `DecisionSection.readings` | built 2026-10-18 (`shared_state/views/`, `shared_state/README.md`) |
 | The backend writing the full executive section (words included), objectives list, per-squad views, the group scratchpad | designed (`MIDDLE_LAYER.md` plan step 7; task #31) |
 
 ## 3. Level 2, the decision layer (`jev/`, `requests.py`, `session.py`)
