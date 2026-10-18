@@ -725,6 +725,7 @@ def run_arm(
     actor_input_fn: HierarchicalActorInputFn = actor_policy_input,
     catches_known: bool = True,
     host_respects_commitment: bool = True,  # accepted for a uniform call; the compiled runner has no host seam
+    host_budget_ms: float = J0_LATENCY_BUDGET_MS,  # likewise accepted; the compiled runner has no host decider
 ) -> ArmRun:
     """Compose one arm, run it ``episodes`` times through the compiled collector, and return its row.
 
@@ -811,6 +812,7 @@ def run_arm_eager(
     task: Any,
     catches_known: bool = True,
     host_respects_commitment: bool = True,  # the session's default since 2026-10-17; False restores the earlier seam
+    host_budget_ms: float = J0_LATENCY_BUDGET_MS,  # a host decision slower than this is a miss (the previous goal stands)
 ) -> ArmRun:
     """Compose one arm and run it through ``session.run_session``, the eager loop.
 
@@ -843,7 +845,7 @@ def run_arm_eager(
             key,
             SessionConfig(
                 steps=steps,
-                host_budget_ms=J0_LATENCY_BUDGET_MS,
+                host_budget_ms=host_budget_ms,
                 host_respects_commitment=host_respects_commitment,
             ),
             skill_ids=ctx.skill_ids,
@@ -1222,6 +1224,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="eager runner: apply a host decider's goal per lane only where the skill's commitment allows a switch (mirrors the core; default on since 2026-10-17; --no-host-respects-commitment restores the earlier seam)",
     )
     parser.add_argument(
+        "--host-budget-ms",
+        type=float,
+        default=J0_LATENCY_BUDGET_MS,
+        help="eager runner: a host decision slower than this many ms is a miss and the previous goal stands (default J0_LATENCY_BUDGET_MS); raise it to attribute metric differences to latency",
+    )
+    parser.add_argument(
         "--js1-heads",
         type=Path,
         default=None,
@@ -1319,6 +1327,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             task=task,
             catches_known=arena.catch_from_terminated,
             host_respects_commitment=args.host_respects_commitment,
+            host_budget_ms=args.host_budget_ms,
         )
         for arm in arms
     ]
