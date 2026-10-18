@@ -104,6 +104,14 @@ class Constructs:
     # NPC walk: after an accepted jump the planar walk is held for the two ticks after touchdown). Owner:
     # sim/gen7/mechanics/landing_walk.py (row 1c, F1c).
     landing_walk_resume: str = "at_once"
+    # Region bench tier: "zero_fill" (HEAD: every Region bench row is tier 0 and only tier-0 requirements are admitted) or
+    # "placed_bench" (a fresh bench is tier 1, tiers 1 to 8 settable; requirements up to tier 8 admitted). Owner:
+    # sim/gen7/mechanics/bench_tiers.py (row 11b, stage 2).
+    crafting_bench_tier: str = "zero_fill"
+    # Region memories level: "level_one" (HEAD: every recipe needs level 1 or less) or "recorded_count" (the universe-wide
+    # recorded count sets the level, 1 to 6; recipes up to level 6 admitted). Owner: sim/gen7/mechanics/crafting_memories.py
+    # (row 11m, stage 4).
+    crafting_memories: str = "level_one"
 
 
 @dataclass(frozen=True)

@@ -1,0 +1,540 @@
+{
+ "recipes": [
+  {
+   "bench_requirements": [
+    {
+     "id": "Farmingbench",
+     "required_tier_level": 2,
+     "type": 0
+    }
+   ],
+   "inputs": [
+    {
+     "excluded_item_asset_ids": [],
+     "item_asset_id": "Plant_Crop_Lettuce_Item",
+     "item_tag_present": false,
+     "metadata_json_sha256": "",
+     "quantity": 1,
+     "resource_type_id": ""
+    }
+   ],
+   "knowledge_required": false,
+   "outputs": [
+    {
+     "excluded_item_asset_ids": [],
+     "item_asset_id": "Ingredient_Life_Essence",
+     "item_tag_present": false,
+     "metadata_json_sha256": "",
+     "quantity": 3,
+     "resource_type_id": ""
+    }
+   ],
+   "primary_output_item_asset_id": "Ingredient_Life_Essence_Lettuce",
+   "recipe_id": "Ingredient_Life_Essence_Lettuce_Recipe_Generated_0",
+   "required_memories_level": 1,
+   "time_seconds": 0.0
+  },
+  {
+   "bench_requirements": [
+    {
+     "id": "Farmingbench",
+     "required_tier_level": 4,
+     "type": 0
+    }
+   ],
+   "inputs": [
+    {
+     "excluded_item_asset_ids": [],
+     "item_asset_id": "Plant_Crop_Cauliflower_Item",
+     "item_tag_present": false,
+     "metadata_json_sha256": "",
+     "quantity": 1,
+     "resource_type_id": ""
+    }
+   ],
+   "knowledge_required": false,
+   "outputs": [
+    {
+     "excluded_item_asset_ids": [],
+     "item_asset_id": "Ingredient_Life_Essence",
+     "item_tag_present": false,
+     "metadata_json_sha256": "",
+     "quantity": 6,
+     "resource_type_id": ""
+    }
+   ],
+   "primary_output_item_asset_id": "Ingredient_Life_Essence_Cauliflower",
+   "recipe_id": "Ingredient_Life_Essence_Cauliflower_Recipe_Generated_0",
+   "required_memories_level": 1,
+   "time_seconds": 0.0
+  },
+  {
+   "bench_requirements": [
+    {
+     "id": "Farmingbench",
+     "required_tier_level": 8,
+     "type": 0
+    }
+   ],
+   "inputs": [
+    {
+     "excluded_item_asset_ids": [],
+     "item_asset_id": "Plant_Crop_Onion_Item",
+     "item_tag_present": false,
+     "metadata_json_sha256": "",
+     "quantity": 1,
+     "resource_type_id": ""
+    }
+   ],
+   "knowledge_required": false,
+   "outputs": [
+    {
+     "excluded_item_asset_ids": [],
+     "item_asset_id": "Ingredient_Life_Essence",
+     "item_tag_present": false,
+     "metadata_json_sha256": "",
+     "quantity": 4,
+     "resource_type_id": ""
+    }
+   ],
+   "primary_output_item_asset_id": "Ingredient_Life_Essence_Onion",
+   "recipe_id": "Ingredient_Life_Essence_Onion_Recipe_Generated_0",
+   "required_memories_level": 1,
+   "time_seconds": 0.0
+  },
+  {
+   "bench_requirements": [
+    {
+     "id": "Furniture_Bench",
+     "required_tier_level": 0,
+     "type": 0
+    }
+   ],
+   "inputs": [
+    {
+     "excluded_item_asset_ids": [],
+     "item_asset_id": "Wood_Deadwood_Planks",
+     "item_tag_present": false,
+     "metadata_json_sha256": "",
+     "quantity": 3,
+     "resource_type_id": ""
+    },
+    {
+     "excluded_item_asset_ids": [],
+     "item_asset_id": "Ingredient_Bar_Copper",
+     "item_tag_present": false,
+     "metadata_json_sha256": "",
+     "quantity": 2,
+     "resource_type_id": ""
+    }
+   ],
+   "knowledge_required": false,
+   "outputs": [
+    {
+     "excluded_item_asset_ids": [],
+     "item_asset_id": "Furniture_Ancient_Chest_Small",
+     "item_tag_present": false,
+     "metadata_json_sha256": "",
+     "quantity": 1,
+     "resource_type_id": ""
+    }
+   ],
+   "primary_output_item_asset_id": "Furniture_Ancient_Chest_Small",
+   "recipe_id": "Furniture_Ancient_Chest_Small_Recipe_Generated_0",
+   "required_memories_level": 2,
+   "time_seconds": 0.0
+  },
+  {
+   "bench_requirements": [
+    {
+     "id": "Builders",
+     "required_tier_level": 0,
+     "type": 3
+    }
+   ],
+   "inputs": [
+    {
+     "excluded_item_asset_ids": [],
+     "item_asset_id": "Cloth_Block_Wool_Black",
+     "item_tag_present": false,
+     "metadata_json_sha256": "",
+     "quantity": 1,
+     "resource_type_id": ""
+    }
+   ],
+   "knowledge_required": false,
+   "outputs": [
+    {
+     "excluded_item_asset_ids": [],
+     "item_asset_id": "Cloth_Block_Wool_Black_Half",
+     "item_tag_present": false,
+     "metadata_json_sha256": "",
+     "quantity": 2,
+     "resource_type_id": ""
+    }
+   ],
+   "primary_output_item_asset_id": "Cloth_Block_Wool_Black_Half",
+   "recipe_id": "Cloth_Block_Wool_Black_Half_Recipe_Generated_0",
+   "required_memories_level": 1,
+   "time_seconds": 0.0
+  },
+  {
+   "bench_requirements": [
+    {
+     "id": "Builders",
+     "required_tier_level": 0,
+     "type": 3
+    }
+   ],
+   "inputs": [
+    {
+     "excluded_item_asset_ids": [],
+     "item_asset_id": "Cloth_Block_Wool_Black",
+     "item_tag_present": false,
+     "metadata_json_sha256": "",
+     "quantity": 1,
+     "resource_type_id": ""
+    }
+   ],
+   "knowledge_required": false,
+   "outputs": [
+    {
+     "excluded_item_asset_ids": [],
+     "item_asset_id": "Cloth_Block_Wool_Black_Stairs",
+     "item_tag_present": false,
+     "metadata_json_sha256": "",
+     "quantity": 1,
+     "resource_type_id": ""
+    }
+   ],
+   "primary_output_item_asset_id": "Cloth_Block_Wool_Black_Stairs",
+   "recipe_id": "Cloth_Block_Wool_Black_Stairs_Recipe_Generated_0",
+   "required_memories_level": 1,
+   "time_seconds": 0.0
+  }
+ ],
+ "scenarios": [
+  {
+   "bench": {
+    "bench_id": "Farmingbench",
+    "block_id": "Bench_Farming",
+    "tier": 1,
+    "type": 0
+   },
+   "expect": {
+    "accepted": false,
+    "native_status": "refused",
+    "reject_reason": "craft_recipe_not_available_at_bench"
+   },
+   "memories_level": 1,
+   "name": "farm_t1_lettuce",
+   "recipe_id": "Ingredient_Life_Essence_Lettuce_Recipe_Generated_0",
+   "stock": [
+    {
+     "item_asset_id": "Plant_Crop_Lettuce_Item",
+     "quantity": 1
+    }
+   ],
+   "stock_source": "inferred: the receipt does not list the stock; the level-2 probe's inputs"
+  },
+  {
+   "bench": {
+    "bench_id": "Farmingbench",
+    "block_id": "Bench_Farming",
+    "tier": 2,
+    "type": 0
+   },
+   "expect": {
+    "accepted": true,
+    "deltas": [
+     {
+      "after": 0,
+      "before": 1,
+      "item": "Plant_Crop_Lettuce_Item"
+     },
+     {
+      "after": 3,
+      "before": 0,
+      "item": "Ingredient_Life_Essence"
+     }
+    ],
+    "finished_tick": 32,
+    "native_status": "finished",
+    "requested_tick": 32
+   },
+   "memories_level": 1,
+   "name": "farm_t2_lettuce",
+   "recipe_id": "Ingredient_Life_Essence_Lettuce_Recipe_Generated_0",
+   "stock": [
+    {
+     "item_asset_id": "Plant_Crop_Lettuce_Item",
+     "quantity": 1
+    }
+   ],
+   "stock_source": "receipt"
+  },
+  {
+   "bench": {
+    "bench_id": "Farmingbench",
+    "block_id": "Bench_Farming",
+    "tier": 4,
+    "type": 0
+   },
+   "expect": {
+    "accepted": true,
+    "deltas": [
+     {
+      "after": 0,
+      "before": 1,
+      "item": "Plant_Crop_Cauliflower_Item"
+     },
+     {
+      "after": 6,
+      "before": 0,
+      "item": "Ingredient_Life_Essence"
+     }
+    ],
+    "finished_tick": 32,
+    "native_status": "finished",
+    "requested_tick": 32
+   },
+   "memories_level": 1,
+   "name": "farm_t4_cauliflower",
+   "recipe_id": "Ingredient_Life_Essence_Cauliflower_Recipe_Generated_0",
+   "stock": [
+    {
+     "item_asset_id": "Plant_Crop_Cauliflower_Item",
+     "quantity": 1
+    }
+   ],
+   "stock_source": "receipt"
+  },
+  {
+   "bench": {
+    "bench_id": "Farmingbench",
+    "block_id": "Bench_Farming",
+    "tier": 7,
+    "type": 0
+   },
+   "expect": {
+    "accepted": false,
+    "native_status": "refused",
+    "reject_reason": "craft_recipe_not_available_at_bench"
+   },
+   "memories_level": 1,
+   "name": "farm_t7_onion",
+   "recipe_id": "Ingredient_Life_Essence_Onion_Recipe_Generated_0",
+   "stock": [
+    {
+     "item_asset_id": "Plant_Crop_Onion_Item",
+     "quantity": 1
+    }
+   ],
+   "stock_source": "inferred: the receipt does not list the stock"
+  },
+  {
+   "bench": {
+    "bench_id": "Farmingbench",
+    "block_id": "Bench_Farming",
+    "tier": 8,
+    "type": 0
+   },
+   "expect": {
+    "accepted": true,
+    "deltas": [
+     {
+      "after": 0,
+      "before": 1,
+      "item": "Plant_Crop_Onion_Item"
+     },
+     {
+      "after": 4,
+      "before": 0,
+      "item": "Ingredient_Life_Essence"
+     }
+    ],
+    "finished_tick": 32,
+    "native_status": "finished",
+    "requested_tick": 32
+   },
+   "memories_level": 1,
+   "name": "farm_t8_onion",
+   "recipe_id": "Ingredient_Life_Essence_Onion_Recipe_Generated_0",
+   "stock": [
+    {
+     "item_asset_id": "Plant_Crop_Onion_Item",
+     "quantity": 1
+    }
+   ],
+   "stock_source": "receipt"
+  },
+  {
+   "bench": {
+    "bench_id": "Furniture_Bench",
+    "block_id": "Bench_Furniture",
+    "tier": 1,
+    "type": 0
+   },
+   "expect": {
+    "accepted": false,
+    "native_status": "refused",
+    "reject_reason": "craft_recipe_memories_unavailable"
+   },
+   "memories_level": 1,
+   "name": "mem_l1_ancient_chest",
+   "recipe_id": "Furniture_Ancient_Chest_Small_Recipe_Generated_0",
+   "stock": [
+    {
+     "item_asset_id": "Wood_Deadwood_Planks",
+     "quantity": 3
+    },
+    {
+     "item_asset_id": "Ingredient_Bar_Copper",
+     "quantity": 2
+    }
+   ],
+   "stock_source": "inferred: the receipt does not list the stock; the level-2 probe's inputs"
+  },
+  {
+   "bench": {
+    "bench_id": "Furniture_Bench",
+    "block_id": "Bench_Furniture",
+    "tier": 1,
+    "type": 0
+   },
+   "expect": {
+    "accepted": true,
+    "deltas": [
+     {
+      "after": 0,
+      "before": 3,
+      "item": "Wood_Deadwood_Planks"
+     },
+     {
+      "after": 0,
+      "before": 2,
+      "item": "Ingredient_Bar_Copper"
+     },
+     {
+      "after": 1,
+      "before": 0,
+      "item": "Furniture_Ancient_Chest_Small"
+     }
+    ],
+    "finished_tick": 33,
+    "native_status": "finished",
+    "requested_tick": 33
+   },
+   "memories_level": 2,
+   "name": "mem_l2_ancient_chest",
+   "recipe_id": "Furniture_Ancient_Chest_Small_Recipe_Generated_0",
+   "stock": [
+    {
+     "item_asset_id": "Wood_Deadwood_Planks",
+     "quantity": 3
+    },
+    {
+     "item_asset_id": "Ingredient_Bar_Copper",
+     "quantity": 2
+    }
+   ],
+   "stock_source": "receipt"
+  },
+  {
+   "bench": {
+    "bench_id": "Builders",
+    "block_id": "Bench_Builders",
+    "tier": 1,
+    "type": 3
+   },
+   "expect": {
+    "accepted": true,
+    "deltas": [
+     {
+      "after": 0,
+      "before": 1,
+      "item": "Cloth_Block_Wool_Black"
+     },
+     {
+      "after": 2,
+      "before": 0,
+      "item": "Cloth_Block_Wool_Black_Half"
+     }
+    ],
+    "finished_tick": 32,
+    "native_finished_tick": 33,
+    "native_status": "finished",
+    "requested_tick": 32
+   },
+   "memories_level": 1,
+   "name": "struct_half_stocked",
+   "note": "native finish one tick after the request (33); the render commits on the request tick (row 11, FIDELITY (o))",
+   "recipe_id": "Cloth_Block_Wool_Black_Half_Recipe_Generated_0",
+   "stock": [
+    {
+     "item_asset_id": "Cloth_Block_Wool_Black",
+     "quantity": 1
+    }
+   ],
+   "stock_source": "receipt"
+  },
+  {
+   "bench": {
+    "bench_id": "Builders",
+    "block_id": "Bench_Builders",
+    "tier": 1,
+    "type": 3
+   },
+   "expect": {
+    "accepted": true,
+    "deltas": [
+     {
+      "after": 0,
+      "before": 1,
+      "item": "Cloth_Block_Wool_Black"
+     },
+     {
+      "after": 1,
+      "before": 0,
+      "item": "Cloth_Block_Wool_Black_Stairs"
+     }
+    ],
+    "finished_tick": 32,
+    "native_finished_tick": 33,
+    "native_status": "finished",
+    "requested_tick": 32
+   },
+   "memories_level": 1,
+   "name": "struct_stairs_stocked",
+   "note": "native finish one tick after the request (33); the render commits on the request tick",
+   "recipe_id": "Cloth_Block_Wool_Black_Stairs_Recipe_Generated_0",
+   "stock": [
+    {
+     "item_asset_id": "Cloth_Block_Wool_Black",
+     "quantity": 1
+    }
+   ],
+   "stock_source": "receipt"
+  },
+  {
+   "bench": {
+    "bench_id": "Builders",
+    "block_id": "Bench_Builders",
+    "tier": 1,
+    "type": 3
+   },
+   "expect": {
+    "accepted": false,
+    "native_status": "refused",
+    "reject_reason": "structural_input_missing_from_inventory"
+   },
+   "memories_level": 1,
+   "name": "struct_half_missing",
+   "recipe_id": "Cloth_Block_Wool_Black_Half_Recipe_Generated_0",
+   "stock": [],
+   "stock_source": "receipt (no input stocked)"
+  }
+ ],
+ "schema": "hytalerl_sim_crafting_oracle_fixture_v1",
+ "source": "FIDELITY-0.7.2.md section (s) (stages 1, 2, 4; jar A6C310DD) and the receipts repo_*.json under ~/.claude/jobs/31947bd7/tmp/phase4i/receipts/; recipe records copied from fidelity072/live/03e_crafting_manifest_072.json"
+}

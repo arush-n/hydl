@@ -209,6 +209,17 @@ _LANDING_WALK = (
     "(native z first moves on L+3)"
 )
 
+_BENCH_TIERS = (
+    "tests/sim/test_crafting_oracle_replay.py: the gen-7 render replayed on the live 0.7.2 oracle receipts (FIDELITY-0.7.2.md "
+    "section (s); Farmingbench Lettuce refused at tier 1 and accepted at tier 2, Cauliflower accepted at tier 4, Onion refused at "
+    "tier 7 and accepted at tier 8, the consumed and output counts equal); tests/sim/test_bench_tiers.py for the row tiers"
+)
+_MEMORIES = (
+    "tests/sim/test_crafting_oracle_replay.py: Furniture_Ancient_Chest_Small refused at memories level 1 and accepted at level 2 "
+    "with the receipt's consumed and output counts (FIDELITY-0.7.2.md section (s), receipts repo_mem_*.json); "
+    "tests/sim/test_crafting_memories.py for the thresholds 10/25/50/100/200"
+)
+
 PATCHES = (
     Patch("sword_swing_left_knockback", PROFILE_JAX,
           "    push = (0.0, 1.0, -1.0, 6.0)\n",
@@ -401,6 +412,58 @@ PATCHES = (
           "        agent_landing_hold_ticks=zeros_i,\n",
           "1c", _LANDING_WALK,
           "the countdown starts at zero at reset (no hold before the first landing)"),
+    # Row 11b, bench tiers (construct crafting_bench_tier): a tier requirement up to 8 is admitted, not only tier 0.
+    Patch("bench_tier_admission", "combat/arsenal/world_actions/crafting.py",
+          "            and requirement.required_tier_level == 0\n",
+          "            # Gen 7 (row 11b): a tier requirement up to the highest native bench tier (8); the tier gate is the\n"
+          "            # provider's, under each bench context's own tier (crafting/runtime._recipe_precondition).\n"
+          "            and requirement.required_tier_level <= 8\n",
+          "11b", _BENCH_TIERS,
+          "the native tier gate (requiredTierLevel > tier refuses, section (s)) is the engine's existing precondition; "
+          "only the admission filter changes. Not modelled: one tier per bench row, not per placed bench instance"),
+    # Row 11m, memories level (construct crafting_memories): the level is the scenario's, and recipes up to level 6 are admitted.
+    Patch("memories_state_field", "combat/arsenal/world_actions/crafting.py",
+          "    bench_valid: jax.Array\n",
+          "    bench_valid: jax.Array\n"
+          "    # Gen 7 (row 11m): the scenario's universe-wide memories level, 1 to 6 (crafting_memories.construct sets it).\n"
+          "    memories_level: int = 1\n",
+          "11m", _MEMORIES,
+          "the level the fieldcraft and bench contexts carry; gen 5 has no field (the RegionFieldcraftAssets default is level 1)"),
+    Patch("memories_admission", "combat/arsenal/world_actions/crafting.py",
+          "        and recipe.required_memories_level == 1\n",
+          "        # Gen 7 (row 11m): levels up to 6 (crafting_memories.MAX_LEVEL).\n"
+          "        and recipe.required_memories_level <= 6\n",
+          "11m", _MEMORIES,
+          "the lossless filter admits the recipe's own level; the gate is _recipe_precondition's memories term"),
+    Patch("memories_resolution", "combat/arsenal/world_actions/crafting.py",
+          "        required_memories_level=1,\n",
+          "        required_memories_level=recipe.required_memories_level,\n",
+          "11m", _MEMORIES,
+          "the packed table carries each recipe's level (gen 5 resolves every recipe to level 1)"),
+    Patch("memories_fieldcraft_signature", "combat/arsenal/world_actions/crafting.py",
+          "def _fieldcraft_context(batch: int, entities: int) -> CraftingContext:\n",
+          "def _fieldcraft_context(batch: int, entities: int, memories_level: int = 1) -> CraftingContext:\n",
+          "11m", _MEMORIES, "the fieldcraft context takes the scenario level (default 1, as gen 5)"),
+    Patch("memories_fieldcraft_body", "combat/arsenal/world_actions/crafting.py",
+          "        memories_level=jnp.ones(prefix, dtype=jnp.int32),\n"
+          "        known_recipe=jnp.ones(prefix + (RECIPE_TABLE_CAPACITY,), dtype=jnp.bool_),\n",
+          "        memories_level=jnp.full(prefix, memories_level, dtype=jnp.int32),\n"
+          "        known_recipe=jnp.ones(prefix + (RECIPE_TABLE_CAPACITY,), dtype=jnp.bool_),\n",
+          "11m", _MEMORIES, "the fieldcraft context's level"),
+    Patch("memories_bench_context", "combat/arsenal/world_actions/crafting.py",
+          "        memories_level=jnp.ones(prefix, dtype=jnp.int32),\n"
+          "        known_recipe=jnp.ones(\n",
+          "        memories_level=jnp.full(prefix, assets.memories_level, dtype=jnp.int32),\n"
+          "        known_recipe=jnp.ones(\n",
+          "11m", _MEMORIES, "each in-reach bench context's level"),
+    Patch("memories_provider_context", "combat/arsenal/world_actions/crafting.py",
+          "        fieldcraft = _fieldcraft_context(batch, entities)\n",
+          "        fieldcraft = _fieldcraft_context(batch, entities, assets.memories_level)\n",
+          "11m", _MEMORIES, "the provider's fieldcraft legality uses the scenario level"),
+    Patch("memories_commit_context", "combat/arsenal/world_actions/crafting.py",
+          "        _fieldcraft_context(batch, 1),\n",
+          "        _fieldcraft_context(batch, 1, assets.memories_level),\n",
+          "11m", _MEMORIES, "the commit re-checks the same level as the provider (a commit at another level would not match its candidate)"),
 )
 
 _MECHANICS = "hytalegym.sim.gen7.mechanics"
@@ -519,6 +582,14 @@ HOOKS = (
          "after an accepted jump, holds forward, back, left and right for the two grounded ticks after touchdown "
          "(npc_walk only); a landing without a jump is not held; the jump request is not held; the native pause before "
          "a re-jump (F1c) is the existing patch npc_rejump_after_landing"),
+    Hook("bench_tier_assets", "combat/arsenal/world_actions/crafting.py", "compile_region_fieldcraft_assets",
+         f"{_MECHANICS}.bench_tiers:construct", "crafting_bench_tier", "active", "11b", _BENCH_TIERS,
+         "the bench rows' tier from the scenario (bench_tiers=: an int for every bench, or a {bench id: tier} mapping; a fresh "
+         "bench, 1, by default); gen 5 keeps the zero fill"),
+    Hook("crafting_memories_assets", "combat/arsenal/world_actions/crafting.py", "compile_region_fieldcraft_assets",
+         f"{_MECHANICS}.crafting_memories:construct", "crafting_memories", "active", "11m", _MEMORIES,
+         "the scenario's memories level (memories_level=, 1 to 6; default 1); a caller passes the bridge's "
+         "native_memories_level when the bridge reports one (none does yet)"),
 )
 
 OVERLAY = Overlay(

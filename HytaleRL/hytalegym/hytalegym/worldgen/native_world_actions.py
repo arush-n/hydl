@@ -245,6 +245,218 @@ def native_world_verb_reset_options(
     return options
 
 
+_CRAFTING_ORACLE_SCHEMA = "hytalerl_crafting_oracle_v1"
+_CRAFTING_ORACLE_STATUSES = ("pending", "finished", "refused", "cancelled")
+_CRAFTING_ORACLE_CONTEXTS = ("bench", "fieldcraft")
+_CRAFTING_ORACLE_EVENT_KINDS = ("reach_out", "second_craft", "damage")
+_CRAFTING_ORACLE_PROBE_KEYS = frozenset(
+    ("recipe_id", "quantity", "crafting_context", "open_window", "events")
+)
+_CRAFTING_ORACLE_EVENT_KEYS = frozenset(("tick", "kind"))
+
+
+def native_crafting_oracle_reset_options(
+    *,
+    crafting_bench_block_id: str | None = None,
+    crafting_bench_tier: int | None = None,
+    memories_level: int | None = None,
+    crafting_oracle_requests: Sequence[Mapping[str, object]] = (),
+) -> dict[str, object]:
+    """Opt into bridge crafting-oracle probes; omitted keys stay absent."""
+
+    options: dict[str, object] = {}
+    if crafting_bench_block_id is not None:
+        if (
+            not isinstance(crafting_bench_block_id, str)
+            or not crafting_bench_block_id.strip()
+        ):
+            raise ValueError("crafting_bench_block_id must be a nonblank string")
+        options["crafting_bench_block_id"] = crafting_bench_block_id.strip()
+    if crafting_bench_tier is not None:
+        options["crafting_bench_tier"] = _bounded_option_int(
+            crafting_bench_tier, "crafting_bench_tier", 1, 8
+        )
+    if memories_level is not None:
+        options["memories_level"] = _bounded_option_int(
+            memories_level, "memories_level", 1, 6
+        )
+    requests = list(crafting_oracle_requests)
+    if len(requests) > 16:
+        raise ValueError("crafting_oracle_requests must contain at most 16 entries")
+    if requests:
+        options["crafting_oracle_requests"] = [
+            _crafting_oracle_probe(request) for request in requests
+        ]
+    return options
+
+
+def _bounded_option_int(value: object, key: str, minimum: int, maximum: int) -> int:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or not minimum <= value <= maximum
+    ):
+        raise ValueError(f"{key} must be an integer in [{minimum}, {maximum}]")
+    return value
+
+
+def _crafting_oracle_probe(probe: object) -> dict[str, object]:
+    if not isinstance(probe, Mapping):
+        raise TypeError("crafting_oracle_requests entries must be mappings")
+    for key in probe:
+        if key not in _CRAFTING_ORACLE_PROBE_KEYS:
+            raise ValueError(f"unknown crafting oracle request key: {key!r}")
+    recipe_id = probe.get("recipe_id")
+    if not isinstance(recipe_id, str) or not recipe_id.strip():
+        raise ValueError("crafting oracle recipe_id must be a nonblank string")
+    quantity = probe.get("quantity")
+    if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity < 1:
+        raise ValueError("crafting oracle quantity must be a positive integer")
+    context = probe.get("crafting_context")
+    if context not in _CRAFTING_ORACLE_CONTEXTS:
+        raise ValueError("crafting_context must be 'bench' or 'fieldcraft'")
+    entry: dict[str, object] = {
+        "recipe_id": recipe_id.strip(),
+        "quantity": quantity,
+        "crafting_context": context,
+    }
+    if "open_window" in probe:
+        if context != "bench":
+            raise ValueError("open_window is only valid for bench crafting")
+        if not isinstance(probe["open_window"], bool):
+            raise ValueError("open_window must be a boolean")
+        entry["open_window"] = probe["open_window"]
+    if "events" in probe:
+        events = probe["events"]
+        if not isinstance(events, (list, tuple)):
+            raise TypeError("events must be a list of {tick, kind} mappings")
+        entry["events"] = [_crafting_oracle_event(event) for event in events]
+    return entry
+
+
+def _crafting_oracle_event(event: object) -> dict[str, object]:
+    if not isinstance(event, Mapping):
+        raise TypeError("events entries must be {tick, kind} mappings")
+    if set(event) != _CRAFTING_ORACLE_EVENT_KEYS:
+        raise ValueError("crafting oracle events must carry exactly tick and kind")
+    tick = event["tick"]
+    if isinstance(tick, bool) or not isinstance(tick, int) or tick < 0:
+        raise ValueError("crafting oracle event tick must be a nonnegative integer")
+    if event["kind"] not in _CRAFTING_ORACLE_EVENT_KINDS:
+        raise ValueError(
+            "crafting oracle event kind must be reach_out, second_craft or damage"
+        )
+    return {"tick": tick, "kind": event["kind"]}
+
+
+@dataclass(frozen=True, slots=True)
+class NativeCraftingBenchReadout:
+    """The crafting bench the bridge reports for a crafting-oracle probe."""
+
+    block_id: str
+    bench_id: str
+    bench_type: int
+    tier: int
+    x: int
+    y: int
+    z: int
+
+
+@dataclass(frozen=True, slots=True)
+class NativeCraftingOracleReadout:
+    """Reset-time crafting-oracle evidence; an absent key reads as None or ()."""
+
+    present: bool | None
+    count: int | None
+    status: str | None
+    records: tuple[dict[str, object], ...]
+    memories_level: int | None
+    memories_recorded_count: int | None
+    bench: NativeCraftingBenchReadout | None
+    processing_count: int | None
+    processing_records_json: str | None
+
+    @classmethod
+    def from_reset_info(
+        cls, info: Mapping[str, object]
+    ) -> NativeCraftingOracleReadout:
+        status = _optional_info_str(info, "native_craft_oracle_status")
+        if status is not None and status not in _CRAFTING_ORACLE_STATUSES:
+            raise ValueError(
+                "native_craft_oracle_status is not a crafting oracle status"
+            )
+        count = _optional_info_int(info, "native_craft_oracle_count")
+        records = _crafting_oracle_records(
+            _optional_info_str(info, "native_craft_oracle_records_json")
+        )
+        if count is not None and count != len(records):
+            raise ValueError("native_craft_oracle_count does not match the records")
+        return cls(
+            present=_optional_info_bool(info, "native_craft_oracle_present"),
+            count=count,
+            status=status,
+            records=records,
+            memories_level=_optional_info_int(info, "native_memories_level"),
+            memories_recorded_count=_optional_info_int(
+                info, "native_memories_recorded_count"
+            ),
+            bench=_crafting_bench(info),
+            processing_count=_optional_info_int(info, "native_processing_oracle_count"),
+            processing_records_json=_optional_info_str(
+                info, "native_processing_oracle_records_json"
+            ),
+        )
+
+
+def _optional_info_bool(info: Mapping[str, object], key: str) -> bool | None:
+    return None if info.get(key) is None else _boolean(info, key)
+
+
+def _optional_info_int(info: Mapping[str, object], key: str) -> int | None:
+    return None if info.get(key) is None else _integer(info, key)
+
+
+def _optional_info_str(info: Mapping[str, object], key: str) -> str | None:
+    value = info.get(key)
+    if value is None or isinstance(value, str):
+        return value
+    raise ValueError(f"{key} must be a string")
+
+
+def _crafting_bench(info: Mapping[str, object]) -> NativeCraftingBenchReadout | None:
+    block_id = _optional_info_str(info, "native_crafting_bench_block_id")
+    if block_id is None:
+        return None
+    bench_id = _optional_info_str(info, "native_crafting_bench_id")
+    if bench_id is None:
+        raise ValueError("native_crafting_bench_id is required with a bench block")
+    return NativeCraftingBenchReadout(
+        block_id=block_id,
+        bench_id=bench_id,
+        bench_type=_integer(info, "native_crafting_bench_type"),
+        tier=_integer(info, "native_crafting_bench_tier"),
+        x=_integer(info, "native_crafting_bench_x"),
+        y=_integer(info, "native_crafting_bench_y"),
+        z=_integer(info, "native_crafting_bench_z"),
+    )
+
+
+def _crafting_oracle_records(text: str | None) -> tuple[dict[str, object], ...]:
+    if text is None:
+        return ()
+    parsed = json.loads(text)
+    if not isinstance(parsed, list) or not all(
+        isinstance(record, dict) for record in parsed
+    ):
+        raise ValueError("native_craft_oracle_records_json must be a list of objects")
+    for record in parsed:
+        if record.get("schema") != _CRAFTING_ORACLE_SCHEMA:
+            raise ValueError("crafting oracle record has an unexpected schema")
+        if record.get("status") not in _CRAFTING_ORACLE_STATUSES:
+            raise ValueError("crafting oracle record has an unexpected status")
+    return tuple(dict(record) for record in parsed)
+
+
 @dataclass(frozen=True, slots=True)
 class NativeWorldVerbLifecycle:
     """One bridge-attributed request outcome; absence is explicit."""
@@ -2283,6 +2495,8 @@ __all__ = [
     "NATIVE_SYNTHETIC_WORLD_INTERACTION_VERSION",
     "NATIVE_SYNTHETIC_WORLD_INTERACTION_VERBS",
     "NativeBlockUseEvidence",
+    "NativeCraftingBenchReadout",
+    "NativeCraftingOracleReadout",
     "NativeSyntheticWorldInteractionEvidence",
     "NativeSyntheticWorldInteractionRow",
     "NativeWorldActionCapabilities",
@@ -2293,6 +2507,7 @@ __all__ = [
     "NativeWorldVerbTelemetry",
     "native_block_use_evidence_contract",
     "native_block_use_evidence_contract_sha256",
+    "native_crafting_oracle_reset_options",
     "native_world_action_capabilities_contract",
     "native_world_action_capabilities_contract_sha256",
     "native_world_verb_reset_options",

@@ -282,6 +282,11 @@ combo misses because the duel harness steers yaw only while the agent's head pit
 authored 0.7.2 value (0.5.7: 123) and the iron combo's 13 likewise (0.5.7: 27). The harness pitch steer, the test expectations and
 the ancient-steel values in the shared `weapon_variants` module are simulator-side items.
 
+**Crafting on gen 7 from the oracle (2026-10-18; FIDELITY-0.7.2.md section (ab)).** Bench tiers (row 11b) and the memories level
+(row 11m) are built as gen-7 constructs and replay all ten oracle scenarios; the render admits 1,264 recipes (1,235 commit alone;
+1,168 at a fresh bench, 1,264 at tier 8 and level 6). Open: timed recipes (row 11j, progress in seconds at 1/30 s) and the
+processing and diagram actions.
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the

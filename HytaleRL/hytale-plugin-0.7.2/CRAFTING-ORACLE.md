@@ -102,3 +102,12 @@ need new mechanics on the simulator side after the oracle answers. The bridge re
 - Open: Tannery and Salvagebench, processing refusals, diagram negative controls; the simulator needs a processing action
   (insert, activate, advance by game seconds) and a diagram action (category, positional inputs, craft) rather than
   `craft_recipe`.
+
+## Simulator side, stages 2 and 4 built (2026-10-18; FIDELITY-0.7.2.md section (ab))
+
+- Stages 2 (bench tiers) and 4 (memories level) are gen-7 overlay entries (`sim/gen7` rows 11b and 11m); the JAX side takes the
+  bench tier per bench row and the memories level per scenario; the bridge readouts `native_crafting_bench_tier` and
+  `native_memories_level` are read by the new helpers in `worldgen/native_world_actions.py`.
+- Stage 3 (timed recipes) is open on the simulator: progress is modelled in seconds at the simulator's 1/30 s tick (90 ticks for
+  3.0 s; the native 87 to 89 ticks are the server's tick jitter); it needs a per-actor pending job in the state and a bench
+  position for the 7-block cancel. Stage 5 needs new actions (processing and diagram), not `craft_recipe`.

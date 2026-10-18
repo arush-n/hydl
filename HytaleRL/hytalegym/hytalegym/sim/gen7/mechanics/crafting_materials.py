@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from functools import wraps
+from inspect import unwrap
 from pathlib import Path
 from typing import Any
 
@@ -78,7 +79,8 @@ def item_resource_types(original: Any, profile: Any) -> Any:
 
     if not _enabled(profile):
         return original
-    env = original.__globals__
+    # The bench tier and memories hooks also wrap this function (render order): read the engine module's globals.
+    env = unwrap(original).__globals__
     np = env["np"]
     jnp = env["jnp"]
     semantic_id = env["semantic_id"]
@@ -86,7 +88,8 @@ def item_resource_types(original: Any, profile: Any) -> Any:
     absent = env["ABSENT_ID"]
 
     @wraps(original)
-    def compile_region_fieldcraft_assets(recording_path, inventory_layout, *, expected_bridge_sha256, assets_path=None):
+    def compile_region_fieldcraft_assets(recording_path, inventory_layout, *, expected_bridge_sha256, assets_path=None,
+                                         **kwargs):
         archive_path = env["default_hytale_assets_path"]() if assets_path is None else Path(assets_path)
         rows: dict[int, list[int]] = {}
         with env["HytaleAssetArchive"](archive_path) as archive:
@@ -104,8 +107,9 @@ def item_resource_types(original: Any, profile: Any) -> Any:
         for row, key in enumerate(keys):
             values[row, : len(rows[int(key)])] = rows[int(key)]
         _TABLE.update(keys=jnp.asarray(keys), values=jnp.asarray(values), jnp=jnp, absent=absent)
+        # Keywords of the other compile hooks (bench tiers, memories) pass through.
         return original(recording_path, inventory_layout, expected_bridge_sha256=expected_bridge_sha256,
-                        assets_path=assets_path)
+                        assets_path=assets_path, **kwargs)
 
     return compile_region_fieldcraft_assets
 
