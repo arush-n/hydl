@@ -91,10 +91,21 @@ follow-ups #74); the bridge half of the plain-root bash withdrawal (`bdb6245`, p
 simulator half waits); bench tiers and the memories level on the simulator with the oracle receipts replayed and the
 harness readers (`a92d0a2`, section (ab): the render admits 1,264 recipes, 1,168 at a fresh bench and 1,264 at tier 8
 and level 6); the bridge session file split for headroom (`0619b1a`: 9,691 to 8,439 lines, 36 methods moved verbatim
-into ten helpers, the full suite unchanged at 421, live smoke, reload and hold probes green, pin `460054A8`). Running:
-timed recipes on the simulator (progress in seconds at 1/30 s), the eleven source-pin audits on 0.7.2 (#68, phase 5,
-bridge 5556), and the stale engine-test fixtures (#62, local files only). Queued: the simulator half of #71, #73, #74,
-the processing and diagram actions, the terrain recapture itself, the stub mechanics (#69).
+into ten helpers, the full suite unchanged at 421, live smoke, reload and hold probes green, pin `460054A8`). The stale engine-test fixtures
+(#62, gitignored test trees, nothing to commit) went 41 to 19 failures: 22 fixtures re-stated in the current
+`LearnerArsenalAction` shape; of the 19 left, 5 need `HYTALE_ASSETS_ZIP`, 12 are artefacts keyed to the old bridge
+pin `5A54A8F5` (recordings, world-evidence history, traversal and token-contract manifests, the stability constant) to
+republish once the pin settles, 2 are expectation questions (#76; receipts under the session `test_fixtures/`,
+pitfalls in `sim/PORTING.md` at `03090b0`). Timed bench crafts on the simulator (`ec1f968`, section (ac): construct
+`timed_crafting`, switch `crafting_time`; seven CombatState leaves; inputs out on R+1, output on R+90 for 3.0 s, queue one
+deep, 7-block reach cancel with refund; all seven stage-3 receipts replay; the render admits 1,485 recipes, 1,446 commit
+alone, 1,305 at a fresh bench, all 211 timed commits finish; quick gate 197, identity 4; open: the executor path inside a live
+Region step, the processing and diagram actions, the fieldcraft `Weapon_Axe_Crude`). Running:
+the eleven source-pin audits on 0.7.2 (#68, phase 5,
+bridge 5556), the timing items 2 to 4 measured with the learner-row harness plus the tick-0 head read of #75 (#73, bridge
+5560, measurement first; constructs after the timed-crafts commit frees the overlay), and the phase 4n test follow-ups
+(#74, bridge 5558: the duel harness pitch, the expectations 13 and 82; the ancient-steel scalar construct as a spec). Queued: the simulator half of #71, the processing and diagram actions (stage 5 on the
+simulator), the terrain recapture itself, the stub mechanics (#69).
 Committed earlier: the
 crafting oracle stage 3 (`274aaec`, timed bench crafts with probe events; pin `5FE609E2`), phase 4j (`a534e83`: the Trork
 target no longer gets a headless Player, which the PvP-off filter used to cancel the agent's damage; the iron combo and
