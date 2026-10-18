@@ -763,7 +763,7 @@ the repository sources, hash equal to the agent's candidate), pin updated.
 |---|---|---|---|
 | look, bridge side | candidate jar, the same probe, 18 actor-one rows over two seeds | wire `head_yaw_degrees` 18.0, 36.8, 45.0, 45.0, 27.0, 8.2, -9.8, -28.5, -45.0, equal to the direct HeadRotation read on all 18 rows; `yaw_degrees` 0.00 throughout (head timing differs between boots, so compare within a run) | MATCH |
 | look, decoder | synthetic wire, body 10 and head -45 | `combat.yaw` 10.0 and `agent_head_yaw` -45.0; without the key 10.0; the original code gave 10.0 (the gap) | MATCH (synthetic) |
-| look, live learner row (ticks 1 to 2) | `test_dynamic_learner_row_world_inputs.py` look case on `B56FD38E` | not run (the before run was stopped on time; the fidelity session owns the test and runs it on the new pin) | PENDING |
+| look, live learner row (ticks 1 to 2) | `test_dynamic_learner_row_world_inputs.py` -k "look or neutral", seeds 570057 and 1553616197, stock engine at `6c30ba9`, the fidelity session's bridge 5572 with `build/libs` at `B56FD38E` (the reset checks the hash against the pin) | 4 passed in 96.7 s: every value and mask matches on every tick; before the fix the look case failed at tick 1 with 13 values (receipts in that session's scratchpad, `batch15_look_gen5`) | MATCH |
 
 Gates: Java full `gradlew test` 111 suites, 387 tests, 0 failures (agent); `NativeActorEvidenceWireTest` 3,
 `NpcTraceWireTest` 3, `NativeActorEvidenceFrameTest` 5, `SourceFileSizeRatchetTest` 2, 0 failures (coordinator);

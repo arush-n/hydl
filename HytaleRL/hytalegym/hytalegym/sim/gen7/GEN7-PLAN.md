@@ -188,7 +188,8 @@ as `Ability4` (peer session), and the interrupt case, where Primary is not offer
 **Bridge status, phase 4e (2026-10-18; FIDELITY-0.7.2.md section (n)).** The actor evidence row carries
 `head_yaw_degrees` (HeadRotation) beside the body `yaw_degrees`, and the decoder maps `agent_head_yaw` from it when
 present (jar `B56FD38E`; schema and contract identities unchanged), so the native self row is the head frame the policy
-trained on; the live learner-row look case on the new pin is the fidelity session's to run.
+trained on; the live learner-row look case passes on the new pin on both seeds (4 passed, every value and mask; it
+failed at tick 1 with 13 values before).
 
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
