@@ -48,6 +48,7 @@ Import the submodules, which are sorted into subfolders by purpose (each subfold
 * ``training.traces``: the loader for native NPC traces from the live server (A7).
 * ``training.bc_dataset`` and ``training.bc_smoke``: the behaviour-cloning dataset from those traces and its smoke
   (B2).
+* ``training.distill``: DAgger distillation of walk_to and look_at into the generalist (A2).
 
 ``bench``: per-tick latency, the 30 Hz gate.
 

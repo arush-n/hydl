@@ -63,6 +63,8 @@ and `TRAINING-0.7.2.md` (the measured 0.7.2 gameplay changes).
 - RULED (2026-10-18, late): training starts only from a clear plan the owner has approved ("depends, you need
   to have a clear plan"): `docs/TRAINING_PLAN.md`. The dataset smoke (`bc_smoke`, seconds) may be used where it
   helps ("your choice if it helps").
+- RULED (2026-10-18, late): A2, the first student training (DAgger distillation of walk_to and look_at into the
+  generalist, `training/distill.py`), goes ahead ("ok continue").
 
 ## 1. Where it is built
 

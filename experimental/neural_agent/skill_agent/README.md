@@ -748,6 +748,38 @@ The live per-tick step is 0.1667 blocks (the 1/30 s step) on its quietest ticks 
 ramp matches an acceleration of about 10 blocks/s^2. So the physics agree, and some live ticks ran longer than 1/30 s
 under load. look_at's T4 is not run yet.
 
+### 2.16 DAgger distillation into the generalist (`training/distill.py`, 2026-10-18)
+
+**What it is.** The trainer for A2, the first student: the generalist (2.13) learns walk_to and look_at from the two
+scripted teachers (2.11) on the flat tasks (2.12), and reads only the legal observation (2.14). The teachers read the
+full simulator state, but they only label; the student never sees that state.
+
+**How it trains.** DAgger (Ross, Gordon and Bagnell 2011):
+- each iteration runs a batch of episodes, the teachers label every state visited, the labels join one aggregate
+  dataset, and Adam fits the student on the whole aggregate;
+- iteration 0 runs the teachers (beta = 1). From iteration i on, a lane follows the teacher for its whole episode with
+  probability 0.5^i and the student otherwise, so later data comes from the student's own mistakes;
+- each lane runs one mode: walk only, look only, or both at once (the composition the owner's bar asks for);
+- the requests are rebuilt at every decision from the world goal and the agent's own pose, in the body frame
+  (positions over 16 blocks): the agent may know its own pose;
+- the loss is the cross-entropy on the heads of each request's scope (walk: locomotion; look: gaze), plus 0.5 x the
+  binary cross-entropy of each request's done logit.
+
+**What is held out.** Two argument regions are never trained on: walk targets in the rear-left quadrant of the spawn
+body (bearing 180 to 270 degrees) and look points 25 to 40 degrees off the body. The evaluation runs the student and
+the teachers on the same seeds, seen and held out, and reports success per mode, walk pace (within 5 %), radius and
+illegal decisions. [test: test_sa_distill.py, 9 tests]
+
+**Status: built, smoke only; A2 has not run.** A 2-iteration smoke (32 lanes, 50 steps per iteration, 10,191 samples)
+ran end to end with 0 illegal decisions. Its student is untrained by design: walk 0.23 and look 0.0, against the
+teachers' 1.0 and 1.0. Two changes come before the A2 run:
+- The student cannot see where its head points. The self token carries the body yaw but not the head's offset from
+  it, so look_at cannot tell when it is done (inferred from the token layout; the fix adds the offset to the self
+  token).
+- The stored batches carry the four token types the flat world never fills (block candidates, inventory, geometry,
+  kit). Dropping them is expected to make a training step several times faster at the same loss (to be measured when
+  the change lands).
+
 ## 3. For the agent building the gen-7 simulator
 
 **What you receive.** Each tick you get one choice per head per agent, in this order. A head no request

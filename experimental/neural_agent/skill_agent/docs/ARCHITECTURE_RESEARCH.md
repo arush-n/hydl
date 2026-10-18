@@ -193,7 +193,8 @@ Status (2026-10-18, late):
 - A1 passes: 3.56 ms p95 at batch 8 at load about 10 (15.08 ms at load 53 to 75 was the load).
 - A2's two teachers exist (`teaching/teachers.py`), and so do its flat tasks (`tasks/simple_tasks.py`).
 - The observation adapter is built (README 2.14). The teachers pass T1, T2 and T3, and walk_to passes T4 live (README
-  2.15). A2's student training is next, after the owner sees these results.
+  2.15). A2's trainer is built (`training/distill.py`, README 2.16) and the owner approved the run ("ok continue");
+  it waits on the head's offset from the body in the self token.
 
 ## 5. Decisions for the owner (answered 2026-10-18, late; docs/BUILD.md section 0)
 

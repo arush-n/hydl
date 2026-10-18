@@ -1,10 +1,11 @@
-# Phase C: the plan for training the first skill bodies (PROPOSED 2026-10-18, late; needs the owner's approval)
+# Phase C: the plan for training the first skill bodies (2026-10-18, late; approved in stages)
 
-**Provisional (owner, 2026-10-18 late).** The architecture may move away from pure PPO with per-verb adapters, toward
-one generalist, request-conditioned policy, "similar to a vla model". Section 2's body and algorithm are therefore
-provisional. The research has landed (`docs/ARCHITECTURE_RESEARCH.md`): it recommends one request-conditioned generalist
-trained by teacher distillation (DAgger) and KL-anchored RL, pending the owner's decision. The method (section 2b),
-the staging, the gates and the dependencies stand either way.
+**Status (2026-10-18, late).** The owner approved the plan in stages: the simple track (sections 2c to 2e, "you have
+the green light"), then A2, the first student training ("ok continue"). The architecture moved away from pure PPO
+with per-verb adapters, toward one generalist, request-conditioned policy ("similar to a vla model"):
+`docs/ARCHITECTURE_RESEARCH.md` recommends it, trained by teacher distillation (DAgger) and KL-anchored RL, and the
+owner's answers made it the working design (docs/BUILD.md section 0). The method (section 2b), the staging, the
+gates and the dependencies stand.
 
 Nothing in this plan runs until the owner approves it (docs/BUILD.md section 0). It answers the owner's condition for
 training: what trains, on what, for how long, what counts as success, what happens on failure, and what each step
@@ -198,6 +199,8 @@ Status (2026-10-18, late; `teaching/certificates.py`, README 2.15):
   kinematic minimum, 0 illegal decisions.
 - walk_to v1 passes T4 live: 24 of 24 on the 0.7.2 server against 24 of 24 simulated, 0 illegal
   (`teaching/certify_live.py`). look_at's T4 is not run yet. T5 and T6 need a student.
+- A2's trainer is built (`training/distill.py`, README 2.16) and a smoke runs end to end. The A2 run waits on two
+  changes: the head's offset from the body in the self token, and dropping the token types the flat world never fills.
 
 A teacher need not be perfect, because stage 3's practice can go past it. But a systematic teacher error is copied
 into the student, which is why nothing teaches before its certificate.
