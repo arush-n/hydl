@@ -1,4 +1,4 @@
-# Current state of experimental/neural_agent (2026-10-18, morning)
+# Current state of experimental/neural_agent (2026-10-18, evening)
 
 A dated snapshot. Numbers and hashes are from the ledger and the commit log; nothing here is inferred unless
 it says so. Status words: **measured** (a gate ran, the number is in `LEDGER.md`), **built** (code and tests,
@@ -73,21 +73,44 @@ for the gen-7 simulator), and the gen-7 simulator itself (phase 3 of 6 running).
 P6 (8B, 14B, restate variant); gen-7 phase 3 agent; the lower-layer session's on_tick commit and
 forced-target-loss test.
 
-## 7. Decisions waiting on the owner
+## 7. Decisions taken and still open (2026-10-18, evening)
 
-1. Push the local commits (nothing is pushed).
-2. Install `peft` in the shared venv so P6's LoRA step can run, or skip LoRA.
-3. Planned versus general compile for the simulator callers (numbers in `sim/BASELINES.md` section 5).
-4. (done 2026-10-18) The cleanup deletions: `jev/lm/anthropic_quick.py`, `tasks/events.py`, the unused `MINIMUM_COMMITMENT_SECONDS`, the synthetic PPO environment and the MLP stand-in; the "sibling-refusal path" named on 2026-10-17 could not be identified in the code and was left alone.
-5. `HytaleRL/.gitignore` exception for `tests/sim/`; `pyproject` package data for `sim/*/data`; the content sha in the contract stamp (uncommitted `publication.py`); the 53 uncommitted `HytaleRL/` files held by other sessions.
-6. The lower layer's asks: body-turn label rule; a richer training observation (terrain).
-7. Review of the lower layer's private catalogue edits and the uncommitted pursuit fix.
+Resolved today under the owner's delegation ("manage the remaining commits the best way you think"):
+- The long-uncommitted work reviewed on 2026-10-18 (86 files, six groups) is committed in dependency order:
+  engine edits that change no rollout (`6bdcd20`), tooling and docs (`cb3d08c`), the bridge's world-verb transport
+  v5 / facade v4 with the native Python side (`64c8044`), the publication-hygiene entry (`35a5a2d`), the v6 policy
+  contract across jvm-agent, adk/deploy and the export tools (`c0d5f9b`), and the 0.7.2 bridge plugin project
+  (`cdf258c`). `peft` is installed for later LoRA work; compile-mode differences below the differential bars are
+  acceptable (`sim/BASELINES.md` 5); the lower layer has the go-ahead on the body-turn label and the terrain
+  observation; the 2026-10-17 cleanup is done (`b58a317`); `tests/sim` is versioned and the sim tables ship as
+  package data (`ad220cb`).
+
+Still uncommitted, by design:
+- **The value-changing engine edits** (jax/combat `agent.py`, `step.py`, `types.py`, `events.py`, `motion.py`,
+  `encoder.py`, `item_programs.py`; worldgen `source_pins.py`, `recertification.py`, `region/__init__.py`; the arena
+  curriculum). They change the gen-5 fixed-rollout fingerprints (the review measured: HEAD `0b28448a` / `ace7a94e`,
+  working tree `d8477b63` / `b02ee274`, attributable to `agent.py` + `step.py` + `types.py`), and they include the
+  native NPC jump fix that gen 7 adopts through its overlay. Every composition number measured this week ran on the
+  working tree, so committing them makes HEAD match what was measured. Plan: commit them as one unit with
+  `sim/gen5/identity.json` re-recorded and the combat stamps republished, once the phase 4 port agent has reported,
+  because that agent renders from HEAD and its overlay patches anchor on the current literals.
+- **The arena session's files** (console/**, arena/training/**, worldgen/region/*, jax/training/multi_actor/*,
+  HytaleRL/examples/*, worlds/region.py, root .gitignore; dated 2026-10-13 to 17). Asked which are theirs; no answer
+  yet. Not touched.
+- **In-flight files of live agents**: `sim/gen7/*` (phase 4), `skill_agent/*` (the lower layer), `lm_reader.py` (P6).
+
+Open for the owner: pushing (nothing is pushed); the reviewer's one flagged question in the v6 contract
+(`PublicServerEvidenceSource.java` self row now uses head yaw and pitch, unexplained); whether to re-extract
+`sim/gen5/data` from a 0.5.7 archive or relabel it 0.5.10.
 
 ## 8. Commits of 2026-10-17 late to 2026-10-18 (this session)
 
-`0cf8c05` seam default; `1b76c0e` typed condition and the fallback reader; `782a523` B5 parser switch;
-`59d2047` the exact typed path and the questions channel; `ffe11c5` `on_tick`; `8707eec` `--host-budget-ms`;
-`e09c496` the renderer (phase 2a). Lower layer: `e62f654`, `3439c67`, `0f17bc8`, `39b450e`.
+`0cf8c05` seam default; `1b76c0e` typed condition and the fallback reader; `782a523` B5 parser switch; `59d2047` the
+exact typed path and the questions channel; `ffe11c5` `on_tick`; `8707eec` `--host-budget-ms`; `e09c496` the renderer
+(phase 2a); `97539bf` folder documentation and the package map; `ad220cb` packaging; `30c6136` port phase 3;
+`83fe6eb` the scratchpad package; `b7d71c2` the briefing view and goal readings; `20c2c0d` the patterned language
+(P7); `b58a317` cleanup; `6bdcd20`, `cb3d08c`, `64c8044`, `35a5a2d`, `c0d5f9b`, `cdf258c` the old uncommitted work
+in groups. Lower layer: `e62f654`, `3439c67`, `0f17bc8`, `39b450e`, `9b6c571`, `cbd4e00`, `5286797`.
 
 ## 9. Layout
 
