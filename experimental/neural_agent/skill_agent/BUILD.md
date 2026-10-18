@@ -50,6 +50,16 @@ and `TRAINING-0.7.2.md` (the measured 0.7.2 gameplay changes).
   ("otherwise we can just use a simple heuristic"). A neural skill that does not beat its heuristic on combined
   requests, disturbances and unseen worlds is not shipped; the heuristic is (TRAINING_PLAN 1b, H10). The owner gave
   the green light for the simple track (TRAINING_PLAN 2c to 2e).
+- RULED (2026-10-18, late, the owner's answers):
+  - "smarter" means beating the heuristic on hard cases: combined requests, disturbances, unseen worlds. Matching it
+    on easy solo tasks is fine.
+  - The library grows by versioned releases with regression suites: a shared retrain may shift a working skill
+    within a set tolerance, never worse. Strict bit-identical freezing applies only to skills the owner marks frozen,
+    and `freezing.py` serves them. This narrows requirement 7 to the marked skills.
+  - Training and benchmark runs use low CPU priority (`nice`) on this shared machine, and timings are re-measured in
+    quiet windows.
+  - So the one request-conditioned generalist (ARCHITECTURE_RESEARCH) is the working design; proofs A1 to A4 confirm
+    or refute it.
 - RULED (2026-10-18, late): training starts only from a clear plan the owner has approved ("depends, you need
   to have a clear plan"): `TRAINING_PLAN.md`. The dataset smoke (`bc_smoke`, seconds) may be used where it
   helps ("your choice if it helps").

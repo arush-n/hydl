@@ -49,7 +49,8 @@ So:
     arriving;
   - (c) unseen worlds and openings;
   - (d) cost: time to success, damage taken, stalls.
-- **Pass:** higher success, or equal success at a lower cost, on (a) to (c), separated by 2 SE. A skill whose student
+- **Pass (confirmed by the owner, "beat it on hard cases"):** higher success, or equal success at a lower cost, on
+  (a) to (c), separated by 2 SE. Matching the script on easy solo tasks is fine. A skill whose student
   does not beat its heuristic ships the heuristic, and the finding goes to TRAINING_NEEDS.
 - **Where the gain comes from:**
   - one network learning every skill together;

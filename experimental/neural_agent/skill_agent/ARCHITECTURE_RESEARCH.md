@@ -188,14 +188,14 @@ skills); the simulator adapter; the benches.
 
 Then TRAINING_PLAN's C-steps run on the generalist instead of on per-verb bodies.
 
-## 5. Decisions for the owner
+## 5. Decisions for the owner (answered 2026-10-18, late; BUILD.md section 0)
 
-1. **Adopt the request-conditioned generalist** (recommended), trained by teacher distillation and anchored RL.
-2. **Teacher B,** a scripted planner in the simulator, as a demonstration source (still pending).
-3. **The growth rule.**
-   - The recommendation is versioned generalist releases with regression suites (transfer between skills), plus
-     strict bit-identity only for skills marked frozen.
-   - The alternative is strict freezing for every skill (less transfer; always bit-identical).
+1. **The request-conditioned generalist** is the working design. The owner gave the green light, on the grounds that
+   neural skills exist to combine behaviours and be smarter than heuristics. Proofs A1 to A4 confirm or refute it.
+2. **Scripted teachers** are approved for the simple track (navigation, gaze, aim). Complex families get their own
+   teacher plans (TRAINING_PLAN 2e).
+3. **The growth rule:** versioned releases with regression suites. Strict bit-identity only for skills the owner
+   marks frozen.
 
 ## 6. Not adopted, and why
 
