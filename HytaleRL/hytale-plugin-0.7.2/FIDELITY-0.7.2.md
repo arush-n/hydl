@@ -947,3 +947,31 @@ carrying the type that is not an output. Next stages, which need native evidence
 - bench tiers: the world's bench tier state;
 - timed recipes: a multi-tick craft lifecycle;
 - bench types 1-3: the other session's oracle (item 55).
+
+## (q) Phase 4g: legality from the engine's admission, and the reload-interrupt busy gate (2026-10-18; receipts `~/.claude/jobs/31947bd7/tmp/phase4g/receipts/`)
+
+Owner ruling: fidelity; the bridge advertises what the server admits. `InteractionAdmissionDryRun` (new, 114 lines)
+replays the engine's private static `applyRules` by reflection with a fresh cancel list and a fresh chain data built as
+`initChain` builds it, never calling `cancelChains`; it falls back to `canRun` with one WARN if the method is absent.
+Side-effect-free by three readings: the 0.7.2 decompile (the static method reads the chain map and the data and only
+appends to the list it is given), the installed server's bytecode (`javap -c -p`: no `putfield`, no `putstatic`, no
+`cancelChains`, `setServerState` or `sendCancelPacket` call), and a live run with the replay evaluated every tick that
+left the reload's ammo, arrows and execution timeline identical to the pinned run. `NativeInteractionCapabilityView`
+takes legality from it (so the guard and dodge captures change too); the session's busy gate rejects a pending guard
+fork as before and lets a running tracked ability be replaced only by a non-guard-fork root the replay admits. Jar
+`A4487CF3` (rebuilt here from the repository sources, hash equal to the agent's build), pin updated.
+
+| Row | What ran | Measured | Status |
+|---|---|---|---|
+| 6c interrupt, advertised set | seed 570057, reload bound `Ability4` by the in-process profile patch, no forced ticks | pinned `B56FD38E`: slot 0 `host_legal` and the learner mask False on ticks 2 to 94, True at 1 and 95 to 100; fix: wire `host_legal` True from tick 26 (= 2 + 24 ticks, the 0.8 s interruptible time at 30 TPS) through 86; slots 1 to 4, ammo, arrows and the reload finish (95) unchanged | MATCH (offered at the Repeat window) |
+| learner mask gaps | the same run | the Python mask is False at ticks 36, 46, 56, 66, 76 and 86 while the wire is True (the ticks the reload adds an arrow; `evidence.py` about 1005-1035 folds resource availability into the bound mask) | Python side, OPEN |
+| 6c interrupt, official test with the `Ability4` patch | `test_crossbow_primary_interrupts_reload_at_first_repeat_window` | decisive tick 38 (ammo 1.0, arrows 4, legal, requested, no reject); accepted and started at 39 with root 0; fails at line 342: `execution` 4, expected 0. Cause (code path and values; the causal link inferred): `evidence.py` `_record_accepted_ability` resolves the execution child from the current wire's resources, and the shot has already spent the ammo (1.0 at 38, 0.0 at 39), so the crossbow resolver picks the reload child | Python side, OPEN |
+| 12 crossbow tests, stock, no patch | `A4487CF3` | 3 pass (Primary reload; big arrow 46.0 and 78.0), 9 fail at the same lines as (p): interrupt at 315 (the stock `Ability3` row), combo at 611 and 689, signature at 305; the four signature cases fail identically on the pinned jar with the current harness file, so they predate this change; `test_native_queue_mask.py::test_native_queue_drain_keeps_every_learner_head_satisfiable` passes | no regression |
+| combo `target_health` | stock `B56FD38E`, seed 570057, 150 ticks, scratch diagnostic jars | `target_health` 61.0 every tick equals the server's Health stat (Trork_Brawler MaxHealth 61); the three projectile damage events (rows 98, 108, 118; 10, 10, 13; target entity 2, source the agent) are cancelled by the server before application (`cancelled` true, `blocked` false); at step ends the target is not dead, not Invulnerable, not Intangible, effect invulnerability false, `getCanCauseDamage(agent)` true, no flock membership; world NPC-damage config and the desync flag excluded; the bridge's only `setCancelled` is the explosion accessor | not a bridge defect; cancelling filter not isolated (inferred: a transient effect invulnerability at the hit) |
+
+Java: full `gradlew test --rerun --no-build-cache` 112 suites, 389 tests, 0 failures (baseline 111 / 387); the touched
+classes `InteractionAdmissionDryRunTest` 2, `NativeInteractionCapabilityViewTest` 2, `SourceFileSizeRatchetTest` 2
+(coordinator re-run); `tests/test_server_versions.py` 7 passed; `NativeEnvironmentSession.java` 9,642 of 9,700 lines.
+Not measured live: the guard and dodge legality through the shared capture; the guard-fork gate has no live test.
+Claim most likely wrong (agent): that the execution value 4 is a Python resolution artefact rather than what the engine
+runs; the engine's child selection was not read.

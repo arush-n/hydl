@@ -204,6 +204,15 @@ BASELINES.md section 6). tests/sim 102 -> 114. The learner rows on the final ren
 (stock 4). Next there: crafting stage 1 (resource-type inputs with output exclusions, +66 recipes), then the stages of
 section 2b above; bench types 1 to 3 need the bridge oracle first (this session's lane).
 
+**Bridge status, phases 4f and 4g (2026-10-18; FIDELITY-0.7.2.md sections (p) and (q)).** The bridge's advertised
+legality comes from a side-effect-free replay of the engine's admission instead of `canRun` (jar `A4487CF3`), so the
+crossbow interrupt is offered from the Repeat window (tick 26) as the server admits it; guard and dodge legality share the
+path (not yet re-measured live). Still open on the Python side: the accepted-edge execution child resolves from post-shot
+ammo (the official interrupt test fails at line 342 on `execution` 4 versus 0) and the learner mask drops for one tick
+when the reload adds an arrow. The combo hits land and are cancelled by the server before application (not a bridge
+defect; filter not isolated); the signature cases were a harness ray on the body yaw (fixed in the fidelity session's
+harness). Next for the bridge: the crafting oracle stages of CRAFTING-ORACLE.md.
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the

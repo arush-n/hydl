@@ -184,6 +184,7 @@ import com.hytalerlbridge.imitation.NpcAttackActionSnapshot;
 import com.hytalerlbridge.imitation.NpcObservationSnapshot;
 import com.hytalerlbridge.imitation.NpcTraceBatch;
 import com.hytalerlbridge.nativebackend.support.CombatSpawnSupport;
+import com.hytalerlbridge.nativebackend.support.InteractionAdmissionDryRun;
 import com.hytalerlbridge.worldgen.ChunkApiContract;
 import com.hytalerlbridge.worldgen.BlockAffordanceContract;
 import com.hytalerlbridge.worldgen.NativeDoorTransitionEvidence;
@@ -4720,7 +4721,23 @@ final class NativeEnvironmentSession
         }
 
         NativeInteractionBinding binding = nativeCombatAbilities.get(abilitySlot);
-        if (trackedAgentAbilityChain != null || pendingAgentAbilityFork != null) {
+        if (pendingAgentAbilityFork != null) {
+            step.abilityRejectReason = "native_combat_busy";
+            return false;
+        }
+        // A guard fork never replaces a running ability. A root may replace one
+        // only when the engine admits it (FIDELITY-0.7.2.md section (p)).
+        if (
+            trackedAgentAbilityChain != null
+                && (
+                    guardForkType != null
+                        || !InteractionAdmissionDryRun.admits(
+                            interactionManager(ref, store),
+                            binding.type(),
+                            binding.root()
+                        )
+                )
+        ) {
             step.abilityRejectReason = "native_combat_busy";
             return false;
         }
@@ -4788,6 +4805,7 @@ final class NativeEnvironmentSession
         combat.setExecutingAttack(chain, false, 0.0);
         policyActorState(0).setManualAttackWindow(true);
         trackedAgentAbilityChain = chain;
+        trackedAgentAbilityParentChain = null;
         trackedAgentAbilitySlot = abilitySlot;
         trackedAgentAbilityId = binding.id();
         trackedAgentAbilityType = binding.type().name();

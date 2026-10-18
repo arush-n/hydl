@@ -6,6 +6,7 @@ import com.hypixel.hytale.protocol.RootInteractionSettings;
 import com.hypixel.hytale.server.core.entity.InteractionManager;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.CooldownHandler;
 import com.hytalerlbridge.nativebackend.model.NativeInteractionBinding;
+import com.hytalerlbridge.nativebackend.support.InteractionAdmissionDryRun;
 import java.lang.reflect.Field;
 
 /** Read-only view of native rule, cooldown, and charge admission. */
@@ -38,7 +39,11 @@ public final class NativeInteractionCapabilityView {
             return capture(
                 handler,
                 binding,
-                manager.canRun(binding.type(), binding.root())
+                InteractionAdmissionDryRun.admits(
+                    manager,
+                    binding.type(),
+                    binding.root()
+                )
             );
         } catch (IllegalAccessException | RuntimeException unavailable) {
             return State.unavailable();
