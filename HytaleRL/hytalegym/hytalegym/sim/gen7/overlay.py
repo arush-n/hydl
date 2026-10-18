@@ -69,12 +69,14 @@ _A1 = (
     "gen-7 model before this row changes"
 )
 _GUARD = (
-    "a guard-during-attack lifecycle compare on 0.7.2 (no test exercises the guard attack-cancel "
-    "rule yet) plus test_native_shield_bash_resource_cost_matches_and_regen_phase_is_explicit"
+    "tests/fidelity/combat/defense/test_native_guard_attack_cancel.py on the live 0.7.2 bridge: Guard raised while "
+    "the attack root runs cancels it (sword left onsets 2-5, sword down 2-12, mace 2-18, battleaxe down-left "
+    "2-12), later it does not; plus test_native_shield_bash_resource_cost_matches_and_regen_phase_is_explicit"
 )
 _GUARD_NOTE = (
     "0.7.2 removes Rules.Interrupting [Primary] from this family's guard root "
-    "(ASSET-DIFF-0.7.2.md:237-243, 266-322)"
+    "(ASSET-DIFF-0.7.2.md:237-243, 266-322); the cancel now comes from the attack roots' InterruptedBy "
+    "[Secondary] during their RunTime (hook guard_cancel_window)"
 )
 
 
@@ -115,15 +117,6 @@ PATCHES = (
     _guard_root("mace", 8),
     _guard_root("battleaxe", 9),
     _guard_root("daggers", 27),
-    Patch("sword_thrust_interrupted_by_secondary", PROFILE_JAX,
-          "            hold_speed_multiplier=0.8,\n"
-          "            hold_speed_multiplier_after_seconds=_NESTED_OUTER_GATE_SECONDS,\n        ),\n",
-          "            hold_speed_multiplier=0.8,\n"
-          "            hold_speed_multiplier_after_seconds=_NESTED_OUTER_GATE_SECONDS,\n"
-          "            interrupted_by_type_mask=1 << INTERACTION_TYPE_SECONDARY,\n        ),\n",
-          "5d", _GUARD,
-          "0.7.2 Weapon_Sword_Primary_Thrust adds Rules.InterruptedBy [Secondary]; no threshold, so "
-          "interruptible_after_seconds stays 0. Its timing changes (row 5f) are not patched"),
     Patch("slope_wall_limits_parameters", "combat/types.py",
           "PLAYER_SPRINT_REQUIRES_FORWARD_DOMINANT_TRAVEL = True\n",
           "PLAYER_SPRINT_REQUIRES_FORWARD_DOMINANT_TRAVEL = True\n\n"
@@ -216,6 +209,17 @@ HOOKS = (
          "and a seeded bronze-dagger contact on the live bridge (native 5.0; tests/fidelity)",
          "Swing_Left and Swing_Right per material; the other direct values and the angled values are unchanged; "
          "Void_Crystal is in the 0.7.2 table but has no simulator variant row (not modelled)"),
+    Hook("guard_cancel_window_roots", PROFILE_JAX, "_ability",
+         f"{_MECHANICS}.guard_window:ability_root_window", "guard_cancel_window", "active", "5d", _GUARD,
+         "stamps each Sword, Mace, Battleaxe and Daggers Primary attack root that 0.7.2 declares InterruptedBy "
+         "[Secondary] with its RunTime (weapons rows interaction:<id>); replaces the inert thrust patch (the engine "
+         "resolves a one-tick thrust request through the primary hold table to the left swing)"),
+    Hook("guard_cancel_window_operations", "combat/arsenal/programs/interaction_rules.py",
+         "active_operation_interrupted_by",
+         f"{_MECHANICS}.guard_window:operation_window", "guard_cancel_window", "active", "5d", _GUARD,
+         "for those attacks the boundary ends the Secondary window instead of opening it; not modelled: a Guard "
+         "held through the end of an uncancelled attack never rises natively, and native admits an attack one "
+         "tick before the engine's legality view (the first window tick)"),
     Hook("dodge_action_head", "combat/observation/v3/policy/layout.py", "split_locomotion_choice",
          f"{_MECHANICS}.dodge:construct", "dodge_action_head", "stub", "9",
          "test_native_policy_dodge_boundary_matches_advertised_capability and "

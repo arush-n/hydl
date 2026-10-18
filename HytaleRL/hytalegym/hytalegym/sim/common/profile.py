@@ -64,6 +64,10 @@ class Constructs:
     # shared weapon_variants module, HEAD) or "gen7_table" (the 0.7.2 item rows). Owner: sim/gen7/mechanics/
     # dagger_damage.py (phase 4, item 5c).
     dagger_swing_damage: str = "shared_rows"
+    # Guard raised during a melee attack: "guard_root" (the guard root's Interrupting [Primary] cancels the attack at
+    # any time, 0.5.x) or "attack_root" (0.7.2: the attack root's InterruptedBy [Secondary] cancels it only while
+    # the root's RunTime runs). Owner: sim/gen7/mechanics/guard_window.py (row 5d).
+    guard_cancel_window: str = "guard_root"
     # Walk controller while descending: "free_fall" (0.5.x) or
     # "minimum_descent_rate" (0.7.2 code change, unmeasured). P2.
     walk_descent: str = "free_fall"
