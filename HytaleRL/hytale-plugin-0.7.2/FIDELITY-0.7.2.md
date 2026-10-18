@@ -579,3 +579,32 @@ fixture overrides the target side only and relies on the Goblin edge. The overri
 Open after this phase: 5a's flinch (a flagged sword or dagger attack, not an NPC club, is the next thing to test),
 5b (a moving target hit by a known force, to separate Set from Add), 6a (launch and hit ticks per tier on the live
 bridge), 7b (no rune exists in the simulator), and the JAX side of 5a (a Skeleton or Goblin profile).
+
+## (k) Phase 4c: the group yaw lever and the crossbow reload context (2026-10-18; receipts `~/.claude/jobs/31947bd7/tmp/phase4c/receipts/`)
+
+Policy-bound actor yaw: not a 0.7.2 fault. On jar `8B09661F`, `camera_delta_yaw` moves only the head: actor one's body
+yaw (`combat_target_yaw_degrees`) stays 0.00 for 37 steps on seeds 570057 and 913771, the head saturates near +45 and
+-30 against the camera window, and the facing error stays -180.00. `body_delta_yaw` turns the body: about 120 degrees
+after six +30 degree steps and 180.00 three ticks later, facing error 0.00. The gen-5 bridge `DBFC877D` on the 0.5
+server reproduces the same pattern (`ctl05_yaw.json`), so the cause is the body/camera split of the bridge and the
+trained runtime (`NativeEnvironmentSession.java` 2959-2964 head, 3109-3112 body; `jax/combat/runtime/agent.py` 411-416),
+present since at least 2026-08-22. The group facing tests command facing with the camera lever and cannot pass under
+the split; the lever is a test decision (recommended: `body_delta_yaw` with settle time), unless the owner wants the
+camera to drive policy-bound bodies, which would change parity for every policy that turns with the camera. Caveat from
+the agent: the Java attack selectors read head yaw (`ActiveMeleeSimulator` about 787 and 883), so a body-lever test may
+still need the head aimed for attacks.
+
+Crossbow reload context: NPE fixed, interrupt case still failing. Slot 4 is requested as `Ability3`; `forInteraction`
+builds an ability-slots context for it and, on `8B09661F`, the headless NPC has no `AbilitySlots` component (0.7.2
+added it; the headless install copied the 0.5 list), so `Interaction.tickInternal` line 534 dereferenced a null
+container on the reload's second tick and the world stopped ("World thread is not accepting tasks"). The bridge now adds
+`AbilitySlots(6)` to the controlled entity at headless install (jar `8720BC76`): no NPE and no world stop in two runs,
+and a follow-up request is accepted. The slot-4 reload still fails on tick 2 (`native_ability_failed`) because the
+0.7.2 crossbow binds that reload root under `Ability4` and the bridge's `Ability3` context carries no held item; the
+Primary reload path passes on both jars (274 s and 242 s). Open for the owner: map slot 4 to `Ability4` for 0.7.2 items
+(a wire contract change, Java plus the Python slot table) or keep the interrupt case as a known failure.
+
+Java gates on the fixed tree: `NativeHeadlessWorldVerbContextTest` 2 and `SourceFileSizeRatchetTest` 2, 0 failures
+(agent and coordinator runs); full `gradlew test` 111 suites, 384 tests, 0 failures (agent run, no pre-change
+baseline); `tests/test_server_versions.py` 7 passed. The plugin's `src/test` tree is untracked (`HytaleRL/.gitignore`
+`**/test/`), so the new unit test exists on disk only.

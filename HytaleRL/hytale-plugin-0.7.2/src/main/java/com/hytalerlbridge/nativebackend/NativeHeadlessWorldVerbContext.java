@@ -102,6 +102,22 @@ final class NativeHeadlessWorldVerbContext {
             playerRef
         );
 
+        // InteractionContext.forInteraction reads ability slots from the entity itself, and
+        // its Ability2/Ability3 branch builds a context with a null container when there are
+        // none. Interaction.tickInternal then throws on an interrupted reload (0.7.2 added this
+        // component; the 0.5 list above predates it). 6 is PlayerSystems.PlayerInitSystem's default.
+        if (
+            store.getComponent(
+                reference,
+                InventoryComponent.AbilitySlots.getComponentType()
+            ) == null
+        ) {
+            store.addComponent(
+                reference,
+                InventoryComponent.AbilitySlots.getComponentType(),
+                new InventoryComponent.AbilitySlots((short) 6)
+            );
+        }
         Holder<EntityStore> inventoryHolder =
             store.getRegistry().newHolder();
         copyInventoryComponent(

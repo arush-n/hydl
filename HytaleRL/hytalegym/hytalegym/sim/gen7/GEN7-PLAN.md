@@ -173,6 +173,13 @@ Also open for 5f: the kunai +1 per throw may be measurement (native sets accepte
 NativeEnvironmentSession.java:5789-5797, and the test re-requests on finish); the sword +2 matches a player-backed
 selector in JAX; probes P1 and P2 of that session decide before any 5f patch.
 
+**Bridge status, phase 4c (2026-10-18; FIDELITY-0.7.2.md section (k)).** The headless context now gives the controlled
+entity an `AbilitySlots` component (jar `8720BC76`), which removes the `Interaction.tickInternal` NPE and the world stop;
+the slot-4 reload still fails because the bridge requests `Ability3` while the 0.7.2 crossbow binds that reload to
+`Ability4` (owner decision: remap or known failure). Policy-bound yaw follows `body_delta_yaw` by design, on 0.5 as on
+0.7.2, so the group facing tests need a lever decision before they can pass; defect (1) above is withdrawn as a bridge
+fault.
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the
