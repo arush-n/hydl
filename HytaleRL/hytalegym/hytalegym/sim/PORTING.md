@@ -74,6 +74,12 @@ Each step ends with its gate, a command with a pass bar.
   those artefacts once the pin settles, not after every bridge commit; until then read those failures as staleness.
 - Five more untracked tests need `HYTALE_ASSETS_ZIP` (or `APPDATA`) set to the install's `Assets.zip`; without it
   they fail on the asset lookup before reaching any bridge code.
+- Several construct builders at once share four files: `sim/gen7/overlay.py`, `sim/common/profile.py`,
+  `sim/gen7/mechanics/__init__.py` and `tests/sim/test_constructs.py`. Lock protocol (2026-10-18): before editing any of them,
+  create `sim/gen7/.overlay.lock` containing your lane name (fail if it exists: `set -o noclobber`); edit, run the two modules
+  you touched, remove the lock. If the lock exists, wait 60 s and retry, up to 30 min; never delete another lane's lock. The
+  construct module, its tests and its fixture are per lane (`sim/gen7/mechanics/<name>.py`, `tests/sim/test_<name>.py`) and
+  need no lock. The coordinator commits one lane at a time, staging that lane's files only.
 - The gen-7 tools name gen 7: `sim_port.regen_swap_plan` checks `hytalegym.sim.gen7.overlay`, and `fidelity_index.py`
   reads `FIDELITY-0.7.2.md`.
 
