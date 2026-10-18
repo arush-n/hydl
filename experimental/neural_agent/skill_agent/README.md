@@ -427,8 +427,9 @@ bookkeeping alone (`StubBody`), measured separately and summed.
     path's: 4.9 to 7.5 times at 3 and 6 skills (6 skills, shared: 25.9 against 171.3 ms).
   - With one agent holding one skill it was slightly slower (0.8 times as fast), because it makes two
     calls where the old path made one.
-  - Its quiet-machine number is still to be measured. The table's middle column is the same work without
-    the combiner.
+  - On a quieter machine (load about 10), batch 8 p95 through the combiner is 5.78 / 4.60 ms at 3 skills
+    (shared / distinct) and 6.32 / 6.50 ms at 6, against 24.4 / 21.1 and 39.5 / 39.2 ms for the trunk per call
+    in the same run. That is within the bar at 6 skills per agent.
 
 Caveats: freezing's default sizes (trunk width 64, two layers, context 128; adapter hidden 64), random
 weights, CPU, one run at a load of about 6 on 18 cores.
@@ -655,8 +656,9 @@ verb.
 - pointers gather the named token;
 - outputs are deterministic.
 
-**Speed (A1): not settled.** At batch 8, p95 of trunk plus generalist was 15.08 ms against the 15 ms bar (trunk
-10.4, generalist 3.8; median total 6.0), at a machine load of 53 to 75 on 18 cores. A quiet-machine run decides it.
+**Speed (A1): PASS.** At a machine load of about 10 on 18 cores, batch 8 p95 of trunk plus generalist is 3.56 ms
+against the 15 ms bar (trunk 2.60, generalist 0.98; median 2.19). Batch 64 is 8.99 ms; batch 1 is 3.51 ms. The first
+run's 15.08 ms (load 53 to 75) was the load.
 
 ### 2.14 The legal observation adapter (`observation_adapter.py`, 2026-10-18)
 
@@ -717,6 +719,17 @@ PATH --date YYYY-MM-DD`. [test: test_sa_certificates.py, 7 tests; a deliberately
   - harder distributions.
 - By the owner's bar (TRAINING_PLAN 1b), a student can only match these scripts on easy solo tasks; it has to win on
   combined and disturbed ones.
+
+**T4, the live replay, for walk_to v1: PASS** (`certify_live.py`, 2026-10-18, jar 460054A8). The teacher ran in
+closed loop on the live 0.7.2 server, reading the native position and tracking its commanded body yaw, and the
+simulator teacher ran from the same start and goal:
+- 24 of 24 live and 24 of 24 simulated, 0 illegal decisions;
+- the live runs end inside the radius;
+- live runs finished a median 2 ticks sooner (at most 8).
+
+The live per-tick step is 0.1667 blocks (the 1/30 s step) on its quietest ticks and 0.1748 at the median, and the
+ramp matches an acceleration of about 10 blocks/s^2. So the physics agree, and some live ticks ran longer than 1/30 s
+under load. look_at's T4 is not run yet.
 
 ## 3. For the agent building the gen-7 simulator
 

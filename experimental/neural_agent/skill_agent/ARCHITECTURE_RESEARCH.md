@@ -190,11 +190,10 @@ Then TRAINING_PLAN's C-steps run on the generalist instead of on per-verb bodies
 
 Status (2026-10-18, late):
 - The generalist is built (`generalist.py`, README 2.13).
-- A1 is measured once under load: 15.08 ms p95 at batch 8 against the bar, at load 53 to 75. It is not settled; a
-  quiet-machine re-run decides.
+- A1 passes: 3.56 ms p95 at batch 8 at load about 10 (15.08 ms at load 53 to 75 was the load).
 - A2's two teachers exist (`teachers.py`), and so do its flat tasks (`simple_tasks.py`).
-- Still missing for A2: the observation adapter (simulator state to tokens, legal only) and the teachers' full
-  certificates.
+- The observation adapter is built (README 2.14). The teachers pass T1, T2 and T3, and walk_to passes T4 live (README
+  2.15). A2's student training is next, after the owner sees these results.
 
 ## 5. Decisions for the owner (answered 2026-10-18, late; BUILD.md section 0)
 
