@@ -74,9 +74,10 @@ for the gen-7 simulator), and the gen-7 simulator itself (phase 3 of 6 running).
 
 ## 6. Running right now (2026-10-18, night)
 
-The phase 4c bridge agent (the two 0.7.2 bridge defects the fidelity session measured: the NPC yaw path for
-policy-bound group actors, the held-item NPE on the reload interrupt; Java only, scratch builds, ports 5556/25572;
-`GEN7-PLAN.md` 2b). The peer session (hydl-1f) owns the fidelity tests under `tests/fidelity` and, since `2b88082`,
+No agent of this session is running. Phase 4c is committed (`4066417`): the headless entity gets an `AbilitySlots`
+component, so the reload interrupt no longer stops the world (pin `8720BC76`); the group yaw finding was withdrawn as a
+bridge fault (the camera lever steers the head by design, on 0.5 as on 0.7.2; the group tests need `body_delta_yaw`);
+the slot-4 `Ability3` versus `Ability4` mapping is an owner decision (`FIDELITY-0.7.2.md` (k)). The peer session (hydl-1f) owns the fidelity tests under `tests/fidelity` and, since `2b88082`,
 the overlay rows 5f and 11 and the learner-row harness repair, each as its own construct with a native differential,
 both sim gates before any overlay commit. P6 is concluded; the phase 3, 4 and 4b port agents have reported and their
 work is committed.
@@ -112,6 +113,12 @@ crossbow tests look up the head `world_move_none_plus_compass`, which `ARSENAL_P
 no revision, so they raise before measuring; two static placement tests pin the 0.5.7 `Assets.zip`; the
 reload-interrupt test gets "World thread is not accepting tasks" from the bridge. Harness problems, not mechanics.
 
+Open for the owner from phase 4c: whether slot 4 maps to `Ability4` for 0.7.2 items (a wire-contract change, Java plus
+the Python slot table) or the crossbow interrupt case stays a known failure; whether the group facing tests move to the
+body lever (recommended) or the camera is made to drive policy-bound bodies (changes parity for every policy that
+turns with the camera); and the fixture-only attitude override of `1159f8f`. Repo hygiene: both bridge plugins' Java
+tests (111 files for 0.7.2) are untracked because `HytaleRL/.gitignore` ignores `**/test/`; left as found.
+
 Open for the owner: pushing (nothing is pushed); the reviewer's one flagged question in the v6 contract
 (`PublicServerEvidenceSource.java` self row now uses head yaw and pitch, unexplained); whether to re-extract
 `sim/gen5/data` from a 0.5.7 archive or relabel it 0.5.10.
@@ -126,7 +133,8 @@ exact typed path and the questions channel; `ffe11c5` `on_tick`; `8707eec` `--ho
 in groups. Lower layer: `e62f654`, `3439c67`, `0f17bc8`, `39b450e`, `9b6c571`, `cbd4e00`, `5286797`.
 Night: `1f0af14` identity gate against the repaired HEAD; `ebc2e41` P6; `3cb4416` the peer's fidelity section (i);
 `1159f8f` the phase 4b bridge half (readouts, `hit_interrupt_duel`, jar pin `8B09661F`); `235565b` the nearest-skill
-resolver (#32, SYSTEM_ONE 9.16); `2b88082` the gen-7 mana pool construct with fidelity section (j) and phase 4c recorded.
+resolver (#32, SYSTEM_ONE 9.16); `2b88082` the gen-7 mana pool construct with fidelity section (j) and phase 4c recorded;
+`7f56001` this document; `4066417` phase 4c (AbilitySlots fix, pin `8720BC76`, fidelity section (k)).
 
 ## 9. Layout
 
