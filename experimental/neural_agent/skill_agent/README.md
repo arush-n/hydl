@@ -1,6 +1,6 @@
 # The skill agent: how to use it, and why it is built this way (2026-10-17, base 691e854)
 
-`BUILD.md` is the plan: what to build, the gen-7 checklist and the proofs. This file covers two other
+`docs/BUILD.md` is the plan: what to build, the gen-7 checklist and the proofs. This file covers two other
 things. First, the guide to creating, registering and using a skill (section 1). Second, the reasons for
 each component, with the research each one follows (section 2). Two handoffs follow: one for the agent
 building the gen-7 simulator (section 3), and one for the agent that will be built on top of this layer
@@ -9,13 +9,13 @@ building the gen-7 simulator (section 3), and one for the agent that will be bui
 Evidence markers:
 
 - **[test: name]** — a test in `tests/experimental/neural_agent/test_sa_*.py` proves the claim.
-- **[ledger]** — a recorded gate in `docs/LEDGER.md` proves it.
+- **[ledger]** — a recorded gate in `experimental/neural_agent/docs/LEDGER.md` proves it.
 - **(inferred)** — the claim is a reason, not a measurement.
 
-Each reference in section 6 says how it was checked, in the vocabulary of `docs/REFERENCES.md`.
-*Recalled* means cited from memory and not reopened. *Search summary 2026-10-17* means only a search
-engine's summary was read; three entries were checked this way: MineDojo's action space, Pirjanian's
-report number, and ros_control's exclusive resource claims.
+Each reference in section 6 says how it was checked, in the vocabulary of
+`experimental/neural_agent/docs/REFERENCES.md`. *Recalled* means cited from memory and not reopened. *Search summary
+2026-10-17* means only a search engine's summary was read; three entries were checked this way: MineDojo's action space,
+Pirjanian's report number, and ros_control's exclusive resource claims.
 
 ```
 middle layer (JEV)                lower layer (this folder)                              environment
@@ -25,16 +25,33 @@ RequestStatus(accepted | ...    ◄───────────────
   | done(outcome))
 ```
 
+## Layout
+
+The modules are sorted into subfolders by purpose (2026-10-18); each subfolder's README lists its files, gates and
+commands. Paths in this package's documents are relative to `skill_agent/`; files elsewhere are cited by repo path.
+Import a module by its subfolder: `from experimental.neural_agent.skill_agent.runtime.library import SkillLibrary`.
+
+| Folder | What it holds |
+|---|---|
+| [`contract/`](contract/README.md) | What a skill is and what it speaks: the gen-7 surface, the catalogue's verb contracts, the request protocol, the resolver. |
+| [`runtime/`](runtime/README.md) | Running skills: the registry, the combiner, programs, the combiner on S_t, the simulator head adapter, the parity and joint checks. |
+| [`model/`](model/README.md) | The networks: the token-set trunk, per-verb adapters, the request-conditioned generalist, the legal-observation adapter. |
+| [`teaching/`](teaching/README.md) | Scripted teachers and their certificates. |
+| [`tasks/`](tasks/README.md) | The episodes skills are trained and measured on. |
+| [`training/`](training/README.md) | Native traces, the behaviour-cloning dataset, the trainers. |
+| [`bench/`](bench/README.md) | Per-tick latency benches (the 30 Hz gate). |
+| [`docs/`](docs/README.md) | The design record: `BUILD.md` (the plan), `TRAINING_PLAN.md`, `ARCHITECTURE_RESEARCH.md`, `FIDELITY.md`, `AGENT_BRIEF.md`. |
+
 ## 1. Create, register, use (the guide)
 
 The code below runs as written. Its output is shown in section 4.
 
 ```python
 from experimental.neural_agent import requests as middle
-from experimental.neural_agent.skill_agent.catalogue import ActivityProgram, ActivityStep
-from experimental.neural_agent.skill_agent.combiner import AgentContext, BodyStep
-from experimental.neural_agent.skill_agent.library import SkillLibrary, script
-from experimental.neural_agent.skill_agent.programs import ProgramRunner
+from experimental.neural_agent.skill_agent.contract.catalogue import ActivityProgram, ActivityStep
+from experimental.neural_agent.skill_agent.runtime.combiner import AgentContext, BodyStep
+from experimental.neural_agent.skill_agent.runtime.library import SkillLibrary, script
+from experimental.neural_agent.skill_agent.runtime.programs import ProgramRunner
 
 library = SkillLibrary.from_catalogue()                     # 122 verbs and 19 programs, one call
 context = AgentContext(world_bounds=((-100.0, -64.0, -100.0), (100.0, 320.0, 100.0)),
@@ -120,13 +137,13 @@ Rules the registry enforces, each covered by a test:
   - It matches the request contract: the resolver has already turned references into agent-frame
     vectors and marked tokens.
 - **Memory.** A body keeps its recurrent state per `request_id` and resets it when
-  `ticks_since_start == 0`, because a new grant is a new run of the verb (BUILD.md §3.2).
+  `ticks_since_start == 0`, because a new grant is a new run of the verb (docs/BUILD.md §3.2).
 - **Why `BodyStep`, not bare choices.** A body returns its choices together with done, outcome and
   progress, because the status stream reports them.
 
 ## 2. Why each piece is the way it is
 
-### 2.1 A skill is an option with a contract (`catalogue.py`, `library.py`)
+### 2.1 A skill is an option with a contract (`contract/catalogue.py`, `runtime/library.py`)
 
 An option is a triple (I, π, β): where it may start, its policy, and when it ends (Sutton, Precup and
 Singh 1999). Here the three parts are:
@@ -169,7 +186,7 @@ that behaviour may change only under a new name (inferred).
 skills and retrieves them by their descriptions. `library.descriptions()` gives the text for every verb
 and program. The owner's ruling (commit e865049) keeps conditions typed; the words are context only.
 
-### 2.2 Factored heads in six scopes (`surface.py`)
+### 2.2 Factored heads in six scopes (`contract/surface.py`)
 
 **Factored heads.** The action is a set of heads that one torso emits together:
 
@@ -226,7 +243,7 @@ forward = (−sin yaw, 0, −cos yaw),   right = (cos yaw, 0, −sin yaw),   up 
 
 [test: test_agreement_with_the_gym_formula_on_a_seeded_batch]
 
-### 2.3 Typed requests and their statuses (`protocol.py` over the middle layer's `requests.py`)
+### 2.3 Typed requests and their statuses (`contract/protocol.py` over the middle layer's `requests.py`)
 
 **The request.** It carries a verb and four typed argument kinds, each with a presence flag: position
 (world), direction (unit), entity handle, and cell with face. It also carries up to four named scalars,
@@ -253,7 +270,7 @@ feedback. The mapping (ours):
 Each accepted or running status names the heads it drove that tick, so the middle layer can see which
 request moved the body.
 
-### 2.4 The combiner: arbitration per scope, atomic grants (`combiner.py`)
+### 2.4 The combiner: arbitration per scope, atomic grants (`runtime/combiner.py`)
 
 **Arbitration, not fusion.** Pirjanian's survey (1999) divides behaviour coordination into arbitration
 (one behaviour wins a resource, as in Brooks's 1986 subsumption) and command fusion (votes are
@@ -315,7 +332,7 @@ memory and work per tick follow the live requests, however long the episode.
 ticks since grant) lowers the host's grants to arrays, so a compiled runner gives the same action as
 the host. [test: test_no_head_is_ever_shared_and_the_compiled_table_gives_the_host_action, gate R6]
 
-### 2.5 Programs: sequence, parallel, repeat (`programs.py`)
+### 2.5 Programs: sequence, parallel, repeat (`runtime/programs.py`)
 
 **The three forms.** A program is a list of stages. Stage k + 1 starts only when every step of stage k
 is done. The steps of one stage run together, and a `(for each ...)` step repeats. These are the
@@ -341,7 +358,7 @@ catalogue's 19 programs meet this rule. [test: test_the_steps_of_a_parallel_stag
 each threat in its second. The attacks therefore start only after keep_range and guard have both
 finished. A step that should last across stages is the middle layer's to issue as a request of its own.
 
-### 2.6 Parity, traces and fidelity (`parity.py`, `training/traces.py`, `FIDELITY.md`)
+### 2.6 Parity, traces and fidelity (`runtime/parity.py`, `training/traces.py`, `docs/FIDELITY.md`)
 
 **Parity is differential testing** (McKeeman 1998): the same inputs go through the old and the new path,
 and every non-timing metric is compared.
@@ -362,7 +379,7 @@ world, seed), so it is never used against the wrong ruleset.
 count as fidelity. Randomising a gap (Tobin et al. 2017) is allowed only after a differential has named
 that gap.
 
-### 2.7 The trunk: a token-set encoder (`encoder.py`, B1)
+### 2.7 The trunk: a token-set encoder (`model/encoder.py`, B1)
 
 **What it reads.** Every body reads its agent's token sets through one trunk: entity, block candidate,
 inventory slot, geometry, self and kit tokens (`surface.TOKEN_TYPES` names), any number of each.
@@ -386,7 +403,7 @@ context = Dense(concat(mean, max, marked mean, self token))     tokens[t] = the 
   [test: test_sa_encoder.py, padding, permutation and capacity invariance]
 
 **The 30 Hz budget.** The owner set p95 <= 15 ms for the whole per-tick path, inside the 33.3 ms tick.
-`bench_tick.py` times the lower layer's share: the resolver, the combiner and the encoder.
+`bench/bench_tick.py` times the lower layer's share: the resolver, the combiner and the encoder.
 
 | batch | p95 per tick |
 |---|---|
@@ -397,7 +414,7 @@ context = Dense(concat(mean, max, marked mean, self token))     tokens[t] = the 
 These were measured on 2026-10-17 at a machine load of about 21 on 18 cores [ledger: B1]. The bodies
 were stand-ins, so a trained body's own heads come on top of the encoder's cost.
 
-**Trained bodies with the trunk in every call cost about 1 ms per agent per skill** (`bench_bodies.py`,
+**Trained bodies with the trunk in every call cost about 1 ms per agent per skill** (`bench/bench_bodies.py`,
 2026-10-18 [ledger]). That was the design until the owner's ruling later that day. A trained body was a
 freezing verb (section 2.9): the trunk and the verb's adapter in one compiled program. The combiner calls
 each granted body once per agent per tick, so every call ran the trunk again on one agent. The bench times
@@ -495,7 +512,7 @@ Reading:
 - **It also costs.** Trained on varied terrain and tested on a uniform floor, the compass drops by 0.079,
   with a wide seed spread.
 - **The likely weakness is the token selection** (inferred): the 64 nearest cells are mostly floor. A
-  selection of obstacles and height changes, and more worlds, are the next things to try. BUILD.md 7b
+  selection of obstacles and height changes, and more worlds, are the next things to try. docs/BUILD.md 7b
   records the choice.
 
 **The compass was labelled in the wrong frame (v4, 2026-10-18).**
@@ -534,7 +551,7 @@ minus the current one, else the centre. The gym decodes both heads with one code
 - Like the other heads, it learns the training world and not the other one.
 [test: test_the_body_yaw_rule_labels_the_requested_body_turn; test_labels_equal_arena_projection_on_every_trace]
 
-### 2.9 Freezing: adding a skill never changes a frozen one (`freezing.py`, B4, proof E13)
+### 2.9 Freezing: adding a skill never changes a frozen one (`model/freezing.py`, B4, proof E13)
 
 **The mechanism.** One shared trunk (the B1 encoder) and one small adapter per verb:
 `logits_v = Adapter_v(Encoder(x))`. A verb's compiled program takes only the trunk and its own adapter as
@@ -544,7 +561,7 @@ depend on how many verbs exist.
 - A frozen verb cannot be trained.
 - `params_sha256` fingerprints the weights.
 
-This is the weights half of requirement 7; `library.py`'s version rule is the contract half. It is the
+This is the weights half of requirement 7; `runtime/library.py`'s version rule is the contract half. It is the
 frozen-trunk-plus-adapters pattern of parameter-efficient transfer (Houlsby et al. 2019). Keeping a frozen
 skill's weights untouched is the strongest guard against catastrophic forgetting (McCloskey and Cohen 1989).
 
@@ -583,7 +600,7 @@ field. Two verbs that end with the same outcome class can still be told apart: a
 Stand-in bodies report their contract's progress names and, on done, the success label.
 [test: test_progress_signals_follow_the_done_texts_family; test_a_done_status_carries_the_bodys_termination_signal_and_a_foreign_signal_is_refused; every verb in test_sa_execute_all]
 
-### 2.11 Scripted teachers for the simple track (`teachers.py`, 2026-10-18)
+### 2.11 Scripted teachers for the simple track (`teaching/teachers.py`, 2026-10-18)
 
 **What they are.** Pure JAX functions of the simulator's full state and the request. They return choices on the gym's
 12 heads plus a done flag, for every lane at once (TRAINING_PLAN 2d). They will label the student's data.
@@ -610,7 +627,7 @@ This is T1 and T3 of the certificate on a small sample, not the full certificate
 - Done is per tick. A head swinging through the target can be "done" for one tick (1 of 64 lanes), so a data pipeline
   needs done for k consecutive ticks.
 
-### 2.12 Flat tasks with the NPC body (`simple_tasks.py`, 2026-10-18)
+### 2.12 Flat tasks with the NPC body (`tasks/simple_tasks.py`, 2026-10-18)
 
 **What it is:**
 - `make_flat_npc_environment` builds the arsenal environment on a flat world with `npc_walk`, the body the bridge
@@ -637,9 +654,9 @@ behaviour. The pair path applies no field of view, a simulator gap now in the si
 **Simulator note** (passed to the simulator lane): reset sets the head to yaw 0, not to the spawn's body heading,
 despite its comment (`runtime/reset.py`:158-161). The head catches up in about 2 ticks.
 
-### 2.13 The request-conditioned generalist (`generalist.py`, `bench_generalist.py`, 2026-10-18)
+### 2.13 The request-conditioned generalist (`model/generalist.py`, `bench/bench_generalist.py`, 2026-10-18)
 
-**What it is.** The working design of `ARCHITECTURE_RESEARCH.md`, built and untrained: one policy for every learned
+**What it is.** The working design of `docs/ARCHITECTURE_RESEARCH.md`, built and untrained: one policy for every learned
 verb.
 - *Inputs.* Each granted request becomes a token: a verb embedding, plus its typed arguments (agent-frame position and
   direction, 4 scalars, mode, urgency, age), with absent argument groups masked, plus the granted scope's embedding,
@@ -660,7 +677,7 @@ verb.
 against the 15 ms bar (trunk 2.60, generalist 0.98; median 2.19). Batch 64 is 8.99 ms; batch 1 is 3.51 ms. The first
 run's 15.08 ms (load 53 to 75) was the load.
 
-### 2.14 The legal observation adapter (`observation_adapter.py`, 2026-10-18)
+### 2.14 The legal observation adapter (`model/observation_adapter.py`, 2026-10-18)
 
 **What it is.** `legal_tokens(observation, *, capacities, body_yaw_degrees)` turns the environment's legal observation
 into the trunk's token sets. It never reads the simulator state; the signature takes none.
@@ -691,7 +708,7 @@ The pair path applies no field of view yet; the simulator lane is adding it as a
 
 Positions are quantised to 0.1 block.
 
-### 2.15 Teacher certificates (`certificates.py`, 2026-10-18)
+### 2.15 Teacher certificates (`teaching/certificates.py`, 2026-10-18)
 
 **What it is.** `certify_walk_to` and `certify_look_at` run a teacher in closed loop on the flat tasks and write a
 JSON certificate (TRAINING_PLAN 2c):
@@ -700,8 +717,8 @@ JSON certificate (TRAINING_PLAN 2c):
 - T3, pace, radius and legality;
 - T7-lite, failure classes and done hysteresis.
 
-The CLI is `python -m experimental.neural_agent.skill_agent.certificates --teacher walk_to --seeds 77001,... --out
-PATH --date YYYY-MM-DD`. [test: test_sa_certificates.py, 7 tests; a deliberately idle teacher fails T1]
+The CLI is `python -m experimental.neural_agent.skill_agent.teaching.certificates --teacher walk_to --seeds
+77001,... --out PATH --date YYYY-MM-DD`. [test: test_sa_certificates.py, 7 tests; a deliberately idle teacher fails T1]
 
 **First certificates (4 seeds x 256 episodes, flat `npc_walk`):**
 
@@ -720,7 +737,7 @@ PATH --date YYYY-MM-DD`. [test: test_sa_certificates.py, 7 tests; a deliberately
 - By the owner's bar (TRAINING_PLAN 1b), a student can only match these scripts on easy solo tasks; it has to win on
   combined and disturbed ones.
 
-**T4, the live replay, for walk_to v1: PASS** (`certify_live.py`, 2026-10-18, jar 460054A8). The teacher ran in
+**T4, the live replay, for walk_to v1: PASS** (`teaching/certify_live.py`, 2026-10-18, jar 460054A8). The teacher ran in
 closed loop on the live 0.7.2 server, reading the native position and tracking its commanded body yaw, and the
 simulator teacher ran from the same start and goal:
 - 24 of 24 live and 24 of 24 simulated, 0 illegal decisions;
@@ -735,7 +752,7 @@ under load. look_at's T4 is not run yet.
 
 **What you receive.** Each tick you get one choice per head per agent, in this order. A head no request
 owns carries its neutral choice. The first twelve heads are the gym's own, with the same names, sizes
-and order. The nine planned heads, with their choices from `surface.py`, are:
+and order. The nine planned heads, with their choices from `contract/surface.py`, are:
 
 | head | size | scope | choices |
 |---|---|---|---|
@@ -764,7 +781,7 @@ decision, combiner, bodies) has a budget of p95 <= 15 ms at the deployed batch, 
    - Do not stand in for a missing mechanic with a present head whose only legal choice is neutral.
      That pattern means "a cooldown": the scope stays legal and the request waits.
    - [test: test_legal_scopes_follow_the_action_mask]
-2. **The token sets, with their `FEATURES` from `surface.py`.**
+2. **The token sets, with their `FEATURES` from `contract/surface.py`.**
    - Fill every position in the agent frame (section 2.2), and keep entity handles stable across ticks:
      requests point at entities by handle.
    - Block candidates are matched on (cell, face) exactly; the faces are Hytale's six BlockFace names.
@@ -775,7 +792,7 @@ decision, combiner, bodies) has a budget of p95 <= 15 ms at the deployed batch, 
    the bounds and handles it does not know.
 
 **When a planned head lands:** turn its `HeadSpec.status` to `published` in the same commit that adds its
-`FIDELITY.md` row with the differential's receipt. The pass bars are in `BUILD.md` §4.
+`docs/FIDELITY.md` row with the differential's receipt. The pass bars are in `docs/BUILD.md` §4.
 
 **The adapter between the combiner and the simulator** (`sim_adapter.HeadAdapter`, 2026-10-17).
 - Build it from the simulator's mask (`HeadAdapter.from_mask`): the heads the mask names are the
@@ -790,7 +807,7 @@ planned mount head and the gen-5 mask drops it]
 
 **What still speaks the old contract:**
 
-- `parity.py` and the ADK proof-of-concept skills (idle, pursuit, evader): twelve heads.
+- `runtime/parity.py` and the ADK proof-of-concept skills (idle, pursuit, evader): twelve heads.
 - The JAX environment's action decoder: twelve heads, on gen 5 and on the gen-7 render alike. The overlay
   adds none of the nine planned heads, its dodge-head construct is a stub, and the policy layout publishes
   no recipe head (`observation/v3/policy/layout.py`: "Crafting is out of scope for a combat agent").
@@ -856,7 +873,7 @@ program [ledger].
     20 ms budget had 3 misses where the baseline had none, and the run diverged.
     [test: test_once_the_hook_is_seen_decide_leaves_the_combining_to_it]
   - [test: test_the_combining_decider_forwards_the_session_bindings_and_runs_the_combiner_after_each_decision]
-- **The joint check** (`joint_check.py`, B3's gate). It runs the composition arms flat, j0, shuffled and
+- **The joint check** (`runtime/joint_check.py`, B3's gate). It runs the composition arms flat, j0, shuffled and
   jprog-J0 (64 ticks, batch 8, seed 0) with and without the wrapper.
   - Every non-timing metric is identical.
   - In the jprog run the combiner wrote 232 statuses: 120 accepted (one per lane per decision) and 112
@@ -889,7 +906,7 @@ done [(0, 'wave_at(friend)', 0, 'accepted'), (1, ..., 'running'), (2, ...), (3, 
 - **Starvation.** It is bounded only by the middle layer's aging rule.
 - **Gen 7 is partly proved.** The gen-7 simulator is a render of HEAD's engine with the `sim/gen7`
   overlay. Since 2026-10-18 (late) it and the bridge belong to the peer session
-  (`sim/gen7/GEN7-PLAN.md` section 2b). In the fidelity ledger's current status (`FIDELITY.md`) only
+  (`sim/gen7/GEN7-PLAN.md` section 2b). In the fidelity ledger's current status (`docs/FIDELITY.md`) only
   Dodge passes, so a verb that needs any other mechanic cannot count a gen-7 training result yet (E14).
 - **Trace timing.** The 32 native NPC traces from the live 0.7.2 server (A7) have one frame per 1/30 s
   (120 TPS × 4 dilation), the gen-7 tick under the 30 Hz ruling, so they need no resampling for gen 7.

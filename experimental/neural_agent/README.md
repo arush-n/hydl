@@ -11,7 +11,7 @@ another session). Map last updated **2026-10-18**; the dated state of everything
 |---|---|
 | Decision record | `agents/design/ADR-001-three-level-agent.md`. Local-only (excluded through `.git/info/exclude`); pinned by sha256 `6d81f8b7fb660fe0e66c9be9555c6eddf57ae3840dc07daf3d88442219768594` in `docs/ARCHITECTURE.md` section 8. |
 | Shared interface | [`contracts.py`](contracts.py), sha256 `65a056b0eded18af62910ee30f379a4e145d6f713c5f3f4daac812911dc887a3`. The only module the others import shared names from; the pin is refreshed on every edit. |
-| Where things stand | [`docs/MIDDLE_LAYER.md`](docs/MIDDLE_LAYER.md) (the decision layer: measured, built, designed, failed, per gate), [`docs/LEDGER.md`](docs/LEDGER.md) (every measurement with its command), [`skill_agent/BUILD.md`](skill_agent/BUILD.md) (the lower layer). |
+| Where things stand | [`docs/MIDDLE_LAYER.md`](docs/MIDDLE_LAYER.md) (the decision layer: measured, built, designed, failed, per gate), [`docs/LEDGER.md`](docs/LEDGER.md) (every measurement with its command), [`skill_agent/docs/BUILD.md`](skill_agent/docs/BUILD.md) (the lower layer). |
 | The decisions that shape the design | [`docs/SYSTEM_ONE.md`](docs/SYSTEM_ONE.md) sections 8.12 and 9.9 to 9.13: typed fields are the contract, words are context; behaviour programs; the request stream; how the LLM communicates. |
 
 ## The three levels, in one table
@@ -80,7 +80,7 @@ Lint: `ruff check --isolated --no-respect-gitignore --select E4,E7,E9,F <files>`
 - `docs/LEDGER.md` is append-only (`>>`); every number comes with its command and date.
 - `contracts.py` is pinned by sha256 in `README.md`, `SKILL.md`, `docs/ARCHITECTURE.md`, `jev/SKILL.md` and two tests; refresh the pin on every edit.
 - Private inputs under `agent_skills/` are read, never staged or copied into tracked files.
-- `skill_agent/` belongs to the lower-layer session; coordinate through its `BUILD.md` and messages rather than editing it.
+- `skill_agent/` belongs to the lower-layer session; coordinate through its `docs/BUILD.md` and messages rather than editing it.
 - Code paths are stable: other sessions import `experimental.neural_agent.{contracts,shared_state,requests,session}`; a split keeps the import path through the package's `__init__` (as `shared_state/` does since 2026-10-18), and a move needs re-export shims and an owner decision.
 
 ## Limits

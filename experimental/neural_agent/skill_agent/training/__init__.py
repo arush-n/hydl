@@ -1,1 +1,1 @@
-"""Training-side modules of the skill agent. Phase A has only ``traces`` (native NPC trace ingestion, A7)."""
+"""Data and trainers: trace ingestion, the behaviour-cloning dataset and its smoke (``README.md`` in this folder)."""

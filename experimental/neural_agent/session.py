@@ -464,7 +464,7 @@ def run_session(
             )
 
         # 6. a host decider's per-tick observer, after the sections of this tick are written: the lower
-        #    layer's combiner runs here when its wrapper defines ``on_tick`` (skill_agent/scratchpad.py), so
+        #    layer's combiner runs here when its wrapper defines ``on_tick`` (skill_agent/runtime/scratchpad.py), so
         #    the status stream carries running statuses between decisions, not only at them
         if observes_ticks:
             host_decider.on_tick(clock_tick, transition, new_state)

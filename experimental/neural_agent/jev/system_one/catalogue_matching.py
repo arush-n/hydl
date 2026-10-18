@@ -116,7 +116,7 @@ def parse_catalogue(text: str) -> tuple[CatalogueRow, ...]:
     """Return the rows of the skill and activity tables under numbered sections (module docstring).
 
     Since 2026-10-17 late (B5) the skill rows come from the skill agent's parser, the one reader of the
-    catalogue (``skill_agent/catalogue.py``): ids, group, description and kind letter are its. The activity
+    catalogue (``skill_agent/contract/catalogue.py``): ids, group, description and kind letter are its. The activity
     tables (header ``activity``) are read here, as before, with the ``sequence`` cell as the
     description, because the matching rows keep the section title and the sequence as written (the
     ``program of`` tables are skipped, as this module always skipped them, so the row count is the catalogue's). Document
@@ -128,7 +128,7 @@ def parse_catalogue(text: str) -> tuple[CatalogueRow, ...]:
             is malformed or a kind is unknown), or an activity table precedes a skill table.
     """
 
-    from experimental.neural_agent.skill_agent.catalogue import parse_catalogue as _parse_skill_rows
+    from experimental.neural_agent.skill_agent.contract.catalogue import parse_catalogue as _parse_skill_rows
 
     rows: list[CatalogueRow] = []
     skipped: set[str] = set()  # verbatim rows of the tables this module does not read

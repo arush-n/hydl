@@ -199,7 +199,7 @@ Each module is IMPLEMENTED only once its tests pass in the Verify stage. A box i
 - [x] `jev/train_j1.py`, `eval_j1.py`, `sim_goal_env.py`, `j1_actor_critic.py`. The J1 line (behaviour cloning on real J0 traces, semi-MDP PPO). Gates: `test_na_jev_bc.py`, `test_na_sim_goal_env.py`, `test_na_jev_ppo.py`. Status: measured 2026-10-17; superseded as the primary instance by J-S1.
 - [x] `tasks/arenas.py`. Arena selection. Gate: `test_na_arenas.py`.
 - [x] `session.py` (grown): the executive seam, host deciders with the commitment-honouring seam (default since 0cf8c05), the scratchpad scribe, information requests, the per-tick `on_tick` observer. Gate: `test_na_session.py`.
-- [ ] `skill_agent/`. The lower layer, built by another session (`skill_agent/BUILD.md`, `README.md`). Gates: `test_sa_*.py`.
+- [ ] `skill_agent/`. The lower layer, built by another session (`skill_agent/docs/BUILD.md`, `README.md`). Gates: `test_sa_*.py`.
 
 ## 7. Conflicts and open items
 

@@ -1,6 +1,6 @@
 """Native NPC trace ingestion: recorded NpcTraceFrame batches -> arrays with a documented schema (A7).
 
-``AGENT_BRIEF.md`` A7 and ``BUILD.md`` 3.4 (behaviour cloning warm start from native NPC traces, the
+``docs/AGENT_BRIEF.md`` A7 and ``docs/BUILD.md`` 3.4 (behaviour cloning warm start from native NPC traces, the
 only demonstration source for now). The bridge records an NPC's transitions as ``NpcTraceFrame``
 batches (``HytaleRL/hytale-plugin*/src/.../imitation/NpcTraceFrame.java``); the capture tool writes
 one artifact per NPC per scenario with ``hytalegym.worldgen.write_native_npc_trace_artifact`` (a gzip

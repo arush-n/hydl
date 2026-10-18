@@ -24,7 +24,7 @@ document. Every statement carries one of four labels:
 - RULED (night): gen-7 (0.7.2) is the training target, gen-5 is deprecated; training of the neural
   systems is paused until the new lower-layer architecture is proved component by component; the
   skills train next, the middle layer is fine-tuned after. The lower layer's build plan, proofs and
-  gen-7 verification: `experimental/neural_agent/skill_agent/BUILD.md`.
+  gen-7 verification: `experimental/neural_agent/skill_agent/docs/BUILD.md`.
 
 ## 2. What is established
 
@@ -179,7 +179,7 @@ coordinates in requests. Owner decision still needed: the go for steps 2 onwards
 
 ## 10. Where the detail is
 
-`skill_agent/BUILD.md` for the lower layer (bodies, combiner, catalogue parser, gen-7 verification, proofs E1-E14);
+`skill_agent/docs/BUILD.md` for the lower layer (bodies, combiner, catalogue parser, gen-7 verification, proofs E1-E14);
 `SYSTEM_ONE.md` §8 (J-S1, the scratchpad §8.10, the generator §8.11, the rulings §8.12, the failure and
 the split §8.13), §9 (J-S2, programs §9.9, the request stream §9.10); `FORMULAS.md` M1-M13;
 `LEDGER.md` for every number above; ADR-001 (local) for the decisions and the evidence rows.

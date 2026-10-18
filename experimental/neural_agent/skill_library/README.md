@@ -2,7 +2,7 @@
 
 Three skills on the 12-head action surface, enough to measure composition: a pinned pursuit candidate, a
 scripted evader and idle. **The real neural skill library is built in `../skill_agent/`** (the lower-layer
-session; `../skill_agent/BUILD.md`), over the 139-row catalogue, with contracts, a request stream and
+session; `../skill_agent/docs/BUILD.md`), over the 139-row catalogue, with contracts, a request stream and
 behaviour-cloned bodies. Until it replaces these, every composition number is about the middle layer's
 decisions, not the skills.
 

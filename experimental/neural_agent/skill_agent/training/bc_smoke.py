@@ -1,7 +1,7 @@
-"""B2's smoke: a tiny behaviour-cloning body on the native 0.7.2 traces, held out by world (``BUILD.md`` 7b, B2).
+"""B2's smoke: a tiny behaviour-cloning body on the native 0.7.2 traces, held out by world (``docs/BUILD.md`` 7b, B2).
 
-The body is the B1 trunk (``encoder.py``) over the dataset's self, entity and geometry tokens, with one linear head per
-supervised head of the gen-7 layout (base action, locomotion compass, yaw and pitch deltas: the heads the
+The body is the B1 trunk (``model/encoder.py``) over the dataset's self, entity and geometry tokens, with one linear
+head per supervised head of the gen-7 layout (base action, locomotion compass, yaw and pitch deltas: the heads the
 native projection labels). The loss is the cross-entropy over supervised entries only::
 
     L = sum_{rows r, heads h with s[r, h]} -log softmax(W_h c_r + b_h)[a[r, h]]  /  max(1, sum s)
@@ -38,10 +38,10 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
-from experimental.neural_agent.skill_agent.combiner import AgentContext, BodyStep
-from experimental.neural_agent.skill_agent.encoder import EncoderConfig, apply_encoder, init_encoder
-from experimental.neural_agent.skill_agent.library import SkillLibrary
-from experimental.neural_agent.skill_agent.surface import EntityToken, GeometryToken, SelfToken, head_layout
+from experimental.neural_agent.skill_agent.contract.surface import EntityToken, GeometryToken, SelfToken, head_layout
+from experimental.neural_agent.skill_agent.model.encoder import EncoderConfig, apply_encoder, init_encoder
+from experimental.neural_agent.skill_agent.runtime.combiner import AgentContext, BodyStep
+from experimental.neural_agent.skill_agent.runtime.library import SkillLibrary
 from experimental.neural_agent.skill_agent.training.bc_dataset import DEFAULT_OUT, BCDataset, build_dataset
 
 TOKEN_TYPES: tuple[tuple[str, int], ...] = (

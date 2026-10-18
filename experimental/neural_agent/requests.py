@@ -45,7 +45,7 @@ the ranges of the arbitration fields). A non-finite argument value can therefore
 combiner rejects it with a reason instead of failing.
 
 Scopes. A scope is a group of action heads that one granted request owns at a time.
-``SCOPES`` lists the six groups of ``skill_agent/BUILD.md`` section 3.1. Section 9.10 named four
+``SCOPES`` lists the six groups of ``skill_agent/docs/BUILD.md`` section 3.1. Section 9.10 named four
 (locomotion, look, hands, posture). The six-scope plan is newer, and the lower layer's surface draft
 uses the same six names. The default schemas give each proof-of-concept skill the scopes of the heads
 its action scope can move off neutral. For idle that is none. For pursuit it is
@@ -76,7 +76,7 @@ from experimental.neural_agent.contracts import (
 )
 
 SCOPES: tuple[str, ...] = ("locomotion", "gaze", "hands", "posture_defence", "interaction", "abilities_magic")
-"""The six scopes (head groups) of skill_agent/BUILD.md section 3.1. The combiner grants one request per scope."""
+"""The six scopes (head groups) of skill_agent/docs/BUILD.md section 3.1. The combiner grants one request per scope."""
 FACE_NAMES: tuple[str, ...] = ("up", "down", "north", "south", "east", "west")
 """Block faces; ``FACE_NAMES[k]`` is Hytale protocol.BlockFace value ``k + 1``."""
 MODE_PARALLEL: str = "parallel"

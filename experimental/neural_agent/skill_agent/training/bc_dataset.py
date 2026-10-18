@@ -1,4 +1,4 @@
-"""Behaviour-cloning dataset from the recorded native NPC traces, on the gen-7 surface (BUILD.md phase B, B2).
+"""Behaviour-cloning dataset from the recorded native NPC traces, on the gen-7 surface (docs/BUILD.md phase B, B2).
 
 The 32 traces in ``agent_skills/training_runs/traces_072/`` (private) are 16 scenario folders, one per fight,
 each holding the two NPCs that were recorded concurrently: ``<scenario>/<Role>.trace.msgpack.gz``. A scenario
@@ -12,7 +12,8 @@ Rows
     folder) has a frame at the same server tick: an inner join on ``tick``. ``trace_joined_ticks`` records how
     many ticks join for each trace. Traces are in scenario-name order, rows in tick order within a trace.
 
-Tokens, in the agent frame of the row's NPC (``surface.py``; the frame is the one ``references.py`` gives)
+Tokens, in the agent frame of the row's NPC (``contract/surface.py``; the frame is the one
+``contract/references.py`` gives)
     ``self_tokens`` float32[R, 1, 12], ``SelfToken.FEATURES`` order: health = health / max_health in [0, 1];
     stamina, mana, signature_energy and oxygen = the frame's actor_evidence ``resource_values`` over
     ``resource_maximums`` in the slots RESOURCE_STAMINA, RESOURCE_MANA, RESOURCE_SIGNATURE_ENERGY and
@@ -94,7 +95,7 @@ from typing import Any
 import numpy as np
 
 from experimental.neural_agent.contracts import TICKS_SATURATION
-from experimental.neural_agent.skill_agent import surface
+from experimental.neural_agent.skill_agent.contract import surface
 from experimental.neural_agent.skill_agent.training.traces import (
     CONTROL_COLUMNS,
     DEFAULT_TRACE_ROOT,
