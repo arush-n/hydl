@@ -74,7 +74,16 @@ for the gen-7 simulator), and the gen-7 simulator itself (phase 3 of 6 running).
 
 ## 6. Running right now (2026-10-18, night)
 
-No agent of this session is running. Phase 4e is committed (`6d914c8`, pin `B56FD38E`; swap plan `6c30ba9`;
+Two bridge agents are running: the server-cancelled projectile damage behind the combo and signature rows (task #60,
+ports 5556/25572) and the crafting oracle stages 3 and 5 (task #58, ports 5558/25576); the shield bash legality under a
+held guard is queued (#61). Committed since the last update: phase 4f diagnosis and 4g (`b4be1fe`, `6fd60a2`, `aedd85e`:
+interaction legality from a side-effect-free replay of the engine's admission, the crossbow interrupt offered at the
+Repeat window, pin `A4487CF3`; the peer re-measured guard and dodge, no row moved); phase 4h (`cb01a31`, swap plan
+`25ad61f`, identity gate 4 passed in 6:41: the accepted root's child from the pre-admission row and the reload's instant
+stat-modifier status omitted, the official interrupt test passing with the `Ability4` binding); the crafting oracle
+stages 1, 2 and 4 (`76839c5`, pin `A6C310DD`: bench tier and memories fixtures and readouts, structural craft, reset-time
+probes in an oracle-only scope, all ten contract scenarios matching; the contract itself is `CRAFTING-ORACLE.md`,
+`84f1a83`). Phase 4e is committed (`6d914c8`, pin `B56FD38E`; swap plan `6c30ba9`;
 identity gate 4 passed in 6:37 against `6c30ba9`): the actor evidence row carries `head_yaw_degrees` and the decoder
 maps `agent_head_yaw` from it, so the native self row is the head frame the policy trained on; the live learner-row
 look case passes on both seeds on the new pin (the peer's run, `b2acf2f`). Phase 4d is committed (`9f12f0d`, pin
@@ -165,7 +174,9 @@ document; `e4888df` the head-frame comment; `31d08be` the 0.7.2 policy agent cop
 `32EF5EDD`, fidelity section (m)); `5cb738c` the swap-plan regeneration; `9ad7c5f` this document; `6d914c8` phase 4e
 (head yaw on the wire, pin `B56FD38E`, section (n)); `6c30ba9` its swap-plan regeneration; `b2acf2f` the live
 learner-row pass. Peer: `490b1d4` the 5d guard window construct, `4434a48` fidelity section (l), `69422d7` the
-crossbow `Ability4` binding, `e8a1fc7` F1c.
+crossbow `Ability4` binding, `e8a1fc7` F1c, `ff51431` and `4661d5c` the 5f dodge, `6aaf21d` crafting stage 0, `486388e`
+stage 1, `0e45fc6` section (o). Later this session: `8758cb3` docs; `b4be1fe` section (p); `6fd60a2` phase 4g; `aedd85e`
+(q) recheck; `84f1a83` CRAFTING-ORACLE.md; `cb01a31` phase 4h; `25ad61f` swap plan; `76839c5` crafting oracle stages 1, 2, 4.
 
 ## 9. Layout
 
