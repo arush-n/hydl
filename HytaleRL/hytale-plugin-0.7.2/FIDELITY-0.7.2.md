@@ -1331,3 +1331,24 @@ claim-at-request start-at-next-drain split needs a state field (a constant +1 pu
 and 91); the shortbow's reset ammo (native 0 against the engine's 1) may not matter because the charging phase sets ammo 1
 from tick 2, which is unmeasured. Claim most likely wrong (agent): that the jump-armed rule holds for every landing (moving
 jumps, falls after a jump and knockback landings unmeasured); the force-pushed-state mechanism is section (o)'s inference.
+
+## (aa) Phase 4n: the ancient-steel crossbow rows are harness and expectation gaps, not bridge defects (2026-10-18; jar `56D2B532`; receipts `~/.claude/jobs/31947bd7/tmp/phase4n/receipts/`)
+
+Baseline on `56D2B532`, 8 tests, two seeds: the iron signature passes both seeds; the iron combo fails on its expectation
+(`combo.py` 625: damage [10, 10, 13] against [10, 10, 27]; hit ticks 100, 110 to 111, 120 to 122); the ancient-steel combo
+truncates with no hits both seeds; the ancient-steel signature fails at 82.0 against 105.0 both seeds.
+
+| Row | Finding | Status |
+|---|---|---|
+| ancient-steel combo, no hits | the three shots are admitted (123 / 133 / 143) and every flight ends `ProjectileMiss`: the arrow spawns at head pitch -44.7 degrees and lands about 1.35 blocks ahead (inferred from gravity 10 and speed about 40) while the Kweebec target stands 5.84 blocks ahead; the iron crossbow under the same duel harness misses identically (same pitch, three misses) and hits under the default harness. `aim_at_target` (`projectiles/harness/targeting.py` 265 to 311) steers yaw only with no alignment gate; the signature harness steers pitch to the target box and hits. Why the duel agent's pitch is -44.7 at the shot was not determined (the duel's ranged shoot state, inferred) | harness cause; no bridge change |
+| ancient-steel Big Arrow 82 | the installed 0.7.2 `Weapon_Crossbow_Ancient_Steel.json` authors `Signature_BigArrow_Damage` 82 (0.5.7: 123, which the simulator's `weapon_variants/hytale_0_5_7.py` 832 to 834 still carries as (16, 42, 123)); stage logs on a log-only scratch jar show the amount 82.0 unchanged from creation through the player filter (ABSOLUTE calculation, random 0, no impact modifiers, hits 0); the iron control applies 78.0 the same way. 123 times two thirds is 82 by coincidence; the asset states 82 | expectation gap (0.5.7 value) |
+| iron combo third contact | the server applies 13, the 0.7.2 authored value (0.5.7: 27); the test's 27 is stale | expectation gap |
+
+What a real player would see: the same authored base (iron 78, ancient steel 82) for the Big Arrow; attribute, armour or
+effect factors would change it (bytecode, inferred, not measured). Test and simulator changes that follow (this session's,
+not made here): `combo.py` 49 expected damage (10, 10, 27) to (10, 10, 13); the signature's ancient-steel expectation to 82
+(remaining health 23); the ancient-steel scalar row of `weapon_variants/hytale_0_5_7.py` (16, 42, 123) to the 0.7.2 (10.5, 14,
+82) with durability 180 to 500 and loss 0.28 to 0.17, which the renderer must reach through a construct since the module is
+shared; a pitch steer or alignment gate in `aim_at_target`. No bridge change; pin unchanged; no Java gates run. Claim most
+likely wrong (agent): that the -44.7 degree pitch is the sole reason the scalar shots miss, and that a real player's Big
+Arrow equals 82.

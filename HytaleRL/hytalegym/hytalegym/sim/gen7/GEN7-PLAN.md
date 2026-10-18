@@ -277,6 +277,11 @@ again on the third tick after touchdown (`landing_walk_resume`, a `CombatState` 
 cooldown, the attack start split and the shortbow reset ammo (findings recorded in the section); the player motion model's
 hold is unmeasured.
 
+**Phase 4n (2026-10-18; FIDELITY-0.7.2.md section (aa)).** The remaining crossbow rows are not bridge defects: the ancient-steel
+combo misses because the duel harness steers yaw only while the agent's head pitch is -44.7 degrees; the Big Arrow's 82 is the
+authored 0.7.2 value (0.5.7: 123) and the iron combo's 13 likewise (0.5.7: 27). The harness pitch steer, the test expectations and
+the ancient-steel values in the shared `weapon_variants` module are simulator-side items.
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the
