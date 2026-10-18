@@ -60,6 +60,11 @@ class Constructs:
     # PLAYER_JUMP_FORCE 11.8) or "native_npc" (sqrt(2 * gravity floor * jump height parameter) = 5.099,
     # the 0.7.2 NPC first-step vertical speed). Owner: sim/gen7/mechanics/npc_jump.py (phase 3b, row 1c).
     npc_walk_jump_velocity: str = "player_force"
+    # NPC learner (npc_walk) jump arc after the impulse: "constant_gravity" (HEAD: g over the current tick) or
+    # "physics_math" (0.7.2 MotionControllerWalk.computeNewFallSpeed: the previous tick's duration and
+    # PhysicsMath's cubic drag on the speed gained since takeoff). Owner: sim/gen7/mechanics/npc_jump_arc.py
+    # (row 1c, F1c).
+    npc_jump_arc: str = "constant_gravity"
     # Swing_Left and Swing_Right damage of every scalar dagger variant: "shared_rows" (the 0.5.7 tuples of the
     # shared weapon_variants module, HEAD) or "gen7_table" (the 0.7.2 item rows). Owner: sim/gen7/mechanics/
     # dagger_damage.py (phase 4, item 5c).

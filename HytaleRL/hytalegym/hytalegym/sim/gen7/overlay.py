@@ -73,6 +73,11 @@ _GUARD = (
     "the attack root runs cancels it (sword left onsets 2-5, sword down 2-12, mace 2-18, battleaxe down-left "
     "2-12), later it does not; plus test_native_shield_bash_resource_cost_matches_and_regen_phase_is_explicit"
 )
+_JUMP_ARC = (
+    "native_motion_differential --jump-steps 1 (ledge fixture, Kweebec_Razorleaf) on the gen-7 render against the "
+    "live 0.7.2 bridge, <= 5e-4 m and 1e-3 m/s per step; tests/sim/test_npc_jump_arc.py replays a live jump in "
+    "place"
+)
 _GUARD_NOTE = (
     "0.7.2 removes Rules.Interrupting [Primary] from this family's guard root "
     "(ASSET-DIFF-0.7.2.md:237-243, 266-322); the cancel now comes from the attack roots' InterruptedBy "
@@ -160,6 +165,21 @@ PATCHES = (
           "against native target_los; partial-box rays unmeasured (no fixture)",
           "the production perception opacity walk (jax/world/perception/los.py, visit) under the detail rule; the "
           "gen-5 walk is unchanged; cells without detail boxes keep the gen-5 opacity rule"),
+    Patch("npc_rejump_import", "combat/runtime/step.py",
+          "AGENT_ENTITY, GAIT_COUNT,", "AGENT_ENTITY, AGENT_MOTION_NPC_WALK, GAIT_COUNT,",
+          "1c", "with npc_rejump_after_landing", "the motion-model constant the re-jump patch reads"),
+    Patch("npc_rejump_after_landing", "combat/runtime/step.py",
+          "    grounded_jump = jump & state.agent_grounded & ~landing_recovery\n",
+          "    # 0.7.2 NPC walk controller (live jump-held captures): landing on tick L, the next jump on L + 1, with no\n"
+          "    # landing-recovery deferral; the player model keeps the deferral.\n"
+          "    grounded_jump = jump & state.agent_grounded & (\n"
+          "        ~landing_recovery | (params.agent_motion_model == jnp.int32(AGENT_MOTION_NPC_WALK))\n"
+          "    )\n",
+          "1c",
+          "native_motion_differential replays of the two live jump-held captures (jump-forward-30, "
+          "jump_in_place12): FAIL 0.30 / 0.18 m before, PASS (<= 1.1e-5 m) after, with the npc_jump_arc construct",
+          "the planar suppression on that tick (jump_recovery) stays; not modelled: native walks again only on "
+          "the third tick after landing (the engine on the first), which needs engine state"),
     Patch("crafting_table_capacity", "crafting/contract.py",
           "# Installed 0.5.7 has 403 explicit plus 1,544 item-generated recipes.\n"
           "RECIPE_TABLE_CAPACITY = 1947\n",
@@ -200,9 +220,19 @@ HOOKS = (
     Hook("npc_walk_jump_velocity", "combat/types.py", "default_combat_params",
          f"{_MECHANICS}.npc_jump:construct", "npc_walk_jump_velocity", "active", "1c",
          "native_motion_differential --jump-steps 1 on the gen-7 render against the live 0.7.2 bridge "
-         "(max position error <= 5e-4 m per step): first step exact; the bar is NOT met (residual is F1c, "
-         "previous-tick gravity), row 1c stays MISMATCH",
+         "(max position error <= 5e-4 m per step): first step exact; the rest of the arc is the npc_jump_arc "
+         "construct (F1c)",
          "npc_walk only: the player model keeps PLAYER_JUMP_FORCE 11.8; gen 5 keeps player_force"),
+    Hook("npc_jump_arc_previous_delta", "combat/runtime/step.py", "_microtick",
+         f"{_MECHANICS}.npc_jump_arc:capture_previous_delta", "npc_jump_arc", "active", "1c", _JUMP_ARC,
+         "holds the previous microtick's duration (state.last_motion_delta_seconds, which _microtick overwrites "
+         "before the agent moves) for the agent's motion; changes no state"),
+    Hook("npc_jump_arc_fall_speed", "combat/runtime/agent.py", "_tick_agent_geometry_motion",
+         f"{_MECHANICS}.npc_jump_arc:fall_speed_integration", "npc_jump_arc", "active", "1c", _JUMP_ARC,
+         "npc_walk jump rows of the legacy branch after the impulse: v_k = v_(k-1) - 32 (1 - |(v_(k-1) - v_jump) "
+         "/ T|^3) dt_(k-1), with T = 140.488 m/s from the agent bounds and the ModelAsset default PhysicsValues "
+         "(mass 68, drag 0.5); the walk controller's fall, knockback arcs, the no-geometry integrator and the "
+         "player model are unchanged"),
     Hook("dagger_swing_damage", PROFILE_JAX, "_scalar_variant_profile",
          f"{_MECHANICS}.dagger_damage:construct", "dagger_swing_damage", "active", "5c",
          "scalar dagger variants (15 materials) against the 0.7.2 item rows: JAX swing tuple equals the table, "

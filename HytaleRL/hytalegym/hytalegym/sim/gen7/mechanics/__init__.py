@@ -25,6 +25,7 @@ CONSTRUCT_MODULES = {
     "riding": "riding",
     "npc_velocity_model": "npc_velocity",
     "npc_walk_jump_velocity": "npc_jump",
+    "npc_jump_arc": "npc_jump_arc",
     "dagger_swing_damage": "dagger_damage",
     "guard_cancel_window": "guard_window",
     "native_binding_types": "native_bindings",

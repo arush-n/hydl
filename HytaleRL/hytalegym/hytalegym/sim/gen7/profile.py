@@ -38,6 +38,7 @@ PROFILE = SimProfile(
         riding=True,
         npc_velocity_model="role_set_velocity",
         npc_walk_jump_velocity="native_npc",
+        npc_jump_arc="physics_math",
         dagger_swing_damage="gen7_table",
         guard_cancel_window="attack_root",
         native_binding_types="item_interactions",
