@@ -1,0 +1,10 @@
+# The root and HytaleRL ignore rules for the 0.5.x plugin name
+# hytale-plugin/ explicitly, so they do not cover this sibling folder.
+build/
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+/*.json
+telemetry/
+mods/
+logs/
+.cache/

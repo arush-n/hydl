@@ -459,3 +459,24 @@ recorded here; the pins are not changed (P5).
 Gaps that remain: row 1c (committed jump impulse; an engine change for every generation, so an owner
 decision with these numbers), rows 1d, 1e and 2b (no fixture or no reader), and the production
 perception line of sight (`jax/world/perception/los.py`), which hook 2b does not cover.
+
+## (h) Phase 3b and phase 4 on the gen-7 render (2026-10-18; render pinned to 8707eec)
+
+Receipts: `~/.claude/jobs/31947bd7/tmp/phase4/` (`receipts/`, `jump/`, `los/`, `javap/`). Bridge: 0.7.2 jar 686BC4BC...0012 on 127.0.0.1:5556 (unchanged jar and pin). Only what ran is claimed.
+
+| Row | Differential (what ran) | Measured | Bar | Status |
+|---|---|---|---|---|
+| 1c | `adk/tools/native_motion_differential.py --jump-steps 1 --steps 12 --forward-steps 0`, gen-7 render, live | first jump step native = JAX (vy 5.09902; y 65.17525 both); max position error 0.02460 m | <= 5e-4 m | MISMATCH (first step matches; residual is F1c) |
+| 1c | same tool, `--steps 30 --jump-steps 1` (jump, then forward) | max position error 0.97770 m | <= 5e-4 m | MISMATCH |
+| 1c | arithmetic on both receipts (airborne steps) | native dv = -32 x previous dt, deviation <= 2.4e-4 m/s over 16 steps; current-dt deviation 0.01 to 0.21 m/s | - | cause F1c, confirmed by receipt arithmetic (no code experiment) |
+| 1d | jar scan of 38,436 classes (`slope_wall_key_scan_0722_jar.json`) | no 0.7.2 reader of the two keys; gen 7 `slope_limits` False | - | DECIDED no-op; no slope motion measured |
+| 1e | javap of `MotionControllerWalk.postReadPosition`: descend move clamped by `vy = min(vy, -fallSpeed * dt)` | code support for the premise | - | UNMEASURED (no stairs or slope fixture); not hooked |
+| 2b | captured live frames (`los_wall`, `los_diagonal_graze`, `los_diagonal_block`, seed 570057): world walk and production perception walk, gen-5 identity and gen-7 render | 3 of 3 match native `target_los` on both walks and both renders | every fixture ray (full cubes) | MATCH (full cubes) |
+| 2b | implementation check on the captured `half_block` frame (`Rock_Stone_Half` at (0,65,-2), bottom detail box) | ray over the box: visible under the rule, blocked under gen 5; ray through the box: blocked under both | no native oracle (not fidelity) | UNMEASURED (partial box, native) |
+| 5c | `tests/fidelity/test_jax_native_combat_compare._native_archetype_breadth_report`, all 15 scalar dagger profiles, gen-7 render, seeds 20260729 and the control seed (first contact damage) | native = JAX on both seeds for all 15 (bronze 5, mithril 12, crude 3, adamantite 9, ...) | damage exact | MATCH on the render, 15 of 15 (Iron not in this run) |
+| 5c | gen-5 identity render, bronze and mithril (control) | native 5 vs JAX 3 (bronze); native 12 vs JAX 8 (mithril) | damage exact | MISMATCH on gen 5 (the change is needed) |
+| 5c | `Weapon_Daggers_Void_Crystal` in the 0.7.2 table, no simulator variant row | - | - | ABSENT (not modelled) |
+
+**Contract note (the "learner-v3 actor-evidence contract mismatch" abort).** The bridge constant `CONTRACT_SHA256` D47E87B2 is the host hash only while the staged Region library `HytaleRL/artifacts/worldgen/region-library-pilot-v2/manifest.json` exists; that path is gitignored. Without it the host hash is B133A81 (reproduced on a `git archive HEAD`). With it: D47E87B2 on committed jax, the gen-5 render and the gen-7 render, and a live learner-v3 reset plus step passes on both renders. Native compares must run from a tree that has the artifact. A gen-7 library will change this identity.
+
+**Still open:** row 2b partial boxes (the bottom-box `Rock_Stone_Half` cannot be placed to separate the rules from the spawn geometry; needs a rotation API or an eye offset); row 1d slope motion; row 1e descent; row 1c residual (F1c, an engine-wide change needing the owner's decision); Part B constructs (hit interrupt, knockback model, mana, hookshot, dodge head, projectile tiers) not started.
