@@ -114,7 +114,11 @@ harness and the expectations are fixed on the gitignored tests (6 of 8 rows pass
 construct `crossbow_variant` (ancient steel 10.5 / 14 / 82 through a hook on the scalar variant profile) is being wired, then
 the gates and the eight-row live re-run; the kernel already rounds applied damage half up (kernel.py 320 to 322), so the test
 asserts the applied integer and no rounding construct exists. The lower-layer session moved `skill_agent` into subfolders
-(`1b2b780`); the stale document paths in this lane's files follow. Queued: the simulator half of #71, the terrain recapture itself, the stub mechanics (#69), a live Region-step run of the
+(`1b2b780`); the stale document paths in this lane's files follow. Two more lanes launched after the combined commit: a live
+Region-step run of the timed, processing and diagram executor paths on the gen-7 render (bridge 5560; the claim most likely
+wrong in (ac) and (ae); a versioned tests/sim test is the deliverable) and the simulator half of the shield-bash root (#71,
+bridge 5556: construct `shield_bash_fork`, the bash offered only under a held, active guard, as the bridge advertises since
+`bdb6245`). Queued: the simulator half of #71, the terrain recapture itself, the stub mechanics (#69), a live Region-step run of the
 timed executor path.
 Committed earlier: the
 crafting oracle stage 3 (`274aaec`, timed bench crafts with probe events; pin `5FE609E2`), phase 4j (`a534e83`: the Trork
