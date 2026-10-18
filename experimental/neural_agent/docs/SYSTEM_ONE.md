@@ -920,6 +920,18 @@ linguistic on the tick") is not misread:
   output, and 8B and 14B if the 4B misses a bar; bars kind 0.95, number exact 0.98, skill 0.90 over the
   real catalogue given in the prompt; latency reported, not traded against accuracy.
 
+**P6 result (2026-10-18; ledger).** Zero-shot, schema-constrained, on the 1,925 held-out wordings: condition kind
+0.9195 (0.6B, fail), 0.8951 (1.7B, fail), 0.9745 (4B, pass), 1.000 (8B and 14B, pass; every polarity pair exact);
+the number 0.982 to 1.000 (pass everywhere). Skill by intent text over the 119 real rows: 0.36, 0.66, 0.77, 0.78,
+0.88 from 0.6B to 14B, no size at the 0.90 bar, so 9.11 stands. End to end through the rule (M13) with the decoder's
+conditions and typed ids: 0.998 to 1.000 for 4B and above. A restate-then-emit second pass lowered kind at every
+size (it moves errors between wordings rather than fixing them). Latency, batch 1 on the Mac GPU, under load: per
+goal 241 ms (0.6B), 344 (1.7B), 589 (4B), 528 (8B), 999 (14B); per four-goal version 1.0 to 4.4 s. Reading: the
+words-only fallback, when a decoder is wanted at all, is the 8B through local Ollama; the pattern reader of 9.14 runs
+first and the typed fields remain the contract. Caveat from the experiment: the 1.000 rests on about 35 held-out
+templates of one generator; on the generator's other templates the 8B makes about 2 % errors, so real LLM-written
+conditions will likely read nearer 0.98 than 1.0. LoRA on the 1.7B is recorded as the next step, not run.
+
 ### 9.14 Patterned language: structure in the output, prompted not enforced (owner, 2026-10-18)
 
 Owner: "the issue is likely in the structuring not the actual models themselves ... they need to be structured in
