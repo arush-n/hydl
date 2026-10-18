@@ -145,7 +145,8 @@ vs Add needs a displacement harness; mana and runes need a mana readout the brid
 tiers cannot be measured while the shortbow registers no native hit (6a); the dodge head changes the learner
 contract. Those bridge-side pieces are phase 4b. Gates: tests/sim 89 passed with the identity file ignored; the
 identity gate 4 passed against 8707eec (36 min); against HEAD it failed to import until 6c0c33f (motion.py), and
-re-runs against that HEAD.
+passed against that HEAD as well (4 passed, 24 min, the coordinator's run): gen 5 renders bit-identical from the
+repaired HEAD.
 
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
