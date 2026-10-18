@@ -115,13 +115,28 @@ class CatalogueRow:
 def parse_catalogue(text: str) -> tuple[CatalogueRow, ...]:
     """Return the rows of the skill and activity tables under numbered sections (module docstring).
 
+    Since 2026-10-17 late (B5) the skill rows come from the skill agent's parser, the one reader of the
+    catalogue (``skill_agent/catalogue.py``): ids, group, description and kind letter are its. The activity
+    tables (header ``activity``) are read here, as before, with the ``sequence`` cell as the
+    description, because the matching rows keep the section title and the sequence as written (the
+    ``program of`` tables are skipped, as this module always skipped them, so the row count is the catalogue's). Document
+    order is kept: every activity table must follow the last skill table (true of the catalogue), so the row
+    indices that ``load_paraphrases`` keys on are unchanged. Tables whose header starts otherwise are skipped.
+
     Raises:
-        ValueError: If a row's cell count differs from its header's, an id is malformed or a kind is unknown.
+        ValueError: If a skill or activity row cannot be read (a cell count differs from its header's, an id
+            is malformed or a kind is unknown), or an activity table precedes a skill table.
     """
 
+    from experimental.neural_agent.skill_agent.catalogue import parse_catalogue as _parse_skill_rows
+
     rows: list[CatalogueRow] = []
+    skipped: set[str] = set()  # verbatim rows of the tables this module does not read
+    skill_lines: dict[str, tuple[int, list[str]]] = {}  # verbatim skill rows -> (line number, header)
+    activity_rows: list[CatalogueRow] = []
     group: str | None = None
     header: list[str] | None = None
+    seen_activity_table = False
     for number, line in enumerate(text.splitlines(), start=1):
         if line.startswith("#"):
             heading = _HEADING.match(line)
@@ -132,24 +147,60 @@ def parse_catalogue(text: str) -> tuple[CatalogueRow, ...]:
             continue
         cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
         if header is None:
-            header = cells if group is not None and cells[0] in ("skill", "activity") else []
+            header = cells if group is not None else []
+            if header and header[0] == "activity":
+                seen_activity_table = True
+            elif header and header[0] == "skill" and seen_activity_table:
+                raise ValueError(f"line {number}: a skill table after an activity table breaks the row order")
             continue
         if not header or set(line.strip()) <= set("|-: "):
+            continue
+        if header[0] not in ("skill", "activity"):
+            skipped.add(line)  # includes the "program of" tables, which the skill agent reads and this module never did
+            continue
+        if header[0] == "skill":
+            skill_lines[line] = (number, header)  # the skill agent's parser reads these
             continue
         if len(cells) != len(header):
             raise ValueError(f"line {number}: {len(cells)} cells under a header of {len(header)}")
         named = dict(zip(header, cells))
         ids = tuple(item.strip() for item in cells[0].split(","))
         if not all(_ID.match(item) for item in ids):
-            raise ValueError(f"line {number}: malformed skill ids {cells[0]!r}")
-        if header[0] == "activity":
-            kind, description = "A", named["sequence"]
-        else:
-            kind, description = (named["kind"].split() or [""])[0], named["what a person does"]
-        if kind not in ROW_KINDS:
-            raise ValueError(f"line {number}: unknown kind {named.get('kind')!r}; expected one of {ROW_KINDS}")
-        rows.append(CatalogueRow(ids, group, description, kind))
+            raise ValueError(f"line {number}: malformed activity ids {cells[0]!r}")
+        activity_rows.append(CatalogueRow(ids, group, named.get("sequence", ""), "A"))
+    catalogue = _parse_skill_rows(text)
+    for row in catalogue.unparsed_rows:
+        if row in skipped or _is_activity_row(row, activity_rows):
+            continue
+        raise ValueError(_why_unread(row, skill_lines))
+    for skill in catalogue.skills:
+        if skill.kind not in ROW_KINDS:
+            raise ValueError(f"unknown kind {skill.kind!r} on row {skill.ids}; expected one of {ROW_KINDS}")
+        rows.append(CatalogueRow(skill.ids, skill.group, skill.description, skill.kind))
+    rows.extend(activity_rows)
     return tuple(rows)
+
+
+def _why_unread(row: str, skill_lines: Mapping[str, tuple[int, list[str]]]) -> str:
+    """The reason a skill row was not read, in the words this module has always used."""
+
+    number, header = skill_lines.get(row, (0, []))
+    where = f"line {number}" if number else "a skill row"
+    cells = [cell.strip() for cell in row.strip().strip("|").split("|")]
+    if header and len(cells) != len(header):
+        return f"{where}: {len(cells)} cells under a header of {len(header)}"
+    ids = tuple(item.strip() for item in cells[0].split(","))
+    if not all(_ID.match(item) for item in ids):
+        return f"{where}: malformed skill ids {cells[0]!r}"
+    named = dict(zip(header, cells)) if header else {}
+    return f"{where}: unknown kind {named.get('kind')!r}; expected one of {ROW_KINDS}"
+
+
+def _is_activity_row(line: str, activity_rows: Sequence[CatalogueRow]) -> bool:
+    """True when ``line`` (a verbatim table row) is one of the activity rows read here."""
+
+    first = line.strip().strip("|").split("|")[0].strip()
+    return any(first == ", ".join(row.ids) or first == ",".join(row.ids) for row in activity_rows)
 
 
 def read_catalogue(path: Path | str = DEFAULT_CATALOGUE) -> tuple[CatalogueRow, ...] | None:
