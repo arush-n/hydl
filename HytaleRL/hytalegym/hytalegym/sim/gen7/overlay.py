@@ -220,6 +220,15 @@ HOOKS = (
          "for those attacks the boundary ends the Secondary window instead of opening it; not modelled: a Guard "
          "held through the end of an uncancelled attack never rises natively, and native admits an attack one "
          "tick before the engine's legality view (the first window tick)"),
+    Hook("native_binding_types", PROFILE_JAX, "hytale_0_5_7_native_profile_bindings",
+         f"{_MECHANICS}.native_bindings:construct", "native_binding_types", "active", "6c",
+         "the crossbow tests on the live 0.7.2 bridge (jar 32EF5EDD): the reload slot is advertised and its "
+         "Ability4 chain runs (tests/fidelity/combat/ability_lifecycle/test_native_crossbow_reload.py, "
+         "projectiles/crossbow)",
+         "names only: a binding takes its type from the 0.7.2 item's Interactions map where that map binds the "
+         "root under one other type (the two crossbow reloads, compact slot 2, and no other binding); the engine "
+         "keeps the reload's ordinal INTERACTION_TYPE_ABILITY3, which no ability mask references; Primary is "
+         "still not advertised during the native reload (bridge legality, FIDELITY-0.7.2.md (m), open)"),
     Hook("dodge_action_head", "combat/observation/v3/policy/layout.py", "split_locomotion_choice",
          f"{_MECHANICS}.dodge:construct", "dodge_action_head", "stub", "9",
          "test_native_policy_dodge_boundary_matches_advertised_capability and "

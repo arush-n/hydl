@@ -68,6 +68,11 @@ class Constructs:
     # any time, 0.5.x) or "attack_root" (0.7.2: the attack root's InterruptedBy [Secondary] cancels it only while
     # the root's RunTime runs). Owner: sim/gen7/mechanics/guard_window.py (row 5d).
     guard_cancel_window: str = "guard_root"
+    # Interaction type names the bridge gets for a profile's ability slots: "profile_sets" (the 0.5.7 membership
+    # sets of the profile module) or "item_interactions" (a bound root takes its type from the 0.7.2 item's
+    # Interactions map, which moves the crossbow reload from Ability3 to Ability4). Owner: sim/gen7/mechanics/
+    # native_bindings.py (row 6c).
+    native_binding_types: str = "profile_sets"
     # Walk controller while descending: "free_fall" (0.5.x) or
     # "minimum_descent_rate" (0.7.2 code change, unmeasured). P2.
     walk_descent: str = "free_fall"

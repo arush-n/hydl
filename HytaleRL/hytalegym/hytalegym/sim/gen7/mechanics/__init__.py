@@ -27,6 +27,7 @@ CONSTRUCT_MODULES = {
     "npc_walk_jump_velocity": "npc_jump",
     "dagger_swing_damage": "dagger_damage",
     "guard_cancel_window": "guard_window",
+    "native_binding_types": "native_bindings",
     "walk_descent": "walk_descent",
     "slope_limits": "slope_limits",
     "block_health_reset_on_write": "block_health",
