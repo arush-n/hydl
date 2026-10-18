@@ -46,6 +46,10 @@ and `TRAINING-0.7.2.md` (the measured 0.7.2 gameplay changes).
 - RULED (2026-10-18, late): skills train on the base NPC model, the body the bridge drives ("the base npc model
   is best (npc walking should just be an animation of it)"): the simulator's `npc_walk` motion model, with
   walking as one of its movement states and not a separate model. The `player` model is not a training target.
+- RULED (2026-10-18, late): neural skills exist to combine common behaviours and to be smarter than heuristics
+  ("otherwise we can just use a simple heuristic"). A neural skill that does not beat its heuristic on combined
+  requests, disturbances and unseen worlds is not shipped; the heuristic is (TRAINING_PLAN 1b, H10). The owner gave
+  the green light for the simple track (TRAINING_PLAN 2c to 2e).
 - RULED (2026-10-18, late): training starts only from a clear plan the owner has approved ("depends, you need
   to have a clear plan"): `TRAINING_PLAN.md`. The dataset smoke (`bc_smoke`, seconds) may be used where it
   helps ("your choice if it helps").

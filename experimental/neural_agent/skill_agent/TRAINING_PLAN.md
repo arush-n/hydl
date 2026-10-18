@@ -30,6 +30,33 @@ native-trace warm starts, inside the 30 Hz budget? And can the library grow with
 | H7 | The framework is chosen by measured speed | E11 | lane-steps per second on this machine decide | JAX (the default) |
 | H8 | Results hold under legal perception | E12 | success reported at FOV16 and FOV32 with occlusion; no privileged input | fix the input, never the test |
 | H9 | A frozen verb stays bit-identical with real weights | E13 | outputs bit-identical, suite numbers unchanged | separate networks for that body |
+| H10 | The student is smarter than the heuristic: it beats the scripted teachers on combined requests, disturbances and unseen worlds | section 1b | higher success, or equal success at lower cost, by 2 SE | the heuristic ships for that skill |
+
+## 1b. Why neural at all: the bar a neural skill must clear (owner, 2026-10-18)
+
+The owner: "the goal of having these neural agents instead of normal heuristic actions is that it can combine these
+common behaviors to be more complex, otherwise we can just use a simple heuristic; the goal of the low level neural is
+that it is smarter in a sense."
+
+So:
+- **Teachers are scaffolding.** A scripted teacher gives a fast, correct start. A student that only matches its
+  script has not justified itself, because the script could ship instead.
+- **H10, the bar.** On suites the scripts were not built for, the student beats the heuristic: the scripted
+  teachers run directly through the combiner. The suites:
+  - (a) combined requests, several at once, where scripts ignore or fight each other: walk while looking while
+    avoiding a hazard; strafe while aiming; chase while dodging;
+  - (b) disturbances: a target that moves or hides, an interruption, a push, an obstacle appearing mid-path, an enemy
+    arriving;
+  - (c) unseen worlds and openings;
+  - (d) cost: time to success, damage taken, stalls.
+- **Pass:** higher success, or equal success at a lower cost, on (a) to (c), separated by 2 SE. A skill whose student
+  does not beat its heuristic ships the heuristic, and the finding goes to TRAINING_NEEDS.
+- **Where the gain comes from:**
+  - one network learning every skill together;
+  - RL practice on combined and disturbed tasks (stage 3), where the student must get ahead of its teachers;
+  - variety of worlds and requests.
+
+  Distillation only gets the student started. The combined and disturbed suites are built in S4.
 
 ## 2. Fixed choices
 
