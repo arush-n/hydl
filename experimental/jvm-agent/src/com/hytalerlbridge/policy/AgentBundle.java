@@ -7,6 +7,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,12 +34,19 @@ import java.util.Map;
  * <p>Old and hand-assembled directories fail closed.  A v1 manifest could
  * validate widths while same-shaped tensor bytes were swapped underneath it;
  * absence is therefore no longer treated as permission to run an unverified
- * policy. Export the bundle again to produce the v4 tensor, training, and
+ * policy. Export again to produce the v6 tensor, training, ABI, action-scope, and
  * role/profile compatibility identity.
  */
 public final class AgentBundle {
 
-    public static final String SCHEMA = "hytalerl_policy_agent_bundle_v4";
+    public static final String SCHEMA = "hytalerl_policy_agent_bundle_v6";
+    public static final String POLICY_ACTION_SCOPE_SCHEMA =
+        "arena-factored-action-scope-v1";
+    public static final String POLICY_ACTION_SCOPE_IDENTITY_SCHEMA =
+        "hytalerl_policy_action_scope_identity_v1";
+    /** Stable Java projection/action semantics supported by this implementation. */
+    public static final String SUPPORTED_POLICY_PROJECTION_ABI =
+        "hytalerl_arsenal_jvm_projection_abi_v1";
     public static final String TRAINING_PROVENANCE_SCHEMA =
         "hytalerl_policy_training_provenance_v1";
 
@@ -50,18 +59,6 @@ public final class AgentBundle {
         ObservationAssembler.OBSERVATION_SIZE;
     public static final int EXPECTED_ACTIONS =
         java.util.Arrays.stream(Policy.HEAD_SIZES).sum();
-    // Current Gym policy identity; regenerated with the Java projection.
-    //
-    // Re-keyed 2026-08-22 from E6D705C3... to the digest the Gym publishes now.
-    // Unlike the widths above this cannot be derived on the Java side -- the
-    // digest is computed by the Python contract -- so it is the one pin here
-    // that must be updated by hand when the contract moves. Read the current
-    // value from `current_combat_checkpoint_contract()["observation_contract_sha256"]`
-    // or from any freshly exported bundle's `agent.json`; a stale value makes
-    // the plugin refuse every current bundle and report itself inert.
-    public static final String EXPECTED_POLICY_CONTRACT =
-        "1F21B0488BFA1A14A217460A339FBAAB4665EF070AF0982BA35BBF6E64CE6497";
-
     private final Map<String, String> fields;
     private final boolean present;
     private final Path directory;
@@ -118,6 +115,25 @@ public final class AgentBundle {
         return fields.getOrDefault("checkpoint_sha256", "");
     }
 
+    /** Allowed action choices declared by the validated training bundle. */
+    public boolean[] actionScopeMask() {
+        String bits = fields.get("policy_action_scope_bits");
+        if (bits == null || bits.length() != EXPECTED_ACTIONS) {
+            throw new IllegalStateException(
+                "validated bundle has no correctly-sized policy_action_scope_bits");
+        }
+        boolean[] mask = new boolean[bits.length()];
+        for (int index = 0; index < bits.length(); index++) {
+            char value = bits.charAt(index);
+            if (value != '0' && value != '1') {
+                throw new IllegalStateException(
+                    "validated bundle has malformed policy_action_scope_bits");
+            }
+            mask[index] = value == '1';
+        }
+        return mask;
+    }
+
     private int intField(String key) {
         String value = fields.get(key);
         if (value == null) {
@@ -145,10 +161,13 @@ public final class AgentBundle {
     /**
      * Every reason this bundle should not arm. Empty means safe to run.
      *
-     * <p>Checks the declared contract against both the pinned widths and the
+     * <p>Checks the declared contract against the supported widths and the
      * runtime that was actually loaded, because those can disagree in either
      * direction: a manifest can lie about weights, and weights can be swapped
-     * under a correct manifest.
+     * under a correct manifest. The Python exporter validates the semantic
+     * contract against the current Gym and profile; Java requires that identity
+     * to be canonical, to use this Java projection ABI, and to identify the
+     * same policy in its observation, action, and live-profile metadata.
      */
     public List<String> problems(PolicyRuntime runtime) {
         List<String> problems = new ArrayList<>();
@@ -243,17 +262,89 @@ public final class AgentBundle {
         }
         String observationContract = fields.get("observation_contract_sha256");
         String actionContract = fields.get("action_contract_sha256");
+        String projectionAbi = fields.get("policy_projection_abi");
+        if (!SUPPORTED_POLICY_PROJECTION_ABI.equals(projectionAbi)) {
+            problems.add("policy_projection_abi '" + projectionAbi
+                + "' is unsupported; supported value is "
+                + SUPPORTED_POLICY_PROJECTION_ABI);
+        }
         if (observationContract == null || actionContract == null) {
             problems.add("bundle has no exact observation/action contract identity");
         } else {
-            if (!observationContract.equals(EXPECTED_POLICY_CONTRACT)) {
-                problems.add("observation contract " + observationContract
-                    + " != " + EXPECTED_POLICY_CONTRACT);
+            boolean observationIdentityValid = isCanonicalSha256(
+                observationContract);
+            boolean actionIdentityValid = isCanonicalSha256(actionContract);
+            if (!observationIdentityValid) {
+                problems.add("observation contract SHA-256 is malformed");
             }
-            if (!actionContract.equals(EXPECTED_POLICY_CONTRACT)) {
-                problems.add("action contract " + actionContract
-                    + " != " + EXPECTED_POLICY_CONTRACT);
+            if (!actionIdentityValid) {
+                problems.add("action contract SHA-256 is malformed");
             }
+            if (observationIdentityValid && actionIdentityValid
+                    && !observationContract.equals(actionContract)) {
+                problems.add("observation/action contract identities differ");
+            }
+        }
+        String actionScopeSchema = fields.get("policy_action_scope_schema");
+        if (!POLICY_ACTION_SCOPE_SCHEMA.equals(actionScopeSchema)) {
+            problems.add("policy_action_scope_schema '" + actionScopeSchema
+                + "' is unsupported; supported value is '"
+                + POLICY_ACTION_SCOPE_SCHEMA + "'");
+        }
+        String actionScopeIdentitySchema = fields.get(
+            "policy_action_scope_identity_schema");
+        if (!POLICY_ACTION_SCOPE_IDENTITY_SCHEMA.equals(
+                actionScopeIdentitySchema)) {
+            problems.add("policy_action_scope_identity_schema '"
+                + actionScopeIdentitySchema
+                + "' is unsupported; supported value is '"
+                + POLICY_ACTION_SCOPE_IDENTITY_SCHEMA + "'");
+        }
+        String actionScopeBits = fields.get("policy_action_scope_bits");
+        boolean actionScopeBitsValid = actionScopeBits != null
+            && actionScopeBits.length() == actions;
+        if (!actionScopeBitsValid) {
+            problems.add("policy_action_scope_bits width "
+                + (actionScopeBits == null ? -1 : actionScopeBits.length())
+                + " != action_mask_size " + actions);
+        } else {
+            int offset = 0;
+            for (int head = 0; head < Policy.HEAD_SIZES.length; head++) {
+                int size = Policy.HEAD_SIZES[head];
+                boolean headHasChoice = false;
+                for (int choice = 0; choice < size; choice++) {
+                    char bit = actionScopeBits.charAt(offset + choice);
+                    if (bit != '0' && bit != '1') {
+                        actionScopeBitsValid = false;
+                        problems.add("policy_action_scope_bits contains a value "
+                            + "other than 0/1 at index " + (offset + choice));
+                        break;
+                    }
+                    headHasChoice |= bit == '1';
+                }
+                if (!headHasChoice) {
+                    problems.add("policy_action_scope_bits leaves action head "
+                        + head + " with no permitted choices");
+                }
+                offset += size;
+            }
+        }
+        String actionScopeSha = fields.get("policy_action_scope_sha256");
+        if (!isCanonicalSha256(actionScopeSha == null ? "" : actionScopeSha)) {
+            problems.add("policy_action_scope_sha256 is malformed");
+        } else if (actionScopeBitsValid
+                && POLICY_ACTION_SCOPE_SCHEMA.equals(actionScopeSchema)
+                && isCanonicalSha256(actionContract == null ? "" : actionContract)) {
+            String expectedScopeSha = policyActionScopeIdentitySha256(
+                actionScopeSchema, actionContract, actionScopeBits);
+            if (!actionScopeSha.equals(expectedScopeSha)) {
+                problems.add("policy_action_scope_sha256 does not match "
+                    + "the declared action contract and allowed choices");
+            }
+        }
+        if ("live".equals(fields.get("deployment_profile_mode"))) {
+            checkLiveProfileIdentity(
+                problems, observationContract, projectionAbi);
         }
         if (runtime != null) {
             if (observation > 0 && observation != runtime.observationSize()) {
@@ -315,5 +406,87 @@ public final class AgentBundle {
             }
         }
         return true;
+    }
+
+    private static String policyActionScopeIdentitySha256(
+        String scopeSchema,
+        String actionContractSha256,
+        String maskBits
+    ) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update("HYTALERL_POLICY_ACTION_SCOPE\0"
+                .getBytes(StandardCharsets.UTF_8));
+            digest.update(scopeSchema.getBytes(StandardCharsets.UTF_8));
+            digest.update((byte) 0);
+            digest.update(actionContractSha256.getBytes(StandardCharsets.US_ASCII));
+            digest.update((byte) 0);
+            digest.update(maskBits.getBytes(StandardCharsets.US_ASCII));
+            return java.util.HexFormat.of().withUpperCase().formatHex(
+                digest.digest());
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new AssertionError(impossible);
+        }
+    }
+
+    private void checkLiveProfileIdentity(
+        List<String> problems,
+        String expectedPolicyContract,
+        String expectedProjectionAbi
+    ) {
+        Path manifest = directory.resolve("profile/profile.json");
+        if (!Files.isRegularFile(manifest)) {
+            problems.add("live profile has no profile/profile.json identity");
+            return;
+        }
+        try {
+            String json = Files.readString(manifest, StandardCharsets.UTF_8);
+            String profileContract = jsonStringField(
+                json, "arsenal_policy_contract_sha256");
+            String profileAbi = jsonStringField(json, "policy_projection_abi");
+            if (!java.util.Objects.equals(expectedPolicyContract, profileContract)) {
+                problems.add("live profile arsenal_policy_contract_sha256 "
+                    + "does not match the bundle observation contract");
+            }
+            if (!java.util.Objects.equals(expectedProjectionAbi, profileAbi)) {
+                problems.add("live profile policy_projection_abi '" + profileAbi
+                    + "' does not match bundle ABI '" + expectedProjectionAbi
+                    + "'");
+            }
+        } catch (IOException | IllegalArgumentException error) {
+            problems.add("live profile identity cannot be verified: "
+                + error.getMessage());
+        }
+    }
+
+    private static String jsonStringField(String json, String key)
+            throws IOException {
+        String marker = "\"" + key + "\"";
+        int at = json.indexOf(marker);
+        if (at < 0) {
+            return null;
+        }
+        if (json.indexOf(marker, at + marker.length()) >= 0) {
+            throw new IOException("profile.json repeats field '" + key + "'");
+        }
+        int colon = json.indexOf(':', at + marker.length());
+        if (colon < 0) {
+            throw new IOException("profile.json field '" + key + "' is malformed");
+        }
+        int start = colon + 1;
+        while (start < json.length()
+                && Character.isWhitespace(json.charAt(start))) {
+            start++;
+        }
+        if (start >= json.length() || json.charAt(start) != '"') {
+            throw new IOException("profile.json field '" + key
+                + "' is not a string");
+        }
+        int end = json.indexOf('"', start + 1);
+        if (end < 0 || json.substring(start + 1, end).indexOf('\\') >= 0) {
+            throw new IOException("profile.json field '" + key
+                + "' is not a plain string");
+        }
+        return json.substring(start + 1, end);
     }
 }

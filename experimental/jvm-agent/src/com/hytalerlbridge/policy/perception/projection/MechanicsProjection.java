@@ -6,8 +6,15 @@ public final class MechanicsProjection {
     public static final int ENTITY_COUNT = 2;
     public static final int RESOURCE_COUNT = 7;
     public static final int RESOURCE_VALUES = ENTITY_COUNT * RESOURCE_COUNT;
-    public static final int DEFENSE_FEATURES = 7;
+    /**
+     * Learner-v3 defensive columns, in the exact JAX encoder order:
+     * guard, stamina-broken, dodge-invulnerability, applied-force speed,
+     * stamina-regeneration delay, control immunity, alive, locomotion stamina.
+     */
+    public static final int DEFENSE_FEATURES = 8;
     public static final int DEFENSE_VALUES = ENTITY_COUNT * DEFENSE_FEATURES;
+    /** Authored player locomotion-stamina maximum from Hytale 0.5.7. */
+    public static final float LOCOMOTION_STAMINA_MAXIMUM = 10.0f;
     public static final float CONTROL_IMMUNITY_MAXIMUM = 100.0f;
     public static final int STATUS_CAPACITY = 8;
     public static final int STATUS_FEATURES = 6;
@@ -107,7 +114,7 @@ public final class MechanicsProjection {
         }
     }
 
-    /** Raw entity-major fields used by the seven defense columns. */
+    /** Raw entity-major fields used by the eight defense columns. */
     public record DefenseInput(
         boolean[] guardActive,
         boolean[] staminaBroken,
@@ -117,7 +124,8 @@ public final class MechanicsProjection {
         float[] dodgeForce,
         float[] staminaRegenDelay,
         float[] controlImmunity,
-        float[] health
+        float[] health,
+        float[] locomotionStamina
     ) {
         public DefenseInput {
             requireEntityWidth(guardActive, "guardActive");
@@ -131,6 +139,7 @@ public final class MechanicsProjection {
             requireEntityWidth(staminaRegenDelay, "stamina regen delay");
             requireEntityWidth(controlImmunity, "control immunity");
             requireEntityWidth(health, "health");
+            requireEntityWidth(locomotionStamina, "locomotion stamina");
             guardActive = guardActive.clone();
             staminaBroken = staminaBroken.clone();
             dodgeInvulnerabilityRemaining = dodgeInvulnerabilityRemaining.clone();
@@ -140,6 +149,7 @@ public final class MechanicsProjection {
             staminaRegenDelay = staminaRegenDelay.clone();
             controlImmunity = controlImmunity.clone();
             health = health.clone();
+            locomotionStamina = locomotionStamina.clone();
         }
     }
 
@@ -245,7 +255,7 @@ public final class MechanicsProjection {
         return new ResourceResult(values, mask);
     }
 
-    /** Match the seven learner-v3 defensive-mechanics columns per entity. */
+    /** Match the eight learner-v3 defensive-mechanics columns per entity. */
     public static DefenseResult defense(DefenseInput input) {
         float[] values = new float[DEFENSE_VALUES];
         for (int entity = 0; entity < ENTITY_COUNT; entity++) {
@@ -259,13 +269,17 @@ public final class MechanicsProjection {
             values[at + 1] = input.staminaBroken()[entity] ? 1.0f : 0.0f;
             values[at + 2] = input.dodgeInvulnerabilityRemaining()[entity]
                 / Math.max(input.dodgeInvulnerabilityDuration()[entity], 1.0e-6f);
-            values[at + 3] = speed
-                / Math.max(input.dodgeForce()[entity], 1.0e-6f);
+            values[at + 3] = Math.max(0.0f, Math.min(
+                1.0f, speed / Math.max(input.dodgeForce()[entity], 1.0e-6f)));
             values[at + 4] = Math.max(-1.0f, Math.min(
                 0.0f, input.staminaRegenDelay()[entity] / 2.0f));
             values[at + 5] = input.controlImmunity()[entity]
                 / CONTROL_IMMUNITY_MAXIMUM;
             values[at + 6] = input.health()[entity] > 0.0f ? 1.0f : 0.0f;
+            values[at + 7] = Math.max(-1.0f, Math.min(
+                1.0f,
+                input.locomotionStamina()[entity]
+                    / LOCOMOTION_STAMINA_MAXIMUM));
         }
         return new DefenseResult(values);
     }

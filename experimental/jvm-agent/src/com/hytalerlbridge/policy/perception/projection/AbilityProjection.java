@@ -18,6 +18,7 @@ public final class AbilityProjection {
     public static final int RESOURCE_COST_NATIVE_NPC_INSTANT_ADD_STAT = 2;
     public static final int
         RESOURCE_COST_NATIVE_NPC_INSTANT_ADD_STAT_STAMINA_BREAK_IMMUNE = 3;
+    public static final int RESOURCE_COST_SINGLE_APPLICATION_STAMINA_BREAK_IMMUNE = 4;
     public static final int NATIVE_NPC_INSTANT_ADD_STAT_APPLICATIONS = 2;
 
     /**
@@ -43,7 +44,8 @@ public final class AbilityProjection {
         boolean[] authoredAbilityMask,
         boolean[] equipped,
         boolean[] overflow,
-        boolean[] legal
+        boolean[] legal,
+        int[] weaponFamily
     ) {
         public Input {
             require(resources.length, RESOURCE_VALUE_COUNT, "resources");
@@ -63,6 +65,7 @@ public final class AbilityProjection {
             require(equipped.length, ENTITY_COUNT, "equipped");
             require(overflow.length, ENTITY_COUNT, "overflow");
             require(legal.length, SLOT_COUNT, "legal");
+            require(weaponFamily.length, ENTITY_COUNT, "weapon family");
             resources = resources.clone();
             resourceSpan = resourceSpan.clone();
             abilityDurationSeconds = abilityDurationSeconds.clone();
@@ -77,6 +80,7 @@ public final class AbilityProjection {
             equipped = equipped.clone();
             overflow = overflow.clone();
             legal = legal.clone();
+            weaponFamily = weaponFamily.clone();
         }
     }
 
@@ -124,6 +128,7 @@ public final class AbilityProjection {
         boolean[] authoredMask = input.authoredAbilityMask();
         boolean[] equipped = input.equipped();
         boolean[] overflow = input.overflow();
+        int[] weaponFamily = input.weaponFamily();
 
         float[] values = new float[VALUE_COUNT];
         boolean[] mask = new boolean[SLOT_COUNT];
@@ -142,6 +147,7 @@ public final class AbilityProjection {
             for (int localSlot = 0; localSlot < ABILITY_CAPACITY; localSlot++) {
                 int slot = entitySlot + localSlot;
                 mask[slot] = authoredMask[slot]
+                    && !isCrossbowFamily(weaponFamily[entity], localSlot)
                     && equipped[entity]
                     && !overflow[entity];
                 if (!mask[slot]) {
@@ -180,12 +186,25 @@ public final class AbilityProjection {
         if (kind == RESOURCE_COST_SINGLE_APPLICATION) {
             return 1.0f;
         }
+        if (kind == RESOURCE_COST_SINGLE_APPLICATION_STAMINA_BREAK_IMMUNE) {
+            return 1.0f;
+        }
         if (kind == RESOURCE_COST_NATIVE_NPC_INSTANT_ADD_STAT
             || kind
                 == RESOURCE_COST_NATIVE_NPC_INSTANT_ADD_STAT_STAMINA_BREAK_IMMUNE) {
             return NATIVE_NPC_INSTANT_ADD_STAT_APPLICATIONS;
         }
         return 0.0f;
+    }
+
+    /**
+     * Crossbow slots 1 and 3 are authored internal children of the public
+     * Primary selector. The JAX policy surface hides those children while the
+     * native graph may still use them internally.
+     */
+    private static boolean isCrossbowFamily(int family, int localSlot) {
+        boolean crossbow = family == 6 || family == 105;
+        return crossbow && (localSlot == 1 || localSlot == 3);
     }
 
     private static float clip(float value) {

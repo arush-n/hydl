@@ -126,6 +126,9 @@ def _write_profile_metadata(
     from hytalegym.jax.combat.observation.v3.policy import (
         arsenal_policy_contract_sha256,
     )
+    from hytalegym.jax.combat.observation.v3.policy.layout import (
+        ARSENAL_POLICY_JVM_PROJECTION_ABI,
+    )
     from hytalegym.jax.combat.observation.v3.native.codec.decode import (
         _status_programs,
     )
@@ -189,9 +192,13 @@ def _write_profile_metadata(
         if len(native.abilities) != len(native.authored_ability_slots):
             raise SystemExit(
                 f"{actor} native ability bindings lost slot identity")
-        for slot, binding in zip(
-            native.authored_ability_slots, native.abilities, strict=True
+        for slot, native_slot in enumerate(
+            native.authored_to_native_ability_slots
         ):
+            native_slot = int(native_slot)
+            if native_slot < 0:
+                continue
+            binding = native.abilities[native_slot]
             binding_lines.append(
                 "\t".join((
                     actor,
@@ -248,6 +255,7 @@ def _write_profile_metadata(
         "observation_size": int(observation_size),
         "action_size": int(action_size),
         "arsenal_policy_contract_sha256": arsenal_policy_contract_sha256(),
+        "policy_projection_abi": ARSENAL_POLICY_JVM_PROJECTION_ABI,
         "jax_backend": jax.default_backend(),
         "content_sha256": identity.hexdigest().upper(),
     }

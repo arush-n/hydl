@@ -62,10 +62,13 @@ from .tensor_identity import (
 )
 
 
-BUNDLE_SCHEMA = "hytalerl_policy_agent_bundle_v4"
+BUNDLE_SCHEMA = "hytalerl_policy_agent_bundle_v6"
 TRAINING_PROVENANCE_SCHEMA = "hytalerl_policy_training_provenance_v1"
+POLICY_ACTION_SCOPE_IDENTITY_SCHEMA = "hytalerl_policy_action_scope_identity_v1"
 BRIDGE_TARGET_SCHEMA = "hytalerl_policy_bridge_target_v1"
 BRIDGE_TARGET_FILE = "bridge-target.txt"
+_POLICY_ACTION_SCOPE_HASH_DOMAIN = b"HYTALERL_POLICY_ACTION_SCOPE\0"
+_LEGACY_PURSUIT_RUN_SCHEMA = "arena-recurrent-pursuit-run-v16"
 BRIDGE_TARGET_KEYS = (
     "schema",
     "content_sha256",
@@ -99,12 +102,298 @@ def _is_canonical_sha256(value: object) -> bool:
     )
 
 
+def _canonical_json(value: object) -> str:
+    return json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    )
+
+
+def _policy_action_scope_identity_sha256(
+    scope_schema: str,
+    action_contract_sha256: str,
+    mask_bits: str,
+) -> str:
+    digest = hashlib.sha256(_POLICY_ACTION_SCOPE_HASH_DOMAIN)
+    digest.update(scope_schema.encode("utf-8"))
+    digest.update(b"\0")
+    digest.update(action_contract_sha256.encode("ascii"))
+    digest.update(b"\0")
+    digest.update(mask_bits.encode("ascii"))
+    return digest.hexdigest().upper()
+
+
+def _normalize_policy_action_scope(
+    value: object,
+    *,
+    action_contract_sha256: object,
+    expected_scope_sha256: object | None = None,
+) -> dict[str, object]:
+    from arena.training.skills.program import (
+        FACTORED_ACTION_SCOPE_SCHEMA,
+        FactoredActionScope,
+    )
+    from hytalegym.jax.combat.observation.v3.policy import (
+        ARSENAL_POLICY_ACTION_HEAD_NAMES,
+        ARSENAL_POLICY_ACTION_HEAD_SIZES,
+    )
+
+    if not isinstance(value, dict):
+        raise ValueError("policy_action_scope is missing or is not an object")
+    scope_schema = value.get("schema")
+    if scope_schema != FACTORED_ACTION_SCOPE_SCHEMA:
+        raise ValueError(
+            "policy_action_scope.schema "
+            f"{scope_schema!r} is unsupported; supported value is "
+            f"{FACTORED_ACTION_SCOPE_SCHEMA!r}"
+        )
+    if not isinstance(action_contract_sha256, str) or not _is_canonical_sha256(
+        action_contract_sha256
+    ):
+        raise ValueError("action_contract_sha256 is missing or malformed")
+
+    heads = value.get("heads")
+    if not isinstance(heads, (list, tuple)) or len(heads) != len(
+        ARSENAL_POLICY_ACTION_HEAD_NAMES
+    ):
+        raise ValueError(
+            "policy_action_scope.heads must declare every supported action head"
+        )
+    allowed_choices = []
+    for index, (head, name, size) in enumerate(
+        zip(
+            heads,
+            ARSENAL_POLICY_ACTION_HEAD_NAMES,
+            ARSENAL_POLICY_ACTION_HEAD_SIZES,
+            strict=True,
+        )
+    ):
+        if not isinstance(head, dict):
+            raise ValueError(f"policy_action_scope.heads[{index}] is not an object")
+        if head.get("name") != name:
+            raise ValueError(
+                f"policy_action_scope.heads[{index}].name "
+                f"{head.get('name')!r} is unsupported; supported value is {name!r}"
+            )
+        if type(head.get("size")) is not int or head["size"] != size:
+            raise ValueError(
+                f"policy_action_scope.heads[{index}].size "
+                f"{head.get('size')!r} is unsupported; supported value is {size}"
+            )
+        choices = head.get("allowed_choices")
+        if not isinstance(choices, (list, tuple)):
+            raise ValueError(
+                f"policy_action_scope.heads[{index}].allowed_choices must be a list"
+            )
+        allowed_choices.append(tuple(choices))
+
+    try:
+        scope = FactoredActionScope(tuple(allowed_choices), schema=scope_schema)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"policy_action_scope is invalid: {error}") from error
+    normalized_manifest = json.loads(_canonical_json(scope.manifest()))
+    if _canonical_json(value) != _canonical_json(normalized_manifest):
+        raise ValueError(
+            "policy_action_scope contains unsupported or inconsistent fields"
+        )
+    if scope.manifest()["action_contract_sha256"] != action_contract_sha256:
+        raise ValueError(
+            "policy_action_scope.action_contract_sha256 does not match "
+            "transfer_contract.action_contract_sha256"
+        )
+    if expected_scope_sha256 is not None and expected_scope_sha256 != (
+        scope.contract_sha256
+    ):
+        raise ValueError(
+            "policy_action_scope_sha256 does not match the declared scope manifest"
+        )
+
+    mask_bits = "".join(
+        "1" if choice in choices else "0"
+        for size, choices in zip(
+            ARSENAL_POLICY_ACTION_HEAD_SIZES,
+            scope.allowed_choices,
+            strict=True,
+        )
+        for choice in range(size)
+    )
+    return {
+        "manifest": normalized_manifest,
+        "contract_sha256": scope.contract_sha256,
+        "identity": {
+            "schema": POLICY_ACTION_SCOPE_IDENTITY_SCHEMA,
+            "mask_bits": mask_bits,
+            "content_sha256": _policy_action_scope_identity_sha256(
+                scope_schema,
+                action_contract_sha256,
+                mask_bits,
+            ),
+        },
+    }
+
+
+def _full_policy_action_scope() -> dict[str, object]:
+    from arena.training.skills.program import FactoredActionScope
+    from hytalegym.jax.combat.observation.v3.policy import (
+        ARSENAL_POLICY_ACTION_HEAD_SIZES,
+    )
+
+    return FactoredActionScope(
+        tuple(tuple(range(size)) for size in ARSENAL_POLICY_ACTION_HEAD_SIZES)
+    ).manifest()
+
+
+def _legacy_pursuit_action_scope(
+    checkpoint: Path,
+    checkpoint_metadata: Mapping[str, object],
+    training_report: Path,
+) -> tuple[dict[str, object], str]:
+    try:
+        report = json.loads(training_report.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"training report is unreadable: {error}") from error
+    if not isinstance(report, dict) or report.get("schema") != (
+        _LEGACY_PURSUIT_RUN_SCHEMA
+    ):
+        schema = report.get("schema") if isinstance(report, dict) else None
+        raise ValueError(
+            "training report has no policy_action_scope and no supported "
+            f"legacy adapter for schema {schema!r}"
+        )
+
+    checkpoint_sha256 = _digest(checkpoint)
+    report_checkpoint = report.get("checkpoint")
+    report_checkpoint_sha256 = (
+        report_checkpoint.get("sha256")
+        if isinstance(report_checkpoint, dict)
+        else None
+    )
+    lineage = checkpoint_metadata.get("certification_lineage")
+    lineage_sha256 = (
+        lineage.get("source_sha256") if isinstance(lineage, dict) else None
+    )
+    if report_checkpoint_sha256 not in {checkpoint_sha256, lineage_sha256}:
+        raise ValueError(
+            "training report checkpoint SHA-256 does not identify this "
+            "checkpoint or its certified source"
+        )
+
+    selection = report.get("selection")
+    settings = report.get("settings")
+    contracts = report.get("contracts")
+    if not all(isinstance(value, dict) for value in (selection, settings, contracts)):
+        raise ValueError("training report is missing selection/settings/contracts")
+    selected_update = selection.get("selected_update")
+    if type(selected_update) is not int or selected_update != checkpoint_metadata.get(
+        "selected_update"
+    ):
+        raise ValueError(
+            "training report selected_update does not match checkpoint metadata"
+        )
+    batch = settings.get("batch")
+    rollout_steps = settings.get("rollout_steps")
+    if type(batch) is not int or type(rollout_steps) is not int:
+        raise ValueError("training report batch/rollout_steps are not integers")
+    selected_steps = selected_update * batch * rollout_steps
+    if (
+        checkpoint_metadata.get("selected_environment_steps") != selected_steps
+        or checkpoint_metadata.get("environment_steps") != selected_steps
+    ):
+        raise ValueError(
+            "training report environment steps do not match checkpoint metadata"
+        )
+
+    report_stage = contracts.get("stage")
+    report_stage_sha256 = contracts.get("stage_sha256")
+    metadata_stage = checkpoint_metadata.get("pursuit_stage")
+    metadata_stage_sha256 = checkpoint_metadata.get("pursuit_stage_sha256")
+    if (
+        not isinstance(report_stage, dict)
+        or _canonical_json(report_stage) != _canonical_json(metadata_stage)
+        or report_stage_sha256 != metadata_stage_sha256
+    ):
+        raise ValueError(
+            "training report stage contract does not match checkpoint metadata"
+        )
+
+    base_allow_jump = settings.get("evader_allow_jump")
+    stage_options = settings.get("stage_options", {})
+    if type(base_allow_jump) is not bool or not isinstance(stage_options, dict):
+        raise ValueError(
+            "training report does not declare a valid pursuit action-scope setting"
+        )
+    effective_allow_jump = stage_options.get("allow_jump", base_allow_jump)
+    if type(effective_allow_jump) is not bool:
+        raise ValueError(
+            "training report stage_options.allow_jump must be a boolean"
+        )
+
+    from arena.training.contracts.pursuit import (
+        PursuitStageConfig,
+        pursuit_learner_action_scope,
+    )
+
+    stage = PursuitStageConfig(
+        maximum_ticks=settings.get("evaluation_steps"),
+        **{"allow_jump": base_allow_jump, **stage_options},
+    )
+    if (
+        stage.allow_jump != effective_allow_jump
+        or _canonical_json(stage.manifest()) != _canonical_json(report_stage)
+    ):
+        raise ValueError(
+            "training report settings do not reproduce its selected stage contract"
+        )
+    scope = pursuit_learner_action_scope(allow_jump=stage.allow_jump)
+    return scope.manifest(), scope.contract_sha256
+
+
+def _policy_action_scope_errors(
+    manifest: dict[str, object],
+    transfer_contract: object,
+) -> list[str]:
+    if not isinstance(transfer_contract, dict):
+        return ["policy_action_scope cannot be checked without an action contract"]
+    expected_scope_sha256 = manifest.get("policy_action_scope_contract_sha256")
+    try:
+        normalized = _normalize_policy_action_scope(
+            manifest.get("policy_action_scope"),
+            action_contract_sha256=transfer_contract.get(
+                "action_contract_sha256"
+            ),
+            expected_scope_sha256=expected_scope_sha256,
+        )
+    except (TypeError, ValueError) as error:
+        return [str(error)]
+
+    problems = []
+    if manifest.get("policy_action_scope_identity") != normalized["identity"]:
+        problems.append(
+            "policy_action_scope_identity differs from the declared allowed choices"
+        )
+    contract = manifest.get("contract")
+    action_size = contract.get("action_mask_size") if isinstance(contract, dict) else None
+    mask_bits = normalized["identity"]["mask_bits"]
+    if action_size != len(mask_bits):
+        problems.append(
+            "policy_action_scope mask width "
+            f"{len(mask_bits)} != contract action_mask_size {action_size}"
+        )
+    return problems
+
+
 def _transfer_contract_errors(contract: object) -> list[str]:
     if not isinstance(contract, dict):
         return ["checkpoint has no exact transfer_contract"]
     from hytalegym.jax.training.checkpoint import (
         ARSENAL_POLICY_SURFACE,
         combat_checkpoint_contract_errors,
+    )
+    from hytalegym.jax.combat.observation.v3.policy.layout import (
+        ARSENAL_POLICY_JVM_PROJECTION_ABI,
     )
 
     world_manifest = contract.get("world_geometry_policy_config")
@@ -127,7 +416,31 @@ def _transfer_contract_errors(contract: object) -> list[str]:
         "action_contract_sha256"
     ):
         errors.append("checkpoint observation/action contract identities differ")
+    declared_abi = contract.get("policy_projection_abi")
+    if declared_abi is not None and declared_abi != ARSENAL_POLICY_JVM_PROJECTION_ABI:
+        errors.append(
+            "policy_projection_abi: checkpoint declares "
+            f"{declared_abi!r}, supported value is "
+            f"{ARSENAL_POLICY_JVM_PROJECTION_ABI!r}"
+        )
     return errors
+
+
+def _projection_abi_errors(contract: object) -> list[str]:
+    from hytalegym.jax.combat.observation.v3.policy.layout import (
+        ARSENAL_POLICY_JVM_PROJECTION_ABI,
+    )
+
+    if not isinstance(contract, dict):
+        return ["policy_projection_abi is missing from the bundle contract"]
+    declared = contract.get("policy_projection_abi")
+    if declared != ARSENAL_POLICY_JVM_PROJECTION_ABI:
+        return [
+            "policy_projection_abi: bundle declares "
+            f"{declared!r}, supported value is "
+            f"{ARSENAL_POLICY_JVM_PROJECTION_ABI!r}"
+        ]
+    return []
 
 
 def _digest(path: Path) -> str:
@@ -408,7 +721,12 @@ def _profile_content_sha256(profile: Path) -> str:
     return profile_payload_sha256(profile)
 
 
-def _profile_errors(profile: Path, contract: dict[str, object]) -> list[str]:
+def _profile_errors(
+    profile: Path,
+    contract: dict[str, object],
+    *,
+    allow_missing_projection_abi: bool = False,
+) -> list[str]:
     manifest_path = profile / "profile.json"
     if not manifest_path.is_file():
         return [f"live profile has no profile.json: {profile}"]
@@ -423,6 +741,15 @@ def _profile_errors(profile: Path, contract: dict[str, object]) -> list[str]:
             "live profile policy contract does not match the checkpoint: "
             f"profile={manifest.get('arsenal_policy_contract_sha256')!r}, "
             f"checkpoint={expected_policy!r}"
+        )
+    expected_abi = contract.get("policy_projection_abi")
+    declared_abi = manifest.get("policy_projection_abi")
+    if declared_abi != expected_abi and not (
+        allow_missing_projection_abi and declared_abi is None
+    ):
+        problems.append(
+            "live profile policy_projection_abi does not match the bundle: "
+            f"profile={declared_abi!r}, bundle={expected_abi!r}"
         )
     if manifest.get("jax_backend") != "gpu":
         problems.append("live profile was not exported on the required GPU backend")
@@ -476,6 +803,12 @@ def _flat_contract_errors(
     contract = contract if isinstance(contract, dict) else {}
     transfer = manifest.get("transfer_contract")
     transfer = transfer if isinstance(transfer, dict) else {}
+    action_scope = manifest.get("policy_action_scope")
+    action_scope = action_scope if isinstance(action_scope, dict) else {}
+    action_scope_identity = manifest.get("policy_action_scope_identity")
+    action_scope_identity = (
+        action_scope_identity if isinstance(action_scope_identity, dict) else {}
+    )
     expected = {
         "schema": manifest.get("schema"),
         "role": manifest.get("role"),
@@ -502,6 +835,15 @@ def _flat_contract_errors(
             "observation_contract_sha256"
         ),
         "action_contract_sha256": transfer.get("action_contract_sha256"),
+        "policy_projection_abi": transfer.get("policy_projection_abi"),
+        "policy_action_scope_schema": action_scope.get("schema"),
+        "policy_action_scope_identity_schema": action_scope_identity.get(
+            "schema"
+        ),
+        "policy_action_scope_bits": action_scope_identity.get("mask_bits"),
+        "policy_action_scope_sha256": action_scope_identity.get(
+            "content_sha256"
+        ),
     }
     bridge_target = manifest.get("bridge_target")
     if isinstance(bridge_target, dict):
@@ -536,6 +878,7 @@ def export(checkpoint: Path, destination: Path, *, role: str,
            fixture: Path | None = None,
            diagnostic: bool = False,
            diagnostic_control: Path | None = None,
+           training_report: Path | None = None,
            bridge_target: Path | None = None,
            role_transfer: tuple[str, str] | None = None,
            profile_transfer: tuple[str, str] | None = None,
@@ -546,13 +889,47 @@ def export(checkpoint: Path, destination: Path, *, role: str,
         bridge_target = Path(bridge_target)
         bridge_target_manifest = _read_bridge_target(bridge_target)
         shutil.copyfile(bridge_target, destination / BRIDGE_TARGET_FILE)
-    transfer_contract = report["transfer_contract"]
-    transfer_errors = _transfer_contract_errors(transfer_contract)
+    source_transfer_contract = report["transfer_contract"]
+    transfer_errors = _transfer_contract_errors(source_transfer_contract)
     if transfer_errors:
         raise ValueError(
             "checkpoint is not deployable under the current policy contract: "
             + "; ".join(transfer_errors)
         )
+    from hytalegym.jax.combat.observation.v3.policy.layout import (
+        ARSENAL_POLICY_JVM_PROJECTION_ABI,
+    )
+
+    transfer_contract = dict(source_transfer_contract)
+    transfer_contract["policy_projection_abi"] = (
+        ARSENAL_POLICY_JVM_PROJECTION_ABI
+    )
+    checkpoint_metadata = report.get("checkpoint_metadata")
+    if not isinstance(checkpoint_metadata, Mapping):
+        checkpoint_metadata = {}
+    scope_manifest = checkpoint_metadata.get("policy_action_scope")
+    scope_contract_sha256 = checkpoint_metadata.get(
+        "policy_action_scope_sha256"
+    )
+    if scope_manifest is None and training_report is not None:
+        scope_manifest, scope_contract_sha256 = _legacy_pursuit_action_scope(
+            Path(checkpoint),
+            checkpoint_metadata,
+            Path(training_report),
+        )
+    if scope_manifest is None and diagnostic:
+        scope_manifest = _full_policy_action_scope()
+    if scope_manifest is None:
+        raise ValueError(
+            "checkpoint metadata has no policy_action_scope; retrain with a "
+            "scope-aware trainer or pass --training-report for a supported "
+            "older pursuit checkpoint"
+        )
+    action_scope = _normalize_policy_action_scope(
+        scope_manifest,
+        action_contract_sha256=transfer_contract.get("action_contract_sha256"),
+        expected_scope_sha256=scope_contract_sha256,
+    )
     if diagnostic_control is not None and not diagnostic:
         raise ValueError("diagnostic_control requires diagnostic=True")
     if diagnostic:
@@ -572,7 +949,9 @@ def export(checkpoint: Path, destination: Path, *, role: str,
     profile_manifest = None
     if profile is not None:
         profile = Path(profile)
-        profile_errors = _profile_errors(profile, transfer_contract)
+        profile_errors = _profile_errors(
+            profile, transfer_contract, allow_missing_projection_abi=True
+        )
         if profile_errors:
             raise ValueError("live profile is not deployable: " + "; ".join(profile_errors))
         profile_manifest = json.loads(
@@ -603,6 +982,17 @@ def export(checkpoint: Path, destination: Path, *, role: str,
             shutil.rmtree(target)
         shutil.copytree(profile, target)
         installed_profile = target
+        installed_manifest_path = installed_profile / "profile.json"
+        installed_manifest = json.loads(
+            installed_manifest_path.read_text(encoding="utf-8")
+        )
+        installed_manifest["policy_projection_abi"] = (
+            ARSENAL_POLICY_JVM_PROJECTION_ABI
+        )
+        installed_manifest_path.write_text(
+            json.dumps(installed_manifest, indent=1, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
         installed_errors = _profile_errors(installed_profile, transfer_contract)
         if installed_errors:
             raise ValueError(
@@ -648,6 +1038,11 @@ def export(checkpoint: Path, destination: Path, *, role: str,
             "content_sha256": tensor_content_sha256,
         },
         "training_provenance": training_provenance,
+        "policy_action_scope": action_scope["manifest"],
+        "policy_action_scope_contract_sha256": action_scope[
+            "contract_sha256"
+        ],
+        "policy_action_scope_identity": action_scope["identity"],
         "deployment_compatibility": deployment_compatibility,
         "bridge_target": bridge_target_manifest,
         "transfer_contract": transfer_contract,
@@ -699,6 +1094,23 @@ def export(checkpoint: Path, destination: Path, *, role: str,
             transfer_contract["observation_contract_sha256"],
         ),
         ("action_contract_sha256", transfer_contract["action_contract_sha256"]),
+        ("policy_projection_abi", transfer_contract["policy_projection_abi"]),
+        (
+            "policy_action_scope_schema",
+            action_scope["manifest"]["schema"],
+        ),
+        (
+            "policy_action_scope_identity_schema",
+            action_scope["identity"]["schema"],
+        ),
+        (
+            "policy_action_scope_bits",
+            action_scope["identity"]["mask_bits"],
+        ),
+        (
+            "policy_action_scope_sha256",
+            action_scope["identity"]["content_sha256"],
+        ),
     ]
     rows.extend(compatibility_flat_contract_rows(deployment_compatibility))
     if bridge_target_manifest is not None:
@@ -758,6 +1170,8 @@ def verify(destination: str | Path, *, expect_observation: int | None = None,
         return [f"agent.json is unreadable: {error}"]
     transfer_contract = manifest.get("transfer_contract")
     problems.extend(_transfer_contract_errors(transfer_contract))
+    problems.extend(_projection_abi_errors(transfer_contract))
+    problems.extend(_policy_action_scope_errors(manifest, transfer_contract))
     problems.extend(
         _training_provenance_errors(
             destination,
@@ -903,6 +1317,15 @@ def main() -> int:
                     help="captured observation/action-mask directory used for "
                          "offline Java inference and fallback bundle values")
     ap.add_argument(
+        "--training-report",
+        type=Path,
+        default=None,
+        help=(
+            "selected training report for a supported older pursuit "
+            "checkpoint that did not save policy_action_scope metadata"
+        ),
+    )
+    ap.add_argument(
         "--diagnostic",
         action="store_true",
         help=(
@@ -961,6 +1384,7 @@ def main() -> int:
         nojump=args.nojump, profile=args.profile, fixture=args.fixture,
         diagnostic=args.diagnostic,
         diagnostic_control=args.diagnostic_control,
+        training_report=args.training_report,
         bridge_target=args.bridge_target,
         role_transfer=parse_transfer_mapping(
             args.role_transfer, name="--role-transfer"

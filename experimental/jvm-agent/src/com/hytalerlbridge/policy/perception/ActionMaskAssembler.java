@@ -10,14 +10,17 @@ public final class ActionMaskAssembler {
     public static final int ABILITY_COUNT = 16;
     public static final int DODGE_DIRECTION_COUNT = 4;
     public static final int CANDIDATE_COUNT = 16;
+    public static final int LOCOMOTION_DODGE_START = 33;
+    public static final int LOCOMOTION_HEAD_SIZE = 37;
+    public static final int HOTBAR_HEAD_SIZE = 10;
 
     /**
      * Inputs already filtered by the native host at the current tick.
      *
-     * <p>The two candidate masks and their availability bits remain separate:
-     * an all-false available row is not interchangeable with an unavailable
-     * producer. The policy mask happens to close both, but the observation
-     * carries that distinction.
+     * <p>The recipe candidate evidence is intentionally not an input here:
+     * recipe selection is no longer a published combat-policy head. Recipe
+     * evidence may still be carried by the observation/world-action seam, but
+     * it must not change the twelve-head combat mask.
      */
     public record Input(
         boolean valid,
@@ -28,13 +31,10 @@ public final class ActionMaskAssembler {
         boolean[] dodge,
         boolean jump,
         boolean movement,
-        boolean look,
         boolean use,
         boolean[] blockTrigger,
         boolean blockAvailable,
-        boolean[] blockCandidates,
-        boolean recipeAvailable,
-        boolean[] recipeCandidates
+        boolean[] blockCandidates
     ) {
         public Input {
             require(skill, SKILL_COUNT, "skill");
@@ -43,14 +43,12 @@ public final class ActionMaskAssembler {
             require(dodge, DODGE_DIRECTION_COUNT, "dodge");
             require(blockTrigger, 2, "block trigger");
             require(blockCandidates, CANDIDATE_COUNT, "block candidates");
-            require(recipeCandidates, CANDIDATE_COUNT, "recipe candidates");
             skill = skill.clone();
             door = door.clone();
             ability = ability.clone();
             dodge = dodge.clone();
             blockTrigger = blockTrigger.clone();
             blockCandidates = blockCandidates.clone();
-            recipeCandidates = recipeCandidates.clone();
         }
 
         private static void require(boolean[] values, int width, String name) {
@@ -79,23 +77,42 @@ public final class ActionMaskAssembler {
         offset = copyGated(result, offset, input.skill(), input.valid());
         offset = copyGated(result, offset, input.door(), input.valid());
 
-        // Every factored head retains a legal neutral choice even when the
-        // actor or producer is unavailable.
+        // Base heads: the first choice of each added binary/categorical head
+        // is the neutral action. This is the exact 33-column base prefix in
+        // layout.py: 9 skills, 3 doors, ability none+16, guard off/on, and
+        // jump off/on.
         result[offset++] = true;
         offset = copyGated(result, offset, input.ability(), input.valid());
         result[offset++] = true;
         result[offset++] = input.valid() && input.guard();
         result[offset++] = true;
-        offset = copyGated(result, offset, input.dodge(), input.valid());
-        result[offset++] = true;
         result[offset++] = input.valid() && input.jump();
 
+        // Locomotion is one categorical head. Choice 0 is idle, choices 1..32
+        // are the gait/compass ring, and choices 33..36 are the authored dodge
+        // directions. JAX gates the ring on translation availability while
+        // preserving per-direction dodge legality.
+        result[offset++] = true;
+        for (int index = 1; index < LOCOMOTION_DODGE_START; index++) {
+            result[offset++] = input.valid() && input.movement();
+        }
+        offset = copyGated(result, offset, input.dodge(), input.valid());
+
+        // Look choices are legal whenever the observation is valid. A missing
+        // native look actuator is represented by the producer returning an
+        // invalid frame, not by silently shrinking the policy surface.
         offset = neutralOrAll(result, offset, Policy.HEAD_SIZES[5],
-            input.valid() && input.movement(), 0);
+            input.valid(), Policy.HEAD_SIZES[5] / 2);
         offset = neutralOrAll(result, offset, Policy.HEAD_SIZES[6],
-            input.valid() && input.look(), Policy.HEAD_SIZES[6] / 2);
+            input.valid(), Policy.HEAD_SIZES[6] / 2);
         offset = neutralOrAll(result, offset, Policy.HEAD_SIZES[7],
-            input.valid() && input.look(), Policy.HEAD_SIZES[7] / 2);
+            input.valid(), Policy.HEAD_SIZES[7] / 2);
+
+        // Choice 0 leaves the live slot alone; every number-key slot is a
+        // legal request, including an empty slot. Loadout resolution decides
+        // whether the selected slot has an applicable item.
+        offset = neutralOrAll(result, offset, HOTBAR_HEAD_SIZE,
+            input.valid(), 0);
 
         result[offset++] = true;
         result[offset++] = input.valid() && input.use();
@@ -112,13 +129,6 @@ public final class ActionMaskAssembler {
             result[offset++] = true;
             result[offset++] = false;
         }
-
-        result[offset++] = true;
-        offset = copyGated(
-            result,
-            offset,
-            input.recipeCandidates(),
-            input.valid() && input.recipeAvailable());
 
         boolean blockTarget = input.valid()
             && input.blockAvailable()

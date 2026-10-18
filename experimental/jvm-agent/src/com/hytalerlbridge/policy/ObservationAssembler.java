@@ -6,7 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Builds the 8,271-value policy observation from structured evidence, in Java.
+ * Builds the 8,272-value policy observation from structured evidence, in Java.
  *
  * <p>Port of {@code observation/v3/policy/layout.py:arsenal_policy_observation}.
  * Thirty-seven groups concatenated in a fixed order. Two semantics carry the
@@ -15,7 +15,7 @@ import java.util.Map;
  * <ul>
  *   <li><b>Agent selection.</b> Per-entity arrays keep an entity axis; only row
  *       {@code AGENT_ENTITY} enters the vector. Taking the wrong row still
- *       produces a well-formed 8,271-vector describing the opponent.</li>
+ *       produces a well-formed 8,272-vector describing the opponent.</li>
  *   <li><b>Mask-before-append.</b> A masked-off value is multiplied to zero and
  *       the mask is appended <i>separately</i>. So a zero means "not
  *       applicable" only in combination with its mask bit; writing the raw
@@ -31,6 +31,12 @@ public final class ObservationAssembler {
 
     public static final int AGENT_ENTITY = 0;
     public static final int OBSERVATION_SIZE = 8272;
+    public static final int TARGET_PLANAR_DISTANCE_OFFSET =
+        Projection.SELF_SIZE + Projection.TARGET_PLANAR_DISTANCE_INDEX;
+    public static final int TARGET_VISIBLE_OFFSET =
+        Projection.SELF_SIZE + Projection.TARGET_VISIBLE_INDEX;
+    public static final int TARGET_MASK_OFFSET =
+        Projection.SELF_SIZE + Projection.TARGET_SIZE;
 
     /** Which of the 24 combat floats reach the policy (18 of them). */
     private static final int[] COMBAT_FLOAT_INDICES = {
@@ -38,7 +44,9 @@ public final class ObservationAssembler {
     };
 
     private static final int ENTITIES = 2;
-    private static final int SELF = 16, TARGET = 16, COMBAT = 24;
+    private static final int SELF = Projection.SELF_SIZE;
+    private static final int TARGET = Projection.TARGET_SIZE;
+    private static final int COMBAT = 24;
     // DEFENSE moved 7 -> 8 on 2026-08-22. The eighth slot is
     // `locomotion_stamina_fraction`: the sprint budget over
     // PLAYER_STAMINA_MAXIMUM, which is a different bar from the guard/ability

@@ -25,9 +25,9 @@ import java.util.Arrays;
  *   <li><b>Illegality is total.</b> One out-of-range or mask-forbidden head
  *       zeroes every field, including movement, not only the offending head.
  *   <li><b>world_move suppresses the strafe booleans but not attack.</b> When a
- *       compass direction is requested, forward/back/left/right stay false and
- *       the server derives the vector from the direction itself; attack still
- *       fires.
+ *       body-relative direction is requested, forward/back/left/right stay
+ *       false and the server derives the local vector from the direction
+ *       itself; attack still fires.
  * </ul>
  */
 public final class ActionDecoder {
@@ -54,7 +54,7 @@ public final class ActionDecoder {
     // rather than derived because this side has no access to the Python module,
     // and `ContractTest` is what proves they still agree.
 
-    /** Compass directions in the gait ring: N, NE, E, SE, S, SW, W, NW. */
+    /** Local direction ring: forward, forward-right, right, ..., forward-left. */
     public static final int COMPASS_DIRECTIONS = 8;
     /** Choices at or above this are a dodge rather than a step. */
     public static final int LOCOMOTION_DODGE_START = 33;
@@ -148,7 +148,7 @@ public final class ActionDecoder {
         false, false, false, false, false
     );
 
-    /** Gait, compass direction and dodge, fanned out of one locomotion choice. */
+    /** Gait, local direction and dodge, fanned out of one locomotion choice. */
     public record Locomotion(int gait, int direction, int dodge) {
     }
 
@@ -201,7 +201,7 @@ public final class ActionDecoder {
         return Policy.HEAD_SIZES[LOCOMOTION] - LOCOMOTION_DODGE_START;
     }
 
-    /** The locomotion choice for a gait (1-based) and compass direction (1-based). */
+    /** The locomotion choice for a gait (1-based) and local direction (1-based). */
     public static int locomotionStepChoice(int gait, int direction) {
         if (gait < 1 || direction < 1 || direction > COMPASS_DIRECTIONS) {
             throw new IllegalArgumentException(
@@ -222,7 +222,7 @@ public final class ActionDecoder {
      * given.
      *
      * @param factors 12 head indices, one per head, in {@code Policy.HEAD_SIZES} order
-     * @param legal   99 per-logit legality bits, concatenated in head order
+     * @param legal   124 per-logit legality bits, concatenated in head order
      */
     public static Decoded decode(int[] factors, boolean[] legal) {
         int[] sizes = Policy.HEAD_SIZES;
@@ -292,8 +292,9 @@ public final class ActionDecoder {
         boolean left = movementSkill == SKILL_STRAFE_LEFT;
         boolean right = movementSkill == SKILL_STRAFE_RIGHT;
         if (worldMove != 0) {
-            // The compass direction replaces the strafe booleans; the server
-            // derives dx/dz from the direction. Attack is unaffected.
+            // The body-relative direction replaces the strafe booleans; the
+            // server derives the local vector and rotates it by body yaw.
+            // Attack is unaffected.
             forward = false;
             back = false;
             left = false;

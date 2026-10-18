@@ -31,6 +31,16 @@ public interface PolicyActionSink {
         return false;
     }
 
+    /** Release sink-owned state when the actor's policy episode terminates. */
+    default void onTerminal(
+        Ref<EntityStore> ref,
+        NPCEntity npc,
+        Store<EntityStore> store,
+        float deltaTime,
+        PolicyAgentMarker marker
+    ) {
+    }
+
     /**
      * @param deltaTime the tick delta the system was invoked with
      * @param marker    the NPC's marker, holding the accumulated look pose that

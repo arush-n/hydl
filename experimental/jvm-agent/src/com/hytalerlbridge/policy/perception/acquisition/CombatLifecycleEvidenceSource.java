@@ -32,6 +32,11 @@ public interface CombatLifecycleEvidenceSource {
         float deltaTime
     );
 
+    /** Reason for the most recent unavailable lifecycle row, diagnostics only. */
+    default String lastFailureReason() {
+        return "unknown";
+    }
+
     /**
      * Entity-major lifecycle state. Arrays are copied on construction and read.
      *

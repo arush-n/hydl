@@ -21,3 +21,11 @@ __pycache__/
 docs/
 tests/
 case/
+
+# Keep the native policy trace certification regression test versioned.
+!tests/
+tests/**
+!tests/com/
+!tests/com/hytalerlbridge/
+!tests/com/hytalerlbridge/policy/
+!tests/com/hytalerlbridge/policy/PolicyTraceSinkTest.java

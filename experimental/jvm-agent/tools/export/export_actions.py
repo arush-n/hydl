@@ -148,7 +148,8 @@ def main() -> int:
         {"name": "guard", "factors": factors(guard_off_on=1)},
         {"name": "jump", "factors": factors(jump_off_on=1)},
         # Dodge and world movement share `locomotion_gait_compass`: choice 0 is
-        # idle, 1..8 walk a compass direction, and the four dodges sit at the
+        # idle, 1..8 walk a body-relative local direction, and the four dodges
+        # sit at the
         # tail. The case names keep their old numbering so the Java side still
         # certifies the same semantic actions.
         *(
@@ -245,9 +246,14 @@ def main() -> int:
                 "guard_held": bool(np.asarray(base.guard_held)[0]),
                 "dodge_direction": int(np.asarray(base.dodge_direction)[0]),
                 "jump_held": bool(np.asarray(base.jump_held)[0]),
+                "gait": int(np.asarray(base.gait)[0]),
                 "world_move_direction": int(np.asarray(base.world_move_direction)[0]),
                 "yaw_delta_degrees": float(np.asarray(base.yaw_delta_degrees)[0]),
+                "body_yaw_delta_degrees": float(
+                    np.asarray(base.body_yaw_delta_degrees)[0]
+                ),
                 "pitch_delta_degrees": float(np.asarray(base.pitch_delta_degrees)[0]),
+                "hotbar_slot": int(np.asarray(base.hotbar_slot)[0]),
                 "use_requested": bool(np.asarray(base.use_requested)[0]),
                 "block_interaction_trigger": int(
                     np.asarray(base.block_interaction_trigger)[0]
@@ -374,15 +380,20 @@ def main() -> int:
                 [record["dodge_direction"]], dtype=jnp.int32
             ),
             jump_held=jnp.asarray([record["jump_held"]], dtype=jnp.bool_),
+            gait=jnp.asarray([record["gait"]], dtype=jnp.int32),
             world_move_direction=jnp.asarray(
                 [record["world_move_direction"]], dtype=jnp.int32
             ),
             yaw_delta_degrees=jnp.asarray(
                 [record["yaw_delta_degrees"]], dtype=jnp.float32
             ),
+            body_yaw_delta_degrees=jnp.asarray(
+                [record["body_yaw_delta_degrees"]], dtype=jnp.float32
+            ),
             pitch_delta_degrees=jnp.asarray(
                 [record["pitch_delta_degrees"]], dtype=jnp.float32
             ),
+            hotbar_slot=jnp.asarray([record["hotbar_slot"]], dtype=jnp.int32),
             use_requested=jnp.asarray([record["use_requested"]], dtype=jnp.bool_),
             block_interaction_trigger=jnp.asarray(
                 [record["block_interaction_trigger"]], dtype=jnp.int32

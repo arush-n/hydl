@@ -12,7 +12,7 @@ import com.hytalerlbridge.policy.world.model.BlockCandidateBinding;
 /**
  * One actor-safe, same-tick input to the live policy projector.
  *
- * <p>This is deliberately raw rather than an 8,271-float row. Acquisition
+ * <p>This is deliberately raw rather than an 8,272-float row. Acquisition
  * reads server components into these facts; {@code LivePolicyPerception} owns
  * every normalization and layout operation. Keeping that boundary explicit
  * lets offline fixtures certify the arithmetic without a running server and

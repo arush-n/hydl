@@ -4,8 +4,8 @@ The three existing tests each certify one link and none of them certify the
 chain:
 
   * `ProjectionTest` -- raw simulation state -> the derived fields
-  * `AssembleTest`   -- 37 structured fields -> the 8,271-column vector
-  * `Main`           -- an 8,271-column vector -> logits and value
+  * `AssembleTest`   -- 37 structured fields -> the 8,272-column vector
+  * `Main`           -- an 8,272-column vector -> logits and value
 
 A stage can be correct in isolation and still be wired up wrong: a derived group
 written to the wrong slot, the agent row taken from the wrong entity, a field
@@ -314,7 +314,7 @@ def _augment_existing_structured_inputs() -> int:
             )
         if not np.all(np.isin(resource_masks, (0, 1))):
             raise SystemExit(f"{directory.name}: resource masks are not boolean")
-        if defense_values.shape != (14,):
+        if defense_values.shape != (16,):
             raise SystemExit(
                 f"{directory.name}: defense fixture width drift "
                 f"{defense_values.shape}"
@@ -400,7 +400,7 @@ def _augment_existing_structured_inputs() -> int:
         )
         resource_minimum = np.zeros((14,), dtype=np.float32)
         resource_maximum = resource_masks.astype(np.float32)
-        defense = defense_values.reshape(2, 7)
+        defense = defense_values.reshape(2, 8)
         defense_velocity = np.zeros((2, 3), dtype=np.float32)
         defense_velocity[:, 0] = defense[:, 3]
         raw_defense = np.concatenate(
@@ -414,8 +414,13 @@ def _augment_existing_structured_inputs() -> int:
                 defense[:, 4] * np.float32(2.0),
                 defense[:, 5] * np.float32(100.0),
                 defense[:, 6],
+                defense[:, 7] * np.float32(10.0),
             )
         ).astype(np.float32)
+        if raw_defense.shape != (24,):
+            raise SystemExit(
+                f"{directory.name}: raw defense width drift {raw_defense.shape}"
+            )
         status = status_values.reshape(2, 8, 6)
         active = status_masks.astype(np.float32)
         raw_status = np.concatenate(
@@ -445,7 +450,7 @@ def _augment_existing_structured_inputs() -> int:
                 float(dodge_masks[3]),
                 1.0,  # movement enabled
                 1.0,  # alive
-                2.0,  # stamina
+                float(defense[0, 7] * np.float32(10.0)),  # locomotion stamina
                 2.0,  # authored dodge cost
             ),
             dtype=np.float32,
@@ -500,6 +505,7 @@ def _migrate_arsenal_attack_slot_divisor() -> int:
     from hytalegym.jax.combat.arsenal.schema.contract import (
         OBSERVATION_CAPACITY,
     )
+    from hytalegym.jax.combat.types import PLAYER_STAMINA_MAXIMUM
 
     divisor = float(max(OBSERVATION_CAPACITY - 1, 1))
     updates: list[tuple[Path, str]] = []
@@ -976,6 +982,14 @@ def capture(
 
     directory.mkdir(parents=True, exist_ok=True)
     combat = state.runtime.combat
+    mechanics = state.runtime.mechanics
+    from hytalegym.jax.combat.mechanics import project_applied_motion_velocity
+
+    projected_motion_velocity = np.asarray(
+        project_applied_motion_velocity(mechanics)
+    )
+    agent_applied_motion = projected_motion_velocity[lane, AGENT_ENTITY]
+    agent_applied_motion_active = bool(np.any(agent_applied_motion != 0.0))
     combat_row = np.asarray(state.learner_observation.base.combat_f32)[lane]
     o = state.learner_observation
 
@@ -1038,7 +1052,8 @@ def capture(
         "agent_attack_cooldown_seconds": scalar(
             combat.agent_attack_cooldown_seconds),
         "agent_knockback_control_lock": float(
-            bool(scalar(combat.knockback_control_lock))),
+            bool(scalar(combat.knockback_control_lock))
+            or agent_applied_motion_active),
         "agent_ticks_since_damage": scalar(combat.ticks_since_agent_damage),
         "agent_applied_vertical_velocity": scalar(
             combat.agent_applied_vertical_velocity),
@@ -1073,6 +1088,7 @@ def capture(
             bool(scalar((combat.agent_hit_delay > 0)
                         | (combat.agent_attack_cooldown_seconds > 0.0)))),
         "agent_max_speed": float(params.agent_max_speed),
+        "agent_maximum_gait_speed": float(params.agent_maximum_gait_speed),
         "vertical_speed_scale": float(params.vertical_speed_scale),
         "agent_max_health": float(params.agent_max_health),
         "agent_attack_pause_max_seconds": float(
@@ -1122,6 +1138,12 @@ def capture(
             * params.agent_walk_max_drop_height
         ),
         "agent_walk_max_drop_height": float(params.agent_walk_max_drop_height),
+        "agent_weapon_family": float(
+            np.asarray(runtime.loadout.weapon_family)[lane, AGENT_ENTITY]
+        ),
+        "target_weapon_family": float(
+            np.asarray(runtime.loadout.weapon_family)[lane, TARGET_ENTITY]
+        ),
     }
     (directory / "inputs.txt").write_text(
         "\n".join(f"{key}\t{value!r}" for key, value in values.items()) + "\n",
@@ -1213,22 +1235,30 @@ def capture(
 
     write_recipe_policy_view(directory, surface.recipe_candidates, lane=lane)
 
-    mechanics = state.runtime.mechanics
     rules = runtime.mechanics_rules
+    from hytalegym.jax.combat.types import PLAYER_STAMINA_MAXIMUM
+
     raw_defense = np.concatenate(
         (
             np.asarray(mechanics.guard_active)[lane].astype(np.float32),
             np.asarray(mechanics.stamina_broken)[lane].astype(np.float32),
             np.asarray(mechanics.dodge_invulnerability_remaining_seconds)[lane],
             np.asarray(rules.dodge_invulnerability_seconds)[lane],
-            np.asarray(mechanics.applied_velocity)[lane].reshape(-1),
+            projected_motion_velocity[lane].reshape(-1),
             np.asarray(rules.dodge_force)[lane],
             np.asarray(mechanics.stamina_regen_delay_seconds)[lane],
             np.asarray(mechanics.control_immunity)[lane],
             np.asarray(state.runtime.combat.health)[lane],
+            np.asarray(
+                (
+                    np.asarray(combat.agent_locomotion_stamina)[lane],
+                    PLAYER_STAMINA_MAXIMUM,
+                ),
+                dtype=np.float32,
+            ),
         )
     ).astype(np.float32)
-    if raw_defense.shape != (22,):
+    if raw_defense.shape != (24,):
         raise SystemExit(f"raw defense width drift: {raw_defense.shape}")
     (directory / "raw_defense.bin").write_bytes(raw_defense.tobytes())
 
@@ -1271,7 +1301,7 @@ def capture(
             float(dodge_mask[3]),
             1.0,
             1.0,
-            2.0,
+            float(np.asarray(combat.agent_locomotion_stamina)[lane]),
             2.0,
         ),
         dtype=np.float32,

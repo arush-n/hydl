@@ -4,6 +4,7 @@ import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.protocol.MovementStates;
 import com.hypixel.hytale.server.core.entity.damage.DamageDataComponent;
+import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.entity.movement.MovementStatesComponent;
 import com.hypixel.hytale.server.core.modules.entity.component.HeadRotation;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
@@ -12,6 +13,8 @@ import com.hypixel.hytale.server.core.modules.entitystats.EntityStatValue;
 import com.hypixel.hytale.server.core.modules.entitystats.EntityStatsModule;
 import com.hypixel.hytale.server.core.modules.entitystats.asset.EntityStatType;
 import com.hypixel.hytale.server.core.modules.physics.component.Velocity;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.Universe;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.server.npc.entities.NPCEntity;
 import com.hypixel.hytale.server.npc.role.Role;
@@ -19,7 +22,7 @@ import com.hypixel.hytale.server.npc.role.support.MarkedEntitySupport;
 import com.hytalerlbridge.policy.perception.projection.MovementProjection;
 import org.joml.Vector3d;
 
-/** Public 0.5.7 component reads for one combat actor. */
+/** Public 0.5.7 component reads for one policy actor or target. */
 public final class ServerActorReader {
 
     public static final float PERCEPTION_RADIUS = 24.0f;
@@ -59,7 +62,7 @@ public final class ServerActorReader {
         float controlImmunity
     ) {
         public Actor {
-            if (ref == null || npc == null
+            if (ref == null
                 || resourceValues == null || resourceValues.length != 7
                 || resourceMaximums == null || resourceMaximums.length != 7
                 || resourceAvailable == null
@@ -102,6 +105,7 @@ public final class ServerActorReader {
             return null;
         }
         NPCEntity npc = store.getComponent(ref, NPCEntity.getComponentType());
+        Player player = store.getComponent(ref, Player.getComponentType());
         TransformComponent transform = store.getComponent(
             ref, TransformComponent.getComponentType());
         MovementStatesComponent movement = store.getComponent(
@@ -109,7 +113,8 @@ public final class ServerActorReader {
         MovementStates states = movement == null
             ? null
             : movement.getMovementStates();
-        if (npc == null || transform == null || states == null
+        if ((npc == null && player == null)
+            || transform == null || states == null
             || transform.getPosition() == null
             || transform.getRotation() == null) {
             return null;
@@ -121,7 +126,7 @@ public final class ServerActorReader {
         EntityStatMap stats = store.getComponent(
             ref, EntityStatsModule.get().getEntityStatMapComponentType());
         EntityStatValue healthStat = stat(stats, "Health");
-        Role role = npc.getRole();
+        Role role = npc == null ? null : npc.getRole();
         float fallbackMaximum = role == null
             ? 0.0f
             : Math.max(0.0f, role.getInitialMaxHealth());
@@ -191,12 +196,32 @@ public final class ServerActorReader {
         );
     }
 
-    /** Prefer the authored default target slot, then the first valid slot. */
+    /** Prefer the authored default NPC target slot, then the first valid slot. */
     public static Ref<EntityStore> selectTarget(
         Ref<EntityStore> self,
         NPCEntity npc,
         Store<EntityStore> store
     ) {
+        return selectTarget(self, npc, store, false);
+    }
+
+    /**
+     * Select the policy target, optionally preferring the nearest connected
+     * player in the same world store.
+     *
+     * <p>The player mode is deliberately explicit. It does not fall back to
+     * native NPC target memory, because doing so would make a validation run
+     * appear to follow the player while actually following a marked NPC.</p>
+     */
+    public static Ref<EntityStore> selectTarget(
+        Ref<EntityStore> self,
+        NPCEntity npc,
+        Store<EntityStore> store,
+        boolean followPlayer
+    ) {
+        if (followPlayer) {
+            return nearestConnectedPlayer(self, store);
+        }
         Role role = npc == null ? null : npc.getRole();
         MarkedEntitySupport marked = role == null
             ? null
@@ -206,7 +231,7 @@ public final class ServerActorReader {
         }
         Ref<EntityStore> preferred = marked.getMarkedEntityRef(
             MarkedEntitySupport.DEFAULT_TARGET_SLOT);
-        if (usableTarget(self, preferred, store)) {
+        if (usableTarget(self, preferred, store, false)) {
             return preferred;
         }
         Ref<EntityStore>[] targets = marked.getEntityTargets();
@@ -214,7 +239,7 @@ public final class ServerActorReader {
             return null;
         }
         for (Ref<EntityStore> candidate : targets) {
-            if (usableTarget(self, candidate, store)) {
+            if (usableTarget(self, candidate, store, false)) {
                 return candidate;
             }
         }
@@ -236,6 +261,9 @@ public final class ServerActorReader {
             > PERCEPTION_RADIUS * PERCEPTION_RADIUS) {
             return false;
         }
+        if (self.npc() == null) {
+            return false;
+        }
         Role role = self.npc().getRole();
         if (role == null || role.getPositionCache() == null) {
             return false;
@@ -251,14 +279,83 @@ public final class ServerActorReader {
     private static boolean usableTarget(
         Ref<EntityStore> self,
         Ref<EntityStore> target,
-        Store<EntityStore> store
+        Store<EntityStore> store,
+        boolean allowPlayer
     ) {
-        return target != null
-            && target.isValid()
-            && !sameEntity(self, target)
-            && store.getComponent(target, NPCEntity.getComponentType()) != null
+        if (target == null || !target.isValid() || store == null
+            || sameEntity(self, target)) {
+            return false;
+        }
+        boolean npc = target != null
+            && store.getComponent(target, NPCEntity.getComponentType()) != null;
+        boolean player = allowPlayer
+            && target != null
+            && store.getComponent(target, Player.getComponentType()) != null;
+        return (npc || player)
             && store.getComponent(
                 target, TransformComponent.getComponentType()) != null;
+    }
+
+    /** Select the nearest live player represented by the current world store. */
+    private static Ref<EntityStore> nearestConnectedPlayer(
+        Ref<EntityStore> self,
+        Store<EntityStore> store
+    ) {
+        if (self == null || !self.isValid() || store == null) {
+            return null;
+        }
+        TransformComponent selfTransform = store.getComponent(
+            self, TransformComponent.getComponentType());
+        if (selfTransform == null || selfTransform.getPosition() == null) {
+            return null;
+        }
+        try {
+            Universe universe = Universe.get();
+            if (universe == null || universe.getPlayers() == null) {
+                return null;
+            }
+            Ref<EntityStore> nearest = null;
+            double nearestDistance = Double.POSITIVE_INFINITY;
+            String nearestKey = null;
+            for (PlayerRef playerRef : universe.getPlayers()) {
+                if (playerRef == null || !playerRef.isValid()) {
+                    continue;
+                }
+                Ref<EntityStore> candidate = playerRef.getReference();
+                if (!usableTarget(self, candidate, store, true)) {
+                    continue;
+                }
+                TransformComponent transform = store.getComponent(
+                    candidate, TransformComponent.getComponentType());
+                if (transform == null || transform.getPosition() == null) {
+                    continue;
+                }
+                double dx = transform.getPosition().x
+                    - selfTransform.getPosition().x;
+                double dy = transform.getPosition().y
+                    - selfTransform.getPosition().y;
+                double dz = transform.getPosition().z
+                    - selfTransform.getPosition().z;
+                double distance = dx * dx + dy * dy + dz * dz;
+                if (!Double.isFinite(distance)) {
+                    continue;
+                }
+                String key = String.valueOf(playerRef.getUuid());
+                boolean closer = distance < nearestDistance;
+                boolean tied = distance == nearestDistance
+                    && (nearestKey == null || key.compareTo(nearestKey) < 0);
+                if (closer || tied) {
+                    nearest = candidate;
+                    nearestDistance = distance;
+                    nearestKey = key;
+                }
+            }
+            return nearest;
+        } catch (RuntimeException unavailable) {
+            // Target acquisition is an optional validation accommodation. A
+            // transient Universe/player registry read must not kill the tick.
+            return null;
+        }
     }
 
     private static boolean sameEntity(

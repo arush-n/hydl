@@ -42,6 +42,12 @@ public final class PublicServerEvidenceSource
     private final LifecycleTraceSink lifecycleTrace;
     private final ServerRecipeCandidateReader recipeCandidates;
     private final boolean worldVerbAvailable;
+    private final boolean pursuitContext;
+    private final boolean followPlayer;
+    private volatile String lastFailureReason = "none";
+    private volatile boolean lastFailureTerminal;
+    private record PursuitTarget(Ref<EntityStore> actor, Ref<EntityStore> target) {}
+    private final ConcurrentMap<Integer, PursuitTarget> pursuitTargets = new ConcurrentHashMap<>();
     private final ConcurrentMap<Integer, DamageClock> damageClocks =
         new ConcurrentHashMap<>();
     /** Diagnostics-only rate state; never read by perception or policy. */
@@ -65,6 +71,8 @@ public final class PublicServerEvidenceSource
             lifecycle,
             lifecycleTrace,
             ServerRecipeCandidateReader.load(),
+            false,
+            false,
             false
         );
     }
@@ -81,6 +89,35 @@ public final class PublicServerEvidenceSource
         ServerRecipeCandidateReader recipeCandidates,
         boolean worldVerbAvailable
     ) {
+        this(profile, lifecycle, lifecycleTrace, recipeCandidates,
+            worldVerbAvailable, false, false);
+    }
+
+    public PublicServerEvidenceSource(
+        PerceptionProfile profile,
+        CombatLifecycleEvidenceSource lifecycle,
+        LifecycleTraceSink lifecycleTrace,
+        ServerRecipeCandidateReader recipeCandidates,
+        boolean worldVerbAvailable,
+        boolean pursuitContext
+    ) {
+        this(profile, lifecycle, lifecycleTrace, recipeCandidates,
+            worldVerbAvailable, pursuitContext, false);
+    }
+
+    /**
+     * Full production constructor with an explicit connected-player target
+     * mode. The policy actor is still an NPC; only target acquisition changes.
+     */
+    public PublicServerEvidenceSource(
+        PerceptionProfile profile,
+        CombatLifecycleEvidenceSource lifecycle,
+        LifecycleTraceSink lifecycleTrace,
+        ServerRecipeCandidateReader recipeCandidates,
+        boolean worldVerbAvailable,
+        boolean pursuitContext,
+        boolean followPlayer
+    ) {
         if (profile == null || lifecycle == null || lifecycleTrace == null) {
             throw new IllegalArgumentException(
                 "public acquisition requires profile, lifecycle, and trace");
@@ -94,6 +131,8 @@ public final class PublicServerEvidenceSource
         this.lifecycleTrace = lifecycleTrace;
         this.recipeCandidates = recipeCandidates;
         this.worldVerbAvailable = worldVerbAvailable;
+        this.pursuitContext = pursuitContext;
+        this.followPlayer = followPlayer;
     }
 
     @Override
@@ -106,14 +145,36 @@ public final class PublicServerEvidenceSource
     ) {
         if (ref == null || !ref.isValid() || npc == null || store == null
             || !Float.isFinite(deltaTime) || deltaTime <= 0.0f) {
-            return null;
+            return unavailable("invalid_input");
         }
         ServerActorReader.Actor agent = ServerActorReader.capture(ref, store);
-        if (agent == null || agent.health() <= 0.0f) {
-            return null;
+        if (agent == null) {
+            return unavailable("agent_capture_unavailable");
+        }
+        if (agent.health() <= 0.0f) {
+            return unavailable("agent_dead", true);
         }
         Ref<EntityStore> targetRef = ServerActorReader.selectTarget(
-            ref, npc, store);
+            ref, npc, store, followPlayer);
+        if (pursuitContext) {
+            PursuitTarget retained = pursuitTargets.get(slot);
+            if (targetRef == null && retained != null && retained.actor() == ref
+                    && retained.target().isValid()) {
+                targetRef = retained.target();
+            }
+            if (targetRef != null && targetRef.isValid()) {
+                pursuitTargets.put(slot, new PursuitTarget(ref, targetRef));
+                // Native role memory is cleared by its own tick lifecycle even
+                // under takeover. Preserve the explicitly acquired pursuit goal.
+                if (npc.getRole() != null) {
+                    npc.getRole().setMarkedTarget(
+                        com.hypixel.hytale.server.npc.role.support.MarkedEntitySupport.DEFAULT_TARGET_SLOT,
+                        targetRef);
+                }
+            } else {
+                pursuitTargets.remove(slot);
+            }
+        }
         ServerActorReader.Actor rawTarget = ServerActorReader.capture(
             targetRef, store);
         boolean targetPerceptible = ServerActorReader.perceptible(
@@ -122,7 +183,11 @@ public final class PublicServerEvidenceSource
         CombatLifecycleEvidenceSource.Evidence life = lifecycle.capture(
             ref, targetRef, store, slot, deltaTime);
         if (life == null) {
-            return null;
+            String reason = lifecycle.lastFailureReason();
+            if (reason == null || reason.isBlank() || reason.equals("none")) {
+                reason = "unavailable";
+            }
+            return unavailable("lifecycle_" + reason);
         }
         lifecycleTrace.observe(slot, life);
 
@@ -152,7 +217,7 @@ public final class PublicServerEvidenceSource
             }
         );
         if (status == null) {
-            return null;
+            return unavailable("status_capture_unavailable");
         }
 
         float[] appliedVelocity = life.appliedVelocity();
@@ -179,6 +244,9 @@ public final class PublicServerEvidenceSource
             appliedVelocity[5] = 0.0f;
             dodgeRemaining[1] = 0.0f;
         }
+        boolean agentAppliedMotion = Math.abs(appliedVelocity[0]) > 0.0f
+            || Math.abs(appliedVelocity[1]) > 0.0f
+            || Math.abs(appliedVelocity[2]) > 0.0f;
         PerceptionFrame.Defense defense = new PerceptionFrame.Defense(
             guardActive,
             staminaBroken,
@@ -258,13 +326,13 @@ public final class PublicServerEvidenceSource
             agent.velocityX(),
             agent.velocityY(),
             agent.velocityZ(),
-            agent.yawDegrees(),
-            agent.pitchDegrees(),
+            agent.headYawDegrees(),
+            agent.headPitchDegrees(),
             agentHealth,
             agent.movement(15),
             life.agentAttackExecuting() ? 1.0 : 0.0,
             life.agentAttackCooldownSeconds(),
-            life.agentKnockbackControlLock(),
+            life.agentKnockbackControlLock() || agentAppliedMotion,
             ticksSinceDamage(slot, ref, agentHealth),
             agent.movement(2) ? agent.velocityY() : 0.0,
             Math.min(0.0, agent.velocityY()),
@@ -315,9 +383,10 @@ public final class PublicServerEvidenceSource
             recipes.policy(),
             recipes.recipeIds()
         );
-        return new PerceptionFrame(
+        PerceptionFrame frame = new PerceptionFrame(
             true,
-            targetPerceptible,
+            targetPerceptible || (pursuitContext && rawTarget != null
+                && rawTarget.health() > 0.0f),
             self,
             target,
             combatSelf,
@@ -340,6 +409,30 @@ public final class PublicServerEvidenceSource
             world,
             actions
         );
+        lastFailureReason = "none";
+        lastFailureTerminal = false;
+        return frame;
+    }
+
+    @Override
+    public String lastFailureReason() {
+        return lastFailureReason;
+    }
+
+    @Override
+    public boolean lastFailureTerminal() {
+        return lastFailureTerminal;
+    }
+
+    private PerceptionFrame unavailable(String reason) {
+        return unavailable(reason, false);
+    }
+
+    private PerceptionFrame unavailable(String reason, boolean terminal) {
+        lastFailureReason = reason == null || reason.isBlank()
+            ? "unknown" : reason;
+        lastFailureTerminal = terminal;
+        return null;
     }
 
     private void logDodgeDiagnostic(

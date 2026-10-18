@@ -18,7 +18,13 @@ import com.hypixel.hytale.server.npc.entities.NPCEntity;
 import com.hypixel.hytale.server.npc.systems.AvoidanceSystem;
 import com.hypixel.hytale.server.npc.systems.SteeringSystem;
 import com.hytalerlbridge.policy.action.ActionSelectionControl;
+import com.hytalerlbridge.policy.perception.acquisition.trace.PolicyTraceSink;
+import java.util.Collections;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -56,6 +62,7 @@ public final class PolicyControlSystem extends EntityTickingSystem<EntityStore> 
     private final PolicyActionSink sink;
     private final int decisionPeriod;
     private final ActionSelectionControl actionControl;
+    private final PolicyTraceSink policyTrace;
     private final Query<EntityStore> query;
     private final Set<Dependency<EntityStore>> dependencies;
 
@@ -68,10 +75,22 @@ public final class PolicyControlSystem extends EntityTickingSystem<EntityStore> 
      * entities every tick and make displacement meaningless.
      */
     private volatile PolicyAgentMarker witness;
+    private float[] previousObservation;
+    private volatile long observationChanges;
+    private volatile long targetObservationSamples;
+    private volatile double firstTargetDistance = Double.NaN;
+    private volatile double lastTargetDistance = Double.NaN;
+    private volatile double minimumTargetDistance = Double.NaN;
 
     private final AtomicLong ticks = new AtomicLong();
     private final AtomicLong skippedNoObservation = new AtomicLong();
+    private final ConcurrentMap<String, AtomicLong>
+        skippedNoObservationByReason = new ConcurrentHashMap<>();
+    private volatile String lastSkipReason = "none";
+    private final AtomicLong terminalActors = new AtomicLong();
+    private volatile String lastTerminalReason = "none";
     private final AtomicLong rejectedIllegal = new AtomicLong();
+    private final AtomicLong combatActionRequests = new AtomicLong();
     private final AtomicLong worldVerbRequests = new AtomicLong();
     private final AtomicLong locomotionRequests = new AtomicLong();
     private final AtomicLong droppedWorldVerb = new AtomicLong();
@@ -82,7 +101,9 @@ public final class PolicyControlSystem extends EntityTickingSystem<EntityStore> 
         PolicyPerception perception,
         PolicyActionSink sink
     ) {
-        this(markerType, perception, sink, 1, ActionSelectionControl.NONE);
+        this(
+            markerType, perception, sink, 1,
+            ActionSelectionControl.NONE, PolicyTraceSink.disabled());
     }
 
     /**
@@ -102,7 +123,8 @@ public final class PolicyControlSystem extends EntityTickingSystem<EntityStore> 
             perception,
             sink,
             decisionPeriod,
-            ActionSelectionControl.NONE
+            ActionSelectionControl.NONE,
+            PolicyTraceSink.disabled()
         );
     }
 
@@ -112,6 +134,24 @@ public final class PolicyControlSystem extends EntityTickingSystem<EntityStore> 
         PolicyActionSink sink,
         int decisionPeriod,
         ActionSelectionControl actionControl
+    ) {
+        this(
+            markerType,
+            perception,
+            sink,
+            decisionPeriod,
+            actionControl,
+            PolicyTraceSink.disabled()
+        );
+    }
+
+    public PolicyControlSystem(
+        ComponentType<EntityStore, PolicyAgentMarker> markerType,
+        PolicyPerception perception,
+        PolicyActionSink sink,
+        int decisionPeriod,
+        ActionSelectionControl actionControl,
+        PolicyTraceSink policyTrace
     ) {
         if (decisionPeriod < 1) {
             throw new IllegalArgumentException(
@@ -123,6 +163,8 @@ public final class PolicyControlSystem extends EntityTickingSystem<EntityStore> 
         this.decisionPeriod = decisionPeriod;
         this.actionControl = actionControl == null
             ? ActionSelectionControl.NONE : actionControl;
+        this.policyTrace = policyTrace == null
+            ? PolicyTraceSink.disabled() : policyTrace;
         this.query = Query.and(markerType, NPCEntity.getComponentType());
         this.dependencies = orderingDependencies();
     }
@@ -179,7 +221,30 @@ public final class PolicyControlSystem extends EntityTickingSystem<EntityStore> 
             // Leave the NPC to its authored behaviour. Substituting zeros here
             // would be worse than doing nothing: the network would still emit a
             // confident action, derived from an observation that never happened.
+            String reason = normalizeReason(perception.lastFailureReason());
+            policyTrace.skip(
+                marker.slot(), worldTick(store), reason,
+                perception.lastFailureTerminal());
+            if (perception.lastFailureTerminal()) {
+                lastTerminalReason = reason;
+                long terminalCount = terminalActors.incrementAndGet();
+                sink.onTerminal(ref, npc, store, deltaTime, marker);
+                marker.terminate();
+                LOGGER.log(System.Logger.Level.INFO, () -> String.format(
+                    "policy actor terminated: slot=%d reason=%s total=%d",
+                    marker.slot(), reason, terminalCount));
+                return;
+            }
+            lastSkipReason = reason;
+            long reasonCount = skippedNoObservationByReason
+                .computeIfAbsent(reason, ignored -> new AtomicLong())
+                .incrementAndGet();
             skippedNoObservation.incrementAndGet();
+            if (reasonCount == 1) {
+                LOGGER.log(System.Logger.Level.INFO, () -> String.format(
+                    "policy observation skipped: slot=%d reason=%s",
+                    marker.slot(), reason));
+            }
             // Takeover actors carry Frozen, so returning without a one-tick
             // StepComponent also prevents this system from running next tick.
             // Keep the native pipeline alive while continuing to abstain;
@@ -200,6 +265,26 @@ public final class PolicyControlSystem extends EntityTickingSystem<EntityStore> 
             "observation width", observation.length, runtime.observationSize());
         expect(legal.length == runtime.actionSize(),
             "action mask width", legal.length, runtime.actionSize());
+        if (witness == null || witness == marker) {
+            if (previousObservation != null
+                    && !java.util.Arrays.equals(previousObservation, observation)) {
+                observationChanges++;
+            }
+            previousObservation = observation;
+            // Learner-v3: self row, target row, then target availability.
+            // Target planar distance is clipped to the 24-block sensor scale.
+            if (observation[ObservationAssembler.TARGET_MASK_OFFSET] > 0.5f) {
+                double distance = observation[
+                    ObservationAssembler.TARGET_PLANAR_DISTANCE_OFFSET]
+                    * Projection.NEARBY_ENTITY_RADIUS_BLOCKS;
+                if (targetObservationSamples++ == 0) {
+                    firstTargetDistance = distance;
+                    minimumTargetDistance = distance;
+                }
+                lastTargetDistance = distance;
+                minimumTargetDistance = Math.min(minimumTargetDistance, distance);
+            }
+        }
 
         // The network runs on EVERY tick, even when its output will be
         // discarded, and that is deliberate rather than wasteful.
@@ -236,6 +321,18 @@ public final class PolicyControlSystem extends EntityTickingSystem<EntityStore> 
             sample.actionEvidence()
         );
         ActionDecoder.Decoded action = chosen.action();
+        policyTrace.observe(
+            marker.slot(),
+            worldTick(store),
+            deltaTime,
+            observation,
+            controlled.effectiveLegalMask(),
+            controlled.factors(),
+            action,
+            chosen.fresh(),
+            controlled.constrained(),
+            controlled.route()
+        );
         if (!chosen.fresh()) {
             heldDecisions.incrementAndGet();
         }
@@ -264,6 +361,12 @@ public final class PolicyControlSystem extends EntityTickingSystem<EntityStore> 
                 droppedWorldVerb.incrementAndGet();
             }
         }
+        if (action.attack()
+                || action.abilitySlot() >= 0
+                || action.guardHeld()
+                || action.dodgeDirection() != 0) {
+            combatActionRequests.incrementAndGet();
+        }
         if (action.forward() || action.back() || action.left() || action.right()
                 || action.worldMoveDirection() != 0) {
             locomotionRequests.incrementAndGet();
@@ -285,6 +388,7 @@ public final class PolicyControlSystem extends EntityTickingSystem<EntityStore> 
         }
 
         marker.applyLookDelta(action.yawDeltaDegrees(), action.pitchDeltaDegrees());
+        marker.applyBodyYawDelta(action.bodyYawDeltaDegrees());
         // Takeover actors carry Frozen so RoleSystems cannot issue a second,
         // competing decision. Frozen also suppresses every native
         // SteppableTickingSystem. We run after behaviour and avoidance and
@@ -315,6 +419,12 @@ public final class PolicyControlSystem extends EntityTickingSystem<EntityStore> 
         return witness;
     }
 
+    public long observationChanges() { return observationChanges; }
+    public long targetObservationSamples() { return targetObservationSamples; }
+    public double firstTargetDistance() { return firstTargetDistance; }
+    public double lastTargetDistance() { return lastTargetDistance; }
+    public double minimumTargetDistance() { return minimumTargetDistance; }
+
     /** The most recent decision, across all actors; {@code null} before the first. */
     public ActionDecoder.Decoded lastDecision() {
         return lastDecision;
@@ -341,14 +451,56 @@ public final class PolicyControlSystem extends EntityTickingSystem<EntityStore> 
         };
     }
 
+    /** Reason for the most recent skipped observation, or {@code none}. */
+    public String lastSkipReason() {
+        return lastSkipReason;
+    }
+
+    /** Number of actor policy episodes ended by terminal evidence. */
+    public long terminalActors() {
+        return terminalActors.get();
+    }
+
+    /** Reason for the most recent terminal actor, or {@code none}. */
+    public String lastTerminalReason() {
+        return lastTerminalReason;
+    }
+
+    /** Stable snapshot of skipped-observation counts grouped by reason. */
+    public Map<String, Long> skippedNoObservationByReason() {
+        Map<String, Long> result = new TreeMap<>();
+        for (Map.Entry<String, AtomicLong> entry
+                : skippedNoObservationByReason.entrySet()) {
+            result.put(entry.getKey(), entry.getValue().get());
+        }
+        return Collections.unmodifiableMap(result);
+    }
+
     /** All decoded World-verb requests, including native rejections. */
     public long worldVerbRequests() {
         return worldVerbRequests.get();
     }
 
+    /** Legal decoded combat requests, including requests rejected by the bridge. */
+    public long combatActionRequests() {
+        return combatActionRequests.get();
+    }
+
     /** Legal decoded ticks that requested horizontal locomotion. */
     public long locomotionRequests() {
         return locomotionRequests.get();
+    }
+
+    private static long worldTick(Store<EntityStore> store) {
+        try {
+            if (store == null || store.getExternalData() == null
+                    || store.getExternalData().getWorld() == null) {
+                return -1L;
+            }
+            return store.getExternalData().getWorld().getTick();
+        } catch (RuntimeException unavailable) {
+            return -1L;
+        }
     }
 
     private static void expect(boolean ok, String what, int actual, int expected) {
@@ -357,5 +509,10 @@ public final class PolicyControlSystem extends EntityTickingSystem<EntityStore> 
                 "policy " + what + " mismatch: got " + actual + ", expected " + expected
             );
         }
+    }
+
+    private static String normalizeReason(String reason) {
+        return reason == null || reason.isBlank()
+            ? "unknown" : reason.trim();
     }
 }

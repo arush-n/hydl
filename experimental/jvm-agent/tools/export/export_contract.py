@@ -7,28 +7,30 @@ arsenal hash is computed as
 `arsenal_policy_contract_sha256(world_geometry_config, entity_count=...)`, and
 neither parameter is recorded. So the pin **cannot be recomputed**, which means
 it cannot be checked, which means nothing noticed when the contract moved
-7818 -> 8259 -> 8271.
+7818 -> 8259 -> 8271 -> 8272.
 
 Equal width is not equal meaning. A checkpoint trained against one column layout
 loads happily against another whenever the widths agree, because `Policy.load`
 derives shapes from file lengths by design. That is the only *silent* failure
 mode left in the port: everything else fails loudly.
 
-Two directions of drift, two checks:
+This generated fixture is not a Java-side expected-policy-hash constant. The
+bundle carries the exact Python-generated identity; Java checks its supported
+projection ABI and internal consistency. Two directions of drift, two checks:
 
   * **Gym drift** -- the Gym's contract changes and our fixtures/weights do not.
     Caught here by `--check`, which recomputes from the live Gym and diffs.
   * **Java drift** -- Java's implemented layout stops matching the pin. Caught
     by `ContractTest`, which needs no Python and runs in the normal gate.
 
-Write the pin:
+Regenerate the fixture from the current Gym:
 
     cd ~/hydl
     # from the repository root (use ":" instead of ";" on POSIX):
     PYTHONPATH="HytaleRL/hytalegym;." \\
         python -u experimental/jvm-agent/tools/export/export_contract.py
 
-Verify it still holds (this is the one to run after touching the Gym):
+Verify the generated fixture (run after touching the Gym):
 
     ... python -u experimental/jvm-agent/tools/export/export_contract.py --check
 """
@@ -45,6 +47,7 @@ OUT = JVM_AGENT_ROOT / "case"
 
 def _contract() -> dict:
     from hytalegym.jax.combat.observation.v3.policy.layout import (
+        ARSENAL_POLICY_JVM_PROJECTION_ABI,
         ARSENAL_POLICY_SCHEMA,
         ARSENAL_POLICY_VERSION,
         arsenal_policy_contract_sha256,
@@ -64,6 +67,7 @@ def _contract() -> dict:
         "schema": ARSENAL_POLICY_SCHEMA,
         "version": ARSENAL_POLICY_VERSION,
         "arsenal_policy_contract_sha256": arsenal_policy_contract_sha256(),
+        "policy_projection_abi": ARSENAL_POLICY_JVM_PROJECTION_ABI,
         "action_head_sizes": list(ARSENAL_POLICY_ACTION_HEAD_SIZES),
         "action_size": int(sum(ARSENAL_POLICY_ACTION_HEAD_SIZES)),
         "entity_count_default": True,
@@ -76,7 +80,7 @@ def main() -> int:
     contract = _contract()
 
     # The manifest shape has moved before, so do not trust a nested lookup to
-    # supply the width. Take it from the fixture Java is actually certified
+    # supply the width. Take it from the fixture Java is actually checked
     # against, which is the number that matters.
     observation_candidates = (
         OUT / "observation.bin",
@@ -100,8 +104,8 @@ def main() -> int:
     if check:
         if not pin_path.is_file():
             raise SystemExit(
-                "no case/contract.json to check against -- run without --check "
-                "first to write the pin"
+            "no case/contract.json to check against -- run without --check "
+            "first to generate the fixture"
             )
         pinned = json.loads(pin_path.read_text(encoding="utf-8"))
         drift = [
@@ -110,17 +114,18 @@ def main() -> int:
             if pinned.get(key) != contract.get(key)
         ]
         if drift:
-            print("CONTRACT DRIFT -- the live Gym no longer matches the pin:")
+            print("CONTRACT DRIFT -- the live Gym no longer matches the fixture:")
             for key in drift:
                 print(f"  {key}:")
                 print(f"    pinned : {pinned.get(key)}")
                 print(f"    live   : {contract.get(key)}")
             print()
-            print("The Java port is certified against the pinned contract. Either")
-            print("re-export every fixture against the live Gym and re-pin, or")
-            print("keep the Gym where it was. Do not just overwrite the pin.")
+            print("The Java port is checked against this generated fixture.")
+            print("Regenerate affected fixtures from the live Gym.")
+            print("If policy_projection_abi changed, port Java before deployment.")
+            print("Do not edit only a SHA or ABI label to force compatibility.")
             return 1
-        print(f"contract pin holds: {pinned['arsenal_policy_contract_sha256']}")
+        print(f"contract fixture holds: {pinned['arsenal_policy_contract_sha256']}")
         print(f"observation {pinned['observation_size']}, "
               f"action {pinned['action_size']}, "
               f"heads {pinned['action_head_sizes']}")
@@ -129,7 +134,7 @@ def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     pin_path.write_text(json.dumps(contract, indent=1, sort_keys=True) + "\n",
                         encoding="utf-8")
-    print(f"pinned contract to {pin_path}")
+    print(f"generated Gym contract fixture at {pin_path}")
     for key, value in sorted(contract.items()):
         print(f"  {key}: {value}")
     return 0

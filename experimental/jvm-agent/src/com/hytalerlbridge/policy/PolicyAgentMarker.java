@@ -28,7 +28,9 @@ public final class PolicyAgentMarker implements Component<EntityStore> {
     /** Re-enable post-behaviour native motion for one tick while AI stays frozen. */
     private final boolean stepFrozenNpc;
     private final float[] carry;
+    private boolean terminated;
     private float desiredYaw;
+    private float desiredBodyYaw;
     private float desiredPitch;
 
     // Motion evidence. The sink is called every tick and throws nothing, which
@@ -111,11 +113,26 @@ public final class PolicyAgentMarker implements Component<EntityStore> {
     }
 
     public boolean active() {
-        return runtime != null && slot >= 0;
+        return runtime != null && slot >= 0 && !terminated;
+    }
+
+    /** End this actor's policy episode after terminal evidence. */
+    public void terminate() {
+        terminated = true;
+    }
+
+    public boolean terminated() {
+        return terminated;
     }
 
     public float desiredYaw() {
         return desiredYaw;
+    }
+
+    public float desiredBodyYaw() { return desiredBodyYaw; }
+
+    public void applyBodyYawDelta(double degrees) {
+        desiredBodyYaw = normalizeRadians(desiredBodyYaw + (float) Math.toRadians(degrees));
     }
 
     public float desiredPitch() {
@@ -125,6 +142,7 @@ public final class PolicyAgentMarker implements Component<EntityStore> {
     /** Seed the pose from the NPC's spawn orientation, in radians. */
     public void setPose(float yaw, float pitch) {
         desiredYaw = normalizeRadians(yaw);
+        desiredBodyYaw = desiredYaw;
         desiredPitch = clamp(pitch, (float) (-Math.PI / 2.0), (float) (Math.PI / 2.0));
     }
 
@@ -276,6 +294,7 @@ public final class PolicyAgentMarker implements Component<EntityStore> {
     public void reset() {
         java.util.Arrays.fill(carry, 0.0f);
         desiredYaw = 0.0f;
+        desiredBodyYaw = 0.0f;
         desiredPitch = 0.0f;
         havePosition = false;
         pathLength = 0.0;
@@ -295,7 +314,7 @@ public final class PolicyAgentMarker implements Component<EntityStore> {
      */
     @Override
     public PolicyAgentMarker clone() {
-        return new PolicyAgentMarker(
+        PolicyAgentMarker copy = new PolicyAgentMarker(
             runtime,
             slot,
             stepFrozenNpc,
@@ -303,6 +322,9 @@ public final class PolicyAgentMarker implements Component<EntityStore> {
             desiredYaw,
             desiredPitch
         );
+        copy.desiredBodyYaw = desiredBodyYaw;
+        copy.terminated = terminated;
+        return copy;
     }
 
     private static float clamp(float value, float low, float high) {

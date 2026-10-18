@@ -277,6 +277,14 @@ public final class HydlSpawnCommand extends AbstractPlayerCommand {
             placed.set(x, y, z);
             last = new Vector3d(placed);
 
+            if (roleName.equals(armedRole)) {
+                // The command bypasses the authored role spawn path. Install
+                // the checkpoint item before the attachment system can claim
+                // the NPC, otherwise live lifecycle evidence fails closed as
+                // agent_item_mismatch on every tick.
+                plugin.prepareSpawnedActor(agentRef, store);
+            }
+
             // Without this the NPC walks back to wherever it thinks it spawned,
             // which for a hand-placed agent is the wrong anchor.
             AbstractCommand.LOGGER.at(Level.INFO).log(

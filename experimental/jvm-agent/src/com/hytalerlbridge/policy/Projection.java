@@ -53,6 +53,12 @@ public final class Projection {
 
     public static final int TARGET_SIZE = 16;
 
+    /** Named target-row indices used by diagnostics and flattened layout. */
+    public static final int TARGET_PLANAR_DISTANCE_INDEX = featureIndex(
+        TARGET_FEATURES, "planar_distance");
+    public static final int TARGET_VISIBLE_INDEX = featureIndex(
+        TARGET_FEATURES, "visible");
+
     /**
      * Column order of {@code combat_f32} — the 24-value actor observation.
      *
@@ -107,6 +113,7 @@ public final class Projection {
      */
     public record Params(
         double agentMaxSpeed,
+        double agentMaximumGaitSpeed,
         double verticalSpeedScale,
         double agentMaxHealth,
         double agentAttackPauseMaxSeconds,
@@ -163,6 +170,13 @@ public final class Projection {
     ) {}
 
     private Projection() {
+    }
+
+    private static int featureIndex(String[] features, String name) {
+        for (int index = 0; index < features.length; index++) {
+            if (features[index].equals(name)) return index;
+        }
+        throw new IllegalStateException("missing projection feature: " + name);
     }
 
     /** Decode the live bridge's row-level movement-state evidence. */
@@ -277,7 +291,7 @@ public final class Projection {
         float velocityZ = (float) state.velocityZ();
         float health = (float) state.health();
 
-        float maximumSpeed = positive((float) params.agentMaxSpeed());
+        float maximumSpeed = positive((float) params.agentMaximumGaitSpeed());
         float verticalScale = positive((float) params.verticalSpeedScale());
 
         float[] out = new float[SELF_SIZE];

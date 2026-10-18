@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * Publishes the hook's counters as a JSON file for the console to read.
@@ -29,7 +30,7 @@ import java.util.Map;
 final class PolicyMetrics {
 
     static final String FILE_NAME = "metrics.json";
-    static final int SCHEMA_VERSION = 3;
+    static final int SCHEMA_VERSION = 6;
     static final double MINIMUM_HORIZONTAL_PATH = 0.05;
 
     private PolicyMetrics() {
@@ -43,6 +44,7 @@ final class PolicyMetrics {
         PolicyControlSystem control,
         SteeringActionSink sink,
         long[] worldVerbCounters,
+        long[] combatCounters,
         long worldTick,
         boolean worldTicking,
         double worldTps,
@@ -65,11 +67,26 @@ final class PolicyMetrics {
         out.put("claimed", attachment.claimed());
         out.put("policy_ticks", counters[0]);
         out.put("skipped_no_observation", counters[1]);
+        appendObservationSkipCounters(
+            out,
+            control.lastSkipReason(),
+            control.skippedNoObservationByReason());
+        out.put("terminal_actors", control.terminalActors());
+        out.put("last_terminal_reason", control.lastTerminalReason());
         out.put("rejected_illegal", counters[2]);
         out.put("dropped_world_verb", counters[3]);
         out.put("world_verb_requests", control.worldVerbRequests());
+        out.put("combat_action_requests", control.combatActionRequests());
         out.put("locomotion_requests", control.locomotionRequests());
+        out.put("observation_changes", control.observationChanges());
+        out.put("target_observation_samples", control.targetObservationSamples());
+        if (control.targetObservationSamples() > 0) {
+            out.put("target_first_planar_distance_clipped", round(control.firstTargetDistance()));
+            out.put("target_last_planar_distance_clipped", round(control.lastTargetDistance()));
+            out.put("target_min_planar_distance_clipped", round(control.minimumTargetDistance()));
+        }
         appendWorldVerbCounters(out, worldVerbCounters);
+        appendCombatCounters(out, combatCounters);
         // Held ticks are ones where the network ran but its action was
         // discarded in favour of the previous decision. `policy_ticks` still
         // counts them, so held/ticks should approach (period-1)/period.
@@ -121,6 +138,8 @@ final class PolicyMetrics {
             out.put("last_skill", last.skillId());
             out.put("last_world_move", last.worldMoveDirection());
             out.put("last_yaw_delta_degrees", round(last.yawDeltaDegrees()));
+            out.put("last_body_yaw_delta_degrees", round(last.bodyYawDeltaDegrees()));
+            out.put("last_gait", last.gait());
             out.put("last_pitch_delta_degrees", round(last.pitchDeltaDegrees()));
             out.put("last_jump", last.jumpHeld());
             out.put("last_attack", last.attack());
@@ -168,6 +187,58 @@ final class PolicyMetrics {
         out.put("world_verb_context_failures", value[8]);
     }
 
+    /** Publish bridge combat admission and lifecycle counters. */
+    static void appendCombatCounters(
+        Map<String, Object> out,
+        long[] counters
+    ) {
+        if (out == null) {
+            throw new IllegalArgumentException("metrics map is required");
+        }
+        boolean available = counters != null;
+        if (available && counters.length != 11) {
+            throw new IllegalArgumentException(
+                "Combat counters must contain exactly eleven values");
+        }
+        long[] value = available ? counters : new long[11];
+        out.put("combat_executor_available", available);
+        out.put("combat_bindings_accepted", value[0]);
+        out.put("combat_bindings_rejected", value[1]);
+        out.put("combat_calls_unavailable", value[2]);
+        out.put("combat_attack_accepted", value[3]);
+        out.put("combat_ability_accepted", value[4]);
+        out.put("combat_dodge_accepted", value[5]);
+        out.put("combat_guard_started", value[6]);
+        out.put("combat_ability_finished", value[7]);
+        out.put("combat_ability_failed", value[8]);
+        out.put("combat_dodge_finished", value[9]);
+        out.put("combat_dodge_failed", value[10]);
+    }
+
+    /** Publish null-observation diagnostics as stable flat JSON fields. */
+    static void appendObservationSkipCounters(
+        Map<String, Object> out,
+        String lastReason,
+        Map<String, Long> counts
+    ) {
+        if (out == null) {
+            throw new IllegalArgumentException("metrics map is required");
+        }
+        out.put("last_skip_reason", normalizeReason(lastReason));
+        if (counts == null) {
+            return;
+        }
+        for (Map.Entry<String, Long> entry
+                : new TreeMap<>(counts).entrySet()) {
+            String reason = normalizeReason(entry.getKey());
+            long count = entry.getValue() == null ? 0L : entry.getValue();
+            out.put(
+                "skipped_no_observation_reason_" + metricKey(reason),
+                count
+            );
+        }
+    }
+
     static void write(Path directory, Map<String, Object> payload) throws IOException {
         Path target = directory.resolve(FILE_NAME);
         Path temporary = directory.resolve(FILE_NAME + ".tmp");
@@ -201,6 +272,20 @@ final class PolicyMetrics {
             return 0.0;
         }
         return Math.round(value * 10000.0) / 10000.0;
+    }
+
+    private static String normalizeReason(String reason) {
+        return reason == null || reason.isBlank()
+            ? "unknown" : reason.trim();
+    }
+
+    private static String metricKey(String reason) {
+        StringBuilder key = new StringBuilder(reason.length());
+        for (int index = 0; index < reason.length(); index++) {
+            char c = reason.charAt(index);
+            key.append(Character.isLetterOrDigit(c) ? c : '_');
+        }
+        return key.length() == 0 ? "unknown" : key.toString();
     }
 
     private static String escape(String value) {

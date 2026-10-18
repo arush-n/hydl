@@ -21,6 +21,8 @@ import com.hytalerlbridge.policy.perception.acquisition.bridge.ReflectiveBridgeC
 import com.hytalerlbridge.policy.perception.acquisition.crafting.ServerRecipeCandidateReader;
 import com.hytalerlbridge.policy.perception.acquisition.trace.JsonLinesLifecycleTraceSink;
 import com.hytalerlbridge.policy.perception.acquisition.trace.LifecycleTraceSink;
+import com.hytalerlbridge.policy.perception.acquisition.trace.JsonLinesPolicyTraceSink;
+import com.hytalerlbridge.policy.perception.acquisition.trace.PolicyTraceSink;
 import com.hytalerlbridge.policy.perception.profile.PerceptionProfile;
 import com.hytalerlbridge.policy.combat.bridge.BridgeCombatFacade;
 import com.hytalerlbridge.policy.combat.bridge.ReflectiveBridgeCombatFacade;
@@ -68,12 +70,13 @@ import com.hytalerlbridge.policy.bundle.BridgeTargetAttestation;
  * mods/policy-agent/                 &lt;- weights and the captured observation
  *     encoder_input_kernel.bin, ... , actor_bias.bin
  *     observation.bin, action_mask.bin
- *     agent.json, contract.txt         &lt;- required v4 identity/provenance
+ *     agent.json, contract.txt         &lt;- required v6 identity/provenance/ABI/scope
  *     profile/                       &lt;- live evidence profile; if present,
  *                                      the matching bridge facade is required
- *     role.txt                       &lt;- required by v4; exact trained role
+ *     role.txt                       &lt;- required by v6; exact trained role
  *     decision.txt                   &lt;- optional; ticks between decisions
  *     nojump                         &lt;- optional; presence suppresses jumping
+ *     follow-player                  &lt;- optional; target the nearest connected player
  *     live-test-control.txt          &lt;- optional one-shot diagnostic control
  *     bridge-target.txt              &lt;- optional exact bridge JAR/ABI tuple;
  *                                      attested before weight load/actor claim
@@ -86,6 +89,7 @@ import com.hytalerlbridge.policy.bundle.BridgeTargetAttestation;
 public final class PolicyAgentPlugin extends JavaPlugin {
 
     private static final String DATA_DIRECTORY = "policy-agent";
+    private static final String FOLLOW_PLAYER_FILE = "follow-player";
     private PolicyControlSystem control;
     private PolicyAttachmentSystem attachment;
     private SteeringActionSink steeringSink;
@@ -95,10 +99,12 @@ public final class PolicyAgentPlugin extends JavaPlugin {
     private PolicyWorldAnchorRegistry worldAnchors;
     private PolicyRuntime runtime;
     private PolicyPerception perception;
+    private PolicyTraceSink policyTrace = PolicyTraceSink.disabled();
     private int captureNonZero = -1;
     private int captureLegal = -1;
     private String perceptionDescription = "unconfigured";
     private String role;
+    private boolean followPlayer;
     private int decisionPeriod = 1;
     /** Profile whose ability bindings still need resolving off the world thread. */
     private volatile PerceptionProfile warmupProfile;
@@ -132,6 +138,11 @@ public final class PolicyAgentPlugin extends JavaPlugin {
     private volatile boolean testSubjectReady;
     /** Parse/setup failures are terminal; a missing startup world is not. */
     private volatile boolean testSubjectFailed;
+    /** Stops heartbeat writes before the shutdown snapshot becomes authoritative. */
+    private volatile boolean heartbeatStopRequested;
+    private volatile Thread heartbeatThread;
+    private volatile double lastWorldTps;
+    private volatile double lastPolicyTps;
 
     public PolicyAgentPlugin(JavaPluginInit init) {
         super(init);
@@ -166,7 +177,7 @@ public final class PolicyAgentPlugin extends JavaPlugin {
                     BridgeTargetAttestation.runtimeProblems(data));
             }
             if (mismatches.isEmpty()) {
-                runtime = PolicyRuntime.load(data);
+                runtime = PolicyRuntime.load(data, declared.actionScopeMask());
                 // Recompute after loading as a narrow TOCTOU guard and compare
                 // declared dimensions with the tensors Policy actually read.
                 mismatches.addAll(declared.problems(runtime));
@@ -180,11 +191,14 @@ public final class PolicyAgentPlugin extends JavaPlugin {
             }
             getLogger().atInfo().log("PolicyAgent bundle: " + declared.describe());
 
-            ActionRuntime actions = configurePerception(data);
+            boolean followPlayer = Files.isRegularFile(
+                data.resolve(FOLLOW_PLAYER_FILE));
+            ActionRuntime actions = configurePerception(data, followPlayer);
             liveActionControl = DeterministicLiveActionControl.load(
                 data.resolve(DeterministicLiveActionControl.FILE_NAME));
 
             role = readRole(data);
+            policyTrace = configurePolicyTrace(data);
             // Read out of the bridge's own CombatRuleset.defaultRules() by
             // executing it (2026-08-04), not guessed: steeringRelativeTurnSpeed
             // 1.5, jumpVelocityGravityFloor 10.0, jumpHeightParameter 1.3. This
@@ -235,6 +249,10 @@ public final class PolicyAgentPlugin extends JavaPlugin {
             if (!allowJump) {
                 getLogger().atWarning().log("PolicyAgent: jump suppressed (nojump present)");
             }
+            if (followPlayer) {
+                getLogger().atInfo().log(
+                    "PolicyAgent target mode: nearest connected player");
+            }
 
             var markerType = getEntityStoreRegistry().registerComponent(
                 PolicyAgentMarker.class, PolicyAgentMarker::new);
@@ -248,7 +266,8 @@ public final class PolicyAgentPlugin extends JavaPlugin {
                 perception,
                 sink,
                 decisionPeriod,
-                liveActionControl
+                liveActionControl,
+                policyTrace
             );
             if (decisionPeriod == 1) {
                 getLogger().atWarning().log(
@@ -274,6 +293,7 @@ public final class PolicyAgentPlugin extends JavaPlugin {
 
             this.decisionPeriod = decisionPeriod;
             this.jumpAllowed = allowJump;
+            this.followPlayer = followPlayer;
 
             // `/hydl`, not a subcommand of `/npc`: that root belongs to
             // Hytale's own NPC plugin and a future update is free to add
@@ -337,6 +357,11 @@ public final class PolicyAgentPlugin extends JavaPlugin {
         return jumpAllowed;
     }
 
+    /** Whether live perception is configured to acquire a connected player. */
+    public boolean followPlayer() {
+        return followPlayer;
+    }
+
     public int observationSize() {
         return runtime == null ? 0 : runtime.observationSize();
     }
@@ -350,7 +375,7 @@ public final class PolicyAgentPlugin extends JavaPlugin {
      * many actions were legal.
      *
      * <p>This is the "does it actually comprehend the world" number. The
-     * contract width (8271) says how much the policy *can* read; this says how
+     * contract width (8272) says how much the policy *can* read; this says how
      * much carried signal when it last looked. A wide contract with a handful
      * of non-zero columns is an agent reading mostly padding -- which looks
      * identical to a working agent from every other diagnostic.
@@ -407,11 +432,13 @@ public final class PolicyAgentPlugin extends JavaPlugin {
      * the world itself went idle and no amount of hook correctness matters.
      */
     private void startHeartbeat() {
+        heartbeatStopRequested = false;
         Thread thread = new Thread(() -> {
             long previousWorld = -1;
             long previousPolicy = -1;
             int refreshesUntilReport = 5;
-            while (!Thread.currentThread().isInterrupted()) {
+            while (!heartbeatStopRequested
+                    && !Thread.currentThread().isInterrupted()) {
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException interrupted) {
@@ -534,17 +561,24 @@ public final class PolicyAgentPlugin extends JavaPlugin {
                         delta[0], delta[1], delta[2], at[0], at[1], at[2]));
                 }
 
+                double worldTps = previousWorld < 0
+                    ? 0.0 : (worldTick - previousWorld) / 5.0;
+                double policyTps = previousPolicy < 0
+                    ? 0.0 : (counters[0] - previousPolicy) / 5.0;
+                lastWorldTps = worldTps;
+                lastPolicyTps = policyTps;
                 publishMetrics(
                     worldTick,
                     current.isTicking(),
-                    previousWorld < 0 ? 0.0 : (worldTick - previousWorld) / 5.0,
-                    previousPolicy < 0 ? 0.0 : (counters[0] - previousPolicy) / 5.0);
+                    worldTps,
+                    policyTps);
 
                 previousWorld = worldTick;
                 previousPolicy = counters[0];
             }
         }, "PolicyAgent-heartbeat");
         thread.setDaemon(true);
+        heartbeatThread = thread;
         thread.start();
     }
 
@@ -625,6 +659,7 @@ public final class PolicyAgentPlugin extends JavaPlugin {
                         // Otherwise the engine reclaims it before it is useful.
                         npc.setDespawnTime(Float.POSITIVE_INFINITY);
                     }
+                    prepareSpawnedActor(spawned.left(), store);
                     // A world with no players may not be ticking at all, in
                     // which case a correct hook still never runs. Record it
                     // rather than guessing later from an empty log.
@@ -655,6 +690,35 @@ public final class PolicyAgentPlugin extends JavaPlugin {
             testSubjectFailed = true;
             getLogger().atWarning().log("PolicyAgent could not read spawn.txt: " + exception);
         }
+    }
+
+    /**
+     * Prepare an explicitly spawned live-policy actor before attachment.
+     *
+     * <p>Server-created NPCs normally arrive with their authored loadout. The
+     * opt-in {@code spawn.txt} and {@code /hydl spawn} paths bypass that
+     * authored spawn configuration, so they must install the checkpoint item
+     * themselves. A captured-observation bundle has no live item contract and
+     * remains unchanged.</p>
+     */
+    public void prepareSpawnedActor(
+        Ref<EntityStore> reference,
+        Store<EntityStore> store
+    ) {
+        PerceptionProfile profile = liveProfile;
+        if (profile == null || profile.agentItemId() == null
+            || profile.agentItemId().isBlank()) {
+            return;
+        }
+        String actual = PolicyActorLoadout.install(
+            reference,
+            store,
+            profile.agentItemId(),
+            com.hytalerlbridge.policy.perception.acquisition.resources
+                .CatalogBackedActorStats.Boundary.FIXTURE_EQUIP
+        );
+        getLogger().atInfo().log(
+            "PolicyAgent prepared explicit actor loadout: %s", actual);
     }
 
     /**
@@ -880,27 +944,43 @@ public final class PolicyAgentPlugin extends JavaPlugin {
             new ArrayList<>(pinnedFixtureChunks.entrySet());
         pinnedFixtureChunks.clear();
         if (current == null || pinned.isEmpty()) return;
+        if (!current.isTicking()) {
+            getLogger().atInfo().log(
+                "PolicyAgent fixture chunk release skipped: world already stopped"
+            );
+            return;
+        }
 
         CompletableFuture<Void> released = new CompletableFuture<>();
-        current.execute(() -> {
-            try {
-                Store<ChunkStore> store = current.getChunkStore().getStore();
-                for (Map.Entry<Long, Ref<ChunkStore>> entry : pinned) {
-                    Ref<ChunkStore> ref = entry.getValue();
-                    if (ref == null || !ref.isValid()) continue;
-                    WorldChunk chunk = store.getComponent(
-                        ref,
-                        WorldChunk.getComponentType()
-                    );
-                    if (chunk != null && chunk.shouldKeepLoaded()) {
-                        chunk.removeKeepLoaded();
+        try {
+            current.execute(() -> {
+                try {
+                    Store<ChunkStore> store = current.getChunkStore().getStore();
+                    for (Map.Entry<Long, Ref<ChunkStore>> entry : pinned) {
+                        Ref<ChunkStore> ref = entry.getValue();
+                        if (ref == null || !ref.isValid()) continue;
+                        WorldChunk chunk = store.getComponent(
+                            ref,
+                            WorldChunk.getComponentType()
+                        );
+                        if (chunk != null && chunk.shouldKeepLoaded()) {
+                            chunk.removeKeepLoaded();
+                        }
                     }
+                    released.complete(null);
+                } catch (Throwable failure) {
+                    released.completeExceptionally(failure);
                 }
-                released.complete(null);
-            } catch (Throwable failure) {
-                released.completeExceptionally(failure);
+            });
+        } catch (RuntimeException failure) {
+            if (!worldStopped(failure)) {
+                throw failure;
             }
-        });
+            getLogger().atInfo().log(
+                "PolicyAgent fixture chunk release skipped: world stopped"
+            );
+            return;
+        }
         try {
             released.get(5, TimeUnit.SECONDS);
         } catch (InterruptedException interrupted) {
@@ -914,6 +994,21 @@ public final class PolicyAgentPlugin extends JavaPlugin {
                 "PolicyAgent fixture chunk release failed"
             );
         }
+    }
+
+    private static boolean worldStopped(Throwable failure) {
+        Throwable current = failure;
+        while (current != null) {
+            if (current instanceof IllegalThreadStateException) {
+                return true;
+            }
+            Throwable cause = current.getCause();
+            if (cause == current) {
+                break;
+            }
+            current = cause;
+        }
+        return false;
     }
 
     private static void awaitFixtureChunkTask(
@@ -946,6 +1041,17 @@ public final class PolicyAgentPlugin extends JavaPlugin {
 
     @Override
     protected void shutdown() {
+        heartbeatStopRequested = true;
+        Thread heartbeat = heartbeatThread;
+        if (heartbeat != null && heartbeat != Thread.currentThread()) {
+            heartbeat.interrupt();
+            try {
+                heartbeat.join(1000L);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        policyTrace.close();
         if (control == null) {
             return;
         }
@@ -997,6 +1103,28 @@ public final class PolicyAgentPlugin extends JavaPlugin {
                 combat[5], combat[6], combat[7], combat[8], combat[9],
                 combat[10]));
         }
+        long finalWorldTick = -1L;
+        boolean finalWorldTicking = false;
+        if (current != null) {
+            try {
+                finalWorldTick = current.getTick();
+                finalWorldTicking = current.isTicking();
+            } catch (RuntimeException failure) {
+                getLogger().atInfo().log(
+                    "PolicyAgent final metrics world state unavailable: "
+                        + failure.getClass().getSimpleName());
+            }
+        }
+        publishMetrics(
+            finalWorldTick,
+            finalWorldTicking,
+            lastWorldTps,
+            lastPolicyTps);
+        if (policyTrace.transitionsWritten() >= 0) {
+            getLogger().atInfo().log(
+                "PolicyAgent native policy trace: transitions="
+                    + policyTrace.transitionsWritten());
+        }
     }
 
     /**
@@ -1017,6 +1145,7 @@ public final class PolicyAgentPlugin extends JavaPlugin {
             PolicyMetrics.write(dataDirectory, PolicyMetrics.snapshot(
                 role, runtime, attachment, control, steeringSink,
                 worldVerbSink == null ? null : worldVerbSink.counters(),
+                combatSink == null ? null : combatSink.counters(),
                 worldTick, worldTicking, worldTps, policyTps,
                 captureNonZero,
                 captureLegal));
@@ -1033,7 +1162,10 @@ public final class PolicyAgentPlugin extends JavaPlugin {
      * missing bridge facade or schema mismatch leaves the plugin inert instead
      * of silently running open-loop.</p>
      */
-    private ActionRuntime configurePerception(Path data) throws Exception {
+    private ActionRuntime configurePerception(
+        Path data,
+        boolean followPlayer
+    ) throws Exception {
         Path profileDirectory = data.resolve("profile");
         if (Files.isDirectory(profileDirectory)) {
             PerceptionProfile profile = PerceptionProfile.load(
@@ -1111,6 +1243,11 @@ public final class PolicyAgentPlugin extends JavaPlugin {
                             + unavailable);
                 }
             }
+            boolean pursuitContext = Files.isRegularFile(data.resolve("pursuit-context"));
+            if (pursuitContext) {
+                getLogger().atInfo().log(
+                    "PolicyAgent accommodation: omniscient pursuit context enabled; physical visibility preserved");
+            }
             perception = new LivePolicyPerception(
                 profile,
                 new PublicServerEvidenceSource(
@@ -1118,10 +1255,14 @@ public final class PolicyAgentPlugin extends JavaPlugin {
                     lifecycle,
                     lifecycleTrace,
                     recipes,
-                    worldFacade != null
-                )
+                    worldFacade != null,
+                    pursuitContext,
+                    followPlayer
+                ),
+                pursuitContext
             );
-            perceptionDescription = "live profile=" + profile.sha256();
+            perceptionDescription = "live profile=" + profile.sha256()
+                + (followPlayer ? " target=connected-player" : "");
             return new ActionRuntime(recipes, worldFacade, combatFacade);
         }
 
@@ -1139,6 +1280,34 @@ public final class PolicyAgentPlugin extends JavaPlugin {
             "PolicyAgent is using frozen open-loop perception; install the "
                 + "checkpoint profile at policy-agent/profile for live input");
         return null;
+    }
+
+    /** Enable the complete native policy boundary only when explicitly marked. */
+    private PolicyTraceSink configurePolicyTrace(Path data) {
+        if (!Files.exists(data.resolve("policy-trace"))) {
+            return PolicyTraceSink.disabled();
+        }
+        try {
+            int maximumTransitions =
+                JsonLinesPolicyTraceSink.readMaximumTransitions(
+                    data.resolve("policy-trace"));
+            var recorder = new JsonLinesPolicyTraceSink(
+                data,
+                maximumTransitions,
+                runtime.observationSize(),
+                runtime.actionSize(),
+                role,
+                liveProfile == null ? "" : liveProfile.sha256()
+            );
+            getLogger().atInfo().log(
+                "PolicyAgent native policy trace: " + recorder.path()
+                    + " (maximum transitions=" + maximumTransitions + ")");
+            return recorder;
+        } catch (IOException | RuntimeException unavailable) {
+            getLogger().atWarning().log(
+                "PolicyAgent native policy trace unavailable: " + unavailable);
+            return PolicyTraceSink.disabled();
+        }
     }
 
     /** Frozen captures need no bindings; live profiles wait for full warm-up. */

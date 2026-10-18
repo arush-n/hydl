@@ -7,7 +7,7 @@ This writes three things into ``case/``:
 
 * the trained weights, as flat little-endian float32 -- no pickle, no npz
   reader needed on the Java side;
-* one real native observation and its 99-bit legality mask, captured live from
+* one real native observation and its 124-bit legality mask, captured live from
   the server, so the Java side is fed genuine server perception rather than a
   synthetic vector;
 * the JAX reference outputs (logits, value, decoded 12 factors) so the Java

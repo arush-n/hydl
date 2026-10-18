@@ -51,6 +51,11 @@ OUT = CASE / "recurrent"
 STEPS = 900
 
 
+def _count(name: str) -> int:
+    """Element count of an exported tensor, so shapes are read not assumed."""
+    return int(np.fromfile(CASE / f"{name}.bin", dtype=np.float32).size)
+
+
 def _read(name: str, shape: tuple[int, ...]) -> np.ndarray:
     values = np.fromfile(CASE / f"{name}.bin", dtype=np.float32)
     if values.size != int(np.prod(shape)):
@@ -66,31 +71,50 @@ def main() -> int:
     from hytalegym.jax.training.types import GRUParams, RecurrentPolicyParams
     from hytalegym.jax.training.policy import apply_policy
 
-    observation_size, hidden = 8271, 32
-    actions = 99
+    # DERIVED FROM THE EXPORTED TENSORS, never pinned here. These widths have
+    # moved twice already -- 8,271 -> 8,272 columns and 99 -> 124 logits -- and
+    # a literal turns that into "encoder_input_kernel.bin has 529408 floats,
+    # expected 264672", which reads like a corrupt export rather than a stale
+    # constant in this file. It cost a debugging session to tell those apart.
+    #
+    # The encoder and the GRU are ALSO no longer the same width (64 against
+    # 128), so the single `hidden` this used to carry cannot describe the
+    # network at all. Each tensor states its own shape; read it from there.
+    encoder = _count("encoder_input_bias")
+    recurrent = _count("gru_bias") // 3
+    observation_size = _count("encoder_input_kernel") // encoder
+    actions = _count("actor_bias")
+    print(
+        f"contract: {observation_size} observations, {actions} logits, "
+        f"encoder {encoder}, recurrent {recurrent}"
+    )
 
     params = RecurrentPolicyParams(
         encoder_input=DenseParams(
-            kernel=jnp.asarray(_read("encoder_input_kernel", (observation_size, hidden))),
-            bias=jnp.asarray(_read("encoder_input_bias", (hidden,))),
+            kernel=jnp.asarray(
+                _read("encoder_input_kernel", (observation_size, encoder))
+            ),
+            bias=jnp.asarray(_read("encoder_input_bias", (encoder,))),
         ),
         encoder_hidden=DenseParams(
-            kernel=jnp.asarray(_read("encoder_hidden_kernel", (hidden, hidden))),
-            bias=jnp.asarray(_read("encoder_hidden_bias", (hidden,))),
+            kernel=jnp.asarray(_read("encoder_hidden_kernel", (encoder, encoder))),
+            bias=jnp.asarray(_read("encoder_hidden_bias", (encoder,))),
         ),
         gru=GRUParams(
-            input_kernel=jnp.asarray(_read("gru_input_kernel", (hidden, 3 * hidden))),
-            recurrent_kernel=jnp.asarray(
-                _read("gru_recurrent_kernel", (hidden, 3 * hidden))
+            input_kernel=jnp.asarray(
+                _read("gru_input_kernel", (encoder, 3 * recurrent))
             ),
-            bias=jnp.asarray(_read("gru_bias", (3 * hidden,))),
+            recurrent_kernel=jnp.asarray(
+                _read("gru_recurrent_kernel", (recurrent, 3 * recurrent))
+            ),
+            bias=jnp.asarray(_read("gru_bias", (3 * recurrent,))),
         ),
         actor=DenseParams(
-            kernel=jnp.asarray(_read("actor_kernel", (hidden, actions))),
+            kernel=jnp.asarray(_read("actor_kernel", (recurrent, actions))),
             bias=jnp.asarray(_read("actor_bias", (actions,))),
         ),
         critic=DenseParams(
-            kernel=jnp.asarray(_read("critic_kernel", (hidden, 1))),
+            kernel=jnp.asarray(_read("critic_kernel", (recurrent, 1))),
             bias=jnp.asarray(_read("critic_bias", (1,))),
         ),
     )
@@ -104,7 +128,7 @@ def main() -> int:
     _, logits, _ = apply_policy(
         params,
         jnp.asarray(reference_observation)[None],
-        jnp.zeros((1, hidden), dtype=jnp.float32),
+        jnp.zeros((1, recurrent), dtype=jnp.float32),
         jnp.asarray(reference_mask)[None],
     )
     reconstruction_delta = float(
@@ -127,9 +151,9 @@ def main() -> int:
     # stops accumulating and the test would quietly prove nothing.
     order = [states[index % len(states)] for index in range(STEPS)]
 
-    carry = jnp.zeros((1, hidden), dtype=jnp.float32)
+    carry = jnp.zeros((1, recurrent), dtype=jnp.float32)
     all_logits = np.zeros((STEPS, actions), dtype=np.float32)
-    all_carry = np.zeros((STEPS, hidden), dtype=np.float32)
+    all_carry = np.zeros((STEPS, recurrent), dtype=np.float32)
     all_value = np.zeros((STEPS,), dtype=np.float32)
 
     for step, state in enumerate(order):
@@ -159,9 +183,9 @@ def main() -> int:
     # trivial rather than meaningful.
     magnitude = np.abs(all_carry)
     moved = int(np.sum(magnitude.max(axis=0) > 1.0e-6))
-    if moved < hidden // 2:
+    if moved < recurrent // 2:
         raise SystemExit(
-            f"only {moved}/{hidden} carry units ever left zero -- the rollout "
+            f"only {moved}/{recurrent} carry units ever left zero -- the rollout "
             "does not exercise the recurrent path"
         )
     drift = float(np.max(np.abs(all_carry[-1] - all_carry[0])))
@@ -184,7 +208,7 @@ def main() -> int:
         encoding="utf-8",
     )
     print(f"wrote {STEPS} steps over {len(states)} distinct observations")
-    print(f"carry units that moved : {moved}/{hidden}")
+    print(f"carry units that moved : {moved}/{recurrent}")
     print(f"carry range            : [{all_carry.min():+.4f}, {all_carry.max():+.4f}]")
     print(f"carry drift first->last: {drift:.3e}")
     print(f"value range            : [{all_value.min():+.4f}, {all_value.max():+.4f}]")

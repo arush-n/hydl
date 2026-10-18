@@ -18,4 +18,14 @@ public interface PerceptionEvidenceSource {
         int slot,
         float deltaTime
     );
+
+    /** Reason for the most recent null capture, for diagnostics only. */
+    default String lastFailureReason() {
+        return "unknown";
+    }
+
+    /** Whether the most recent null capture ends this actor's episode. */
+    default boolean lastFailureTerminal() {
+        return false;
+    }
 }

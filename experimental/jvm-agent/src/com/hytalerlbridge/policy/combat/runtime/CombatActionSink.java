@@ -114,6 +114,26 @@ public final class CombatActionSink implements PolicyActionSink {
         return base.supportsWorldVerb(action);
     }
 
+    @Override
+    public void onTerminal(
+        Ref<EntityStore> ref,
+        NPCEntity npc,
+        Store<EntityStore> store,
+        float deltaTime,
+        PolicyAgentMarker marker
+    ) {
+        BridgeCombatFacade.Execution execution = marker.combat().execution();
+        if (execution != null) {
+            facade.close(
+                execution, ref, store, marker.worldVerb().active());
+            marker.combat().resetLocal();
+        }
+        synchronized (activeActors) {
+            activeActors.remove(marker);
+        }
+        base.onTerminal(ref, npc, store, deltaTime, marker);
+    }
+
     /** Called by the pre-interaction ECS system. */
     public void prepare(
         Ref<EntityStore> ref,

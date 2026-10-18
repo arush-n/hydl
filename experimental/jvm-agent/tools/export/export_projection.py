@@ -1,7 +1,7 @@
 """Export raw state inputs and the derived fields JAX computes from them.
 
 `AssembleTest` certifies the step *after* this one: 37 pre-computed structured
-fields -> 8,271 columns. This exports the step before it -- the raw simulation
+fields -> 8,272 columns. This exports the step before it -- the raw simulation
 quantities plus what the shared projector derives from them -- so the derivation
 itself can be certified rather than assumed.
 
@@ -336,11 +336,15 @@ def _resource_fixture(state, params, config) -> list[str]:
 
 
 def _defense_fixture(state, params, config) -> list[str]:
-    """Exercise all seven defensive columns for both entity rows."""
+    """Exercise all eight defensive columns for both entity rows."""
 
     from hytalegym.jax.combat import empty_injected_world_features
     from hytalegym.jax.combat.observation.v3.encoding.encoder import (
         project_learner_observation_v3_actor_evidence,
+    )
+    from hytalegym.jax.combat.types import (
+        PLAYER_STAMINA_MAXIMUM,
+        PLAYER_STAMINA_MINIMUM,
     )
     from hytalegym.jax.training import open_flat_arsenal_world_capabilities
 
@@ -368,6 +372,17 @@ def _defense_fixture(state, params, config) -> list[str]:
             np.float32(0.0),
             np.float32(10.0 + case) + entity,
         ).astype(np.float32)
+        locomotion_stamina = (
+            np.float32(PLAYER_STAMINA_MINIMUM)
+            + (
+                ((case + 5 * entity.astype(np.int32)) % 15)
+                / np.float32(14.0)
+            )
+            * np.float32(PLAYER_STAMINA_MAXIMUM - PLAYER_STAMINA_MINIMUM)
+        ).astype(np.float32)
+        # The target row is intentionally withheld from the learner and is
+        # encoded as a full bar. Keep the raw fixture honest too.
+        locomotion_stamina[1] = np.float32(PLAYER_STAMINA_MAXIMUM)
 
         def batch_rows(row):
             return jnp.asarray(
@@ -375,7 +390,12 @@ def _defense_fixture(state, params, config) -> list[str]:
             )
 
         case_state = state._replace(
-            combat=state.combat._replace(health=batch_rows(health)),
+            combat=state.combat._replace(
+                health=batch_rows(health),
+                # CombatState stores this actor-zero value as a scalar. The
+                # target row is deliberately not supplied to the encoder.
+                agent_locomotion_stamina=batch_rows(locomotion_stamina[0]),
+            ),
             mechanics=state.mechanics._replace(
                 guard_active=batch_rows(guard),
                 stamina_broken=batch_rows(broken),
@@ -412,24 +432,33 @@ def _defense_fixture(state, params, config) -> list[str]:
                 regen,
                 immunity,
                 health,
+                locomotion_stamina,
                 np.asarray(evidence.defense_f32[0], dtype=np.float32).reshape(-1),
             )
         )
 
-    expected = np.stack([row[10] for row in rows])
+    expected = np.stack([row[11] for row in rows])
     spread = expected.max(axis=0) - expected.min(axis=0)
-    if expected.shape[1] != 14:
+    if expected.shape[1] != 16:
         raise SystemExit("defense fixture contract width drift")
-    if not np.all(spread > 0):
+    if not np.allclose(expected[:, 15], 1.0):
+        raise SystemExit(
+            "target locomotion stamina is not the non-privileged full-bar row"
+        )
+    varying = np.ones((expected.shape[1],), dtype=np.bool_)
+    # The target's final value is intentionally constant: Hytale does not
+    # expose the opponent's sprint budget to the learner.
+    varying[15] = False
+    if not np.all(spread[varying] > 0):
         raise SystemExit(
             "defense fixture leaves columns constant: "
-            f"{np.flatnonzero(spread <= 0).tolist()}"
+            f"{np.flatnonzero((spread <= 0) & varying).tolist()}"
         )
     lines = [
         "# case\tguard[2]\tstamina_broken[2]\tdodge_remaining[2]"
         "\tdodge_duration[2]\tapplied_velocity[6]\tdodge_force[2]"
         "\tstamina_regen_delay[2]\tcontrol_immunity[2]\thealth[2]"
-        "\texpected[14]"
+        "\tlocomotion_stamina[2]\texpected[16]"
     ]
     for row in rows:
         arrays = []
@@ -618,7 +647,14 @@ def _dodge_fixture(state, params, config) -> list[str]:
     )
 
     rows = []
-    for label, corridor, movement_enabled, alive, stamina, cost in cases:
+    for (
+        label,
+        corridor,
+        movement_enabled,
+        alive,
+        stamina,
+        dodge_admission_cost,
+    ) in cases:
         resources = np.asarray(state.mechanics.resources).copy()
         resources[:, 0, RESOURCE_STAMINA] = np.float32(stamina)
         health = np.asarray(state.combat.health).copy()
@@ -637,10 +673,12 @@ def _dodge_fixture(state, params, config) -> list[str]:
                 resources=jnp.asarray(resources), statuses=statuses
             ),
         )
-        dodge_cost = np.asarray(config.mechanics_rules.dodge_cost).copy()
-        dodge_cost[:, 0] = np.float32(cost)
+        admission_costs = np.asarray(
+            config.mechanics_rules.dodge_admission_cost
+        ).copy()
+        admission_costs[:, 0] = np.float32(dodge_admission_cost)
         case_rules = config.mechanics_rules._replace(
-            dodge_cost=jnp.asarray(dodge_cost)
+            dodge_admission_cost=jnp.asarray(admission_costs)
         )
         case_config = config._replace(mechanics_rules=case_rules)
         capabilities = open_flat_arsenal_world_capabilities(
@@ -665,7 +703,7 @@ def _dodge_fixture(state, params, config) -> list[str]:
                 movement_enabled,
                 alive,
                 stamina,
-                cost,
+                dodge_admission_cost,
                 np.asarray(evidence.dodge_action_mask[0], dtype=np.bool_),
             )
         )
@@ -685,9 +723,17 @@ def _dodge_fixture(state, params, config) -> list[str]:
 
     lines = [
         "# case\tcorridor_clear[4]\tmovement_enabled\talive\tstamina"
-        "\tdodge_cost\texpected_mask[4]"
+        "\tdodge_admission_cost\texpected_mask[4]"
     ]
-    for label, corridor, movement_enabled, alive, stamina, cost, mask in rows:
+    for (
+        label,
+        corridor,
+        movement_enabled,
+        alive,
+        stamina,
+        dodge_admission_cost,
+        mask,
+    ) in rows:
         lines.append(
             "\t".join(
                 (
@@ -696,7 +742,7 @@ def _dodge_fixture(state, params, config) -> list[str]:
                     str(int(movement_enabled)),
                     str(int(alive)),
                     repr(float(stamina)),
-                    repr(float(cost)),
+                    repr(float(dodge_admission_cost)),
                     ",".join(str(int(value)) for value in mask),
                 )
             )
@@ -795,7 +841,16 @@ def _ability_fixture(state, params, config) -> list[str]:
             ability_id=batch_rows(
                 np.zeros((2, 16), dtype=np.int32), jnp.int32
             ),
+            ability_interaction_type=batch_rows(
+                np.full((2, 16), -1, dtype=np.int32), jnp.int32
+            ),
+            ability_guard_fork_type=batch_rows(
+                np.full((2, 16), -1, dtype=np.int32), jnp.int32
+            ),
             ability_mask=batch_rows(authored_mask, jnp.bool_),
+            ability_outer_root_selector=batch_rows(
+                np.zeros((2, 16), dtype=np.bool_), jnp.bool_
+            ),
             ability_evidence=batch_rows(
                 np.zeros((2, 16), dtype=np.int32), jnp.int32
             ),
@@ -805,6 +860,12 @@ def _ability_fixture(state, params, config) -> list[str]:
             ),
             ability_scheduler_prelude_ticks=batch_rows(
                 np.zeros((2, 16), dtype=np.int32), jnp.int32
+            ),
+            ability_interrupted_by_type_mask=batch_rows(
+                np.zeros((2, 16), dtype=np.uint32), jnp.uint32
+            ),
+            ability_interruptible_after_seconds=batch_rows(
+                np.zeros((2, 16), dtype=np.float32), jnp.float32
             ),
             ability_resource_cost=batch_rows(authored_cost, jnp.float32),
             ability_resource_cost_kind=batch_rows(cost_kind, jnp.int32),
@@ -1723,8 +1784,12 @@ def main() -> int:
                     "velocity": [
                         float(v) for v in np.asarray(combat.velocity)[lane, AGENT_ENTITY]
                     ],
-                    "yaw_degrees": float(np.asarray(combat.yaw)[lane, AGENT_ENTITY]),
-                    "pitch_degrees": float(np.asarray(combat.pitch)[lane]),
+                    "yaw_degrees": float(
+                        np.asarray(combat.agent_head_yaw)[lane]
+                    ),
+                    "pitch_degrees": float(
+                        np.asarray(combat.agent_head_pitch)[lane]
+                    ),
                     "health": float(np.asarray(combat.health)[lane, AGENT_ENTITY]),
                     "grounded": bool(np.asarray(combat.agent_grounded)[lane]),
                     "attack_executing": float(
@@ -1771,8 +1836,10 @@ def main() -> int:
     for sweep in range(24):
         velocity = np.asarray(combat.velocity).copy()
         velocity[:, AGENT_ENTITY, :] = rng.uniform(-12.0, 12.0, (BATCH, 3))
-        yaw = np.asarray(combat.yaw).copy()
-        yaw[:, AGENT_ENTITY] = rng.uniform(-540.0, 540.0, BATCH)
+        head_yaw = np.asarray(combat.agent_head_yaw).copy()
+        head_yaw[:] = rng.uniform(-540.0, 540.0, BATCH)
+        head_pitch = np.asarray(combat.agent_head_pitch).copy()
+        head_pitch[:] = rng.uniform(-120.0, 120.0, BATCH)
         health = np.asarray(combat.health).copy()
         health[:, AGENT_ENTITY] = rng.uniform(0.0, 105.0, BATCH)
         # `alive` is health > 0, so uniform sampling never exercises it --
@@ -1784,9 +1851,9 @@ def main() -> int:
 
         swept = combat._replace(
             velocity=like(combat.velocity, velocity),
-            yaw=like(combat.yaw, yaw),
+            agent_head_yaw=like(combat.agent_head_yaw, head_yaw),
+            agent_head_pitch=like(combat.agent_head_pitch, head_pitch),
             health=like(combat.health, health),
-            pitch=like(combat.pitch, rng.uniform(-120.0, 120.0, BATCH)),
             agent_grounded=like(
                 combat.agent_grounded, rng.integers(0, 2, BATCH)),
             agent_attack_cooldown_seconds=like(
@@ -1811,8 +1878,8 @@ def main() -> int:
                     "step": 1000 + sweep,
                     "lane": lane,
                     "velocity": [float(v) for v in velocity[lane, AGENT_ENTITY]],
-                    "yaw_degrees": float(yaw[lane, AGENT_ENTITY]),
-                    "pitch_degrees": float(np.asarray(swept.pitch)[lane]),
+                    "yaw_degrees": float(head_yaw[lane]),
+                    "pitch_degrees": float(head_pitch[lane]),
                     "health": float(health[lane, AGENT_ENTITY]),
                     "grounded": bool(np.asarray(swept.agent_grounded)[lane]),
                     "attack_executing": float(
@@ -2262,6 +2329,8 @@ def main() -> int:
     dodge_lines = _dodge_fixture(state.runtime, params, config)
     ability_lines = _ability_fixture(state.runtime, params, config)
     inventory_lines = _inventory_fixture()
+    light_lines = _light_fixture()
+    geometry_lines = _geometry_fixture()
     (OUT / "movement_features.txt").write_text(
         "\n".join(movement_lines) + "\n", encoding="utf-8")
     (OUT / "actor_world_features.txt").write_text(
@@ -2278,9 +2347,14 @@ def main() -> int:
         "\n".join(ability_lines) + "\n", encoding="utf-8")
     (OUT / "inventory_features.txt").write_text(
         "\n".join(inventory_lines) + "\n", encoding="utf-8")
+    (OUT / "light_features.txt").write_text(
+        "\n".join(light_lines) + "\n", encoding="utf-8")
+    (OUT / "geometry_features.txt").write_text(
+        "\n".join(geometry_lines) + "\n", encoding="utf-8")
 
     scalars = {
         "agent_max_speed": float(params.agent_max_speed),
+        "agent_maximum_gait_speed": float(params.agent_maximum_gait_speed),
         "vertical_speed_scale": float(params.vertical_speed_scale),
         "agent_max_health": float(params.agent_max_health),
         "agent_attack_pause_max_seconds": float(params.agent_attack_pause_max_seconds),

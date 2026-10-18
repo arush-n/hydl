@@ -42,7 +42,8 @@ import java.util.Set;
 public final class PerceptionProfile {
 
     private static final int RAW_ABILITY_COUNT = 868;
-    private static final int RAW_DEFENSE_COUNT = 22;
+    /** guard/broken/remaining/duration/velocity/force/regen/immunity/health/stamina */
+    private static final int RAW_DEFENSE_COUNT = 24;
     private static final int RAW_DODGE_COUNT = 8;
 
     private static final String[] IDENTITY_FILES = {
@@ -72,6 +73,7 @@ public final class PerceptionProfile {
 
     private final ObservationAssembler.Template template;
     private final Projection.Params params;
+    private final int[] weaponFamily;
     private final float maximumDropHeight;
     private final float agentForcePerAxisDeadzone;
     private final float[] resourceMinimum;
@@ -95,8 +97,10 @@ public final class PerceptionProfile {
     private PerceptionProfile(Path root) throws IOException {
         template = ObservationAssembler.load(root);
         Map<String, Double> values = readValues(root.resolve("inputs.txt"));
+        double agentMaxSpeed = required(values, "agent_max_speed");
         params = new Projection.Params(
-            required(values, "agent_max_speed"),
+            agentMaxSpeed,
+            values.getOrDefault("agent_maximum_gait_speed", agentMaxSpeed),
             required(values, "vertical_speed_scale"),
             required(values, "agent_max_health"),
             required(values, "agent_attack_pause_max_seconds"),
@@ -111,6 +115,10 @@ public final class PerceptionProfile {
             required(values, "head_pitch_degrees_scale"),
             required(values, "target_attack_index_divisor")
         );
+        weaponFamily = new int[] {
+            (int) Math.round(values.getOrDefault("agent_weapon_family", -1.0)),
+            (int) Math.round(values.getOrDefault("target_weapon_family", -1.0))
+        };
         double expectedAbilitySlotDivisor =
             AbilityProjection.ABILITY_CAPACITY - 1.0;
         if (params.targetAbilitySlotDivisor() != expectedAbilitySlotDivisor) {
@@ -338,7 +346,8 @@ public final class PerceptionProfile {
             ability.authoredMask(),
             ability.equipped(),
             ability.overflow(),
-            legal
+            legal,
+            weaponFamily
         );
     }
 

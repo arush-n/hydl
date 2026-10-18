@@ -14,12 +14,14 @@ carries `null` forever, and `adk.deploy.bundle` refuses it with
     checkpoint is not deployable under the current policy contract:
     checkpoint has no exact transfer_contract
 
-This is the missing assessment. It does NOT assert provenance: it builds the
-live contract from the Gym, compares it against the widths the checkpoint was
-actually trained at, and stamps it only when they agree. A mismatch is an error,
-not a warning, because the whole point of the field is that a policy trained on
-a different observation width would otherwise load and produce confident
-garbage.
+This is the missing contract assessment. It records exact file lineage for the
+derived checkpoint, but does NOT assert training semantic provenance,
+competence, or live behavior: it builds the live contract from the Gym,
+compares it against the widths the checkpoint was actually trained at, and
+stamps it only when they agree. A mismatch is an error, not a warning, because
+the whole point of the field is that a policy trained on a different
+observation width would otherwise load and produce confident garbage. Shape
+and contract agreement alone are not a training-semantic claim.
 
     python -m adk.deploy.certify IN.npz OUT.npz --agent-role Kweebec_Razorleaf
 
@@ -29,18 +31,70 @@ The input is never modified; certification writes a new checkpoint.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
+import struct
 
 import numpy as np
 
 
+CERTIFICATION_LINEAGE_SCHEMA = (
+    "hytalerl_checkpoint_certification_lineage_v1"
+)
+_CHECKPOINT_TENSOR_DOMAIN = b"HYTALERL_CHECKPOINT_TENSORS\0"
+_LINEAGE_METADATA_NAMES = frozenset({"config_json", "metadata_json"})
+
+
 def _load(path: Path) -> tuple[dict, dict, dict]:
-    raw = np.load(path, allow_pickle=True)
-    tensors = {name: raw[name] for name in raw.files}
-    config = json.loads(str(raw["config_json"]))
-    metadata = json.loads(str(raw["metadata_json"]))
+    with np.load(path, allow_pickle=False) as raw:
+        tensors = {name: raw[name] for name in raw.files}
+        config = json.loads(str(raw["config_json"]))
+        metadata = json.loads(str(raw["metadata_json"]))
     return tensors, config, metadata
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for block in iter(lambda: source.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest().upper()
+
+
+def _canonical_json_sha256(value: object) -> str:
+    payload = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest().upper()
+
+
+def _tensor_content_sha256(tensors: dict[str, np.ndarray]) -> str:
+    """Hash every non-JSON checkpoint array independent of NPZ packaging."""
+
+    names = sorted(set(tensors) - _LINEAGE_METADATA_NAMES)
+    digest = hashlib.sha256(_CHECKPOINT_TENSOR_DOMAIN)
+    digest.update(struct.pack(">II", 1, len(names)))
+    for name in names:
+        array = np.asarray(tensors[name])
+        if array.dtype.hasobject:
+            raise ValueError(f"checkpoint tensor {name!r} has object dtype")
+        encoded_name = name.encode("utf-8")
+        encoded_dtype = array.dtype.str.encode("ascii")
+        content = np.ascontiguousarray(array).tobytes(order="C")
+        digest.update(struct.pack(">I", len(encoded_name)))
+        digest.update(encoded_name)
+        digest.update(struct.pack(">I", len(encoded_dtype)))
+        digest.update(encoded_dtype)
+        digest.update(struct.pack(">I", array.ndim))
+        for dimension in array.shape:
+            digest.update(struct.pack(">Q", int(dimension)))
+        digest.update(struct.pack(">Q", len(content)))
+        digest.update(content)
+    return digest.hexdigest().upper()
 
 
 def _training_context(source: Path, metadata: dict) -> dict:
@@ -100,6 +154,17 @@ def certify(
 ) -> dict:
     """Stamp the live contract onto `source`, or raise if it does not fit."""
 
+    source = Path(source)
+    destination = Path(destination)
+    same_file = source.resolve() == destination.resolve()
+    if not same_file and source.exists() and destination.exists():
+        same_file = source.samefile(destination)
+    if same_file:
+        raise ValueError(
+            "certification destination must be different from the source "
+            "checkpoint"
+        )
+
     from hytalegym.jax.combat.observation.v3 import (
         ARSENAL_POLICY_ACTION_HEAD_SIZES,
     )
@@ -154,12 +219,20 @@ def certify(
             "the live contract itself failed validation:\n  " + "\n  ".join(errors)
         )
 
+    lineage = {
+        "schema": CERTIFICATION_LINEAGE_SCHEMA,
+        "source_checkpoint": str(source.resolve()),
+        "source_sha256": _sha256(source),
+        "config_sha256": _canonical_json_sha256(config),
+        "tensors_sha256": _tensor_content_sha256(tensors),
+    }
     certified = dict(metadata)
     certified["transfer_contract"] = contract
     if not certified.get("policy_training_context"):
         certified["policy_training_context"] = _training_context(source, metadata)
     certified["promotion_status"] = "certified_contract_only"
     certified["certified_from"] = source.name
+    certified["certification_lineage"] = lineage
     # Deliberately NOT set true. This certifies the CONTRACT the weights speak;
     # it is not a competence or live-behaviour claim, and the PPO checkpoints
     # that already carry a transfer_contract leave this false too.

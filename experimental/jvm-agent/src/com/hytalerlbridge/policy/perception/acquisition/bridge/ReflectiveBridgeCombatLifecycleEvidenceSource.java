@@ -43,6 +43,7 @@ public final class ReflectiveBridgeCombatLifecycleEvidenceSource
     private final String[] targetInteractionIds;
     private final String[] targetInteractionTypes;
     private final float agentForceDeadzone;
+    private volatile String lastFailureReason = "none";
 
     private ReflectiveBridgeCombatLifecycleEvidenceSource(
         PerceptionProfile profile,
@@ -100,7 +101,7 @@ public final class ReflectiveBridgeCombatLifecycleEvidenceSource
     ) {
         if (agent == null || !agent.isValid() || store == null
             || !Float.isFinite(deltaTime) || deltaTime <= 0.0f) {
-            return null;
+            return unavailable("invalid_input");
         }
         try {
             Object snapshot = facade.capture().invoke(
@@ -118,13 +119,34 @@ public final class ReflectiveBridgeCombatLifecycleEvidenceSource
                 targetInteractionTypes.clone(),
                 agentForceDeadzone
             );
-            return adaptSnapshot(snapshot);
+            if (snapshot == null) {
+                return unavailable("snapshot_null");
+            }
+            Evidence evidence = adaptSnapshot(snapshot);
+            if (evidence == null) {
+                return unavailable(
+                    facade.snapshotType().isInstance(snapshot)
+                        ? "snapshot_unavailable" : "snapshot_type_mismatch");
+            }
+            lastFailureReason = "none";
+            return evidence;
         } catch (IllegalAccessException | InvocationTargetException
             | ClassCastException | IllegalArgumentException failure) {
             // Missing, malformed, or failed native evidence is not equivalent
             // to an all-zero row. The public source skips this policy tick.
-            return null;
+            return unavailable("capture_exception");
         }
+    }
+
+    @Override
+    public String lastFailureReason() {
+        return lastFailureReason;
+    }
+
+    private Evidence unavailable(String reason) {
+        lastFailureReason = reason == null || reason.isBlank()
+            ? "unknown" : reason;
+        return null;
     }
 
     /** Convert one facade return value; package-private for the offline ABI test. */

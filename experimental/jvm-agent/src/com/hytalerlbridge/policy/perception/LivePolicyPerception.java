@@ -26,10 +26,21 @@ public final class LivePolicyPerception implements PolicyPerception {
 
     private final PerceptionProfile profile;
     private final PerceptionEvidenceSource source;
+    private final boolean pursuitContext;
+    private volatile String lastFailureReason = "none";
+    private volatile boolean lastFailureTerminal;
 
     public LivePolicyPerception(
         PerceptionProfile profile,
         PerceptionEvidenceSource source
+    ) {
+        this(profile, source, false);
+    }
+
+    public LivePolicyPerception(
+        PerceptionProfile profile,
+        PerceptionEvidenceSource source,
+        boolean pursuitContext
     ) {
         if (profile == null || source == null) {
             throw new IllegalArgumentException(
@@ -37,6 +48,7 @@ public final class LivePolicyPerception implements PolicyPerception {
         }
         this.profile = profile;
         this.source = source;
+        this.pursuitContext = pursuitContext;
     }
 
     @Override
@@ -49,13 +61,23 @@ public final class LivePolicyPerception implements PolicyPerception {
     ) {
         PerceptionFrame frame = source.capture(
             ref, npc, store, slot, deltaTime);
-        if (frame == null || !frame.valid()) {
+        if (frame == null) {
+            lastFailureReason = "evidence_" + normalizeReason(
+                source.lastFailureReason());
+            lastFailureTerminal = source.lastFailureTerminal();
+            return null;
+        }
+        if (!frame.valid()) {
+            lastFailureReason = "invalid_frame";
+            lastFailureTerminal = false;
             return null;
         }
 
         var movement = Projection.movementFeatures(
             frame.movementValueBits(), frame.movementAvailableBits());
         if (movement.invalid()) {
+            lastFailureReason = "movement_invalid";
+            lastFailureTerminal = false;
             return null;
         }
         var actorWorld = Projection.actorWorldFeatures(frame.actorWorld());
@@ -75,7 +97,14 @@ public final class LivePolicyPerception implements PolicyPerception {
                 profile.dodgeForce(),
                 defenseRaw.staminaRegenDelay(),
                 defenseRaw.controlImmunity(),
-                defenseRaw.health()
+                defenseRaw.health(),
+                // JAX publishes self locomotion stamina and keeps the target
+                // row non-privileged at max stamina. Keep that same contract
+                // here rather than exposing a target-only server component.
+                new float[] {
+                    frame.mechanics().stamina(),
+                    MechanicsProjection.LOCOMOTION_STAMINA_MAXIMUM,
+                }
             )
         );
 
@@ -131,6 +160,9 @@ public final class LivePolicyPerception implements PolicyPerception {
         float[] self = Projection.selfFeatures(frame.self(), profile.params());
         float[] target = Projection.targetFeatures(
             frame.target(), profile.params());
+        if (pursuitContext && frame.targetPresent()) {
+            PursuitTargetContext.apply(target, frame.target(), profile.params());
+        }
         float[] combat = Projection.combatFeatures(
             frame.combatSelf(),
             Projection.targetEvidence(frame.targetRaw(), profile.params()),
@@ -196,22 +228,35 @@ public final class LivePolicyPerception implements PolicyPerception {
                 dodge,
                 actions.jump(),
                 actions.movement(),
-                actions.look(),
                 actions.use(),
                 actions.blockTrigger(),
                 world.blockAvailable(),
-                world.blockMask(),
-                actions.craft() && recipes.available(),
-                actions.craft()
-                    ? recipes.candidateMask()
-                    : new boolean[RecipeCandidateProjection.CANDIDATE_CAPACITY]
+                world.blockMask()
             )
         );
-        return new Sample(
+        Sample sample = new Sample(
             observation,
             actionMask,
             new WorldActionEvidence(
                 world.recipeIds(), world.blockBindings())
         );
+        lastFailureReason = "none";
+        lastFailureTerminal = false;
+        return sample;
+    }
+
+    @Override
+    public String lastFailureReason() {
+        return lastFailureReason;
+    }
+
+    @Override
+    public boolean lastFailureTerminal() {
+        return lastFailureTerminal;
+    }
+
+    private static String normalizeReason(String reason) {
+        return reason == null || reason.isBlank()
+            ? "unknown" : reason.trim();
     }
 }

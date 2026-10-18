@@ -30,10 +30,18 @@ import org.joml.Vector3d;
  * the five-argument constructor disables that standalone counter when another
  * sink owns those requests.
  *
- * <p><b>Not verified at runtime.</b> Every line is modelled on the bridge's
- * certified path and it compiles against Server 0.5.7, but it has never been
- * executed inside a running server -- there is no deployment in this workspace.
- * Treat the numbers below as transcribed, not as confirmed on device.
+ * <p>The body-relative direction projection and gait-to-relative-speed mapping
+ * are exercised by the dependency-free {@link PlayerLocomotionProjection}
+ * contract test. The surrounding NPC seam was executed against the isolated
+ * Hytale Server 0.5.7 fixture in {@code adk/runs/live-port-v6}; that run
+ * verified that this sink is live, but predates the direction/gait correction
+ * and is not itself a transfer pass.
+ *
+ * <p>This is a player-policy-to-NPC public-API surrogate. Hytale's player gait
+ * transition and stamina drain are client-side and are not exposed by the
+ * public NPC steering API, so the sink preserves their authored directional
+ * scale as NPC-relative steering magnitude while reporting those residual
+ * differences in the port status documentation.
  */
 public final class SteeringActionSink implements PolicyActionSink {
 
@@ -167,40 +175,20 @@ public final class SteeringActionSink implements PolicyActionSink {
             skippedInteractions++;
         }
 
-        double forward = (action.forward() ? 1.0 : 0.0) - (action.back() ? 1.0 : 0.0);
-        double strafe = (action.right() ? 1.0 : 0.0) - (action.left() ? 1.0 : 0.0);
-        double length = Math.hypot(forward, strafe);
-        int worldMove = action.worldMoveDirection();
-        boolean worldMoveRequested = worldMove != 0;
-        boolean moving = worldMoveRequested || length > 1.0e-9;
-
-        float yaw = marker.desiredYaw();
+        float yaw = marker.desiredBodyYaw();
+        PlayerLocomotionProjection.Vector movement =
+            PlayerLocomotionProjection.project(action, yaw);
+        boolean moving = movement.moving();
 
         Steering body = role.getBodySteering();
         if (body != null) {
             body.clear();
             if (moving) {
-                double dx;
-                double dz;
-                if (worldMoveRequested) {
-                    // 1..8 are compass points at 45 degree steps starting north,
-                    // resolved in world space rather than relative to the NPC.
-                    double worldAngle = (worldMove - 1) * (Math.PI / 4.0);
-                    dx = Math.sin(worldAngle);
-                    dz = -Math.cos(worldAngle);
-                } else {
-                    forward /= length;
-                    strafe /= length;
-                    dx = forward * -Math.sin(yaw) + strafe * Math.cos(yaw);
-                    dz = forward * -Math.cos(yaw) - strafe * Math.sin(yaw);
-                }
-                double vectorLength = Math.sqrt(dx * dx + dz * dz);
-                if (vectorLength > 1.0) {
-                    dx /= vectorLength;
-                    dz /= vectorLength;
-                }
-                body.setTranslation(dx, 0.0, dz);
-                body.setTranslationRelativeSpeed(1.0);
+                // Steering.getTranslation().length() is the relative speed
+                // consumed by MotionControllerWalk. Do not call
+                // setTranslationRelativeSpeed(1.0) here: that API normalizes
+                // the vector and would erase the gait projection.
+                body.setTranslation(movement.x(), 0.0, movement.z());
             }
             body.setYaw(yaw);
             body.setRelativeTurnSpeed(steeringRelativeTurnSpeed);
@@ -209,7 +197,7 @@ public final class SteeringActionSink implements PolicyActionSink {
         Steering head = role.getHeadSteering();
         if (head != null) {
             head.clear();
-            head.setYaw(yaw);
+            head.setYaw(marker.desiredYaw());
             head.setPitch(marker.desiredPitch());
             head.setRelativeTurnSpeed(steeringRelativeTurnSpeed);
         }
