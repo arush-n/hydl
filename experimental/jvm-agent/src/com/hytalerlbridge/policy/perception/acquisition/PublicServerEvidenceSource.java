@@ -322,6 +322,10 @@ public final class PublicServerEvidenceSource
         );
         double agentHealthFraction = agentHealth
             / profile.params().agentMaxHealth();
+        // Head frame, as in the simulator's self row (observation/v1 encoder
+        // _self_features reads agent_head_yaw and agent_head_pitch): what the
+        // actor perceives follows where it looks, not where its chest points.
+        // CombatSelf and TargetState below keep the body yaw.
         Projection.SelfState self = new Projection.SelfState(
             agent.velocityX(),
             agent.velocityY(),
