@@ -524,22 +524,27 @@ def outlander_arrow(t: ContentTables) -> dict[str, float]:
 
 # -- profiles/hytale_0_5_7.py::_potions ----------------------------------------
 def potions(t: ContentTables) -> dict[str, float]:
+    # Reads the effect list each table holds. 0.5.10 applies a Potion_Stamina_Cooldown status (15 s) with the stamina
+    # drink. 0.7.2 applies none: its drink cooldown (Potion_Consume_Stamina, 30 s) is a TriggerCooldown interaction,
+    # which the tables do not hold. So stamina_cooldown_duration exists only where the table applies that effect.
     instant = t.effect("Potion_Health_Instant")
     regen = t.effect("Potion_Health_Regen")
     stamina = t.consumable("Potion_Stamina")
     stamina_effects = [t.effect(effect_id) for effect_id in stamina.effects_applied]
-    cooldown = next(e for e in stamina_effects if "Cooldown" in e.effect_id)
     restore = next(e for e in stamina_effects if "Stamina" in (e.document.get("StatModifiers") or {}))
+    cooldown = next((e for e in stamina_effects if "Cooldown" in e.effect_id), None)
     antidote = t.effect("Antidote")
-    return {
+    out = {
         "health_instant_percent": float(instant.document["StatModifiers"]["Health"]),
         "health_regen_percent": float(regen.document["StatModifiers"]["Health"]),
         "health_regen_duration": regen.duration,
         "health_regen_cooldown": float(regen.document["DamageCalculatorCooldown"]),
         "stamina_restore_percent": float(restore.document["StatModifiers"]["Stamina"]),
-        "stamina_cooldown_duration": cooldown.duration,
         "antidote_duration": antidote.duration,
     }
+    if cooldown is not None:
+        out["stamina_cooldown_duration"] = cooldown.duration
+    return out
 
 
 # -- tests/fidelity native crafting recording format (jax/crafting packing) ------

@@ -415,3 +415,29 @@ def test_gen7_render_keeps_the_committed_locomotion_literals(gen7, source):
     assert '"installed_default_forward_multiplier": 1.273,' in loco
     assert '"1.273":' not in loco and "render redirect walk_steering_sprint_multiplier" in loco
 
+
+def test_gen7_stamina_drink_has_no_status_and_the_072_cooldown(gen7):
+    out, manifest = gen7
+    applied = {item["id"]: item for item in manifest["applied"]}
+    assert applied["potion_stamina_072_drink"]["kind"] == "patch"
+    assert applied["potion_stamina_072_drink"]["fidelity_row"] == "8e"
+    profile = (out / "combat/arsenal/profiles/hytale_0_5_7.py").read_text()
+    start = profile.index('        _ability(\n            "Potion_Stamina",\n')
+    block = profile[start:profile.index("\n        ),\n", start)]
+    assert '"Potion_Stamina_Cooldown"' not in block and "cooldown=15" not in block  # the comment may name it
+    assert '"Potion_Stamina_Cooldown"' not in profile
+    assert "cooldown=30," in block
+    assert "_resource(0.5, RESOURCE_STAMINA, 45, percent=True)," in block
+
+
+def test_gen7_durability_hook_wraps_the_catalog_loader(gen5, gen7):
+    gen5_out, _ = gen5
+    out, manifest = gen7
+    applied = {item["id"]: item for item in manifest["applied"]}
+    assert applied["weapon_durability_catalog"]["kind"] == "hook"
+    assert applied["weapon_durability_catalog"]["fidelity_row"] == "8d"
+    text = (out / "combat/arsenal/item_programs.py").read_text()
+    assert "from hytalegym.sim.gen7.mechanics.durability import construct as _render_hook_weapon_durability_catalog" in text
+    assert ("hytale_0_5_7_item_program_catalog = _render_hook_weapon_durability_catalog("
+            "hytale_0_5_7_item_program_catalog, _render_profile_weapon_durability_catalog)") in text
+    assert "_render_hook_weapon_durability_catalog" not in (gen5_out / "combat/arsenal/item_programs.py").read_text()

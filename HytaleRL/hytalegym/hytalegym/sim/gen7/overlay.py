@@ -28,8 +28,9 @@ Set -1.5 -> Min -1 (the engine models only Set; needs a construct); Mithril and
 other dagger materials (rows of ``hytalegym/combat/assets/weapon_variants``, a
 shared module outside the rendered package); the sword thrust's HorizontalSpeedMultiplier
 0.8 -> 0.75 and its chained RunTime 0.043 (``Next/0.565/Interactions/2``: no swap-plan site;
-leads under row 5f, not among the 14 values); the potion values (``adapters.potions`` raises
-on 0.7.2); durability (a JSON table: content redirect). The sword, shortbow and crossbow values
+leads under row 5f, not among the 14 values); the potion drink's status and cooldown (patch
+``potion_stamina_072_drink``, row 8e); durability (a JSON table: hook ``weapon_durability_catalog`` on the catalog loader,
+row 8d). The sword, shortbow and crossbow values
 are the ``CONTENT_VALUES`` rows below.
 """
 
@@ -64,9 +65,9 @@ CONTENT_LOCOMOTION = tuple(replace(r, status="active") for r in CONTENT_ROWS if 
 #: so the value follows the table. The shortbow launch speeds have no swap-plan record (the shortbow
 #: record is the charge ladder), so their row is an adapter redirect on the same literal. The renderer
 #: checks the HEAD expression once at its site. Checked on both tables by every content adapter
-#: (receipts: ~/.claude/jobs/31947bd7/tmp/sim_values/). Not applied here: the potion values
-#: (adapters.potions raises on 0.7.2: the stamina cooldown effect is gone; the potion reader is another
-#: task), the weapon durability (a JSON table: a hook, not a redirect), and the sword thrust chained
+#: (receipts: ~/.claude/jobs/31947bd7/tmp/sim_values/). Not applied here: the potion drink's status and
+#: cooldown (patch potion_stamina_072_drink, row 8e; the swap-plan row stays todo), the weapon durability
+#: (a JSON table: hook weapon_durability_catalog, row 8d), and the sword thrust chained
 #: RunTime 0.043 and HorizontalSpeedMultiplier 0.8 -> 0.75 (leads under row 5f, not among the 14).
 _SWORD_TIMING = (
     "0.7.2 selector RunTime of the six sword attack rows (weapons/interaction:<attack>_Selector#document.RunTime; "
@@ -189,6 +190,15 @@ def _guard_root(family: str, energy: int) -> Patch:
         f"        {{RESOURCE_SIGNATURE_ENERGY: {energy}}},\n    )\n"
     )
     return Patch(f"guard_{family}_no_primary_interrupt", PROFILE_JAX, old, new, "5d", _GUARD, _GUARD_NOTE)
+
+
+_POTION = (
+    "file-sourced, read from the 0.7.2 Assets.zip on 2026-10-18: Potion_Stamina.json applies only "
+    "Potion_Stamina_Instant_Small (Stamina 45 percent, equal to 0.5.10) and its ConsumeCooldown var triggers "
+    "Consume_Potion_Stamina_Cooldown.json (TriggerCooldown, Id Potion_Consume_Stamina, Cooldown 30); "
+    "Condition_Consume_Potion_Stamina.json refuses a drink on that CooldownCondition. No live drink differential: "
+    "no bridge loadout holds a potion and the bridge has no item route into the agent's hotbar"
+)
 
 
 PATCHES = (
@@ -344,6 +354,31 @@ PATCHES = (
           "5f",
           "the learner-row dodge_left cases on the live bridge: after dodge_starts_one_drain_later alone the invulnerability fraction and the dodge action mask ran one tick late (native: invulnerability 1.0 and the dodge closed on tick 2, the acceptance tick)",
           "the stock engine started both on its launch tick 2, which was right; the timing patch had moved them with the force"),
+    Patch("potion_stamina_072_drink", PROFILE_JAX,
+          "        _ability(\n"
+          "            \"Potion_Stamina\",\n"
+          "            0.7,\n"
+          "            _resource(0.5, RESOURCE_STAMINA, 45, percent=True),\n"
+          "            _status(\n"
+          "                0.5,\n"
+          "                \"Potion_Stamina_Cooldown\",\n"
+          "                15,\n"
+          "                status_flags=STATUS_FLAG_DEBUFF,\n"
+          "            ),\n"
+          "            cooldown=15,\n"
+          "        ),\n",
+          "        _ability(\n"
+          "            \"Potion_Stamina\",\n"
+          "            0.7,\n"
+          "            _resource(0.5, RESOURCE_STAMINA, 45, percent=True),\n"
+          "            # Gen 7 (row 8e): 0.7.2 applies no Potion_Stamina_Cooldown status; the drink triggers the\n"
+          "            # Potion_Consume_Stamina cooldown of 30 s instead (Consume_Potion_Stamina_Cooldown.json).\n"
+          "            cooldown=30,\n"
+          "        ),\n",
+          "8e", _POTION,
+          "the restore (45 percent) and the 0.7 s ability are unchanged; the status goes and the cooldown is 30 s. "
+          "Residual (inferred from the asset, not measured): the engine starts the cooldown at admission, the server "
+          "when the 0.5 s charge completes (Consume_Charge_Potion_Fastest, Next 0.5)"),
 )
 
 _MECHANICS = "hytalegym.sim.gen7.mechanics"
@@ -450,6 +485,13 @@ HOOKS = (
          "(layout.py:805-813), the 4-wide mask concat (policy/surface.py:441-443), "
          "encoding/encoder.py:507 and native/codec/decode.py:112,169; setting it to 2 keeps the masked "
          "forward/back slots and drops left/right"),
+    Hook("weapon_durability_catalog", "combat/arsenal/item_programs.py", "hytale_0_5_7_item_program_catalog",
+         f"{_MECHANICS}.durability:construct", "weapon_durability", "active", "8d",
+         "file-sourced (sim/gen7/data/durability.json, the 0.7.2 item rows); loss per hit not measured: the bridge "
+         "exposes durability on its inventory frame (NativeInventoryCapture.java:72), not in info, and a read needs a "
+         "policy attack",
+         "the catalog's weapon_items: max_durability and durability_loss_on_hit of all 143 rows from the 0.7.2 table "
+         "(57 maxima and 82 losses change); the rest of the catalog, semantic_sha256 included, unchanged"),
 )
 
 OVERLAY = Overlay(

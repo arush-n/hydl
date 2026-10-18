@@ -97,6 +97,9 @@ class Constructs:
     slope_limits: bool = False
     # 0.7.2 drops a block's health entry on any block write. Owner: block_health.py.
     block_health_reset_on_write: bool = False
+    # Weapon durability maximum and loss per hit: "shipped_json" (HEAD: hytale_0_5_7_item_programs_v1.json) or
+    # "gen7_table" (the 0.7.2 durability table). Owner: sim/gen7/mechanics/durability.py (row 8d).
+    weapon_durability: str = "shipped_json"
 
 
 @dataclass(frozen=True)

@@ -241,7 +241,9 @@ potion values wait on the reader): sword timing (6 attack-window times and 4 hol
 example 0.85 to 0.739 s), shortbow damage 6/9/12/16 to 1/2/4/7 and launch speed 15/30/50/70 to 12/22/35/50, the iron
 crossbow combo damage 27 to 13, and potions. Broken: the potion reader crashes on 0.7.2 (the stamina potion no longer applies
 its 15 s cooldown effect, the simulator still does); weapon durability (57 maximum and 82 loss-per-hit changes across 143
-weapons) lives in a data file the gen-7 build cannot override yet. Open: timing that needs new state (walking resuming
+weapons) lives in a data file the gen-7 build cannot override yet (both closed on 2026-10-18, FIDELITY-0.7.2.md section (y): the
+reader reads each table's effect list and the 0.7.2 drink is a 30 s interaction cooldown; the durability table is served
+through the `weapon_durability` hook). Open: timing that needs new state (walking resuming
 after a landing, the 0.35 s wait before a new guard, melee and kunai attack start, the one-tick structural craft, shortbow
 ammo at reset); mechanics that exist only as stubs (hit interrupt and flinch, runes, hookshot, climbing, gliding, riding,
 player swimming, smaller rules); crafting bench tiers above 1, memories, timed and processing recipes on the simulator

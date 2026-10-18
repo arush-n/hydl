@@ -71,3 +71,23 @@ def test_sprint_swap_record_names_the_value_not_the_key():
     document = json.loads((support.SIM / "common" / "content" / "redirects.json").read_text(encoding="utf-8"))
     (record,) = [r for r in document["redirects"] if r["adapter"] == "walk_steering_sprint_multiplier"]
     assert (record["symbol"], record["symbol_kind"], record["head_line"]) == ("1.273", "numeric_literal", 177)
+
+
+#: ``potions`` on the gen-5 tables, captured on HEAD before the reader was version-aware (2026-10-18).
+GEN5_POTIONS = {
+    "antidote_duration": 120.0,
+    "health_instant_percent": 25.0,
+    "health_regen_cooldown": 5.0,
+    "health_regen_duration": 5.05,
+    "health_regen_percent": 35.0,
+    "stamina_cooldown_duration": 15.0,
+    "stamina_restore_percent": 45.0,
+}
+
+
+def test_potions_reader_is_version_aware_on_both_tables() -> None:
+    assert A.potions(load("0.5.7")) == GEN5_POTIONS  # gen-5 output unchanged
+    stamina = load("0.7.2").consumable("Potion_Stamina")
+    assert list(stamina.effects_applied) == ["Potion_Stamina_Instant_Small"]  # the table holds no cooldown effect
+    gen7 = A.potions(load("0.7.2"))  # no StopIteration; the 0.7.2 drink applies no cooldown status
+    assert gen7 == {key: value for key, value in GEN5_POTIONS.items() if key != "stamina_cooldown_duration"}
