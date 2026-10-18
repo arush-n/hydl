@@ -28,6 +28,18 @@ public final class NativeInteractionCapabilityView {
         InteractionManager manager,
         NativeInteractionBinding binding
     ) {
+        return capture(manager, binding, null);
+    }
+
+    /**
+     * A non-null {@code guardFork} replaces the root replay; see
+     * {@link com.hytalerlbridge.nativebackend.policy.combat.NativeGuardFork#admittedWhileRunning}.
+     */
+    public static State capture(
+        InteractionManager manager,
+        NativeInteractionBinding binding,
+        Boolean guardFork
+    ) {
         if (manager == null || binding == null || HANDLER_FIELD == null) {
             return State.unavailable();
         }
@@ -39,11 +51,13 @@ public final class NativeInteractionCapabilityView {
             return capture(
                 handler,
                 binding,
-                InteractionAdmissionDryRun.admits(
-                    manager,
-                    binding.type(),
-                    binding.root()
-                )
+                guardFork != null
+                    ? guardFork
+                    : InteractionAdmissionDryRun.admits(
+                        manager,
+                        binding.type(),
+                        binding.root()
+                    )
             );
         } catch (IllegalAccessException | RuntimeException unavailable) {
             return State.unavailable();

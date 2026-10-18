@@ -8820,7 +8820,16 @@ final class NativeEnvironmentSession
             NativeInteractionCapabilityView.State capability = authored
                 ? NativeInteractionCapabilityView.capture(
                     capabilityManager,
-                    binding
+                    binding,
+                    NativeGuardFork.admittedWhileRunning(
+                        nativeGuardInteraction,
+                        binding,
+                        nativeGuardChain,
+                        nativeGuardActive,
+                        nativeGuardLifecycle.inputHeld(),
+                        trackedAgentAbilityChain != null
+                            || pendingAgentAbilityFork != null
+                    )
                 )
                 : new NativeInteractionCapabilityView.State(true, false);
             if (!capability.available()) {

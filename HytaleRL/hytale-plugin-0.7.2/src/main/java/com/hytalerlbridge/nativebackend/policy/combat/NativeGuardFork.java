@@ -1,5 +1,6 @@
 package com.hytalerlbridge.nativebackend.policy.combat;
 
+import com.hypixel.hytale.protocol.InteractionState;
 import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.entity.InteractionChain;
@@ -47,6 +48,47 @@ public final class NativeGuardFork {
             describeResolution(guard, ability)
         );
         return null;
+    }
+
+    /**
+     * Engine admission of an authored guard fork while the held guard runs.
+     *
+     * <p>A held Wielding forks through its {@code forks} map, not through
+     * {@code applyRules}. While a Secondary chain runs, the root replay refuses
+     * a Primary root without a bypass tag, because the default {@code blockedBy}
+     * for Primary includes Secondary; FIDELITY-0.7.2.md, shield bash under a
+     * held guard. Null means the root replay decides: the Wielding is not
+     * active, or the guard does not route this ability. Otherwise the answer is
+     * the gates of {@code requestNativeAbility}: a running guard chain, the input
+     * held, and no ability in flight.</p>
+     */
+    public static Boolean admittedWhileRunning(
+        NativeInteractionBinding guard,
+        NativeInteractionBinding ability,
+        InteractionChain guardChain,
+        boolean wielding,
+        boolean held,
+        boolean busy
+    ) {
+        if (!wielding || forkType(guard, ability) == null) {
+            return null;
+        }
+        return guardChain != null
+            && guardChain.getServerState() == InteractionState.NotFinished
+            && held
+            && !busy;
+    }
+
+    /** {@link #resolveType} without the fail-closed warning, for per-tick capture. */
+    public static InteractionType forkType(
+        NativeInteractionBinding guard,
+        NativeInteractionBinding ability
+    ) {
+        if (guard == null || guard.root() == null || ability == null
+            || ability.id() == null || ability.id().isBlank()) {
+            return null;
+        }
+        return resolveType(guard.root(), ability, new HashSet<>());
     }
 
     private static InteractionType resolveType(

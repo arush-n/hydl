@@ -12,7 +12,7 @@ PROFILE = ServerProfile(
     certified_version="0.7.2",
     bridge_jar="hytale-plugin-0.7.2/build/libs/HytaleRLBridge072-0.1.0.jar",
     bridge_jar_sha256=(
-        "4A5E5D6D55519E2871F448A40BC0241E063502FE3D21EA7FAB4AFF53349FCF1E"
+        "56D2B532029AECF364B272C3D51401315C39BD537FB0D53A0F4D83E4B47BC7AB"
     ),
     crafting_recipe_count=2_047,
     checkpoint_rulesets=("0.5.7",),

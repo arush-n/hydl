@@ -263,6 +263,12 @@ seconds, Furnace copper bar about 301 game seconds with three sticks and one cha
 two ticks after the request. The simulator side now has every crafting stage's native shape; the open bridge items are the
 Tannery and Salvagebench, refusals and negative controls.
 
+**Shield bash under a held guard (2026-10-18; FIDELITY-0.7.2.md section (x); jar `56D2B532`).** The bash is a fork of the
+held guard Wielding on the server; the bridge now advertises it on every held-guard tick and a bash request while guarding
+runs (accepted at ticks 4 and 6 live). The learner row's bash mismatch shrinks to tick 2 (JAX a tick early); its other
+mismatches predate this. Open: the plain-root bash with no guard held, advertised by both layers though the asset makes it a
+fork only.
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the
