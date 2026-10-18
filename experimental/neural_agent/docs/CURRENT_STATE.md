@@ -74,7 +74,9 @@ for the gen-7 simulator), and the gen-7 simulator itself (phase 3 of 6 running).
 
 ## 6. Running right now (2026-10-18, night)
 
-No agent of this session is running. Phase 4c is committed (`4066417`): the headless entity gets an `AbilitySlots`
+The phase 4e agent (head yaw on the evidence wire, task #54) is running. Phase 4d is committed (`9f12f0d`, pin
+`32EF5EDD`): the bridge accepts `Ability4` by name and the 0.7.2 crossbow reload runs live; the content binding is
+the peer's next item, and the interrupt case (Primary not offered during the reload) stays open. Phase 4c is committed (`4066417`): the headless entity gets an `AbilitySlots`
 component, so the reload interrupt no longer stops the world (pin `8720BC76`); the group yaw finding was withdrawn as a
 bridge fault (the camera lever steers the head by design, on 0.5 as on 0.7.2; the group tests need `body_delta_yaw`);
 the slot-4 `Ability3` versus `Ability4` mapping is an owner decision (`FIDELITY-0.7.2.md` (k)). The peer session (hydl-1f) owns the fidelity tests under `tests/fidelity` and, since `2b88082`,
@@ -119,10 +121,15 @@ fidelity / whatever is best"), and in progress:
   task #50; the 25-index wire and evidence numbering stay 0.5's); the gen-7 content binding follows in the peer's lane.
 - Group facing tests use the body lever (the peer's two-lever and turn tests); no bridge change.
 - F1c becomes a gen-7 construct (task #52; the peer takes it after the engine batch below lands).
-- The deferred gen-5 engine edits are committed next, during a hold on `sim/gen7` and `sim/common` after the peer's 5d
-  construct commit, with `sim/gen5/identity.json` re-recorded from the new HEAD (task #51). The one engine-file patch
-  anchor (`slope_wall_limits_parameters` on `combat/types.py`) survives the edit; the `npc_jump` construct becomes a
-  by-value no-op because the batch gives `npc_walk` the native jump formula on gen 5 too.
+- The deferred gen-5 engine edits are committed (`ede9a39`; `879321e` added the three worldgen/region files the batch
+  imports, after `ede9a39` failed to import). `sim/gen5/identity.json` is re-recorded from a git archive of `879321e`
+  (`baacdc9`: batch 8 `d8477b63`, batch 64 `b02ee274`, identical in two runs and equal to the working-tree values of the
+  week). The step-clock line anchors moved with the edits, so the swap plan was regenerated from HEAD and the render
+  test re-pinned (next commit after `9f12f0d`); gates on that tree: tests/sim green, identity gate 4 passed in 28:17.
+  The `npc_jump` construct is a by-value no-op now that gen 5 computes the native jump formula for `npc_walk`. The
+  engine's own suite (tests/jax, untracked) ran 86 passed, 1 skipped and one bit-exact geometry test failing by one
+  float32 ulp; that test fails identically on an archive of HEAD before the batch, so it predates it (recorded in the
+  `ede9a39` message). The hold on `sim/` is released with this commit.
 - The head-yaw self row flagged in `c0d5f9b` is correct: the simulator's self row is the head frame (`_self_features`
   reads `agent_head_yaw`); commented in both agent copies (`e4888df`), no behaviour change. The 0.7.2 policy agent copy
   of 2026-10-16 is committed (`31d08be`, 131 files, validation in its PORT-0.7.2.md).
@@ -146,7 +153,10 @@ Night: `1f0af14` identity gate against the repaired HEAD; `ebc2e41` P6; `3cb4416
 `1159f8f` the phase 4b bridge half (readouts, `hit_interrupt_duel`, jar pin `8B09661F`); `235565b` the nearest-skill
 resolver (#32, SYSTEM_ONE 9.16); `2b88082` the gen-7 mana pool construct with fidelity section (j) and phase 4c recorded;
 `7f56001` this document; `4066417` phase 4c (AbilitySlots fix, pin `8720BC76`, fidelity section (k)); `37fdef4` this
-document; `e4888df` the head-frame comment; `31d08be` the 0.7.2 policy agent copy.
+document; `e4888df` the head-frame comment; `31d08be` the 0.7.2 policy agent copy; `d18bf2c` this document;
+`ede9a39` and `879321e` the engine batch; `baacdc9` the identity re-record; `9f12f0d` phase 4d (Ability4, pin
+`32EF5EDD`, fidelity section (m)); the swap-plan regeneration. Peer: `490b1d4` the 5d guard window construct,
+`4434a48` fidelity section (l).
 
 ## 9. Layout
 
