@@ -7,6 +7,7 @@ and on each goal report. Design: ``docs/SYSTEM_ONE.md`` §8.10, one writer per s
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, Sequence
 
 import numpy as np
@@ -19,9 +20,59 @@ from experimental.neural_agent.shared_state import (
     DecisionSection,
     EventsSection,
     GoalInForce,
+    InformationRequest,
     SharedState,
     SkillsSection,
 )
+
+
+def information_request_record(item: Any, tick: int) -> InformationRequest:
+    """Return the :class:`InformationRequest` for one entry of a host decider's ``information_requests``.
+
+    Accepted forms: an InformationRequest (returned as is); the typed decider's dict with ``version``,
+    ``slot``, ``when``, ``kind``, ``argument`` and ``confidence`` (``jev/typed_rule.py``); the executor's
+    ``LaneInformationRequest`` with ``tick``, ``lane``, ``executive_version``, ``program_step``, ``verb`` and
+    ``reason`` (``jev/programs.py``).
+
+    Raises:
+        TypeError: For any other form.
+    """
+
+    if isinstance(item, InformationRequest):
+        return item
+    if isinstance(item, Mapping):
+        kind = item.get("kind")
+        reason = (
+            "the condition could not be read; write the typed condition (kind, argument) for this goal"
+            if kind is None
+            else "the reading is unsure; confirm it by writing the typed condition, or reword the goal"
+        )
+        return InformationRequest(
+            tick=tick,
+            source="typed_rule",
+            executive_version=int(item["version"]),
+            slot=item.get("slot"),
+            lane=None,
+            text=str(item.get("when", "")),
+            kind=kind,
+            argument=item.get("argument"),
+            confidence=item.get("confidence"),
+            reason=reason,
+        )
+    if hasattr(item, "verb") and hasattr(item, "reason") and hasattr(item, "program_step"):
+        return InformationRequest(
+            tick=int(getattr(item, "tick", tick)),
+            source="program",
+            executive_version=int(item.executive_version),
+            slot=None,
+            lane=int(item.lane),
+            text=str(item.verb),
+            kind=None,
+            argument=None,
+            confidence=None,
+            reason=f"program step {int(item.program_step)} was rejected repeatedly: {item.reason}",
+        )
+    raise TypeError(f"not an information request: {type(item).__name__}")
 
 
 class SessionScribe:
@@ -47,7 +98,9 @@ class SessionScribe:
     def state(self) -> SharedState:
         return self._state
 
-    def record_tick(self, tick: int, transition: Any, hierarchy_state: Any) -> None:
+    def record_tick(
+        self, tick: int, transition: Any, hierarchy_state: Any, information_requests: Sequence[Any] = ()
+    ) -> None:
         """Write the belief, events, skills and decision sections for ``tick``.
 
         Args:
@@ -55,6 +108,9 @@ class SessionScribe:
             transition: The HierarchicalLoopTransition just recorded; ``transition.hierarchy_state``
                 is the state before the step and ``transition.hierarchy_step`` the step.
             hierarchy_state: The carried state after the step and after any host decision.
+            information_requests: What the host decider appended to its ``information_requests`` since
+                the last write, in any of the forms :func:`information_request_record` accepts; they join
+                the decision section's bounded list of questions to the LLM.
         """
 
         step = transition.hierarchy_step
@@ -104,7 +160,20 @@ class SessionScribe:
                 DecisionRecord(tick=tick, lane=int(lane), skill_id=skills[lane], replace=True)
                 for lane in np.flatnonzero(changed)
             )
-        self._write("decision", DecisionSection(in_force=in_force, recent=recent, recent_limit=decision.recent_limit), tick)
+        questions = decision.information_requests + tuple(
+            information_request_record(item, tick) for item in information_requests
+        )
+        self._write(
+            "decision",
+            DecisionSection(
+                in_force=in_force,
+                recent=recent,
+                recent_limit=decision.recent_limit,
+                information_requests=questions,
+                information_limit=decision.information_limit,
+            ),
+            tick,
+        )
 
     def push_goal_report(self, report: GoalReport) -> None:
         """Append ``report`` to the skills section's outcomes (the ``ReportSink`` protocol)."""

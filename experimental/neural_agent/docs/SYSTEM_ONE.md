@@ -881,6 +881,20 @@ number next to a comparator, "while it's over 3 out"). Caveat, stated in the mod
 written knowing the generator's vocabulary, so this is agreement with the generator's meanings, not
 generalisation to unseen phrasing; the typed path is the contract, and P6 measures the decoder reader.
 
+**The exact path and the questions channel (2026-10-17, late).** `jev/typed_rule.py` is the layer's typed path
+as a host decider (the `jtyped` arm of the composition driver). Per executive version it reads each goal's
+condition: the typed field; else a non-numeric constraint label such as `on_damage` (the legacy hint); else
+the words through the rule reader; else always. Per decision it evaluates the predicates on the belief and
+applies the priority rule exactly as the teacher does (M13), and the session's seam applies the switch where
+the skill's commitment allows. Measured (test_na_typed_rule): on 300 generator states and 1,200 belief rows its
+choice equals the teacher's on every decision when the goals carry typed fields, and on at least 99 % when
+they carry words only (through the rule reader); on the composition task's E_t it is J0's selection rule
+(the online run is in the ledger). A words reading below CLEAR, or one with no readable number, becomes a
+question to the LLM: an `InformationRequest` in the decision section (`information_requests`, the newest 8
+kept), written by the session's scribe from any host decider's `information_requests` list (the program
+executor's repeated-rejection requests travel the same way) and shown in the LLM view with what to do: write
+the typed condition, or reword the goal.
+
 ### 9.13 How the LLM communicates, restated (owner, 2026-10-17, late)
 
 Owner: "all we need to do is decode the intent properly, this can take time but the intention here is

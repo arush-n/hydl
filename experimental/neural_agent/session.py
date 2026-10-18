@@ -304,6 +304,7 @@ def run_session(
 
     clock_tick = 0
     latest_executive: ExecutiveState | None = None
+    information_consumed = 0  # host decider information requests already handed to the scribe
     executive_versions_applied = 0
     switches = np.zeros((batch,), dtype=np.int64)
     reports: list[GoalReport] = []
@@ -319,7 +320,7 @@ def run_session(
         transition: HierarchicalLoopTransition,
         hierarchy_state: HierarchicalCoreState,
     ) -> HierarchicalCoreState | None:
-        nonlocal clock_tick, latest_executive, executive_versions_applied
+        nonlocal clock_tick, latest_executive, executive_versions_applied, information_consumed
         nonlocal host_misses, host_errors, host_decisions, host_held
 
         clock_tick += 1
@@ -442,7 +443,12 @@ def run_session(
 
         # 5. scratchpad: the sections the session owns, once per host cadence tick
         if scribe is not None and (step_index % config.host_cadence_ticks) == 0:
-            scribe.record_tick(clock_tick, transition, new_state)
+            pending = None if host_decider is None else getattr(host_decider, "information_requests", None)
+            questions: tuple[Any, ...] = ()
+            if isinstance(pending, list) and len(pending) > information_consumed:
+                questions = tuple(pending[information_consumed:])
+                information_consumed = len(pending)
+            scribe.record_tick(clock_tick, transition, new_state, information_requests=questions)
 
         return new_state if changed else None
 

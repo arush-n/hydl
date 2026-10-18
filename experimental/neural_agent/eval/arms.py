@@ -867,6 +867,22 @@ def _program_host_decider(ctx: ArmContext, steps: int) -> Any:
     return executor
 
 
+def _typed_host_decider(ctx: ArmContext, steps: int) -> Any:
+    """Return the ``jtyped`` host decider: the exact typed path (``jev/typed_rule.py``) over the context's E_t.
+
+    Typed conditions (or the legacy constraint labels) are evaluated exactly on the belief and the priority
+    rule chooses the goal; nothing is learned. The control table is the registry's (:func:`_control_table`).
+    For a session longer than one step the counters go to stderr as one JSON line at exit, like ``jprog``.
+    """
+
+    from experimental.neural_agent.jev.typed_rule import TypedRuleDecider
+
+    decider = TypedRuleDecider(ctx.skill_ids, _control_table(ctx), ctx.executive, ctx.batch)
+    if steps > 1:
+        atexit.register(_write_program_counters, arm_label("jtyped", ctx), steps, decider)
+    return decider
+
+
 def _write_program_counters(label: str, steps: int, executor: Any) -> None:
     """Write the executor's counters to stderr as one JSON line (registered with ``atexit``)."""
 
@@ -912,7 +928,7 @@ class Arm(NamedTuple):
     make_host_decider: Callable[[ArmContext, int], Any] | None = None
 
 
-#: The arms by command-line name. ``j_lm``, ``js1`` and ``jprog`` are the host-mode arms.
+#: The arms by command-line name. ``j_lm``, ``js1``, ``jprog`` and ``jtyped`` are the host-mode arms.
 ARMS: dict[str, Arm] = {
     "flat": Arm("flat", _flat_manager, _skill_dispatcher, _shared_belief),
     "j0": Arm("j0", _scripted_manager, _skill_dispatcher, _shared_belief),
@@ -921,6 +937,7 @@ ARMS: dict[str, Arm] = {
     "j_lm": Arm("j_lm", _hold_manager, _skill_dispatcher, _shared_belief, _lm_host_decider),
     "js1": Arm("js1", _hold_manager, _skill_dispatcher, _shared_belief, _js1_host_decider),
     "jprog": Arm("jprog", _hold_manager, _skill_dispatcher, _shared_belief, _program_host_decider),
+    "jtyped": Arm("jtyped", _hold_manager, _skill_dispatcher, _shared_belief, _typed_host_decider),
 }
 
 

@@ -133,6 +133,9 @@ LATENT_PREFIX_WIDTH: int = 8
 """Latent values kept per lane in the belief summary: the first 8 of BELIEF_LATENT_WIDTH."""
 DECISION_HISTORY: int = 16
 """Default bound N of ``DecisionSection.recent``."""
+INFORMATION_HISTORY: int = 8
+"""Default bound of ``DecisionSection.information_requests``: the newest questions the decision layer
+asks the LLM (SYSTEM_ONE 9.12)."""
 OUTCOME_HISTORY: int = 16
 """Default bound of ``SkillsSection.outcomes``."""
 REQUEST_LIMIT: int = 16
@@ -322,6 +325,24 @@ _DECISION_SECTION_SCHEMA = _object_schema(
             ),
         },
         "recent_limit": _count_schema(1),
+        "information_requests": {
+            "type": "array",
+            "items": _object_schema(
+                {
+                    "tick": _count_schema(),
+                    "source": {"type": "string", "minLength": 1},
+                    "executive_version": _count_schema(),
+                    "slot": {"type": ["integer", "null"], "minimum": 0},
+                    "lane": {"type": ["integer", "null"], "minimum": 0},
+                    "text": {"type": "string"},
+                    "kind": {"type": ["string", "null"]},
+                    "argument": {"type": ["number", "null"]},
+                    "confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+                    "reason": {"type": "string"},
+                }
+            ),
+        },
+        "information_limit": _count_schema(1),
     }
 )
 def _triple_schema(item: dict[str, Any]) -> dict[str, Any]:
@@ -748,6 +769,55 @@ class DecisionRecord:
 
 
 @dataclass(frozen=True)
+class InformationRequest:
+    """One question the decision layer asks the LLM (SYSTEM_ONE 9.12): a goal's words it read below
+    CLEAR confidence (``jev/typed_rule.py``), or a step the skills kept rejecting (``jev/programs.py``,
+    item 8). The LLM answers by writing the typed field or rewording in its next version.
+
+    Attributes:
+        tick: The session tick of the request.
+        source: Who asks: ``"typed_rule"`` or ``"program"``.
+        executive_version: The E_t version concerned.
+        slot: The goal slot concerned, or None.
+        lane: The lane concerned, or None when it concerns every lane.
+        text: What was read or attempted: the goal's ``when`` words, or the rejected verb.
+        kind, argument, confidence: The reading, each None when there is none.
+        reason: What went wrong and what the LLM should do, in a sentence.
+    """
+
+    tick: int
+    source: str
+    executive_version: int
+    slot: int | None
+    lane: int | None
+    text: str
+    kind: str | None
+    argument: float | None
+    confidence: float | None
+    reason: str
+
+    def __post_init__(self) -> None:
+        """Validate the fields."""
+
+        object.__setattr__(self, "tick", _non_negative_int(self.tick, "InformationRequest.tick"))
+        _text(self.source, "InformationRequest.source")
+        object.__setattr__(
+            self, "executive_version", _non_negative_int(self.executive_version, "InformationRequest.executive_version")
+        )
+        for name in ("slot", "lane"):
+            value = getattr(self, name)
+            if value is not None:
+                object.__setattr__(self, name, _non_negative_int(value, f"InformationRequest.{name}"))
+        _string(self.text, "InformationRequest.text")
+        if self.kind is not None:
+            _text(self.kind, "InformationRequest.kind")
+        if self.argument is not None:
+            object.__setattr__(self, "argument", _finite_number(self.argument, "InformationRequest.argument"))
+        object.__setattr__(self, "confidence", _optional_bounded(self.confidence, "InformationRequest.confidence", 1.0))
+        _string(self.reason, "InformationRequest.reason")
+
+
+@dataclass(frozen=True)
 class DecisionSection:
     """The JEV's section: the goal in force per lane and the last decisions.
 
@@ -756,20 +826,29 @@ class DecisionSection:
         recent: The last decisions, newest last. Building the section keeps only the newest
             ``recent_limit`` of them, so the list stays bounded.
         recent_limit: The bound N, at least 1. Default ``DECISION_HISTORY`` (16).
+        information_requests: The questions to the LLM, newest last; only the newest
+            ``information_limit`` are kept.
+        information_limit: Their bound, at least 1. Default ``INFORMATION_HISTORY`` (8).
     """
 
     in_force: tuple[GoalInForce, ...] = ()
     recent: tuple[DecisionRecord, ...] = ()
     recent_limit: int = DECISION_HISTORY
+    information_requests: tuple[InformationRequest, ...] = ()
+    information_limit: int = INFORMATION_HISTORY
 
     def __post_init__(self) -> None:
-        """Validate the records and keep the newest ``recent_limit`` decisions."""
+        """Validate the records and keep the newest ``recent_limit`` decisions and ``information_limit`` questions."""
 
         limit = _positive_int(self.recent_limit, "DecisionSection.recent_limit")
         object.__setattr__(self, "recent_limit", limit)
         object.__setattr__(self, "in_force", _instances(self.in_force, GoalInForce, "DecisionSection.in_force"))
         recent = _instances(self.recent, DecisionRecord, "DecisionSection.recent")
         object.__setattr__(self, "recent", recent[-limit:])
+        bound = _positive_int(self.information_limit, "DecisionSection.information_limit")
+        object.__setattr__(self, "information_limit", bound)
+        questions = _instances(self.information_requests, InformationRequest, "DecisionSection.information_requests")
+        object.__setattr__(self, "information_requests", questions[-bound:])
 
     def to_dict(self) -> dict[str, Any]:
         """Return the JSON-shaped mapping."""
@@ -778,6 +857,8 @@ class DecisionSection:
             "in_force": [dataclasses.asdict(goal) | {"params": list(goal.params)} for goal in self.in_force],
             "recent": [dataclasses.asdict(record) for record in self.recent],
             "recent_limit": self.recent_limit,
+            "information_requests": [dataclasses.asdict(item) for item in self.information_requests],
+            "information_limit": self.information_limit,
         }
 
     @classmethod
@@ -789,6 +870,8 @@ class DecisionSection:
             in_force=tuple(GoalInForce(**item) for item in mapping["in_force"]),
             recent=tuple(DecisionRecord(**item) for item in mapping["recent"]),
             recent_limit=mapping["recent_limit"],
+            information_requests=tuple(InformationRequest(**item) for item in mapping["information_requests"]),
+            information_limit=mapping["information_limit"],
         )
 
 
@@ -1350,6 +1433,25 @@ def view_for_llm(state: SharedState) -> str:
             f"confidence={confidence} entropy={entropy}"
         )
 
+    if decision.information_requests:
+        lines.append(
+            f"Questions from the decision layer (newest last, {len(decision.information_requests)} kept of "
+            f"{decision.information_limit}); answer by writing the typed condition or rewording the goal:"
+        )
+        for item in decision.information_requests:
+            where = "no slot" if item.slot is None else f"goal slot {item.slot}"
+            lane = "" if item.lane is None else f", lane {item.lane}"
+            if item.kind is None:
+                reading = "no reading"
+            else:
+                reading = f"read as {item.kind}" + ("" if item.argument is None else f" {_number(item.argument)}")
+            if item.confidence is not None:
+                reading += f" (confidence {_number(item.confidence)})"
+            lines.append(
+                f"  tick {item.tick}, E_t version {item.executive_version}, {where}{lane}, {item.source}: "
+                f"{item.text!r}: {reading}. {item.reason}"
+            )
+
     agents = sorted({request.agent for request in requests.live})
     per_agent = ", ".join(f"agent {agent}: {len(requests.for_agent(agent))}" for agent in agents)
     lines.append(f"Live requests to the skills: {len(requests.live)}" + (f" ({per_agent})." if agents else "."))
@@ -1479,6 +1581,8 @@ __all__ = [
     "BeliefSection",
     "DecisionRecord",
     "DecisionSection",
+    "INFORMATION_HISTORY",
+    "InformationRequest",
     "EventsSection",
     "ExecutiveSection",
     "GoalEntry",
