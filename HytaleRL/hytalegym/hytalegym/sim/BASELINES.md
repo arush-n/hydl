@@ -35,9 +35,12 @@ JAX_PLATFORMS=cpu PYTHONPATH=. ../../../.venv/bin/python -m sim_bench.rollout --
 | | 64 | 0.193 | 1.148 | 90,848 | |
 
 Output fingerprints (SHA-256 over every output leaf) are identical across the two committed samples
-and are the identity gate's values (`sim/gen5/identity.json`): batch 8 `0b28448a...2079`, batch 64
-`ace7a94e...2670`. The working tree gives different fingerprints (`d8477b63...`, `b02ee274...`): other
-sessions' uncommitted changes alter melee-core outputs, which is why renders read `HEAD`.
+and were the identity gate's values at `dedd088` (`sim/gen5/identity.json`): batch 8 `0b28448a...2079`, batch 64
+`ace7a94e...2670`. The working tree gave different fingerprints (`d8477b63...`, `b02ee274...`) because the
+measured engine edits of 2026-10-13 to 18 sat uncommitted, which is why renders read `HEAD`. Since `ede9a39` and
+`879321e` (2026-10-18, late) those edits are committed and the identity values are the working-tree ones: batch 8
+`d8477b63...bd4b`, batch 64 `b02ee274...d8e7`, recorded twice on a git archive of `879321e`, identical; the
+previous values stay in `identity.json` under `committed_engine.previous`.
 
 ### Real-time factor and per-step wall time at 30 Hz (production training step)
 
@@ -143,7 +146,8 @@ ignores `hytalegym/tests/**`):
 Identity gate (`tests/sim/test_render_identity.py`; `sim/common/bench.py` workloads): gen-5 source rendered with
 the gen-5 overlay against a `git archive` of the render's commit; 11 outputs, 2,307 arrays, 101,298 elements,
 0 mismatched, max |diff| 0.0, equal SHA-256. Negative control (PLAYER_BASE_SPEED 5.5 -> 5.75): 82 arrays differ.
-The content agent's rollout fingerprints (`sim/gen5/identity.json`, b8 `0b28448a...`, b64 `ace7a94e...`) are
+The content agent's rollout fingerprints (`sim/gen5/identity.json`; b8 `0b28448a...`, b64 `ace7a94e...` at `dedd088`,
+b8 `d8477b63...`, b64 `b02ee274...` since `879321e`) are
 reproduced through the render by import redirection. Compiled HLO (metadata stripped) is identical for the planned
 and general arsenal and melee steps.
 

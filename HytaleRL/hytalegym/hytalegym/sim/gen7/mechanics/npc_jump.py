@@ -12,6 +12,10 @@ Template_Kweebec_Razorleaf.json``). Measured on the live bridge: native first-st
 Applies to ``motion_model="npc_walk"`` only: the player model (the skills' training model) keeps
 ``PLAYER_JUMP_FORCE``. Gen 5 keeps ``player_force`` (the original function, returned unchanged).
 The construct is the render's hook on ``default_combat_params``.
+
+Since the engine batch of 2026-10-18 (late), gen 5's ``default_combat_params`` computes the same
+``sqrt(2 * jump_velocity_gravity_floor * jump_height_parameter)`` for ``npc_walk`` itself, so on that
+HEAD this construct changes no value; it stays as the switch's record and its differential.
 """
 
 from __future__ import annotations

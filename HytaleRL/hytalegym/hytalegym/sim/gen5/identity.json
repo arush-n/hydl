@@ -3,24 +3,26 @@
  "command": "cd HytaleRL/hytalegym/tools && JAX_PLATFORMS=cpu PYTHONPATH=<engine root>:. ../../../.venv/bin/python -m sim_bench.rollout --batches 8,64 --steps 64",
  "committed_engine": {
   "fingerprints": {
-   "64": "ace7a94e83ebaf57cf85ef4ac0ce076af30402cb6b3eede7d6af5e0366bb2670",
-   "8": "0b28448a8a2fdbf2ba4441359d49be5e26020471de670d7cd33699f6a90c2079"
+   "64": "b02ee27417fb649a44ea2e68a4632453816913af2c85078471f2d0f89924d8e7",
+   "8": "d8477b63fac9d8c550d35158a823c6324267d4de1801bbde7d1f92739dd4bd4b"
   },
-  "git_head": "dedd088acb3199798bc2d105d673316898e22d37",
+  "git_head": "879321eb8ee44684deb40838754bab32ca8d8d63",
+  "previous": {
+   "fingerprints": {
+    "64": "ace7a94e83ebaf57cf85ef4ac0ce076af30402cb6b3eede7d6af5e0366bb2670",
+    "8": "0b28448a8a2fdbf2ba4441359d49be5e26020471de670d7cd33699f6a90c2079"
+   },
+   "git_head": "dedd088acb3199798bc2d105d673316898e22d37",
+   "note": "the committed engine before ede9a39 and 879321e brought in the measured working-tree edits of 2026-10-13 to 18"
+  },
+  "recorded": "2026-10-18 (late): two runs on a git archive of 879321e, identical; load average 27 to 32",
   "repeat_runs_identical": true,
   "source": "git archive HEAD HytaleRL/hytalegym/hytalegym"
  },
  "jax": "0.11.2",
  "machine": "macOS-26.5.1-arm64-arm-64bit",
+ "note": "Since 879321e the committed engine is the engine every measurement of the week ran on; the values above equal the working-tree fingerprints recorded on 2026-10-17. Remaining uncommitted files under hytalegym/jax belong to another session (jax/world/region/library.py, jax/training/multi_actor/*) and are not in the fixed rollout.",
  "purpose": "Values a gen-5 render must reproduce byte for byte (the owner's identity gate): SHA-256 over every output leaf of the fixed rollout in HytaleRL/hytalegym/tools/sim_bench/rollout.py.",
  "rollout": "default_combat_params(microticks=4, target_active=True); reset_batch(split(key(570057), batch)); step_batch x 64 with numpy-seed-20261017 actions and split(key(913771 + t), batch) step keys",
- "schema": "hytalerl_gen5_identity_v1",
- "working_tree_engine": {
-  "fingerprints": {
-   "64": "b02ee27417fb649a44ea2e68a4632453816913af2c85078471f2d0f89924d8e7",
-   "8": "d8477b63fac9d8c550d35158a823c6324267d4de1801bbde7d1f92739dd4bd4b"
-  },
-  "git_head": "dedd088acb3199798bc2d105d673316898e22d37",
-  "note": "HEAD plus other sessions' uncommitted changes (53 files on 2026-10-17); differs from the committed engine, so it is not the identity reference"
- }
+ "schema": "hytalerl_gen5_identity_v1"
 }
