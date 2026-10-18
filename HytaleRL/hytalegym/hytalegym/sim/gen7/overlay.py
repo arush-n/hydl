@@ -192,6 +192,17 @@ PATCHES = (
           "capacity only: the packer still rejects the 0.7.2 catalog (988 excluded-material inputs, 19 "
           "recipes without a bench, 22 bench ids); hytalegym.worldgen.native_action_resolution (shared, "
           "not rendered) still imports the gen-5 contract"),
+    Patch("dodge_starts_one_drain_later", "combat/mechanics/schema/contract.py",
+          "DODGE_LAUNCH_TICK = 2\nDODGE_COST_TICK = 3\n",
+          "# Live 0.7.2 bridge (2026-10-18, jar 32EF5EDD, two seeds): a dodge requested on tick 1 is accepted on\n"
+          "# tick 2 (the next command drain), launches on tick 3 and spends its stamina on tick 4; its force\n"
+          "# sequence is the engine's one tick later (FIDELITY-0.7.2.md row 5f).\n"
+          "DODGE_LAUNCH_TICK = 3\nDODGE_COST_TICK = 4\n",
+          "5f",
+          "the dodge timing probe on the render (first force on tick 3, stamina spent on tick 4, the force sequence "
+          "equal to native) and the learner-row dodge_left cases (test_dynamic_learner_row_world_inputs.py)",
+          "the engine starts the invulnerability, cooldown and regeneration delay on the launch and cost ticks, so "
+          "they move with them; the dodge still becomes pending on the request tick"),
 )
 
 _MECHANICS = "hytalegym.sim.gen7.mechanics"
