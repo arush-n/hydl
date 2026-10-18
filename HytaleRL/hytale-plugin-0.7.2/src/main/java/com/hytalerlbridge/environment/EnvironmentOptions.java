@@ -43,6 +43,8 @@ public record EnvironmentOptions(
     public static final String NATIVE_DUEL_FIXTURE = "native_duel";
     public static final String NATIVE_PROJECTILE_DUEL_FIXTURE =
         "native_projectile_duel";
+    /** Phase 4b: a native duel whose target is hostile to the agent by server attitude override (fixture only). */
+    public static final String HIT_INTERRUPT_DUEL_FIXTURE = "hit_interrupt_duel";
     public static final String DIVE_MOTION_FIXTURE = "dive_motion";
     public static final String SYNTHETIC_WORLD_VERBS_FIXTURE =
         "synthetic_world_verbs";
@@ -721,6 +723,12 @@ public record EnvironmentOptions(
                 "native_projectile_duel owns its pinned target role"
             );
         }
+        if (fidelityFixture.equals(HIT_INTERRUPT_DUEL_FIXTURE)
+            && (combatTargetRole == null || !combatTargetActive)) {
+            throw new IllegalArgumentException(
+                "hit_interrupt_duel requires combat_target_role and combat_target_active=true"
+            );
+        }
         if (
             !world.equals("hytale_generator")
                 && !worldgenStructure.equals("Default")
@@ -789,6 +797,7 @@ public record EnvironmentOptions(
             PATH_FOLLOWER_FIXTURE,
             NATIVE_DUEL_FIXTURE,
             NATIVE_PROJECTILE_DUEL_FIXTURE,
+            HIT_INTERRUPT_DUEL_FIXTURE,
             DIVE_MOTION_FIXTURE,
             SYNTHETIC_WORLD_VERBS_FIXTURE,
             SYNTHETIC_BLOCK_USE_FIXTURE,

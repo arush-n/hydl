@@ -6909,6 +6909,7 @@ final class NativeEnvironmentSession
         if (fixture.equals("default") && !taskId.equals("native_fidelity")) return;
         boolean combatFixture = fixture.equals("los_wall")
             || isDiagonalLosFixture(fixture)
+            || fixture.equals(EnvironmentOptions.HIT_INTERRUPT_DUEL_FIXTURE)
             || fixture.equals(EnvironmentOptions.TARGET_MEMORY_FIXTURE)
             || fixture.equals(EnvironmentOptions.PATH_FOLLOWER_FIXTURE)
             || nativeDuelFixture();
@@ -6969,7 +6970,8 @@ final class NativeEnvironmentSession
                 NativeWorldAccess.setBlock(world, 1, 66, -1, "Rock_Stone");
                 return;
             }
-            if (fixture.equals(EnvironmentOptions.TARGET_MEMORY_FIXTURE)) {
+            if (fixture.equals(EnvironmentOptions.TARGET_MEMORY_FIXTURE)
+                || fixture.equals(EnvironmentOptions.HIT_INTERRUPT_DUEL_FIXTURE)) {
                 return;
             }
             if (fixture.equals(EnvironmentOptions.PATH_FOLLOWER_FIXTURE)) {
@@ -7471,8 +7473,30 @@ final class NativeEnvironmentSession
             targetModelEvidence,
             agentMovementStates,
             targetMovementStates,
-            combatTelemetry
+            combatTelemetry,
+            manaStat == null ? 0.0 : manaStat.getMax(),
+            stateName(store, agentRef),
+            stateName(store, targetRef),
+            statusText(store, agentRef),
+            statusText(store, targetRef)
         );
+    }
+
+    private static String stateName(Store<EntityStore> store, Ref<EntityStore> reference) {
+        if (reference == null || !reference.isValid()) return "";
+        StateSupport state = store.getComponent(reference, StateSupport.getComponentType());
+        return state == null ? "" : state.getStateName();
+    }
+
+    private static String statusText(Store<EntityStore> store, Ref<EntityStore> reference) {
+        if (reference == null || !reference.isValid()) return "";
+        StringBuilder text = new StringBuilder();
+        for (var status : captureStatuses(store, reference).statuses()) {
+            if (text.length() > 0) text.append(';');
+            text.append(status.effectId()).append('=')
+                .append(String.format(java.util.Locale.ROOT, "%.4f", status.remainingDurationSeconds()));
+        }
+        return text.toString();
     }
 
 
@@ -7514,7 +7538,12 @@ final class NativeEnvironmentSession
             EntityModelEvidence.absent(),
             MovementStateFrame.unavailable(),
             MovementStateFrame.unavailable(),
-            CombatTelemetry.idle(previous != null && previous.targetPresent())
+            CombatTelemetry.idle(previous != null && previous.targetPresent()),
+            previous == null ? 0.0 : previous.agentManaMaximum(),
+            "",
+            "",
+            "",
+            ""
         );
     }
 
@@ -8513,6 +8542,12 @@ final class NativeEnvironmentSession
         info.put("has_native_health_stat", snapshot.hasHealthStat());
         info.put("has_native_stamina_stat", snapshot.hasStaminaStat());
         info.put("has_native_mana_stat", snapshot.hasManaStat());
+        info.put("native_agent_mana", snapshot.observation().mana());
+        info.put("native_agent_mana_maximum", snapshot.agentManaMaximum());
+        info.put("native_agent_state_name", snapshot.agentStateName());
+        info.put("combat_target_state_name", snapshot.targetStateName());
+        info.put("native_agent_status", snapshot.agentStatusText());
+        info.put("combat_target_status", snapshot.targetStatusText());
         info.put("max_health", snapshot.observation().maxHealth());
         info.put(
             "inventory_encoding",
@@ -9408,6 +9443,12 @@ final class NativeEnvironmentSession
         WorldSupport targetWorldSupport = store.getComponent(targetRef, WorldSupport.getComponentType());
         agentWorldSupport.requireAttitudeCache();
         targetWorldSupport.requireAttitudeCache();
+        if (options.fidelityFixture().equals(EnvironmentOptions.HIT_INTERRUPT_DUEL_FIXTURE)) {
+            // Phase 4b fixture: the target (Skeleton_Fighter) is HOSTILE to the agent through the server's own
+            // attitude-override memory (the API behind the NPC OverrideAttitude action); the check below still
+            // reads WorldSupport.getAttitude on both sides. Goblin -> Skeleton is HOSTILE natively.
+            targetWorldSupport.overrideAttitude(agentRef, Attitude.HOSTILE, 1.0e6);
+        }
         Attitude actorToTarget = agentWorldSupport.getAttitude(
             agentRef,
             targetRef,

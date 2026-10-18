@@ -29,5 +29,13 @@ public record NativeSnapshot(
     EntityModelEvidence targetModelEvidence,
     MovementStateFrame agentMovementStates,
     MovementStateFrame targetMovementStates,
-    CombatTelemetry combatTelemetry
+    CombatTelemetry combatTelemetry,
+    /** Agent Mana stat maximum (0 when absent); the value is {@code observation().mana()}. */
+    double agentManaMaximum,
+    /** Server StateSupport state names (phase 4b, hit interrupt readout); empty when the entity or state is absent. */
+    String agentStateName,
+    String targetStateName,
+    /** Active entity effects as {@code effectId=remainingSeconds;...} (phase 4b, flinch and stun readout). */
+    String agentStatusText,
+    String targetStatusText
 ) {}
