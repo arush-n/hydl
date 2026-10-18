@@ -192,6 +192,13 @@ class Combiner:
             elif tick >= request.expires_tick:
                 finish(request_id, "aborted",
                        reason=f"expired: request {request_id} ({request.verb}) expired at tick {request.expires_tick}")
+        for request_id, request in current.items():
+            # A request that arrives already expired is rejected once with the check's first code, and kept in
+            # seen so it is forgotten like any finished request when it leaves the stream.
+            if request_id not in state.seen and request_id not in state.finished and tick >= request.expires_tick:
+                state.seen[request_id] = request
+                finish(request_id, "rejected", reason=f"expired: request {request_id} ({request.verb}) arrived at "
+                                                      f"tick {tick}, expiring at tick {request.expires_tick}")
         live = {rid: request for rid, request in current.items()
                 if rid not in state.finished and tick < request.expires_tick}
         state.seen.update(live)
