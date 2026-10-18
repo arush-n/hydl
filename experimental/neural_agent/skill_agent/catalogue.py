@@ -142,6 +142,19 @@ SECOND_SCOPES: Mapping[str, tuple[str, ...]] = {
 }
 """Learned verbs that also drive a second scope; their one request carries both scopes."""
 
+PROGRESS_UNIVERSAL: tuple[str, ...] = ("progress", "elapsed_s")
+"""Progress every verb reports: the fraction toward its done condition (0 to 1) and seconds since its grant."""
+
+PROGRESS_FAMILIES: tuple[tuple[str, str], ...] = (
+    ("distance_m", r"\b(arriv\w*|reach\w*|there|inside|home|away|across)\b"),
+    ("hits", r"\b(hits?|lands?|down|dead|kill\w*|broken|stunned|interrupted|blocked)\b"),
+    ("count", r"\b(gain\w*|placed|collect\w*|craft\w*|mined|picked|stored|built|cooked|harvest\w*|planted|tilled"
+              r"|filled|made|equipped|eaten|drunk|repaired|fed|tamed|sold|bought|traded|given|loaded|lit|opened|closed)\b"),
+    ("angle_deg", r"\b(cent(red|ered)|facing|seen|found|aim\w*|spotted|located)\b"),
+)
+"""The one measured progress signal a verb adds, by its done text's family (whole words, first match wins;
+no match: the universal pair only). Generic English stems, not catalogue text."""
+
 PROOF_OF_CONCEPT: Mapping[str, str] = {"idle": "wait_here", "pursuit": "finish", "evader": "avoid"}
 """Proof-of-concept skill id -> the catalogue row that describes it."""
 
@@ -251,13 +264,14 @@ class VerbContract:
     kind: str
     section: int
     description: str
+    progress: tuple[str, ...] = PROGRESS_UNIVERSAL
 
     def to_dict(self) -> dict[str, Any]:
         contract = self.contract
         return {
             "verb": self.verb, "kind": self.kind, "section": self.section, "scopes": list(self.scopes),
             "arguments": self.arguments.to_dict(),
-            "description": self.description,
+            "description": self.description, "progress": list(self.progress),
             "contract": {
                 "skill_id": contract.skill_id, "version": contract.version,
                 "observation_groups": list(contract.observation_groups),
@@ -582,6 +596,14 @@ def verb_contract(skill: CatalogueSkill, verb: str) -> VerbContract | None:
     return build_verb_contract(verb, arguments, scopes, skill.kind, skill.section, describe(skill, verb, arguments))
 
 
+def progress_signals(done: str) -> tuple[str, ...]:
+    """The progress signals a verb with this done text reports: the universal pair, plus its family's measure."""
+
+    text = done.lower()
+    family = next((name for name, pattern in PROGRESS_FAMILIES if re.search(pattern, text)), None)
+    return PROGRESS_UNIVERSAL + ((family,) if family else ())
+
+
 def build_verb_contract(
     verb: str,
     arguments: ArgumentSchema,
@@ -628,7 +650,8 @@ def build_verb_contract(
         checkpoint_sha256=checkpoint_sha256,
         **control,
     )
-    return VerbContract(verb, contract, arguments, tuple(scopes), kind, section, description)
+    return VerbContract(verb, contract, arguments, tuple(scopes), kind, section, description,
+                        progress_signals(arguments.done))
 
 
 def verb_contracts(catalogue: Catalogue) -> tuple[VerbContract, ...]:
@@ -674,7 +697,7 @@ def proof_of_concept_contracts(catalogue: Catalogue) -> tuple[VerbContract, ...]
         )
         built.append(VerbContract(skill_id, contract, base.arguments, SCOPE_NAMES, row.kind, row.section,
                                   f"{skill_id} (proof of concept, catalogue row {PROOF_OF_CONCEPT[skill_id]}): "
-                                  f"{row.description}."))
+                                  f"{row.description}.", progress_signals(base.arguments.done)))
     return tuple(built)
 
 
@@ -767,6 +790,8 @@ __all__ = [
     "CONTEXT_KINDS",
     "DEFAULT_CATALOGUE",
     "KINDS",
+    "PROGRESS_FAMILIES",
+    "PROGRESS_UNIVERSAL",
     "PROOF_OF_CONCEPT",
     "SECTION_SCOPES",
     "VERB_SCOPES",
@@ -782,6 +807,7 @@ __all__ = [
     "load_catalogue",
     "parse_catalogue",
     "parse_instruction",
+    "progress_signals",
     "proof_of_concept_contracts",
     "resolve_activities",
     "scope_for",

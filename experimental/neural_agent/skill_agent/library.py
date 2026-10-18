@@ -98,10 +98,11 @@ class RegisteredSkill:
 
 
 def placeholder_body(contract: VerbContract, layout: str = "gen7", done_after: int | None = 1) -> StubBody:
-    """A deterministic stand-in that fills the verb's scope heads and reports done after ``done_after`` ticks."""
+    """A deterministic stand-in: it fills the verb's scope heads, reports the contract's progress signals, and on
+    done (after ``done_after`` ticks) the contract's success label as the status signal."""
 
     heads = tuple(head for scope in contract.scopes for head in scope_heads(scope, layout))
-    return StubBody(layout, done_after, heads)
+    return StubBody(layout, done_after, heads, contract.progress, contract.contract.success_signals[0])
 
 
 def script(frames: Sequence[Mapping[str, int] | Callable[[middle.ActionRequest], Mapping[str, int]]]) -> Body:

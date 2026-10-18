@@ -451,6 +451,25 @@ skill's weights untouched is the strongest guard against catastrophic forgetting
 **Assumption.** Bit-identity is shown on CPU for these shapes. Another backend or JAX version should be
 re-checked with the same test.
 
+### 2.10 Progress and stop reasons in every contract (B6)
+
+**What a verb reports.** Every verb contract lists the typed progress signals the verb reports into the
+status stream:
+- `progress`: the fraction toward its done condition, 0 to 1. The middle layer's stall rule reads this.
+- `elapsed_s`: seconds since the grant.
+- One measure by the done text's family, matched on whole words: `distance_m` (arrive, reach), `hits`
+  (hit, land, down), `count` (gained, placed, crafted) or `angle_deg` (centred, facing, found).
+
+On the catalogue, 72 of 122 verbs get a family measure (hits 27, distance 22, count 20, angle 3), and 50
+report the universal pair only.
+
+**Why a verb stopped.** A body that finishes reports `BodyStep.signal`, one of its contract's termination
+labels: the success label from the done column, or `stuck`, `timeout` or `precondition_failed`. The
+combiner refuses any other label, and writes the label into `RequestStatus.signal`, the middle layer's
+field. Two verbs that end with the same outcome class can still be told apart: arrived is not timed out.
+Stand-in bodies report their contract's progress names and, on done, the success label.
+[test: test_progress_signals_follow_the_done_texts_family; test_a_done_status_carries_the_bodys_termination_signal_and_a_foreign_signal_is_refused; every verb in test_sa_execute_all]
+
 ## 3. For the agent building the gen-7 simulator
 
 **What you receive.** Each tick you get one choice per head per agent, in this order. A head no request

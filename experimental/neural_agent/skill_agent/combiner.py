@@ -53,6 +53,7 @@ from experimental.neural_agent.skill_agent.surface import (
     head_layout,
     legal_choices,
     scope_heads,
+    tick_seconds,
 )
 
 ActionRequest = protocol.ActionRequest
@@ -66,6 +67,7 @@ class BodyStep(NamedTuple):
     done: bool = False
     outcome: SkillOutcome = SkillOutcome.COMPLETED
     progress: Mapping[str, float] | None = None
+    signal: str = ""  # on done: the contract's termination label that fired (requests.RequestStatus.signal)
 
 
 Body = Callable[[ActionRequest, int, Any, Any], BodyStep]
@@ -278,7 +280,11 @@ class Combiner:
             statuses.append(RequestStatus(agent=agent, request_id=request_id, kind=kind, tick=tick,
                                           progress=result.progress, heads=driven))
             if result.done:
-                finish(request_id, "done", outcome=result.outcome)
+                spec = self.specs[request.verb]
+                if result.signal and result.signal not in spec.contract.termination:
+                    raise ValueError(f"the body of {request.verb!r} reported signal {result.signal!r}, not one of its "
+                                     f"contract's termination labels {spec.contract.termination}")
+                finish(request_id, "done", outcome=result.outcome, signal=result.signal)
         since_grant = {rid: value for rid, value in since_grant.items() if rid in set(drivers.values())}
         # Forget what can never matter again: a finished request that has left the stream (ids are
         # monotonic per agent and never come back). Done ids stay in ``state.done`` for after-chains (for
@@ -308,6 +314,8 @@ class StubBody:
     layout: str = "gen5"
     done_after: int | None = None
     heads: tuple[str, ...] | None = None
+    progress: tuple[str, ...] = ()
+    success: str = ""
 
     def __call__(self, request: ActionRequest, ticks_since_start: int, observation_tokens: Any,
                  belief_tokens: Any) -> BodyStep:
@@ -320,7 +328,24 @@ class StubBody:
                 choice = (request.request_id + position) % head.size
                 factors[head.name] = choice if legal[position][choice] else head.neutral
         done = self.done_after is not None and ticks_since_start + 1 >= self.done_after
-        return BodyStep(factors, done=done, progress={"ticks": float(ticks_since_start)})
+        values = {"ticks": float(ticks_since_start)} if not self.progress else {
+            name: self._progress_value(name, ticks_since_start, done) for name in self.progress}
+        return BodyStep(factors, done=done, progress=values, signal=self.success if done else "")
+
+    def _progress_value(self, name: str, ticks: int, done: bool) -> float:
+        """Stand-in values with the right types and directions: progress rises to 1, distance and angle fall
+        to 0, hits and counts reach 1 at done (a placeholder proves plumbing, not a measurement)."""
+
+        remaining = float(max(0, (self.done_after or ticks + 2) - ticks - 1))
+        values = {
+            "progress": 1.0 if done else (0.0 if self.done_after is None else (ticks + 1) / self.done_after),
+            "elapsed_s": ticks * tick_seconds(self.layout),
+            "distance_m": remaining,
+            "angle_deg": remaining,
+            "hits": float(done),
+            "count": float(done),
+        }
+        return values.get(name, 0.0)
 
 
 def stub_bodies(specs: Mapping[str, VerbSpec], *, layout: str = "gen5",
