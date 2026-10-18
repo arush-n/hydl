@@ -87,9 +87,12 @@ regression (`7d3c2d5`, (u) addendum); the landing walk resume construct (`580e37
 NPC walks on the third tick after touchdown, within 1.5e-5 m of native on two seeds, closing the locomotion half of the
 lower layer's Phase C blocker; guard cooldown, attack start and shortbow reset ammo re-filed as #73 with findings); the
 ancient-steel crossbow rows settled as a harness pitch gap and two stale 0.5.7 expectations (`02ff098`, section (aa);
-follow-ups #74). Running: crafting on the simulator side from the oracle (#67: bench tiers, memories level, timed
-recipes, harness helpers) and the plain-root bash withdrawal on the bridge (#71). Queued: the session-file split (#72),
-#73, #74, the terrain recapture and audits (#68), the stub mechanics (#69), the stale engine-test fixtures (#62).
+follow-ups #74); the bridge half of the plain-root bash withdrawal (`bdb6245`, pin `BF1D9697`, (x) addendum; the
+simulator half waits); bench tiers and the memories level on the simulator with the oracle receipts replayed and the
+harness readers (`a92d0a2`, section (ab): the render admits 1,264 recipes, 1,168 at a fresh bench and 1,264 at tier 8
+and level 6). Running: timed recipes on the simulator (progress in seconds at 1/30 s) and the bridge session-file split
+for ratchet headroom (#72). Queued: the simulator half of #71, #73, #74, the processing and diagram actions, the terrain
+recapture and audits (#68), the stub mechanics (#69), the stale engine-test fixtures (#62).
 Committed earlier: the
 crafting oracle stage 3 (`274aaec`, timed bench crafts with probe events; pin `5FE609E2`), phase 4j (`a534e83`: the Trork
 target no longer gets a headless Player, which the PvP-off filter used to cancel the agent's damage; the iron combo and
@@ -199,7 +202,8 @@ stage 1, `0e45fc6` section (o). Later this session: `8758cb3` docs; `b4be1fe` se
 `274aaec` stage 3; `5c523a8` the handoff; `a534e83` phase 4j; `7374b76` stage 5; `dc517df` docs; `deb8694` runbooks and
 tools; `8b6e284` the peer's state corrections; `ec9c6da` content values; `fc80707` shield bash; `6b98ee3` potions and
 durability; `4034a10` docs; `7d3c2d5` the no-regression verification; `580e37b` landing walk resume; `02ff098` and
-`f9e79ba` phase 4n and the index tool. Peer, before stopping: `0218d69` guard
+`f9e79ba` phase 4n and the index tool; `b461500` docs; `bdb6245` the bash withdrawal (bridge); `a92d0a2` tiers and
+memories. Peer, before stopping: `0218d69` guard
 release mask, `025ee62` structural crafting (1,168 recipes), `325f938` type 3 on the 0.7 line, `8b3b2ac` last.
 
 ## 9. Layout
