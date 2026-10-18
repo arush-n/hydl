@@ -25,4 +25,5 @@ nothing. Import the submodules:
 * ``freezing``: one frozen trunk and one adapter per verb; adding a verb never changes a frozen one (B4); the trunk
   once per tick (``encode_contexts``) and the trained verb as a body (``VerbBody``).
 * ``sim_adapter``: the combiner's choices onto the heads a simulator implements; drops counted.
+* ``teachers``: scripted walk_to and look_at teachers over the full simulator state (the simple track).
 """

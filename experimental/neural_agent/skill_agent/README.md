@@ -582,6 +582,33 @@ field. Two verbs that end with the same outcome class can still be told apart: a
 Stand-in bodies report their contract's progress names and, on done, the success label.
 [test: test_progress_signals_follow_the_done_texts_family; test_a_done_status_carries_the_bodys_termination_signal_and_a_foreign_signal_is_refused; every verb in test_sa_execute_all]
 
+### 2.11 Scripted teachers for the simple track (`teachers.py`, 2026-10-18)
+
+**What they are.** Pure JAX functions of the simulator's full state and the request. They return choices on the gym's
+12 heads plus a done flag, for every lane at once (TRAINING_PLAN 2d). They will label the student's data.
+- `walk_to_choices`: steers the body toward the target by one codebook step, then takes the compass sector in the
+  commanded body frame that results. Gait comes from the request; sprint falls back to run off the forward direction.
+  It stops inside the radius.
+- `look_at_choices`: aims the head at the target point within the ±45° window around the body. It wraps across the
+  ±180° seam before clamping, and reports done when the actual head is within tolerance.
+- `TEACHERS` registers each with its verbs, kind, the fields it reads, its parameters, version and certificate
+  (none yet).
+
+**Measured** (flat world, `npc_walk`, 64 lanes):
+- walk_to: 64 of 64 arrive within the horizon, median 54 ticks (1.99 s);
+- look_at: 64 of 64 done within 90 ticks, median 11, p95 20;
+- no illegal decision on either.
+
+This is T1 and T3 of the certificate on a small sample, not the full certificate.
+[test: test_sa_teachers.py, 13 tests; the open-loop factors are decoded by the engine's own decoder]
+
+**Learned while building them:**
+- The look codebook is regenerated for each `maximum_turn_degrees`, not scaled, so a teacher quantises against the
+  decoder's own table.
+- The 5-bin pitch head steps ±1° or ±45°, so pitch overshoots by up to 21.5° before settling.
+- Done is per tick. A head swinging through the target can be "done" for one tick (1 of 64 lanes), so a data pipeline
+  needs done for k consecutive ticks.
+
 ## 3. For the agent building the gen-7 simulator
 
 **What you receive.** Each tick you get one choice per head per agent, in this order. A head no request
