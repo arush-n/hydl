@@ -76,9 +76,16 @@ for the gen-7 simulator), and the gen-7 simulator itself (phase 3 of 6 running).
 
 The simulator lane is this session's since the fidelity session's handoff (GEN7-PLAN 2b, `5c523a8`), and the work runs
 as a fleet of Haiku subagents (the owner's ruling: launch Haiku agents, pass the model explicitly, and distil every long
-process into runbooks and tools). Running: the port runbook and tools (PORTING.md checklist, BRIDGE-PORTING.md,
-regen_swap_plan.py, pin_bridge.py, fidelity_index.py), the 14 content values (#64), the verification of the world-verb
-suites on the phase 4j jar, and the shield bash legality under a held guard (#61). Committed since the last update: the
+process into runbooks and tools). Committed since: the port runbook and tools (`deb8694`: the version bump checklist at
+the top of PORTING.md, BRIDGE-PORTING.md, regen_swap_plan.py with its test, pin_bridge.py, fidelity_index.py and the
+generated index in FIDELITY-0.7.2.md); the 13 content values as Redirects (`ec9c6da`, section (w); the shortbow tier-0
+row matches live, the iron sword hit tick stays open); the shield bash under a held guard (`fc80707`, pin `56D2B532`,
+section (x); the plain-root bash with no guard held is queued as #71); potions and durability (`6b98ee3`, section (y):
+the 0.7.2 stamina drink is a 30 s interaction cooldown with no status, the durability table served through a hook).
+Running: the attribution of the world-verb suite failures on the damage-fix jar, the ancient-steel crossbow rows (#70),
+and the timing constructs with state (#66: landing walk resume, guard cooldown, attack start, shortbow ammo at reset).
+Queued: #71, the session-file split for ratchet headroom (#72), simulator crafting from the oracle (#67), the terrain
+recapture and audits (#68), the stub mechanics (#69), the stale engine-test fixtures (#62). Committed since the last update: the
 crafting oracle stage 3 (`274aaec`, timed bench crafts with probe events; pin `5FE609E2`), phase 4j (`a534e83`: the Trork
 target no longer gets a headless Player, which the PvP-off filter used to cancel the agent's damage; the iron combo and
 signature rows now land; pin `CAFAD9B7`), and the crafting oracle stage 5 (`7374b76`: processing benches advance once the
@@ -184,7 +191,9 @@ learner-row pass. Peer: `490b1d4` the 5d guard window construct, `4434a48` fidel
 crossbow `Ability4` binding, `e8a1fc7` F1c, `ff51431` and `4661d5c` the 5f dodge, `6aaf21d` crafting stage 0, `486388e`
 stage 1, `0e45fc6` section (o). Later this session: `8758cb3` docs; `b4be1fe` section (p); `6fd60a2` phase 4g; `aedd85e`
 (q) recheck; `84f1a83` CRAFTING-ORACLE.md; `cb01a31` phase 4h; `25ad61f` swap plan; `76839c5` crafting oracle stages 1, 2, 4; `9750283` (s) note closed; `b4be1fe`,
-`274aaec` stage 3; `5c523a8` the handoff; `a534e83` phase 4j; `7374b76` stage 5. Peer, before stopping: `0218d69` guard
+`274aaec` stage 3; `5c523a8` the handoff; `a534e83` phase 4j; `7374b76` stage 5; `dc517df` docs; `deb8694` runbooks and
+tools; `8b6e284` the peer's state corrections; `ec9c6da` content values; `fc80707` shield bash; `6b98ee3` potions and
+durability. Peer, before stopping: `0218d69` guard
 release mask, `025ee62` structural crafting (1,168 recipes), `325f938` type 3 on the 0.7 line, `8b3b2ac` last.
 
 ## 9. Layout
