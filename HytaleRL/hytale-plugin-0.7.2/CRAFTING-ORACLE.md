@@ -61,3 +61,14 @@ All five stages extend the existing `craft_recipe` verb (`crafting_context`, `be
 Stages 1, 2 and 4 first: their JAX side can be built and measured as soon as the oracle shape exists. Stages 3 and 5
 need new mechanics on the simulator side after the oracle answers. The bridge refuses bench types 1 to 3 today
 (`NativeHeadlessCrafting.java` 110-114).
+
+## Answers (2026-10-18; FIDELITY-0.7.2.md section (s); jar `A6C310DD`)
+
+- Stage 1: not a plain click-craft. The structural craft queues from the window's one-slot input with ORDERED removal and
+  never calls `craftItem`; the bridge moves the inputs into that slot at the request tick and the job lands one tick later.
+- Stage 2: the tier is `BenchBlock.tierLevel`; a fresh bench is at 1; tiers 1 to 8 are reachable natively; the fixture sets
+  it with `setTierLevel`, the readout is `native_crafting_bench_tier`.
+- Stage 4: the level is not fixed. It comes from the universe-wide recorded-memories count (`MemoriesPlugin`), set by the
+  `memories_level` reset option; the readout is `native_memories_level` and `native_memories_recorded_count`.
+- Oracle route: reset-time probes (`crafting_oracle_requests`), scope `oracle_unbound_*`; the production step path still
+  requires candidate evidence for bench contexts until the policy capture offers them (cutover).

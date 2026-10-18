@@ -4,6 +4,7 @@ import com.hypixel.hytale.builtin.crafting.component.CraftingManager;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.asset.type.item.config.CraftingRecipe;
+import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hytalerlbridge.action.NativeWorldVerbRequest;
@@ -55,7 +56,8 @@ final class NativeWorldVerbCraft {
             result.inventoryBefore(),
             result.inventoryAfter(),
             result.outputQuantityBefore(),
-            result.outputQuantityAfter()
+            result.outputQuantityAfter(),
+            result.benchInput()
         );
     }
 
@@ -68,7 +70,8 @@ final class NativeWorldVerbCraft {
         String inventoryAfter,
         int outputQuantityBefore,
         int outputQuantityAfter,
-        String rejectReason
+        String rejectReason,
+        ItemContainer benchInput
     ) {
         private static StartResult rejected(String reason) {
             return new StartResult(
@@ -80,7 +83,8 @@ final class NativeWorldVerbCraft {
                 "",
                 -1,
                 -1,
-                reason
+                reason,
+                null
             );
         }
 
@@ -91,7 +95,8 @@ final class NativeWorldVerbCraft {
             String inventoryBefore,
             String inventoryAfter,
             int outputQuantityBefore,
-            int outputQuantityAfter
+            int outputQuantityAfter,
+            ItemContainer benchInput
         ) {
             return new StartResult(
                 true,
@@ -102,7 +107,8 @@ final class NativeWorldVerbCraft {
                 inventoryAfter,
                 outputQuantityBefore,
                 outputQuantityAfter,
-                ""
+                "",
+                benchInput
             );
         }
     }

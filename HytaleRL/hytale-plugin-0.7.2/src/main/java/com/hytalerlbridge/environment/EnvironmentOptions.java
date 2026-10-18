@@ -1,6 +1,7 @@
 package com.hytalerlbridge.environment;
 
 import com.hytalerlbridge.action.group.NativePolicyCombatBindingSpec;
+import com.hytalerlbridge.environment.fidelity.NativeCraftingOracleFixture;
 import com.hytalerlbridge.environment.fidelity.NativeResourceOverride;
 import com.hytalerlbridge.observation.NativeActorEvidenceRequest;
 
@@ -33,7 +34,8 @@ public record EnvironmentOptions(
     int nativeTickRate,
     float nativeTimeDilation,
     java.util.List<NativeResourceOverride> nativeFidelityResourceOverrides,
-    String combatTargetRole
+    String combatTargetRole,
+    NativeCraftingOracleFixture craftingOracle
 ) {
     public static final int DEFAULT_NATIVE_TICK_RATE = 30;
     public static final float DEFAULT_NATIVE_TIME_DILATION = 1.0f;
@@ -128,6 +130,7 @@ public record EnvironmentOptions(
             nativeTickRate,
             nativeTimeDilation,
             nativeFidelityResourceOverrides,
+            null,
             null
         );
     }
@@ -188,6 +191,7 @@ public record EnvironmentOptions(
             nativePolicyCombatBindings,
             nativeTickRate,
             nativeTimeDilation,
+            null,
             null,
             null
         );

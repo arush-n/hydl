@@ -1011,3 +1011,49 @@ of the native observation and evidence tests shows no test changing status (20 p
 re-run: the targeted five pass. Not done: the active-path recompute in `_projection_state` still reads the current row
 (same class, untested path); the crossbow combo and signature tests were not re-run after this change; the 0.7.2
 projection table.
+
+## (s) Crafting oracle, stages 1, 2 and 4: structural bench, bench tiers, memories level (2026-10-18; receipts `~/.claude/jobs/31947bd7/tmp/phase4i/receipts/repo_*.json`)
+
+Contract: CRAFTING-ORACLE.md. Decision: option B, an oracle-only probe path at reset; the production step path and its three
+candidate-evidence gates are unchanged (option A, the policy capture offering bench contexts, waits for the cutover).
+Reset options, additive: `crafting_bench_block_id` (places the bench two blocks west of the settled actor),
+`crafting_bench_tier` (1 to 8, default 1), `memories_level` (1 to 6), `crafting_oracle_requests` (at most 16 probes, each
+`recipe_id`, `quantity`, `crafting_context` bench or fieldcraft, run in order at reset after the fixtures; execution scope
+`oracle_unbound_opt_in_headless_player_native_crafting_manager`). Reset info: `native_memories_level`,
+`native_memories_recorded_count`, `native_crafting_bench_{block_id,bench_id,type,tier,x,y,z}`, `native_craft_oracle_count`,
+`native_craft_oracle_records_json` (records: status pending/finished/refused, reject_reason, recipe_id, crafting_context,
+execution_scope, requested_tick, bench, lifecycle per tick, slots with before/after item and quantity and first/last
+changed tick). Jar `A6C310DD` (the repository build equals the scratch build used live), pin updated.
+
+Native representation (javap and assets): the bench tier is `BenchBlock.tierLevel` (a fresh bench is 1; `finishTierUpgrade`
+adds 1; Farmingbench reaches 1 to 8; `isValidBenchForRecipe` fails on `requiredTierLevel > tier`). The memories level is
+`MemoriesPlugin.getMemoriesLevel`: i+2 for the highest i with the universe-wide recorded count at least
+`MemoriesAmountPerLevel[i]` (Default 10, 25, 50, 100, 200), else 1; the count is settable (`setRecordedMemoriesCount`), so
+the level is not fixed. The structural (type 3) craft is not a click-craft: `StructuralCraftingWindow` queues from its
+one-slot input with ORDERED removal and never calls `craftItem`; the bridge moves the inputs into that slot at the request
+tick and the job consumes and outputs one tick later (bridge observation; native window timing not run).
+
+| Scenario | Stage | Bench or level | Status | Reject reason | Ticks and deltas |
+|---|---|---|---|---|---|
+| struct_half_stocked | 1 | Builders type 3 tier 1 | finished | | request 32, finished 33; Cloth_Block_Wool_Black x1 to Cloth_Block_Wool_Black_Half x2 (32 to 33); bench_input empty after |
+| struct_stairs_stocked | 1 | same | finished | | request 32, finished 33; Cloth x1 to Cloth_Block_Wool_Black_Stairs x1 |
+| struct_half_missing | 1 | same | refused | structural_input_missing_from_inventory (bridge precheck) | no deltas |
+| farm_t1_lettuce | 2 | Farmingbench tier 1 | refused | craft_recipe_not_available_at_bench | |
+| farm_t2_lettuce | 2 | tier 2 | finished | | request 32, finished 32; Plant_Crop_Lettuce_Item x1 to Ingredient_Life_Essence x3 |
+| farm_t4_cauliflower | 2 | tier 4 | finished | | finished 32; Cauliflower x1 to Life_Essence x6 |
+| farm_t7_onion | 2 | tier 7 | refused | craft_recipe_not_available_at_bench | |
+| farm_t8_onion | 2 | tier 8 | finished | | finished 32; Onion x1 to Life_Essence x4 |
+| mem_l1_ancient_chest | 4 | Furniture_Bench; level 1 (0 recorded) | refused | craft_recipe_memories_unavailable | |
+| mem_l2_ancient_chest | 4 | level 2 (10 recorded) | finished | | request 33, finished 33; Wood_Deadwood_Planks x3 and Ingredient_Bar_Copper x2 consumed, Furniture_Ancient_Chest_Small x1 added |
+
+All ten match the contract's expectations; type-0 zero-time crafts land on the request tick, the structural job one tick
+later. Java: full `gradlew test --rerun --no-build-cache` 116 suites, 409 tests, 0 failures (baseline 112 / 389); the nine
+touched classes re-run here, 0 failures; `tests/test_server_versions.py` 7 passed. Not done: option A; stages 3 and 5;
+identity-mismatch refusals (probes use the placed bench's own readout as the expected identity); tier-set side effects
+(`setBlockInteractionState`, `notifyTierUpgraded`) not replicated; the memories count persists across resets within one
+launch (each scenario ran in its own launch). Python side (the simulator session): `native_action_resolution.py` rejects
+`expected_bench_type != 0` and needs type 3 once the structural queue is modelled; `native_world_actions.py` should read the
+oracle keys; a reset-option helper for the harness; JAX `bench_tier_level` from `native_crafting_bench_tier` and the memories
+level pinned to `native_memories_level`; the structural queue as ORDERED input with one-tick landing. Claim most likely wrong
+(agent): that unbound probe outcomes equal a candidate-bound production craft's; the probe bypasses two gates and uses the
+readout as its expected identity.

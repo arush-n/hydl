@@ -35,9 +35,9 @@ import java.util.Set;
  *
  * <p>This executes server crafting mechanics, not an authenticated player's
  * window protocol. Fieldcraft and ordinary Crafting benches are lossless
- * because their native input removal is inventory/material based. Diagram,
- * Structural and Processing benches are rejected until a request transports
- * their ordered/specialized input state.</p>
+ * because their native input removal is inventory/material based. Structural benches queue from the window's input slot
+ * ({@link NativeStructuralCrafting}); Diagram and Processing benches are
+ * rejected until a request transports their ordered/specialized input state.</p>
  */
 final class NativeHeadlessCrafting {
 
@@ -107,7 +107,12 @@ final class NativeHeadlessCrafting {
             if (!bench.accepted()) {
                 return StartResult.rejected(bench.rejectReason());
             }
-            if (bench.benchAsset().getType() != BenchType.Crafting) {
+            boolean structural =
+                bench.benchAsset().getType() == BenchType.StructuralCrafting;
+            if (
+                bench.benchAsset().getType() != BenchType.Crafting
+                    && !structural
+            ) {
                 return StartResult.rejected(
                     "ordered_or_processing_bench_input_not_transported"
                 );
@@ -122,6 +127,20 @@ final class NativeHeadlessCrafting {
             ) {
                 return StartResult.rejected(
                     "craft_recipe_not_available_at_bench"
+                );
+            }
+            if (structural) {
+                return NativeStructuralCrafting.start(
+                    reference,
+                    store,
+                    world,
+                    request,
+                    recipe,
+                    actorInventory,
+                    manager,
+                    bench.blockType(),
+                    bench.benchBlock(),
+                    bench.rotationIndex()
                 );
             }
 
@@ -231,7 +250,8 @@ final class NativeHeadlessCrafting {
             inventoryAfter,
             outputBefore,
             outputAfter,
-            ""
+            "",
+            null
         );
     }
 
@@ -468,9 +488,10 @@ final class NativeHeadlessCrafting {
         String inventoryAfter,
         int outputQuantityBefore,
         int outputQuantityAfter,
-        String rejectReason
+        String rejectReason,
+        ItemContainer benchInput
     ) {
-        private static StartResult rejected(String reason) {
+        static StartResult rejected(String reason) {
             return new StartResult(
                 false,
                 false,
@@ -479,7 +500,8 @@ final class NativeHeadlessCrafting {
                 "",
                 -1,
                 -1,
-                reason
+                reason,
+                null
             );
         }
     }

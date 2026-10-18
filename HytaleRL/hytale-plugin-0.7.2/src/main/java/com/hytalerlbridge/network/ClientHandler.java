@@ -1,5 +1,6 @@
 package com.hytalerlbridge.network;
 
+import com.hytalerlbridge.network.wire.CraftingOracleOptions;
 import com.hytalerlbridge.action.group.NativeGroupAction;
 import com.hytalerlbridge.environment.EnvironmentManager;
 import com.hytalerlbridge.environment.EnvironmentOptions;
@@ -370,7 +371,8 @@ public final class ClientHandler implements Runnable {
                 ? EnvironmentOptions.DEFAULT_NATIVE_TIME_DILATION
                 : nativeTimeDilation.floatValue(),
             ResourceOverrideCodec.decode(options),
-            getStringField(options, "combat_target_role")
+            getStringField(options, "combat_target_role"),
+            CraftingOracleOptions.decode(options)
         );
 
         environmentManager.destroy(environmentId);

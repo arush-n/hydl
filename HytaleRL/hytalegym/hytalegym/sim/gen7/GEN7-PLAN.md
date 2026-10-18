@@ -219,6 +219,12 @@ legality on every tick and the official crossbow interrupt test passes with the 
 test still passes. The crossbow row 6c is complete apart from the server-cancelled projectile damage (combo and
 signature), the next bridge investigation.
 
+**Crafting oracle, stages 1, 2 and 4 (2026-10-18; FIDELITY-0.7.2.md section (s); CRAFTING-ORACLE.md answers).** The bridge
+places a bench at a tier, sets the memories level and runs craft probes at reset through an oracle-only scope (jar
+`A6C310DD`); all ten contract scenarios match (structural crafts land one tick after the request, type-0 crafts on the
+request tick, tier and memories refusals as the server rules say). The simulator side can now model bench tiers, the
+memories level and the structural queue; stages 3 (timed) and 5 (processing, diagram) are next for the bridge.
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the

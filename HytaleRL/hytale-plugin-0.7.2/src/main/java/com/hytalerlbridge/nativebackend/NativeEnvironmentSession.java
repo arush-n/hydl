@@ -602,6 +602,8 @@ final class NativeEnvironmentSession
     private InteractionChain legacyActorZeroTypedWorldVerbChain;
     private CraftingManager legacyActorZeroTypedWorldVerbCraftingManager;
     private CraftingRecipe legacyActorZeroTypedWorldVerbCraftingRecipe;
+    private NativeCraftingOracle craftingOracle;
+    private NativeCraftingOracle.ResetOutcome craftingOutcome;
     private WorldVerbTelemetry.Execution legacyActorZeroTypedWorldVerbExecution =
         WorldVerbTelemetry.Execution.unrequested();
     private final Object[] nativePolicyWorldVerbHandlesByActor = new Object[
@@ -751,6 +753,15 @@ final class NativeEnvironmentSession
             bindSyntheticBlockUseFixture();
             advance(AgentAction.noop(), 1, false);
         }
+        craftingOutcome = NativeCraftingOracle.resetSequence(
+            world,
+            agentRef,
+            options.craftingOracle(),
+            task -> runOnWorld(task::run, INITIALIZATION_TIMEOUT),
+            () -> advance(AgentAction.noop(), 1, false),
+            this::requestOracleCraft,
+            () -> craftingOracle
+        );
         if (taskId.equals("kill_trork")) {
             spawnTaskEntities(npcPlugin);
             advance(AgentAction.noop(), 1, false);
@@ -4135,7 +4146,8 @@ final class NativeEnvironmentSession
                 store,
                 request,
                 step,
-                requestedTick
+                requestedTick,
+                false
             );
             return;
         }
@@ -4395,8 +4407,10 @@ final class NativeEnvironmentSession
         Store<EntityStore> store,
         NativeWorldVerbRequest request,
         PendingStep step,
-        long requestedTick
+        long requestedTick,
+        boolean unbound
     ) {
+        craftingOracle = NativeCraftingOracle.begin(request, world, ref, store, requestedTick);
         NativeWorldVerbCraft.StartResult result =
             NativeWorldVerbCraft.start(
                 ref,
@@ -4406,6 +4420,7 @@ final class NativeEnvironmentSession
                 options.nativeWorldVerbs()
             );
         if (!result.accepted()) {
+            craftingOracle.refuse(result.rejectReason(), requestedTick);
             step.legacyActorZeroWorldVerbExecution =
                 WorldVerbTelemetry.Execution.rejected(
                     request,
@@ -4415,13 +4430,19 @@ final class NativeEnvironmentSession
             return;
         }
 
+        String scope = unbound
+            ? NativeCraftingOracle.UNBOUND_SCOPE_PREFIX
+                + "opt_in_headless_player_native_crafting_manager"
+            : candidateExecutionScope(
+                request,
+                "opt_in_headless_player_native_crafting_manager"
+            );
+        craftingOracle.accepted(result.benchInput(), scope);
+        craftingOracle.observe(requestedTick, true);
         WorldVerbTelemetry.Execution execution =
             WorldVerbTelemetry.Execution.accepted(
                 request,
-                candidateExecutionScope(
-                    request,
-                    "opt_in_headless_player_native_crafting_manager"
-                ),
+                scope,
                 requestedTick,
                 "not_applicable",
                 0,
@@ -4468,6 +4489,7 @@ final class NativeEnvironmentSession
             inventorySha256,
             ""
         );
+        craftingOracle.observe(requestedTick, false);
         legacyActorZeroTypedWorldVerbGeometryBefore = "";
         legacyActorZeroTypedWorldVerbInventoryBefore = "";
     }
@@ -5035,6 +5057,17 @@ final class NativeEnvironmentSession
             syntheticWorldFixturePlaceTarget = place;
             syntheticWorldFixtureBreakTarget = broken;
         }, INITIALIZATION_TIMEOUT);
+    }
+
+    private void requestOracleCraft(NativeWorldVerbRequest request) {
+        runOnWorld(() -> requestLegacyActorZeroTypedCraft(
+            agentRef,
+            world.getEntityStore().getStore(),
+            request,
+            new PendingStep(NativeGroupAction.legacy(AgentAction.noop()), 0, false),
+            world.getTick(),
+            true
+        ), INITIALIZATION_TIMEOUT);
     }
 
     private void bindSyntheticBlockUseFixture() {
@@ -5923,6 +5956,9 @@ final class NativeEnvironmentSession
         WorldVerbTelemetry.Execution execution =
             legacyActorZeroTypedWorldVerbExecution;
         CraftingManager crafting = legacyActorZeroTypedWorldVerbCraftingManager;
+        if (craftingOracle != null) {
+            craftingOracle.observe(world.getTick(), execution.pending());
+        }
         if (crafting != null && execution.pending()) {
             if (!execution.started()) {
                 execution.observeStarted(world.getTick());
@@ -5975,6 +6011,9 @@ final class NativeEnvironmentSession
                     inventorySha256,
                     ""
                 );
+            }
+            if (craftingOracle != null) {
+                craftingOracle.observe(world.getTick(), false);
             }
             if (crafting.hasBenchSet()) {
                 crafting.clearBench(agentRef, store);
@@ -7834,6 +7873,7 @@ final class NativeEnvironmentSession
         info.put("resolved_spawn_x", spawnX);
         info.put("resolved_spawn_y", spawnY);
         info.put("resolved_spawn_z", spawnZ);
+        NativeCraftingOracle.putResetInfo(info, craftingOutcome);
         info.put("npc_role", snapshot.roleName());
         info.put("combat_target_role", combatTargetRole());
         info.put("native_actor_target_attitude", nativeActorTargetAttitude);
@@ -8090,6 +8130,7 @@ final class NativeEnvironmentSession
             "native_group_action_world_verb_selected_semantics",
             activeStep == null ? "" : activeStep.worldVerbSemanticsByActor()
         );
+        NativeCraftingOracle.putInfo(info, craftingOracle);
         WorldVerbTelemetry.put(
             info,
             action,
