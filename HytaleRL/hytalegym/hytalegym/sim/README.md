@@ -9,7 +9,7 @@ flipping the default. Never copying kernels.
 
 | Part | Where | What it is |
 |---|---|---|
-| engine | today `hytalegym/jax/combat/...`; migrates in place behind profiles | the one JAX simulator: kernels, factored actions, observation layout machinery, events, world, contracts |
+| engine | source `hytalegym/jax/combat/...` (frozen gen-5 reference); each generation's package `sim/<gen>/engine/` is RENDERED from the committed source by `sim/common/render.py` with the generation's `sim/<gen>/overlay.py` (never committed: `sim/<gen>/.gitignore`; `sim/common/RENDER.md`) | the one JAX simulator: kernels, factored actions, observation layout machinery, events, world, contracts |
 | common | `sim/common/` | content schema and loader (profile -> typed tables), the content sha for the contract stamp, the differential harness |
 | gen 5 | `sim/gen5/` (profile, `data/` extracted from the 0.5.7 `Assets.zip`) | Hytale 0.5.7; deprecated by the owner. Until the engine reads the gen-5 profile bit-exactly, the code it holds today is the reference and is not edited |
 | gen 7 | `sim/gen7/` (profile, `data/` from the 0.7.2 `Assets.zip`, `mechanics/` constructs new in 0.7.2, `GEN7-PLAN.md`) | Hytale 0.7.2; the training target |

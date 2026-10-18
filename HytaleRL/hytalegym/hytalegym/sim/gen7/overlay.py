@@ -1,0 +1,185 @@
+"""Gen-7 overlay (Hytale 0.7.2): a skeleton. Rendering it does NOT make the
+simulator faithful to 0.7.2; every change below is gated by a differential that
+has not run yet (``HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md`` is the
+ledger, table (a) rows cited per change).
+
+* the active redirects: the step clock. Owner ruling (2026-10-17): the agent
+  operates at 30 Hz, the game's tick. The value is the profile field
+  ``SimProfile.step_duration`` (gen 7: nominal = loaded = 1/30 s, one timing
+  profile; gen 5 keeps 1/30 s, 0.045 s and three per-lane profiles). The rows
+  are generated from the swap plan's ``step_duration`` sites
+  (``overlay.step_clock_redirects``): the 13 sites in the rendered source that
+  take the clock from a constant (reads of the ruleset ``engine`` block, a
+  literal tick rate, one-tick literals); the other 301 sites read one of them
+  and follow. Only ``loaded_delta_seconds`` (0.045 -> 1/30) and the
+  timing-profile count (3 -> 1) change value; the rest are value-identical.
+* ``status="todo"`` redirects: the swap plan's 90 records
+  (``sim/common/content/redirects.json``, owned by the content agent), loaded
+  as rows valued by their adapter; the records a render cannot reach (JSON
+  tables, shared modules) are counted in ``audit``. Listed, not applied.
+* ``patches``: the items of FIDELITY section (e) that are pure constant or rule
+  changes with an unambiguous ``old`` text at HEAD.
+* ``hooks``: named construct insertion points, stubs until the constructs in
+  ``sim/gen7/mechanics/`` exist and their differentials are named.
+
+Not patched, and why: the dodge head size (a remap across the action surface,
+not a constant: hook ``dodge_action_head``); shield bash ``StaminaRegenDelay``
+Set -1.5 -> Min -1 (the engine models only Set; needs a construct); Mithril and
+other dagger materials (rows of ``hytalegym/combat/assets/weapon_variants``, a
+shared module outside the rendered package); the sword thrust's 0.7.2 timing
+(0.65 -> 0.565 s branch, 0.05 -> 0.043 s, speed 0.8 -> 0.75: hit timing, row 5f,
+unexplained live offsets first); durability (a JSON table: content redirect).
+"""
+
+from __future__ import annotations
+
+from hytalegym.sim.common.overlay import (
+    Hook,
+    Overlay,
+    Patch,
+    load_swap_plan,
+    step_clock_redirects,
+    swap_plan_redirects,
+)
+
+PROFILE_JAX = "combat/arsenal/profiles/hytale_0_5_7.py"
+
+_SWAP_PLAN = load_swap_plan()
+STEP_CLOCK, STEP_CLOCK_SITES = step_clock_redirects(_SWAP_PLAN)
+CONTENT_TODO, UNREACHABLE_RECORDS = swap_plan_redirects(_SWAP_PLAN, status="todo")
+
+_SWORD_KNOCKBACK = (
+    "knockback displacement differential on 0.7.2 (TRAINING-0.7.2.md: Trork 0.19 m vs 0.44 m on "
+    "0.5.10) and the test_jax_native_combat_compare.py sword tests recalibrated to 0.7.2"
+)
+_A1 = (
+    "VelocityType unchanged: the asset authors Add, the engine applies _melee's default FORCE_SET "
+    "(A1; gen 5 keeps Set through calibration_057.json); the knockback differential decides the "
+    "gen-7 model before this row changes"
+)
+_GUARD = (
+    "a guard-during-attack lifecycle compare on 0.7.2 (no test exercises the guard attack-cancel "
+    "rule yet) plus test_native_shield_bash_resource_cost_matches_and_regen_phase_is_explicit"
+)
+_GUARD_NOTE = (
+    "0.7.2 removes Rules.Interrupting [Primary] from this family's guard root "
+    "(ASSET-DIFF-0.7.2.md:237-243, 266-322)"
+)
+
+
+def _guard_root(family: str, energy: int) -> Patch:
+    old = f"        guard_stamina_value,\n        {{RESOURCE_SIGNATURE_ENERGY: {energy}}},\n    )\n"
+    new = (
+        f"        _guard(guard_stamina_value, interrupting_type_mask=0),\n"
+        f"        {{RESOURCE_SIGNATURE_ENERGY: {energy}}},\n    )\n"
+    )
+    return Patch(f"guard_{family}_no_primary_interrupt", PROFILE_JAX, old, new, "5d", _GUARD, _GUARD_NOTE)
+
+
+PATCHES = (
+    Patch("sword_swing_left_knockback", PROFILE_JAX,
+          "    push = (0.0, 1.0, -1.0, 6.0)\n",
+          "    push = (0.0, 0.2, -1.0, 4.3)\n",
+          "5b", _SWORD_KNOCKBACK, "Weapon_Sword_Primary_Swing_Left_Damage: Force 6.0 -> 4.3, Dir Y 1 -> 0.2. " + _A1),
+    Patch("sword_swing_right_knockback", PROFILE_JAX,
+          "                force=(0, 1, -1, 7),\n                on_hit=(RESOURCE_SIGNATURE_ENERGY, 1),\n"
+          "                horizontal_selector=_SWORD_SWING_RIGHT_SELECTOR,\n",
+          "                force=(0, 0.2, -1, 5.0),\n                on_hit=(RESOURCE_SIGNATURE_ENERGY, 1),\n"
+          "                horizontal_selector=_SWORD_SWING_RIGHT_SELECTOR,\n",
+          "5b", _SWORD_KNOCKBACK, "Weapon_Sword_Primary_Swing_Right_Damage: Force 7 -> 5.0, Dir Y 1 -> 0.2. " + _A1),
+    Patch("sword_swing_down_knockback", PROFILE_JAX,
+          "                force=(0, 1, -2, 12),\n",
+          "                force=(0, 0.2, -2, 10.8),\n",
+          "5b", _SWORD_KNOCKBACK, "Weapon_Sword_Primary_Swing_Down_Damage: Force 12 -> 10.8, Dir Y 1 -> 0.2"),
+    Patch("iron_daggers_swing_damage", PROFILE_JAX,
+          "    damage: tuple[float, ...] = (4, 4, 8, 12, 25, 31, 37),\n",
+          "    damage: tuple[float, ...] = (6, 6, 8, 12, 25, 31, 37),\n",
+          "5c",
+          "seeded dagger melee contact on 0.7.2 with damage exact (tests/fidelity/combat; native 5.0 vs "
+          "JAX 3.0 on bronze daggers in the fidelity run)",
+          "Iron template only (Weapon_Daggers_Iron Swing_Left/Right 4 -> 6). Mithril (8 -> 12) and the "
+          "other materials are rows of hytalegym/combat/assets/weapon_variants/hytale_0_5_7.py, a shared "
+          "module outside the rendered package: content redirect, not patchable here"),
+    _guard_root("sword", 20),
+    _guard_root("mace", 8),
+    _guard_root("battleaxe", 9),
+    _guard_root("daggers", 27),
+    Patch("sword_thrust_interrupted_by_secondary", PROFILE_JAX,
+          "            hold_speed_multiplier=0.8,\n"
+          "            hold_speed_multiplier_after_seconds=_NESTED_OUTER_GATE_SECONDS,\n        ),\n",
+          "            hold_speed_multiplier=0.8,\n"
+          "            hold_speed_multiplier_after_seconds=_NESTED_OUTER_GATE_SECONDS,\n"
+          "            interrupted_by_type_mask=1 << INTERACTION_TYPE_SECONDARY,\n        ),\n",
+          "5d", _GUARD,
+          "0.7.2 Weapon_Sword_Primary_Thrust adds Rules.InterruptedBy [Secondary]; no threshold, so "
+          "interruptible_after_seconds stays 0. Its timing changes (row 5f) are not patched"),
+    Patch("slope_wall_limits_parameters", "combat/types.py",
+          "PLAYER_SPRINT_REQUIRES_FORWARD_DOMINANT_TRAVEL = True\n",
+          "PLAYER_SPRINT_REQUIRES_FORWARD_DOMINANT_TRAVEL = True\n\n"
+          "#: 0.7.2 ``MovementConfig/Default.json`` adds ``MaxSlopeAngleDegrees`` and\n"
+          "#: ``MaxWallAngleDegrees`` (absent in 0.5.x; sim/gen7/data/movement.json\n"
+          "#: config:Default). Rendered gen-7 parameters: nothing reads them until the\n"
+          "#: slope/wall construct lands (FIDELITY-0.7.2.md row 1d, P2).\n"
+          "PLAYER_MAX_SLOPE_ANGLE_DEGREES = 30.0\n"
+          "PLAYER_MAX_WALL_ANGLE_DEGREES = 15.0\n",
+          "1d", "a new stairs/slope bridge fixture and the motion differential (<= 5e-4 m per step)",
+          "new parameters only; no consumer and no Constructs switch exists yet"),
+    Patch("crafting_table_capacity", "crafting/contract.py",
+          "# Installed 0.5.7 has 403 explicit plus 1,544 item-generated recipes.\n"
+          "RECIPE_TABLE_CAPACITY = 1947\n",
+          "# Installed 0.5.7 has 403 explicit plus 1,544 item-generated recipes; the live\n"
+          "# 0.7.2 catalog has 2,047 (FIDELITY-0.7.2.md row 11).\n"
+          "RECIPE_TABLE_CAPACITY = 2047\n",
+          "11",
+          "surrogate_crafting_native_compare.py once its 0.5.7 gate is profile-keyed, and the crafting "
+          "source audit at a 0.7.2 baseline",
+          "capacity only: the packer still rejects the 0.7.2 catalog (988 excluded-material inputs, 19 "
+          "recipes without a bench, 22 bench ids); hytalegym.worldgen.native_action_resolution (shared, "
+          "not rendered) still imports the gen-5 contract"),
+)
+
+_MECHANICS = "hytalegym.sim.gen7.mechanics"
+HOOKS = (
+    Hook("hit_interrupt_flinch", "combat/mechanics/runtime/kernel.py", "resolve_damage_events",
+         f"{_MECHANICS}.hit_interrupt:construct", "hit_interrupt", "stub", "5a",
+         "interrupt/flinch differential against an eligible NPC (Skeleton_Fighter or Goblin_Scrapper): "
+         "flinch 0.5 s, stun 0.7 s, attack cancelled",
+         "31 attacks parent DamageEntityParent_Hit_Interrupt in 0.7.2; Trork_Brawler, Trork_Unarmed and "
+         "Kweebec_Razorleaf carry no eligibility (static reading)"),
+    Hook("mana_pool", "combat/mechanics/factory.py", "default_mechanics_rules",
+         f"{_MECHANICS}.mana:construct", "mana_pool", "stub", "7a",
+         "mana resource differential: 100/100, +1 per 0.3 s, rates within 5 %"),
+    Hook("rune_casting", PROFILE_JAX, "hytale_0_5_7_loadouts",
+         f"{_MECHANICS}.mana:construct", "rune_casting", "stub", "7b",
+         "one differential per rune: cost, cooldown, cast time, flight, effect",
+         "7 ability runes plus Rune_Empty and 11 modifier runes under Server/Item/Items/Rune/"),
+    Hook("detail_hitbox_line_of_sight", "world/geometry/__init__.py", "line_of_sight_result",
+         f"{_MECHANICS}.line_of_sight:construct", "line_of_sight", "stub", "2b",
+         "a bridge fixture with a slab, stair or fence in the target ray, compared like "
+         "tests/fidelity/native_geometry_compare.py's three rays"),
+    Hook("dodge_action_head", "combat/observation/v3/policy/layout.py", "split_locomotion_choice",
+         f"{_MECHANICS}.dodge:construct", "dodge_action_head", "stub", "9",
+         "test_native_policy_dodge_boundary_matches_advertised_capability and "
+         "test_native_lateral_dodge_projects_mechanics_when_supported (both pass on 0.7.2)",
+         "not a constant: DODGE_ACTION_COUNT (observation/v3/schema/contract.py:123) indexes "
+         "[forward, back, left, right] in this decode (layout.py:664-673), the encode "
+         "(layout.py:805-813), the 4-wide mask concat (policy/surface.py:441-443), "
+         "encoding/encoder.py:507 and native/codec/decode.py:112,169; setting it to 2 keeps the masked "
+         "forward/back slots and drops left/right"),
+)
+
+OVERLAY = Overlay(
+    generation="gen7",
+    profile="hytalegym.sim.gen7.profile:PROFILE",
+    modules=("combat/",),
+    redirects=STEP_CLOCK + CONTENT_TODO,
+    hooks=HOOKS,
+    patches=PATCHES,
+    audit=(
+        ("step_duration_sites", STEP_CLOCK_SITES),
+        ("swap_plan_rows", len(CONTENT_TODO)),
+        ("swap_plan_unreachable", [f"{r['kind']} {r['module'].split('hytalegym/', 1)[-1]}:{r['head_line']} "
+                                   f"[{r['status']}] {r['target']}" for r in UNREACHABLE_RECORDS]),
+    ),
+    description="skeleton: 30 Hz step clock, FIDELITY (e) constant/rule patches, construct hook stubs",
+)

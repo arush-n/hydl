@@ -64,6 +64,33 @@ assumed, and never at the cost of bit-exactness unless the owner sees the number
 - **the rule from the speed-ups memory**: measure first; only bit-exact opt-in changes while other
   sessions run; a methodology change goes to the owner with the numbers.
 
+**Status (2026-10-17, late; phase 2a done, `sim/common/RENDER.md`).** The renderer exists: `sim/common/overlay.py`
+(the overlay spec: modules, redirects by symbol / expression / line with casts and a status, profile-gated
+construct hooks, exact patches each tied to a fidelity row and a differential, validation before any write),
+`sim/common/render.py` (reads the pinned commit with `git cat-file --batch`, relocates, redirects, hooks,
+patches, checks that everything compiles and nothing imports `hytalegym.jax`, writes atomically with a
+MANIFEST) and `sim/common/bench.py` (identity workloads, bench, profiler). The **identity gate passes bit for
+bit**: gen-5 source + gen-5 overlay against a `git archive` of the same commit, 11 outputs, 2,307 arrays,
+101,298 elements, 0 mismatched, equal SHA-256; a negative control (base speed 5.5 -> 5.75) is caught (82
+arrays differ); the content agent's rollout fingerprints (`sim/gen5/identity.json`) are reproduced through
+the render; original and render compile to identical HLO for 4 programs; the existing combat suite is
+unchanged before and after (69 failed / 1000 passed / 1 skipped / 15 xfailed both times, none of the
+failures the port's). The rendered engine is a build artifact: `sim/<gen>/engine/` is gitignored and
+re-rendered on demand. **Gen-7 skeleton** (`sim/gen7/overlay.py`): renders and runs on the 1/30 s clock; 24
+rows applied (13 step-clock redirects to `SimProfile.step_duration`; 11 patches from the fidelity report:
+5b knockback 6/7/12 -> 4.3/5.0/10.8 with the upward component 1 -> 0.2, 5c dagger swings 4 -> 6, 5d guard
+roots no longer interrupt Primary and the sword thrust gains InterruptedBy Secondary, 1d slope 30 degrees /
+wall 15 degrees parameters, 11 crafting capacity 1,947 -> 2,047), 90 pending (85 renderable redirects from
+`redirects.json`, 5 unreachable, 5 hook stubs 5a / 7a / 7b / 2b / 9). Not applied, and why: the dodge head
+size indexes four directions in decode, encode, masks and codec (now hook `dodge_action_head`); shield bash
+StaminaRegenDelay Set -> Min needs a construct; dagger materials live outside the render; sword thrust timing
+is row 5f. **No 0.7.2 fidelity is claimed: no differential has run.** Bench (original vs render, HLO
+identical, timing deltas noise under load 28-39): `sim/BASELINES.md` section 5. One opt-in bit-exact speed-up
+(`sim/gen5/overlay.py` `OPTIMIZED`: the damage-resistance walk, thunk events 6,718 -> 4,200 per step at
+batch 64, +6 % throughput); four more hot spots proposed, not implemented. A methodology question for the
+owner: the planned (production) compile and the general compile are not bit-identical (6 of 315 arrays, max
+2.4e-7 over 64 steps), so moving callers to the planned path is a decision, not a free speed-up.
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the

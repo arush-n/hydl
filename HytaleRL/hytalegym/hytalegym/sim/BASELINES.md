@@ -137,3 +137,33 @@ ignores `hytalegym/tests/**`):
 |---|---|---:|---|
 | before this port's changes (started 16:46) | 74 failed, 1006 passed, 1 skipped, 15 xfailed | 2,950.4 s | 11-17 (other sessions) |
 | after this port's changes (started 17:40) | 73 failed, 1006 passed, 15 xfailed, 2 errors: the 2 errors are two live-native tests that hit another session's native lease on 127.0.0.1:5556 (pid 39875); run alone afterwards they fail and skip exactly as in the baseline | 2,876.6 s | 6.6 rising to 24.0 |
+
+## 5. Render: identity gate and bench (2026-10-17 late, phase 2a)
+
+Identity gate (`tests/sim/test_render_identity.py`; `sim/common/bench.py` workloads): gen-5 source rendered with
+the gen-5 overlay against a `git archive` of the render's commit; 11 outputs, 2,307 arrays, 101,298 elements,
+0 mismatched, max |diff| 0.0, equal SHA-256. Negative control (PLAYER_BASE_SPEED 5.5 -> 5.75): 82 arrays differ.
+The content agent's rollout fingerprints (`sim/gen5/identity.json`, b8 `0b28448a...`, b64 `ace7a94e...`) are
+reproduced through the render by import redirection. Compiled HLO (metadata stripped) is identical for the planned
+and general arsenal and melee steps.
+
+Bench, original vs render on a HEAD archive (load 28-39; the HLO is identical, so timing deltas are noise;
+receipt `~/.claude/jobs/31947bd7/tmp/render_bench/bench-20261018T010007Z.json`):
+
+| metric | original | rendered |
+|---|---:|---:|
+| planned step compile, batch 64 (s) | 9.57 | 9.79 |
+| planned lane-steps/s, batch 8 / 64 | 6,866 / 23,100 | 7,731 / 24,390 |
+| planned per-tick p95, 1 / 8 NPCs (ms) | 2.01 / 3.15 | 2.34 / 3.27 |
+| real-time factor, 1 / 8 NPCs | 29.3 / 19.0 | 28.2 / 19.7 |
+| general step compile (s) | 25.6 | 26.2 |
+| general lane-steps/s, batch 64 | 630 | 624 |
+| general per-tick p95, 8 NPCs (ms) | 23.7 | 24.4 |
+| Region library load / atlas + path table (s) | 10.6 / 6.8 | 11.0 / 7.0 |
+
+"Planned" is what production training compiles; "general" (no compile flags) is how `rollout_arsenal_batch` and
+`step_learner_arsenal_batch` call the step. Planned meets the 15 ms per-tick target; general is over it at 8 NPCs
+(under the 33.3 ms budget). Planned and general are not bit-identical (6 of 315 arrays, max 2.4e-7, 64-step
+sword-vs-battleaxe rollout): switching callers is the owner's methodology decision. Opt-in `OPTIMIZED` gen-5
+overlay (damage-resistance walk): bit-exact on the identity rollouts and on 10,240 random inputs; thunk events
+6,718 -> 4,200 per step at batch 64; un-profiled step 3.46 -> 2.40 ms; +6 % throughput under load.
