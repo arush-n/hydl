@@ -689,6 +689,35 @@ The pair path applies no field of view yet; the simulator lane is adding it as a
 
 Positions are quantised to 0.1 block.
 
+### 2.15 Teacher certificates (`certificates.py`, 2026-10-18)
+
+**What it is.** `certify_walk_to` and `certify_look_at` run a teacher in closed loop on the flat tasks and write a
+JSON certificate (TRAINING_PLAN 2c):
+- T1, success with Wilson intervals;
+- T2, time against the kinematic minimum d / v + v / (2a);
+- T3, pace, radius and legality;
+- T7-lite, failure classes and done hysteresis.
+
+The CLI is `python -m experimental.neural_agent.skill_agent.certificates --teacher walk_to --seeds 77001,... --out
+PATH --date YYYY-MM-DD`. [test: test_sa_certificates.py, 7 tests; a deliberately idle teacher fails T1]
+
+**First certificates (4 seeds x 256 episodes, flat `npc_walk`):**
+
+| teacher | T1 success | T2 | T3 | failures |
+|---|---|---|---|---|
+| walk_to v1 | 1,024 / 1,024 (Wilson [0.9963, 1]) | median 1.0004 x the minimum, p90 1.006 | pace within 5 % on all 1,002 steady lanes; 0 illegal of 207,561 decisions | none; done never blinks |
+| look_at v1 | 1,024 / 1,024 | median 13 ticks, p95 20 (no bar: the codebook sets the pace) | tolerance at done on all lanes; 0 illegal of 92,160 | none |
+
+**What they do not show:**
+- On a flat world with point goals, the scripted teachers are essentially perfect, so T1 cannot separate them, and
+  T2's reference is the engine's own kinematics, not a native NPC.
+- The checks that test a teacher are still to come:
+  - T4, the live replay;
+  - T5, whether a student can follow it;
+  - harder distributions.
+- By the owner's bar (TRAINING_PLAN 1b), a student can only match these scripts on easy solo tasks; it has to win on
+  combined and disturbed ones.
+
 ## 3. For the agent building the gen-7 simulator
 
 **What you receive.** Each tick you get one choice per head per agent, in this order. A head no request

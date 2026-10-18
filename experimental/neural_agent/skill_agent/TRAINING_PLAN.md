@@ -193,6 +193,11 @@ What each check catches:
   that would let it infer the same thing (the belief's last-seen position).
 - T6 makes DAgger's labels trustworthy in the places the student actually drifts to.
 
+Status (2026-10-18, late; `certificates.py`, README 2.15):
+- walk_to v1 and look_at v1 pass T1, T2 and T3 on flat `npc_walk`: 1,024 of 1,024 each, walk_to at 1.0004 x the
+  kinematic minimum, 0 illegal decisions.
+- T4, the live replay, is next. T5 and T6 need a student.
+
 A teacher need not be perfect, because stage 3's practice can go past it. But a systematic teacher error is copied
 into the student, which is why nothing teaches before its certificate.
 

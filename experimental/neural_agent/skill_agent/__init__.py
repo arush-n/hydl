@@ -29,4 +29,5 @@ nothing. Import the submodules:
 * ``simple_tasks``: the flat npc_walk environment with explicit spawns, walk_to and look_at goals, and run_episode.
 * ``generalist``: the request-conditioned generalist policy (ARCHITECTURE_RESEARCH); ``bench_generalist`` times it.
 * ``observation_adapter``: the legal observation to the trunk's token sets (self and entity; body frame).
+* ``certificates``: the teacher certificate (T1 success, T2 efficiency, T3 obedience, failure sorting) and its CLI.
 """
