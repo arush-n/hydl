@@ -74,9 +74,13 @@ for the gen-7 simulator), and the gen-7 simulator itself (phase 3 of 6 running).
 
 ## 6. Running right now (2026-10-18, night)
 
-The phase 4e agent (head yaw on the evidence wire, task #54) is running. Phase 4d is committed (`9f12f0d`, pin
-`32EF5EDD`): the bridge accepts `Ability4` by name and the 0.7.2 crossbow reload runs live; the content binding is
-the peer's next item, and the interrupt case (Primary not offered during the reload) stays open. Phase 4c is committed (`4066417`): the headless entity gets an `AbilitySlots`
+No agent of this session is running. Phase 4e is committed (`6d914c8`, pin `B56FD38E`; swap plan `6c30ba9`;
+identity gate 4 passed in 6:37 against `6c30ba9`): the actor evidence row carries `head_yaw_degrees` and the decoder
+maps `agent_head_yaw` from it, so the native self row is the head frame the policy trained on; the live learner-row
+look case passes on both seeds on the new pin (the peer's run, `b2acf2f`). Phase 4d is committed (`9f12f0d`, pin
+`32EF5EDD` then): the bridge accepts `Ability4` by name and the 0.7.2 crossbow reload runs live; the peer's content
+binding is in (`69422d7`), and the interrupt case (Primary not offered during the reload) stays open. The peer has
+also landed F1c as a gen-7 construct (`e8a1fc7`). Phase 4c is committed (`4066417`): the headless entity gets an `AbilitySlots`
 component, so the reload interrupt no longer stops the world (pin `8720BC76`); the group yaw finding was withdrawn as a
 bridge fault (the camera lever steers the head by design, on 0.5 as on 0.7.2; the group tests need `body_delta_yaw`);
 the slot-4 `Ability3` versus `Ability4` mapping is an owner decision (`FIDELITY-0.7.2.md` (k)). The peer session (hydl-1f) owns the fidelity tests under `tests/fidelity` and, since `2b88082`,
@@ -120,7 +124,8 @@ fidelity / whatever is best"), and in progress:
 - Slot 4 drives the 0.7.2 crossbow reload under `Ability4`: the bridge accepts and reports it by name (phase 4d agent,
   task #50; the 25-index wire and evidence numbering stay 0.5's); the gen-7 content binding follows in the peer's lane.
 - Group facing tests use the body lever (the peer's two-lever and turn tests); no bridge change.
-- F1c becomes a gen-7 construct (task #52; the peer takes it after the engine batch below lands).
+- F1c is a gen-7 construct, built by the peer (`e8a1fc7`): the server's fall-speed update with the previous tick's
+  duration and cubic drag; passes jump in place, jump held, jump held with forward and ledge walk live on both seeds.
 - The deferred gen-5 engine edits are committed (`ede9a39`; `879321e` added the three worldgen/region files the batch
   imports, after `ede9a39` failed to import). `sim/gen5/identity.json` is re-recorded from a git archive of `879321e`
   (`baacdc9`: batch 8 `d8477b63`, batch 64 `b02ee274`, identical in two runs and equal to the working-tree values of the
@@ -155,8 +160,10 @@ resolver (#32, SYSTEM_ONE 9.16); `2b88082` the gen-7 mana pool construct with fi
 `7f56001` this document; `4066417` phase 4c (AbilitySlots fix, pin `8720BC76`, fidelity section (k)); `37fdef4` this
 document; `e4888df` the head-frame comment; `31d08be` the 0.7.2 policy agent copy; `d18bf2c` this document;
 `ede9a39` and `879321e` the engine batch; `baacdc9` the identity re-record; `9f12f0d` phase 4d (Ability4, pin
-`32EF5EDD`, fidelity section (m)); the swap-plan regeneration. Peer: `490b1d4` the 5d guard window construct,
-`4434a48` fidelity section (l).
+`32EF5EDD`, fidelity section (m)); `5cb738c` the swap-plan regeneration; `9ad7c5f` this document; `6d914c8` phase 4e
+(head yaw on the wire, pin `B56FD38E`, section (n)); `6c30ba9` its swap-plan regeneration; `b2acf2f` the live
+learner-row pass. Peer: `490b1d4` the 5d guard window construct, `4434a48` fidelity section (l), `69422d7` the
+crossbow `Ability4` binding, `e8a1fc7` F1c.
 
 ## 9. Layout
 

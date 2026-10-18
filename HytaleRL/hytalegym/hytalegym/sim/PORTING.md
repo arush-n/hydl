@@ -74,6 +74,12 @@ interrupting Primary, dodge unchanged).
    ```sh
    cd $ROOT && $PY -c "from hytalegym.sim.common.content import load, adapters as A; t=load('N.M.P'); [print(e.adapter, getattr(A, e.adapter)) for e in A.SWAP_PLAN]"
    cd HytaleRL/hytalegym/tools && $PY -m content_extract.redirects --repo $ROOT --out ../hytalegym/sim/common/content/redirects.json
+
+   Rule (2026-10-18): the step-clock redirects anchor on HEAD line numbers recorded in `redirects.json`, so every
+   commit that touches an engine module under `hytalegym/jax/` (even a comment) must be followed by this
+   regeneration, by re-pinning the site counts in `tests/sim/test_render.py`
+   (`test_step_clock_rows_are_the_swap_plan_source_sites`) if they moved, and by `tests/sim` plus
+   `test_render_identity.py`; the engine batch of that day failed both gates until the plan was regenerated.
    ```
 
    The redirect list records, per engine symbol, the module, the line in `HEAD`, the line in the
