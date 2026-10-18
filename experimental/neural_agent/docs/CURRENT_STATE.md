@@ -57,7 +57,7 @@ for the gen-7 simulator), and the gen-7 simulator itself (phase 3 of 6 running).
 | Stand-ins (pursuit candidate v0001, scripted evader, idle) and the dispatcher | built; the composition task runs on them |
 | Lower layer phase A (the other session): 12-head surface (+9 for 0.7.2, six scopes), catalogue parser (139 rows, 19 activities), protocol, combiner with stub bodies, parity, library, body contract, 32 NPC traces at 1/30 s | built, 763 tests at hand-off |
 | Phase B: behaviour-cloning dataset, freezing (shared encoder plus per-skill adapter; frozen skills bit-identical when a skill is added), joint wiring with the executor, progress names and stop reasons on every contract, bounded done-id window | built `baff062`, `0f17bc8`, `e62f654`, `3439c67`, `39b450e`, `14db188`, `9b6c571`, `cbd4e00` (body-yaw label, dataset v2), `5286797` (terrain, meters and visibility, dataset v3), `19c642f` (sim_adapter), `e07de22` (an already-expired request is rejected once), `63d85dd` (bench_bodies); package gate 867 passed, 2 skipped, 1 xfailed on the 2026-10-18 tree (baseline 863 plus 4 new) |
-| Phase C: real skill competence tests (E2 to E6 of `skill_agent/BUILD.md`) | blocked on three things: the gen-7 locomotion phase (walk resume after landing; the Region library recaptured on 0.7.2), the owner's training go-ahead, and the owner's motion-model choice (the player model has no live oracle; FIDELITY-0.7.2 (e), P2 item 1). Measured (`63d85dd`, ledger): as built, trained bodies cost about 1 ms per agent per skill at batch 8; the combiner calls each body per agent and freezing's verb program reruns the trunk on every call, so p95 is 12.5 ms at 3 skills per agent and 24.5 / 44.9 ms at 6 (shared / distinct verbs), over the 15 ms bar; one trunk pass per tick plus per-verb adapter programs keeps every case within the bar (worst 10.0 ms), a body-contract decision still open |
+| Phase C: real skill competence tests (E2 to E6 of `skill_agent/docs/BUILD.md`) | blocked on three things: the gen-7 locomotion phase (walk resume after landing; the Region library recaptured on 0.7.2), the owner's training go-ahead, and the owner's motion-model choice (the player model has no live oracle; FIDELITY-0.7.2 (e), P2 item 1). Measured (`63d85dd`, ledger): as built, trained bodies cost about 1 ms per agent per skill at batch 8; the combiner calls each body per agent and freezing's verb program reruns the trunk on every call, so p95 is 12.5 ms at 3 skills per agent and 24.5 / 44.9 ms at 6 (shared / distinct verbs), over the 15 ms bar; one trunk pass per tick plus per-verb adapter programs keeps every case within the bar (worst 10.0 ms), a body-contract decision still open |
 | Asks to the owner from the lower layer | the body-turn label and the terrain observation are done (`cbd4e00`, `5286797`); remaining: push, review of the catalogue edits, the uncommitted pursuit fix in `arena/training/runs/pursuit_run.py`, the training go-ahead, the motion-model choice, the one-trunk-pass body-contract change |
 
 ## 5. The simulator port to Hytale 0.7.2 (`HytaleRL/hytalegym/hytalegym/sim/`)
@@ -104,23 +104,17 @@ Region step, the processing and diagram actions, the fieldcraft `Weapon_Axe_Crud
 recorded 0.7.2 rows (absent-safe digests; pins keyed by the audited jar's release line in `worldgen/source_pin_baselines.py`
 and `source_pin_baselines_072.json`; the 0.5 line byte-identical on the 0.5.10 control); each audit's finding names the
 simulator work it implies; the terrain recapture stays gated on all eleven; next is claim re-derivation per audit, the
-inventory row first. Running:
-the timing items 2 to 4 measured with the learner-row harness plus the tick-0 head read of #75 (#73, bridge
-5560, measurement first; constructs after the timed-crafts commit frees the overlay), and the phase 4n test follow-ups
-(#74, bridge 5558: the duel harness pitch, the expectations 13 and 82; the ancient-steel scalar construct as a spec), and
-stage 5 on the simulator (processing benches and the Armory click-craft as constructs replaying the six `v6_*` receipts; no
-bridge). Concurrent construct lanes share four overlay files under the lock protocol of `sim/PORTING.md` (`80d3bbd`:
-`.overlay.lock`, noclobber, wait and retry; one lane committed at a time). A fifth lane (#77, engine, no bridge) closes two
-legal-observation gaps the lower-layer session reported: the certified pair path ignores `view_sector_full_angle_radians`
-(perceptible at any bearing) and the v3 row blanking has no sensor-range term (an opponent beyond range 16 still publishes
-defense and stamina rows); both land opt-in with the identity fingerprints unchanged (d8477b63 / b02ee274) and the swap plan
-regenerated after the commit; the peer defined FOV16/FOV32 as a 120-degree full sector at ranges 16 and 32. Landed in `c613d22`:
-both options are perception keywords (`view_sector_full_angle_radians`, `legal_observation_sensor_range`) on the pair path, the
-sector centred on the head yaw and gating the agent's entry, line of sight, the selector gate and the engagement target; the
-policy flat with an opponent behind the agent equals the no-opponent flat for four loadouts; fingerprints and the three digests
-unchanged; named gaps: non-line-of-sight events on the step's engagement id, the multi-entity body-yaw cone, the 16-block case
-inferred, the NPC cone unmodelled. Also landed: the audits' section (aa) correction (`44d3d69`: the -44.7 was the pinned head
-yaw, not pitch) and the lock protocol's render check (`a6f55a6`). Queued: the simulator half of #71, the terrain recapture itself, the stub mechanics (#69), a live Region-step run of the
+inventory row first. Landed together in `a21bdc7` (two lanes that shared the overlay files): stage 5 on the simulator (section (ae): processing
+benches, progress and fuel at one recipe second per 30 ticks, charcoal on the second fuel item; the Armory click-craft committing
+two ticks after the request; all six receipts replay in order, fuel and seconds; the render admits 1,945 recipes) and the three
+timing constructs (section (af): guard re-entry 0.35 s from the claim, the attack-start split one drain after the claim, the
+shortbow reset ammo 0; native under load reopened one tick earlier in 17 of 24 runs, recorded as jitter with the idle-machine
+re-measurement filed as #78); coordinator quick gate 292, identity 4. Running: the crossbow lane (#74, bridge 5558): the duel
+harness and the expectations are fixed on the gitignored tests (6 of 8 rows pass; the two left need the construct), the
+construct `crossbow_variant` (ancient steel 10.5 / 14 / 82 through a hook on the scalar variant profile) is being wired, then
+the gates and the eight-row live re-run; the kernel already rounds applied damage half up (kernel.py 320 to 322), so the test
+asserts the applied integer and no rounding construct exists. The lower-layer session moved `skill_agent` into subfolders
+(`1b2b780`); the stale document paths in this lane's files follow. Queued: the simulator half of #71, the terrain recapture itself, the stub mechanics (#69), a live Region-step run of the
 timed executor path.
 Committed earlier: the
 crafting oracle stage 3 (`274aaec`, timed bench crafts with probe events; pin `5FE609E2`), phase 4j (`a534e83`: the Trork
