@@ -102,8 +102,10 @@ port's own document (the model is PORT-0.7.2.md, "What 0.7.2 changed, and how th
   binds both ports to check they are free, waits for the boot and bridge-listening markers, runs `--then` with
   `HYTALERL_BRIDGE_PORT`, `HYTALERL_GAME_PORT` and `HYTALERL_SERVER_PID` set, stops the server (`stop` on stdin, then
   SIGTERM, then SIGKILL) and writes `launch-report.json` in the run directory.
-- Ports: one port pair per agent or session, never another session's. The launcher defaults are 5556 and 25572. Other
-  sessions used 5558/25576 (commit 274aaec) and 5556/25572 (commit 9f12f0d). The launcher does not retry a busy port. A port in TIME_WAIT is expected to fail its bind probe
+- Ports: one port pair per agent or session, never another session's. The launcher defaults are 5556 and 25572, but the
+  game ports 25570 to 25573 belong to another session's render bridge (5570), so always pass `--game-port`: this
+  session's pairs are 5556/25574, 5558/25576, 5560/25578 and 5562/25580 (phase 5 ran 23 launches on 5556/25574; commit
+  274aaec used 5558/25576; 9f12f0d used 5556/25572 before the reservation). The launcher does not retry a busy port. A port in TIME_WAIT is expected to fail its bind probe
   (inferred from the probe code, not run here), so choose another pair.
 - One launch per scenario when native state persists across resets (commit 76839c5).
 - Receipts stay outside the repository, in the run directory or a job directory. Name the receipt path in the

@@ -11,7 +11,7 @@ import sys
 from typing import Mapping
 from zipfile import BadZipFile, ZipFile
 
-from hytalegym.worldgen.region.contract import HYTALE_SERVER_VERSION
+from hytalegym.server_versions import server_profile
 
 
 SOURCE_PIN_STALENESS_SCHEMA = "hytalerl_world_source_pin_staleness_v10"
@@ -152,10 +152,12 @@ def world_source_pin_staleness_report(
     server_jar: str | Path,
     reports: Mapping[str, Mapping[str, object]],
     *,
-    expected_version: str = HYTALE_SERVER_VERSION,
+    expected_version: str | None = None,
 ) -> dict[str, object]:
     """Validate installed identity and already-produced audit reports."""
 
+    if expected_version is None:
+        expected_version = server_profile().certified_version
     server_path = Path(server_jar).resolve()
     identity = installed_hytale_server_identity(server_path)
     observed_version = identity["implementation_version"]

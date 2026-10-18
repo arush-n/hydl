@@ -1,0 +1,375 @@
+{
+  "schema": "hytalerl_source_pin_baselines_072_v1",
+  "release_line": [
+    0,
+    7
+  ],
+  "installed_build": {
+    "implementation_version": "0.7.2",
+    "implementation_revision": "d769dc3d57881261a62858e1394f0e4de9a21eca",
+    "server_jar_sha256": "23f71f03763422ce7c04df191db49cd0e7d87d43b12baad75c43fdc202410aff"
+  },
+  "recorded_from": "live-free offline read of the installed 0.7.2 Server/HytaleServer.jar and Assets.zip",
+  "status": "observed; no semantic baseline is verified (every audit has open gaps)",
+  "audits": {
+    "perception": {
+      "EXPECTED_SERVER_SHA256": "23f71f03763422ce7c04df191db49cd0e7d87d43b12baad75c43fdc202410aff",
+      "EXPECTED_SEMANTIC_SHA256": null,
+      "CLASS_SHA256": {
+        "com/hypixel/hytale/math/iterator/BlockIterator.class": "9f3e629c6185ae7ade93174ca89a1b0dbc86bb6a004a1c55d599661b28dafd3e",
+        "com/hypixel/hytale/math/shape/Box.class": "16f6922a1c636264f9a1f04867a3897318c09e08a7c9aecd8eb6c0c9a0605ec1",
+        "com/hypixel/hytale/math/hitdetection/HitDetectionExecutor.class": "89d5568aec6f9b4b90ae75ff00bd5025c6d60e7ca8763bc7d06a4b2a2497aef6",
+        "com/hypixel/hytale/math/hitdetection/LineOfSightProvider.class": "de3a71c3d4a3224d5d98fc5c388f795446dac61f4287079cce26dee874075589",
+        "com/hypixel/hytale/math/random/RandomExtra.class": "2389d8b152832b8bf29d127626012100fbd5e24cc02a57bd1eb7acfbb27cb7ae",
+        "com/hypixel/hytale/server/core/modules/interaction/interaction/config/selector/HorizontalSelector.class": "7d4a42208dc0ecdb4c8b1129d5e015000ee5b9255d3992a7fddeeca5f06fff9e",
+        "com/hypixel/hytale/server/core/modules/interaction/interaction/config/selector/HorizontalSelector$RuntimeSelector.class": "7a5d35c6eadd262b6b39f014e322bac481f94c331e3a738acfb9631148ed85af",
+        "com/hypixel/hytale/server/core/universe/world/accessor/LocalCachedChunkAccessor.class": "absent",
+        "com/hypixel/hytale/server/core/universe/world/chunk/BlockChunk.class": "622022eef1c326f3bc3bf0153e24c142c5a8fd1176e4ae5901447f2127bea160",
+        "com/hypixel/hytale/server/core/universe/world/chunk/section/BlockSection.class": "ef6f84a7a4408289abc161cddec581c6ffe38c38a111c832708670c3c9165e5c",
+        "com/hypixel/hytale/server/core/universe/world/chunk/section/ChunkLightData.class": "67cb67a433dce89e14acf5d39767bb60dada09ebad501e20d758298dff0cbd17",
+        "com/hypixel/hytale/server/core/universe/world/lighting/ChunkLightingManager.class": "eb5af6227bd570b9196686f4ee982f348d3e0c232124fa642f7f1218eb9498f7",
+        "com/hypixel/hytale/server/core/universe/world/lighting/FloodLightCalculation.class": "87cd68d50a14bb1fd4e9eee00fd9a271e6eface8fc52b94e577c07aabd2c9c65",
+        "com/hypixel/hytale/server/core/universe/world/storage/ChunkStore.class": "d95fe5468cbaf6daa3d56e7ed4d8f48a1bfedc06c873a23a6991b768fd811613",
+        "com/hypixel/hytale/server/core/command/system/arguments/types/ArgTypes$30.class": "721e693825d43b5830a54d9125b51e3688a3f245544445676e6acd69bdd769fa",
+        "com/hypixel/hytale/server/core/command/commands/world/chunk/ChunkTintCommand.class": "39c933df3f4bb0f219a5f53b031dd2cf45fc8f7aef823aa432d5c580c11ee805",
+        "com/hypixel/hytale/server/npc/corecomponents/entity/builders/BuilderSensorEntityBase.class": "89bcebbb595e9f8f7e80e07c3884c5f76ac08bf4bfedec589ca5bacd84352d39",
+        "com/hypixel/hytale/server/npc/corecomponents/entity/SensorEntityBase.class": "8c7136f341184581d5fa1d364bc4d635e4be3a4ebe256763d030aa66a73fad37",
+        "com/hypixel/hytale/server/npc/corecomponents/entity/filters/EntityFilterLineOfSight.class": "4a1898b2ccdf1a7cfb55fce16ab501d303a49852f9e662e37a72206fc45fb1f6",
+        "com/hypixel/hytale/server/npc/corecomponents/movement/BodyMotionFindBase.class": "e680a71557a8a6498c253262cc47b3ecc9e746d7e7be0a6b6ec225cbd15afd28",
+        "com/hypixel/hytale/server/npc/movement/controllers/MotionController.class": "1f0431232f5e0db15223cd0f9c436ced5258d4d3eef8841973dc47f4e27221e5",
+        "com/hypixel/hytale/server/npc/movement/controllers/MotionControllerBase.class": "0783cb72a823eb1484c826a3559bdf5ff9fdfc2581acfa4ec75fba9afd25adcb",
+        "com/hypixel/hytale/server/npc/movement/controllers/MotionControllerDive.class": "bc5c51022604f82c812e9933b022c79eac91693139dcd28fc7c02a9b54468484",
+        "com/hypixel/hytale/server/npc/movement/controllers/MotionControllerFly.class": "087e7e2163b0ea4d2dbf3cdb6739aa0e7d11ddf07f8f150b6d67566c7d3335f2",
+        "com/hypixel/hytale/server/npc/movement/controllers/MotionControllerWalk.class": "b8bb0c895bef7e0b3530ca0f8c6b16f3460d970aa5e130d25393ffa46b776efe",
+        "com/hypixel/hytale/server/npc/role/support/PositionCache.class": "9a12cfab97d768548472854e7908458bda82c77b9ef106a243861dd5c44ebc3e"
+      },
+      "open_gaps": [
+        "LocalCachedChunkAccessor.class absent on 0.7.2 (0.5.7 pin); the claimed unloaded-chunk LOS rule (unloaded_chunk: blocked) is not re-derived.",
+        "PositionCache.hasLineOfSight body changed (17 of 84 bodies; fields +3 -2; methods +16 -9; getRole, processEntitiesInRange, processNPCsInRange, processPlayersInRange removed).",
+        "2 of 26 pinned classes are byte-identical; 23 changed and 1 (LocalCachedChunkAccessor) absent."
+      ]
+    },
+    "actor_world_state": {
+      "EXPECTED_SERVER_SHA256": "23f71f03763422ce7c04df191db49cd0e7d87d43b12baad75c43fdc202410aff",
+      "EXPECTED_SEMANTIC_SHA256": null,
+      "CLASS_SHA256": {
+        "com/hypixel/hytale/server/core/asset/type/blockhitbox/BlockBoundingBoxes$RotatedVariantBoxes.class": "7794135cfd65dbe09e7a92914d1ef6fbe1e5bffdd897be50b05606873cae3de1",
+        "com/hypixel/hytale/server/core/asset/type/fluid/Fluid.class": "7c7c969624d975fa978f05c107b44263e82273e5887b53da9f77ee816f7f8095",
+        "com/hypixel/hytale/server/core/entity/EntityUtils.class": "6c5e3e1f471e934ccf5223591311bf9a45a97d21fb870ba7f94008abe17d64c6",
+        "com/hypixel/hytale/server/core/entity/LivingEntity.class": "26e7dabbe725a76b0a56db80604e0e77fba9bb7cdf1bf2a39ddd7f7eaf982077",
+        "com/hypixel/hytale/server/core/event/events/ecs/BreathingCheckEvent.class": "bc35cea110fb06e5771c58b0a5d9c26184b46e604003855c02b34b2a47c9db8e",
+        "com/hypixel/hytale/server/core/modules/collision/BoxBlockIntersectionEvaluator.class": "af110519f4d7cac5359717c52af1d3ef42f0db8c71774a3f7d17e9c99ea2aa18",
+        "com/hypixel/hytale/server/core/modules/collision/CollisionConfig.class": "eb9498a7044ecc65f8abc14f6241205c1e1f7236b5fef2cebf77fa50004d9940",
+        "com/hypixel/hytale/server/core/modules/collision/CollisionModule.class": "0e313294777ee7a67c924eef894c974e78d21050eed02c9bad385c06cef8d7cd",
+        "com/hypixel/hytale/server/core/modules/collision/WorldUtil.class": "3982d45dd997dbe5db462a988027e4c3c34a75bbfba3749de6d9825d160a5829",
+        "com/hypixel/hytale/server/core/modules/entity/component/BreathingComponent.class": "3661261ab5cd27539dfeda24fe88307ca553f756975fba9e013ca77799acb65d",
+        "com/hypixel/hytale/server/core/modules/entity/damage/DamageSystems$BreathingSystem.class": "9b1d2d5941174ede98e79bd399836b5946a1c09fae125aa8bb46a71e667afeaa",
+        "com/hypixel/hytale/server/core/modules/entity/damage/DamageSystems$CanBreathe.class": "4d1d1616e1088fbce1e5c0df5f5a32699caf1b8fd8607478cdd3408ec6079e0f",
+        "com/hypixel/hytale/server/core/modules/entity/damage/DamageSystems$FallDamageNPCs.class": "c15b7e38a6a0a53a08670c2e64d58af2b7f95b5daec07c787a8e4b9ba1e40495",
+        "com/hypixel/hytale/server/core/modules/entity/damage/DamageSystems$FallDamagePlayers.class": "5b462da17ff19ef0c43fd7116d68e47a3897516651b470f194c24ab3ac94e606",
+        "com/hypixel/hytale/server/core/util/FillerBlockUtil.class": "59c0dc7532b1fdf1b59d69a25392e93d9b59a6f9539b99540706cd38b9a2d904",
+        "com/hypixel/hytale/server/npc/corecomponents/world/SensorInWater.class": "4ab80ea524fcf759c803dc92e310e2706a3b072fb2e6d4502b96d37a54aa259f",
+        "com/hypixel/hytale/server/npc/movement/controllers/MotionControllerWalk.class": "b8bb0c895bef7e0b3530ca0f8c6b16f3460d970aa5e130d25393ffa46b776efe"
+      },
+      "open_gaps": [
+        "WorldUtil.getPackedMaterialAndFluidAtPosition removed; findFarthestEmptySpaceAbove/Below and findFluidBlock re-signatured to ChunkStore.",
+        "CollisionConfig.canCollide body changed (3 of 65); MotionControllerWalk.findDropBlockCollision body changed (22 of 166 bodies).",
+        "13 of 17 pinned classes differ."
+      ]
+    },
+    "locomotion": {
+      "EXPECTED_SERVER_SHA256": "23f71f03763422ce7c04df191db49cd0e7d87d43b12baad75c43fdc202410aff",
+      "EXPECTED_SEMANTIC_SHA256": null,
+      "CLASS_SHA256": {
+        "com/hypixel/hytale/server/core/entity/entities/player/movement/MovementConfig.class": "816c6bde3d31a50e425391d27497bc833548a0e785917ed51b967ceb4efca7a0",
+        "com/hypixel/hytale/server/core/entity/entities/player/movement/MovementManager.class": "d668b41c102fa08c2c2f06cd41b90fef769637893602024e2cdab6cc581c3271",
+        "com/hypixel/hytale/server/core/entity/movement/MovementStatesSystems.class": "b3fdc9ae57ced626c6665437ec3c4305df77efc2ba7a992f88260441f05e0354",
+        "com/hypixel/hytale/server/core/entity/movement/MovementStatesSystems$TickingSystem.class": "36ad44a7cf4acbc5b1687dd19a441fca2f175aa6133849a5c635fe7127c3339d",
+        "com/hypixel/hytale/server/core/entity/movement/MovementStatesComponent.class": "745a989d18710ad2879bce06783012907a21f79fc7f36b8c2e5a5a907b5d7e33",
+        "com/hypixel/hytale/protocol/MovementStates.class": "066248493b465692dd2536cb0b1b28066267cb1878388ef6d079032c0a98c154",
+        "com/hypixel/hytale/server/npc/systems/MovementStatesSystem.class": "4989c205c3822f5f7dbe3d8d4e9901f3866368c1f699585470b215eb9342004b",
+        "com/hypixel/hytale/protocol/packets/setup/ClientFeature.class": "cb9f6e36144102dc574d27d947c736c5b67a9b2f7afba1f87ecfdffe24178df7",
+        "com/hypixel/hytale/builtin/mantling/MantlingPlugin.class": "d5944135a6822ad18392aadd7c73edc1439fa4def538a31bb4d5753f190f0ada",
+        "com/hypixel/hytale/server/core/modules/entity/stamina/StaminaSystems.class": "d8081e7c1000c3ac60a6521e4a870d7946eb90df518c91b2492facb3bc31eb58",
+        "com/hypixel/hytale/server/core/modules/physics/util/PhysicsMath.class": "1a96762719c64fd0d1c246d2789a02371e01e98ae0583adcd88b945edd0a3e1e",
+        "com/hypixel/hytale/math/util/TrigMathUtil$Riven.class": "ddea7f80aab4a27611673957abe7b0de8c91975d5f3fd040b46e8a000614f590",
+        "com/hypixel/hytale/math/util/TrigMathUtil$Icecore.class": "68ca40e3c694099945d6a6edeb3288c82521cab974e89006e9ef6e9ee65f46f4",
+        "com/hypixel/hytale/server/npc/movement/controllers/MotionControllerWalk.class": "b8bb0c895bef7e0b3530ca0f8c6b16f3460d970aa5e130d25393ffa46b776efe",
+        "com/hypixel/hytale/server/npc/movement/controllers/MotionControllerBase.class": "0783cb72a823eb1484c826a3559bdf5ff9fdfc2581acfa4ec75fba9afd25adcb",
+        "com/hypixel/hytale/server/npc/movement/controllers/MotionControllerDive.class": "bc5c51022604f82c812e9933b022c79eac91693139dcd28fc7c02a9b54468484",
+        "com/hypixel/hytale/server/npc/movement/MotionKind.class": "006edddee8f2cf95666885288ada82dfeb195952b204cbfd5ef59671635d64a3",
+        "com/hypixel/hytale/server/npc/movement/controllers/builders/BuilderMotionControllerBase.class": "3a76a3e26b13e7530312eb5e85b7eacd882de2e7cf160fcf530a339cd59e4fc2",
+        "com/hypixel/hytale/server/npc/movement/controllers/builders/BuilderMotionControllerWalk.class": "5ec4adcbd3a28bb3af9267419af9ab12f7998a1e10bad9f9a8c56a0b06accf97",
+        "com/hypixel/hytale/server/npc/movement/controllers/builders/BuilderMotionControllerDive.class": "18413e8bb8f4437cae89a661408abc74f69926ba9b11335aa10ce043e078fca2",
+        "com/hypixel/hytale/server/npc/util/PositionProbeWater.class": "1b2828583594140c0635999780505d5f04694fb5bf4499d55442f86da99945ab",
+        "com/hypixel/hytale/server/npc/util/NPCPhysicsMath.class": "8eefdf5371f4ff7c095b723fb958553bb9ca6c68e5586034b81e3d6c3c8e9f46"
+      },
+      "ASSET_SHA256": {
+        "Server/Entity/MovementConfig/Default.json": "08ff21409ef5d310b93d53240667a4c8afa386d95de18322a06f93333e1f5bdc",
+        "Server/GameplayConfigs/Default.json": "05e46e2d45c93603d63ba062a9838b2a587e776496095f93b664f1bb1ae06784",
+        "Server/NPC/Roles/_Core/Templates/Template_Swimming_Aggressive.json": "21fed958a8a2ce3703a5c9e5ef02e2e0079575c6c657016c182704c13b60c31e",
+        "Server/NPC/Roles/_Core/Templates/Template_Swimming_Passive.json": "1e922fbcd406adbe1bc086b04cfb31e272e280853012eaa74322877b7c952490",
+        "Server/NPC/Roles/_Core/Tests/Flocking/Test_Flock_Damage.json": "6f1e32680c532d73456627556cc87bc24f774bf4aa0859a22cf56239e8d7c001",
+        "Server/NPC/Roles/_Core/Tests/Flocking/Test_Flock_Pos.json": "b7f1611044ba2719ea9bd926edfd27421a1829cdbce750982982e8b17160fe69",
+        "Server/NPC/Roles/_Core/Tests/Motion/Test_Dive_Flee.json": "e2a278ccc7e00a5ea571fac88dcbcdb4aa856a37ac115f9c74a0df0bd2c44cf0"
+      },
+      "open_gaps": [
+        "MovementStates gains extraJumpsUsed (byte) after the 23 booleans (boolean order unchanged); codec moved to MemorySegment/ReadCursor (toObject, requireBounds).",
+        "MovementConfig gains MaxSlopeAngleDegrees 30 and MaxWallAngleDegrees 15 (MovementConfig.toPacket changed); the simulator models neither.",
+        "MotionControllerWalk changed (fields +3; methods +11 -2; 22 of 166 bodies); ClientFeature loses 6 fields.",
+        "14 of 22 pinned classes differ; 6 of 7 pinned assets differ; Test_Dive_Stationary.json added (dive roles 5 -> 6)."
+      ]
+    },
+    "navigation": {
+      "EXPECTED_SERVER_SHA256": "23f71f03763422ce7c04df191db49cd0e7d87d43b12baad75c43fdc202410aff",
+      "EXPECTED_SEMANTIC_SHA256": null,
+      "CLASS_SHA256": {
+        "com/hypixel/hytale/server/npc/role/Role.class": "c9f6f5d7d9a8c30014874183c0cc7cb9e66b3ac50d6915b933962703830ab01d",
+        "com/hypixel/hytale/server/npc/instructions/BodyMotion.class": "c480eeb7af11ef6eb1159430875ecfeed667ac8539bfb7dab6e86e5f0fbad7ff",
+        "com/hypixel/hytale/server/npc/movement/Steering.class": "680f22182ae415617dd961bd4ab1a76d984d0d9ae2b81b2a230ee970d1156cd1",
+        "com/hypixel/hytale/server/npc/movement/controllers/MotionController.class": "1f0431232f5e0db15223cd0f9c436ced5258d4d3eef8841973dc47f4e27221e5",
+        "com/hypixel/hytale/server/npc/navigation/IWaypoint.class": "e517f9ab7c374cfdecb4359bc27f70ce79a2066588b4b50747c6022ee041ab1f",
+        "com/hypixel/hytale/server/npc/navigation/AStarBase.class": "2fd633b6012ee7b0d95600e9c0369b1a6dad41efd6c1345e3740092c1656178a",
+        "com/hypixel/hytale/server/npc/navigation/AStarNode.class": "ea384a98e58e665d0261a9b6dfee83597f0e2d9389074e424e373e09b4215761",
+        "com/hypixel/hytale/server/npc/navigation/AStarWithTarget.class": "f8674513449bdd68d5ea891f6a55ba6d6c17d1f4a2282f88bdf271e0c94a927b",
+        "com/hypixel/hytale/server/npc/navigation/AStarEvaluator.class": "60c7d922dda1ae9c234911122c45ea0a0026414375c49175c4e9afa227ff59a0",
+        "com/hypixel/hytale/server/npc/navigation/AStarNodePoolProviderSimple.class": "60c81c05bdbeece0460272ea93140decd0e06de165eff27ac25bf6b7cd764ae4",
+        "com/hypixel/hytale/server/npc/movement/controllers/ProbeMoveData.class": "a02f596ae3ce976066ede6755326c713ad3b6f7c6f115946d93a4591e811386e",
+        "com/hypixel/hytale/server/npc/navigation/PathFollower.class": "b03091e21032f469c197614cb6dcc313f0a1e145b88ccc2be5c15fbb269367df",
+        "com/hypixel/hytale/server/npc/corecomponents/movement/BodyMotionFind.class": "fa0e7efc29d3fc95414647979560c9d4e4470ceec09adf38baedf06281a2cabb",
+        "com/hypixel/hytale/server/npc/corecomponents/movement/BodyMotionFindBase.class": "e680a71557a8a6498c253262cc47b3ecc9e746d7e7be0a6b6ec225cbd15afd28",
+        "com/hypixel/hytale/server/npc/corecomponents/movement/BodyMotionFindWithTarget.class": "d1f03077b19b7077c7c8614e3eb006c90435347cccb8d0dd8b51e0b061fd5838",
+        "com/hypixel/hytale/server/npc/corecomponents/movement/builders/BuilderBodyMotionFindBase.class": "cde7b886dbc4ef56cd4ee52369bf3519259a9ea737625a1685c6df986f0e5c0f",
+        "com/hypixel/hytale/server/npc/movement/controllers/MotionControllerBase.class": "0783cb72a823eb1484c826a3559bdf5ff9fdfc2581acfa4ec75fba9afd25adcb",
+        "com/hypixel/hytale/server/npc/util/NPCPhysicsMath.class": "8eefdf5371f4ff7c095b723fb958553bb9ca6c68e5586034b81e3d6c3c8e9f46"
+      },
+      "TRACE_ASSET_SHA256": {
+        "Server/NPC/Roles/Intelligent/Faction/Trork/Trork_Brawler.json": "1566e5739850ec705afa8e22ee44ed909e09e2b3226afe8f4e06ce1408e46ec5",
+        "Server/NPC/Roles/Intelligent/Faction/Trork/Templates/Template_Trork_Melee.json": "e1d5246db747deb0778b23e9c5cf85a6c7c131d5f770ee9b6f9e111f8e79bfd5",
+        "Server/NPC/Roles/_Core/Components/Instructions/Combat/Component_Instruction_Intelligent_Chase.json": "b6c850ac932066777457df8b3011f0c87335fbeff0066050e57d110ac7fd8250",
+        "Server/NPC/Roles/_Core/Components/Instructions/Combat/Component_Instruction_Target_Adjusted_Attack_Melee.json": "45c63f868649ddae79cf600a52d19e30faa65092bd8f617b3a3b81c5ef66b165"
+      },
+      "open_gaps": [
+        "AStarBase.computePath body changed; the 0.5.7 limits (path 200, open 200, total 900) and the lookup order are not re-derived.",
+        "Component_Instruction_Intelligent_Chase gains DesiredAltitudeWeight (value -1), read by MotionControllerWalk and BodyMotionFindBase; its effect on the Trork chase is not measured.",
+        "12 of 18 pinned classes differ. Template_Trork_Melee.json gains MemoriesKillRange and MemoriesUnlockedBy (additive)."
+      ]
+    },
+    "doors": {
+      "EXPECTED_SERVER_SHA256": "23f71f03763422ce7c04df191db49cd0e7d87d43b12baad75c43fdc202410aff",
+      "EXPECTED_SEMANTIC_SHA256": null,
+      "CLASS_SHA256": {
+        "com/hypixel/hytale/server/core/asset/type/blockhitbox/BlockBoundingBoxes.class": "47092949e29417b2943174a203e39d551e6bd5ec6ca37d8e02b58c8484fdb513",
+        "com/hypixel/hytale/server/core/asset/type/blocktype/config/Rotation.class": "d3a32c5f08f51c6f000bbaf167788a657e62f9242dcc8041727f087ebb378bf1",
+        "com/hypixel/hytale/server/core/modules/interaction/interaction/config/client/SimpleBlockInteraction.class": "5b1abaebd06df66a771ca3bd351bfc67ac93592e771c54e180ac5d5879e7b5f6",
+        "com/hypixel/hytale/server/core/modules/interaction/interaction/config/server/DoorInteraction.class": "3e5530e4ffbdb6a8f98fcde54846a202995b656c43e4164f3b7a71ac83a1d21a",
+        "com/hypixel/hytale/server/core/universe/world/accessor/BlockAccessor.class": "absent",
+        "com/hypixel/hytale/server/core/util/FillerBlockUtil.class": "59c0dc7532b1fdf1b59d69a25392e93d9b59a6f9539b99540706cd38b9a2d904"
+      },
+      "ASSET_SHA256": {
+        "Server/Item/Block/Hitboxes/Furniture/Door/Door_Kweebec.json": "f487bf80e8418b5180c1665ce9be5facb2ab8adc29b909a7c0c99a0109d7607e",
+        "Server/Item/Block/Hitboxes/Furniture/Door/Door_Kweebec_Open_In.json": "0575531491c769ebfccce02a8cca2efc55c8dc5747213ff2daf4a8a9c23cabf2",
+        "Server/Item/Block/Hitboxes/Furniture/Door/Door_Kweebec_Open_Out.json": "01a7d22dafda8b09e0c91a0971960e1d6931f04ea05168129ecbaa9d166e063c",
+        "Server/Item/CustomConnectedBlockTemplates/DoorConnectedBlockTemplate.json": "36173837d21f45adcbb029a262cd1e5ade42f41b8b546ab682bfa00dfbfa5b63",
+        "Server/Item/Interactions/Door/Door.json": "2883c5ab768d3ff7aa89e323573b0b14ba85b025d409a9543dd24c5021193f05",
+        "Server/Item/Interactions/Door/Door_Horizontal.json": "7b7d50ecfc2cbe3ddb188bcd614ad582188762803b7af674f61b06f876373fed",
+        "Server/Item/Items/Furniture/Kweebec/Furniture_Kweebec_Door.json": "a7b96f072ed803d78018d6e975ddf7d834a2fc5f09b151571cb1a27ab636ec10",
+        "Server/Item/RootInteractions/Door/Door.json": "fc2aa601d6babb8c577a86ccb379a5be750f281e8f60b862a84f873f37b394d5",
+        "Server/Item/RootInteractions/Door/Door_Horizontal.json": "26ee6d5e7a5c1bffe3828dc38bf539d4ba7c6e4ac218883f5f9cfda229ae0c60"
+      },
+      "open_gaps": [
+        "DoorInteraction restructured: checkDoor, canOpenDoor, checkForDoubleDoor, isHorizontalDoor, isInFrontOfDoor and the OPEN/CLOSE_DOOR_IN/OUT constants removed (fields -4, methods -12; 3 of 15 bodies changed); the vertical-transition and double-door claims are not re-derived.",
+        "BlockAccessor.class absent on 0.7.2; Rotation.add removed; Of 6 pinned classes, 1 is byte-identical, 4 changed and 1 (BlockAccessor) absent. 9 of 9 door assets are byte-identical."
+      ]
+    },
+    "mutable_blocks": {
+      "EXPECTED_SERVER_SHA256": "23f71f03763422ce7c04df191db49cd0e7d87d43b12baad75c43fdc202410aff",
+      "EXPECTED_SEMANTIC_SHA256": null,
+      "CLASS_SHA256": {
+        "com/hypixel/hytale/assetstore/codec/ContainedAssetCodec.class": "df62ebce387c7da3563cbab825ede6fea46e136c63ef4b1f7a40690e44bb6e4b",
+        "com/hypixel/hytale/server/core/modules/blockhealth/BlockHealth.class": "be40d4071370fee7f218ad9e2ab35a57c1972965b719da594caa94017706aa08",
+        "com/hypixel/hytale/server/core/asset/type/blocktype/config/BlockGathering.class": "f90aec053d55a8e2bbd2c2cfee76c63ff8bef9ba254aa9628dc0038db3cc9066",
+        "com/hypixel/hytale/server/core/asset/type/blocktype/config/BlockBreakingDropType.class": "6eb25a7baefea4cd3fdad991f235d95654bbed6d28a3c8fe5665c051dcc45d7e",
+        "com/hypixel/hytale/server/core/asset/type/blocktype/config/SoftBlockDropType.class": "577500f7d60fd38bfaf71505f45ac4f758c16698eead486c58467f91d8be2505",
+        "com/hypixel/hytale/server/core/asset/type/blocktype/config/BlockType.class": "14ba34c791201907e4d251b59bbbaf1ad007e22011395998f0aa6e4a374629f8",
+        "com/hypixel/hytale/server/core/asset/type/blocktype/config/SupportDropType.class": "785e90995f8d811fb1b64c6f07b5309414ca27ce23041e96bf410cc12361796d",
+        "com/hypixel/hytale/server/core/asset/type/blocktype/config/RequiredBlockFaceSupport.class": "54afb04696f64f5ccf7e882ff63e637facbf2f7758ee2e47ef7eaa030e13c344",
+        "com/hypixel/hytale/server/core/asset/type/blocktype/config/BlockFaceSupport.class": "6b1d609b91bce6cedd706665c25b201dc7c4ab31a04c5f90a55e157ddf9b1f82",
+        "com/hypixel/hytale/server/core/asset/type/blocktype/config/BlockFace.class": "46179fc7cf8dbb09212c6bfcac30f64ceeae9b882985de436b61205a65566a9f",
+        "com/hypixel/hytale/server/core/asset/type/blocktype/config/RotationTuple.class": "8b6e679b1f984893dc65fe5b88395bb57d12b17479e2616f4c3cedddec5e7d3b",
+        "com/hypixel/hytale/server/core/asset/type/blocktype/config/HarvestingDropType.class": "7383b8cf1bef7ba0794882f83ab25a0805bba3b83e8272f7db1325959b76660d",
+        "com/hypixel/hytale/server/core/asset/type/item/config/Item.class": "331613b22ecbb285ab4de9b3989e6e88bd545104688082aa4267b0e0d3c36388",
+        "com/hypixel/hytale/server/core/asset/type/item/config/ItemToolSpec.class": "40f7a3711c4de9f703babfb24911b12da2eb82bd8da9f4f5798bf3c1a97bc1da",
+        "com/hypixel/hytale/server/core/asset/type/item/config/ItemTool.class": "cf619b294a0e6072a340f6f221e152e0d4609615c6634a02e396f4c8e88d195d",
+        "com/hypixel/hytale/server/core/asset/type/item/config/ItemDrop.class": "14fa791ad161fb5d82dfaa61484284546eb214d4c9423cf246cce471b89d9eab",
+        "com/hypixel/hytale/server/core/asset/type/item/config/ItemDropList.class": "7fd8164149c59e460ab5658fe083ef8baaf56467d4259cbcb3a638114aee72ea",
+        "com/hypixel/hytale/server/core/asset/type/item/config/container/ItemDropContainer.class": "174d92c95bfb5b5a0c7c1b696c58dabb6e2c2a3e9fb2833db1e7f30e45e07be0",
+        "com/hypixel/hytale/server/core/asset/type/item/config/container/SingleItemDropContainer.class": "17aa7a21232e33f07c4a6802546a858615e6592649b1f92b57ba6fe03212386c",
+        "com/hypixel/hytale/server/core/asset/type/item/config/container/MultipleItemDropContainer.class": "2fcee426e7938919a55a3fd9255b2b3b3cfaf31788932708b11274e76f69fb1e",
+        "com/hypixel/hytale/server/core/asset/type/item/config/container/ChoiceItemDropContainer.class": "6ced07ef0292ca8807e034df59acc606d817ac645195e5515465ed806fa2a60f",
+        "com/hypixel/hytale/server/core/asset/type/item/config/container/DroplistItemDropContainer.class": "3c3e5c0761941bbb2adfd295276c8a9073cdd8f8cb85407e31410f97532965fe",
+        "com/hypixel/hytale/server/core/asset/type/item/config/container/EmptyItemDropContainer.class": "d79decbcda54c70bb1640ead12b7ce84baad0b4838cbe4127031b4d5f6d66e17",
+        "com/hypixel/hytale/server/core/modules/item/ItemModule.class": "c581909dfec130bdf1d9405bdab54c42ab30ad2e8f62f905c0f25744c0fe55a5",
+        "com/hypixel/hytale/server/core/inventory/ItemStack.class": "eddd71681db28b929cf3bb43ee063345d116c0e812546a28839187675d5f7c24",
+        "com/hypixel/hytale/server/core/modules/blockhealth/BlockHealthChunk.class": "a2ab79790dc7439f6a8c480ec7778f40f89c1264ba588ecf748a121a86495d6c",
+        "com/hypixel/hytale/server/core/modules/blockhealth/BlockHealthModule$BlockHealthSystem.class": "absent",
+        "com/hypixel/hytale/server/core/modules/interaction/BlockHarvestUtils.class": "6e67f6eedfacbdf12eb8e47d8eea51c833bcb4d926ea5c530b97a29504d3d2e3",
+        "com/hypixel/hytale/server/core/modules/interaction/BlockPlaceUtils.class": "1d602e9f5b811687b812d90c35ed7986707cf90d46fe35ea999012f7f23d12db",
+        "com/hypixel/hytale/server/npc/util/BlockPlacementHelper.class": "d9a9a0f40a6c5a2d3ed2dbe1a45b65f891c5a99fccedd252a8facebad36d6b21",
+        "com/hypixel/hytale/server/core/asset/type/blockhitbox/BlockBoundingBoxes.class": "47092949e29417b2943174a203e39d551e6bd5ec6ca37d8e02b58c8484fdb513",
+        "com/hypixel/hytale/server/core/asset/type/blockhitbox/BlockBoundingBoxes$RotatedVariantBoxes.class": "7794135cfd65dbe09e7a92914d1ef6fbe1e5bffdd897be50b05606873cae3de1",
+        "com/hypixel/hytale/math/shape/Box.class": "16f6922a1c636264f9a1f04867a3897318c09e08a7c9aecd8eb6c0c9a0605ec1",
+        "com/hypixel/hytale/server/core/entity/entities/Player.class": "a5ed312e3bc6c821a08b546a566b853010a8c25c0ea2eec1731b5acdec0ae353",
+        "com/hypixel/hytale/server/core/entity/InteractionManager.class": "d4f85fd08555d1e3b7d11a324fdafb3b73ceee2938f62830ad88249b8073b26d",
+        "com/hypixel/hytale/server/core/entity/InteractionContext.class": "bafb3ed29f83c0b752e3ead9b37aeb35f87d60a952555054c383e0f0e3c5bb9c",
+        "com/hypixel/hytale/server/core/entity/InteractionChain.class": "7197debd20d26950fe8d73db0b79b4d727880c754e9775e21869b68913234362",
+        "com/hypixel/hytale/server/core/modules/interaction/system/InteractionSystems$TickInteractionManagerSystem.class": "d2e75567b8e9461c82b7e329a3f430173fa2f2c0a3b70052eb96f75d7f3240d8",
+        "com/hypixel/hytale/protocol/InteractionSyncData.class": "6c16d092a100f9f0c9849f640302d0ce6435a5da0e64cfc3577abb4b70c67522",
+        "com/hypixel/hytale/protocol/InteractionType.class": "58320ac781f66ff3d11bca392279e7f13183cc8ea36b6c18d434b3657c71b651",
+        "com/hypixel/hytale/protocol/RootInteraction.class": "0d5b889995d56419d49ed774f002a89689355d542c5747c228fdec9d7b7d0689",
+        "com/hypixel/hytale/protocol/InteractionRules.class": "e5092b9885b7645223bc3b35318c52cce62572ba575d68755cffc29161690719",
+        "com/hypixel/hytale/server/core/inventory/InventoryComponent.class": "27fff18c35148cf1cb5d2b558a34e8896e3228ba53a21129c94f8627ec7f3cb8",
+        "com/hypixel/hytale/server/core/inventory/InventoryComponent$Armor.class": "4563b781a071cdbbf1d9e021b26b98e43b64038e0b61528c763690648f93dcd6",
+        "com/hypixel/hytale/builtin/blockphysics/BlockPhysicsUtil.class": "ca237af65a861a76ec6cf86aa78f642b1b97cf04c755f5d16d07e58a699e094d",
+        "com/hypixel/hytale/builtin/blockphysics/BlockPhysicsSystems.class": "b4b9fa1f5034e2d51e6cf3c2f4673e1f23e522cd342b5be3547b327c9ef812d8",
+        "com/hypixel/hytale/server/core/modules/blockset/BlockSetModule.class": "c32f90206afd1b773fbf213bed5d628e81bfa37508bb0eb4b42887b7b4b52246",
+        "com/hypixel/hytale/server/core/blocktype/component/BlockPhysics.class": "207f7a0da8b2fcf0f9c149f8ad7aadd5762b0801048b7d8ade44c27e795e0160",
+        "com/hypixel/hytale/builtin/fallingblocks/FallingBlock.class": "d22f3ee5e2de33b147c3ac8799cb196fdedb8ef0b3f0c6f30ba95b5acca7d4c3",
+        "com/hypixel/hytale/builtin/fallingblocks/FallingBlockTickingSystem.class": "52f71dc5a133eb34635fe087e0f66a6795a390beb762bb2ed3cbf3078c59bb6b",
+        "com/hypixel/hytale/server/core/modules/entity/BlockEntitySystems$Ticking.class": "b93462c8a4c5bef9b2f4cf5cf4c15c7b382aefa1140c762e60caefdf3749ffe1",
+        "com/hypixel/hytale/server/core/modules/entity/item/ItemPrePhysicsSystem.class": "6340b863c4c663894bebbf29b4e4830056d1c5fb1ce6e590b9fc0ee5ce1bfdcc",
+        "com/hypixel/hytale/server/core/modules/physics/SimplePhysicsProvider.class": "fce7255f81871d67902e77bb56364385b42cd951993a5efad3e3df5d9e58dfe7",
+        "com/hypixel/hytale/server/core/modules/physics/util/PhysicsMath.class": "1a96762719c64fd0d1c246d2789a02371e01e98ae0583adcd88b945edd0a3e1e",
+        "com/hypixel/hytale/builtin/fallingblocks/PlaceFallingBlockImpact.class": "5c0d8232d51b0fb6baefb95e7bbecab40d011e2c167198caf1fcc85e70dce580",
+        "com/hypixel/hytale/builtin/fallingblocks/BreakFallingBlockImpact.class": "182b91f462d935005ef33cd7515db9a1332e93f872f2445abd4cf7b59bfed206",
+        "com/hypixel/hytale/builtin/fallingblocks/ExplodeFallingBlockImpact.class": "a798405fbef339002006f3e25dfd095cdc4806ff9c2359a8aa713f8a62b6f56c",
+        "com/hypixel/hytale/server/core/asset/type/blocktype/config/fallingblocks/FallingBlockSettings.class": "47b132969f36cad7936ba6846988fc240a31de782bf01639766886586e6f8557",
+        "com/hypixel/hytale/server/core/asset/type/blocktype/config/fallingblocks/FallingBlockImpact.class": "9c2f3e7954746ac57725dcb3258d65de5f37ab7dac4b1570d1395ea4167ec89c",
+        "com/hypixel/hytale/server/core/universe/world/WorldConfig.class": "4fb73bd1feb7295b8dccc9fcdec5fa46856a5758f63b2b9e8c45b1e6aeb8cd0a",
+        "com/hypixel/hytale/builtin/blocktick/system/ChunkBlockTickSystem.class": "7e22299163160c6addd27c76d4b24146db4df957513bd74e9232c77f80bdfd07",
+        "com/hypixel/hytale/server/core/asset/type/blocktick/BlockTickManager.class": "ac900accf98d38712127bdd1e3dbc83be6587e30d6a5e1da7fc898dc7cd3051e",
+        "com/hypixel/hytale/server/core/asset/type/blocktick/config/RandomTickProcedure.class": "413cff9148b76d9a51e490483a493b5df79bbd38af9b1794a8b948d5e2c0f82b",
+        "com/hypixel/hytale/builtin/blocktick/procedure/BasicChanceBlockGrowthProcedure.class": "b177156616cf2509b18393b9be2c42591c0c402ba21adfc57b076b703d68b1a8",
+        "com/hypixel/hytale/builtin/blocktick/procedure/SplitChanceBlockGrowthProcedure.class": "5faca53693a1665d9d3d05a685e3e379a3bfe43b6e25a31b75327c900f72707d",
+        "com/hypixel/hytale/server/core/modules/interaction/interaction/config/client/BreakBlockInteraction.class": "a87ac67e547c3a1c12c3a17b21a674c5c87f6ae15d5a3e6dd04b74b889a1c4bc",
+        "com/hypixel/hytale/server/core/modules/interaction/interaction/config/client/PlaceBlockInteraction.class": "d6757905a4ab8eb322afe47b2b3e1f31e1d9d0f28d7dcd775ca0b7dc8653b063",
+        "com/hypixel/hytale/server/core/modules/interaction/interaction/config/RootInteraction.class": "5477106a6844b45f1e85ff46aeb70ed69388c3ede608e53181e87a34b2e807e8",
+        "com/hypixel/hytale/server/core/modules/interaction/interaction/config/InteractionRules.class": "ed2914af05811a8099cd30d8f466b9fbb696809d28511ed0f384adca2574711a",
+        "com/hypixel/hytale/server/core/modules/interaction/interaction/config/Interaction.class": "acdbb91bfb69a7ade5bb5523aca5c4fc2e33397bbca9370c060fa7335c06295b",
+        "com/hypixel/hytale/server/core/modules/interaction/interaction/config/SimpleInteraction.class": "70b954efd45269318aaf27e56013ec5a9b3e751daaac9531f6dee11ce9739f4e",
+        "com/hypixel/hytale/server/core/modules/interaction/interaction/config/client/SimpleBlockInteraction.class": "5b1abaebd06df66a771ca3bd351bfc67ac93592e771c54e180ac5d5879e7b5f6",
+        "com/hypixel/hytale/server/core/universe/world/chunk/WorldChunk.class": "a91ba20088de8c30d3f518dd71416ec3209e32f574b2bfcf9838a74de05e2752",
+        "com/hypixel/hytale/server/core/universe/world/chunk/section/BlockSection.class": "ef6f84a7a4408289abc161cddec581c6ffe38c38a111c832708670c3c9165e5c",
+        "com/hypixel/hytale/builtin/triggervolumes/effect/builtin/PlaceBlockEffect.class": "7673eedb13640cc1f193b4fa2d0b19a92e1c8454811f612fdc9e61d5695f1b45",
+        "com/hypixel/hytale/builtin/triggervolumes/effect/builtin/ReplaceBlockTypeEffect.class": "e5d6124caa4131bf721a772fa46f11a7c1281b2e743802639450293de5174453",
+        "com/hypixel/hytale/builtin/triggervolumes/effect/builtin/GiveItemEffect.class": "d118b64a0f7707be44362be036ee36f9c0cf66a1124f5bf445e5324dc1092139",
+        "com/hypixel/hytale/builtin/triggervolumes/effect/builtin/RunRootInteractionEffect.class": "c85b7ab9455be51f7ba4670339ed4faa4b1c56186b945482ff067a5b24534d12"
+      },
+      "open_gaps": [
+        "BlockHealthModule$BlockHealthSystem.class absent on 0.7.2; WorldChunk.setBlock removed (a claimed placement path).",
+        "Of 78 pinned classes, 19 are byte-identical, 58 changed and 1 (BlockHealthSystem) absent (BlockType: 160 methods added, 154 removed); the asset census and tick-procedure pins are not recorded for 0.7.2."
+      ]
+    },
+    "explosion_mutation": {
+      "EXPECTED_SERVER_SHA256": "23f71f03763422ce7c04df191db49cd0e7d87d43b12baad75c43fdc202410aff",
+      "EXPECTED_SEMANTIC_SHA256": null,
+      "CLASS_SHA256": {
+        "com/hypixel/hytale/server/core/entity/ExplosionUtils.class": "d44cd12a8c0f99996e7efe33c9742ce88688b32f7f14d8115b32886723d3f322",
+        "com/hypixel/hytale/server/core/entity/ExplosionConfig.class": "59a7043c5e08ee5383b09daced41c5fb4278e9dff1657475c7af3d2b82efa4de",
+        "com/hypixel/hytale/math/block/BlockSphereUtil.class": "cf8ce2f25dc649a43b331a2094a6c4af70e9b874fa075ec4d1b301072ac80ec6",
+        "com/hypixel/hytale/server/core/util/TargetUtil.class": "890f2f088a038eaaec41a26823e8d10acdcd187c3ec3114be1bcfcf2cccf95a6",
+        "com/hypixel/hytale/server/core/modules/interaction/BlockHarvestUtils.class": "6e67f6eedfacbdf12eb8e47d8eea51c833bcb4d926ea5c530b97a29504d3d2e3",
+        "com/hypixel/hytale/server/core/modules/blockhealth/BlockHealth.class": "be40d4071370fee7f218ad9e2ab35a57c1972965b719da594caa94017706aa08",
+        "com/hypixel/hytale/server/core/modules/blockhealth/BlockHealthChunk.class": "a2ab79790dc7439f6a8c480ec7778f40f89c1264ba588ecf748a121a86495d6c",
+        "com/hypixel/hytale/server/core/universe/world/chunk/section/BlockSection.class": "ef6f84a7a4408289abc161cddec581c6ffe38c38a111c832708670c3c9165e5c",
+        "com/hypixel/hytale/server/core/util/FillerBlockUtil.class": "59c0dc7532b1fdf1b59d69a25392e93d9b59a6f9539b99540706cd38b9a2d904",
+        "com/hypixel/hytale/server/core/modules/entity/item/ItemComponent.class": "4045d4944f0f089a5393502228013ea7e8fd41d44232f69abf9c244762ba32f0",
+        "com/hypixel/hytale/server/core/inventory/ItemStack.class": "eddd71681db28b929cf3bb43ee063345d116c0e812546a28839187675d5f7c24",
+        "com/hypixel/hytale/server/core/asset/type/blocktype/config/BlockType.class": "14ba34c791201907e4d251b59bbbaf1ad007e22011395998f0aa6e4a374629f8"
+      },
+      "ASSET_SHA256": {
+        "Server/Item/Items/Recipe/Recipe_Book_Magic_Air.json": "02660eb8b65af7a16608c6e0f481d8a27ccae9d8da2ebac2ac3894fea6e321e5"
+      },
+      "open_gaps": [
+        "ExplosionUtils.performExplosion and BlockHarvestUtils.performBlockDamage removed (claimed explosion paths); DEBUG_SHAPES removed.",
+        "BlockHealthChunk fields +4 -1, methods +1 -14; BlockHealth fields +3 -2; the claimed health layout is not re-derived. 12 of 12 pinned classes differ."
+      ]
+    },
+    "explosion_dynamics": {
+      "EXPECTED_SERVER_SHA256": "23f71f03763422ce7c04df191db49cd0e7d87d43b12baad75c43fdc202410aff",
+      "EXPECTED_SEMANTIC_SHA256": null,
+      "CLASS_SHA256": {
+        "com/hypixel/hytale/server/core/entity/ExplosionUtils.class": "d44cd12a8c0f99996e7efe33c9742ce88688b32f7f14d8115b32886723d3f322",
+        "com/hypixel/hytale/server/core/modules/entity/damage/DamageSystems.class": "619a73604c012c13c02b550a65a40e8d50e802b9e9c9e395e539cf7bf65751ff"
+      },
+      "open_gaps": [
+        "ExplosionUtils.performExplosion removed (the claimed phase order lives on it); processTargetEntity and processTargetBlocks bodies changed (4 of 23).",
+        "The raw-damage and Math.round claims are not re-derived. 2 of 2 pinned classes differ (DamageSystems: no member or body change)."
+      ]
+    },
+    "crafting": {
+      "EXPECTED_SERVER_SHA256": "23f71f03763422ce7c04df191db49cd0e7d87d43b12baad75c43fdc202410aff",
+      "EXPECTED_SEMANTIC_SHA256": null,
+      "CLASS_SHA256": {
+        "com/hypixel/hytale/builtin/crafting/BenchRecipeRegistry.class": "7ce916b3e8292f97e96b3f48e09791ce952b6addc81ae34434267d3c21debe6d",
+        "com/hypixel/hytale/builtin/crafting/CraftingPlugin.class": "bb66eae05384069939e04229a4196b9ec95923c357bb4e0f040486ad7520deb4",
+        "com/hypixel/hytale/builtin/crafting/component/CraftingManager.class": "529e163b2639d7dc0ce71c9084c1fdb0b3b19b8b8bb457da48b02c6f1e50397e",
+        "com/hypixel/hytale/builtin/crafting/component/BenchBlock.class": "31dec275878a651321673efa2ab576a81176f66fa17f500c5ab4f1ec65b550cd",
+        "com/hypixel/hytale/builtin/crafting/component/ProcessingBenchBlock.class": "b65de516affb2517c5c90596e1ff1409eadc63e9186a65aff01d1eb803ecb619",
+        "com/hypixel/hytale/builtin/crafting/interaction/LearnRecipeInteraction.class": "4ddaa6aad7e2e31d564d916deb35df4383d61991fa7630cae55a4737f7886324",
+        "com/hypixel/hytale/builtin/crafting/interaction/OpenBenchPageInteraction.class": "511aee38cd0ca598bc6732428153ca4e27e65e6d341d5a5af3379450e36e58d3",
+        "com/hypixel/hytale/builtin/crafting/interaction/OpenProcessingBenchInteraction.class": "5f6175bd13fecee901e7c7f8e5061534ea641dc578dd1c2211ea9e1740356524",
+        "com/hypixel/hytale/builtin/crafting/window/BenchWindow.class": "326aed7e10c0f329b12257ef685fcc2b4d2d1c14a5fe045b62cecd7ec93a7e79",
+        "com/hypixel/hytale/builtin/crafting/window/CraftingWindow.class": "3c76dd0cdfcdf759642e6bf88792860cd5dab1abc3f9a562e6bb1a9e46b0366e",
+        "com/hypixel/hytale/builtin/crafting/window/SimpleCraftingWindow.class": "4f44f7f59ee64f56cb27d1e5b6850507e55635381d7f33d73fdcfcdbc976099b",
+        "com/hypixel/hytale/builtin/crafting/window/DiagramCraftingWindow.class": "46fd49f0c12105453e4264510986fa6d18628f269ffaa2e8380b9b27eeb16909",
+        "com/hypixel/hytale/builtin/crafting/window/FieldCraftingWindow.class": "d5f30d15f0dba1047b1e7d79911d5b2f907d8191e835a047cd9a70c7417e2d17",
+        "com/hypixel/hytale/builtin/crafting/window/StructuralCraftingWindow.class": "cf140e9e3cd814e87bb894b5cd02047451385c060b32fec9b31f225dd885f9d2",
+        "com/hypixel/hytale/protocol/packets/window/CraftRecipeAction.class": "6f29572da5cbd7628d29adfb246080147a90392cf3e92158bd5c0ef2cdb9478a",
+        "com/hypixel/hytale/server/core/asset/type/item/config/CraftingRecipe.class": "8da8e361799b66fd0e7b97613ac62a2cf813b9fff1f6643636b3b2662ea48158",
+        "com/hypixel/hytale/server/core/inventory/MaterialQuantity.class": "71c1a1dca8113b9182aa45e70fcca8ad51d972588e0caef74ddbf391e7347340",
+        "com/hypixel/hytale/server/core/inventory/InventoryComponent.class": "27fff18c35148cf1cb5d2b558a34e8896e3228ba53a21129c94f8627ec7f3cb8",
+        "com/hypixel/hytale/server/core/inventory/InventoryUtils.class": "ae237bf60bc5f4322c9c1d88ae9bb3153f146c51843278d9ffe5e56d1a680105",
+        "com/hypixel/hytale/server/core/inventory/ItemStack.class": "eddd71681db28b929cf3bb43ee063345d116c0e812546a28839187675d5f7c24",
+        "com/hypixel/hytale/server/core/inventory/container/InternalContainerUtilMaterial.class": "e36a4c79174ccfc766590d862b9e50e074627cf20908d1607a2ecf465974fbd1",
+        "com/hypixel/hytale/server/core/inventory/container/SimpleItemContainer.class": "77ee4fe19c06a1c537c56759cb5dd77a79b1fe7f887237a3eea9fc515326f4a1",
+        "com/hypixel/hytale/server/core/modules/entity/player/PlayerSettings.class": "a9802a71e988e01383bcf47d8f0949b3a9ac55b1b8058b6b1f3d38a078fed993",
+        "com/hypixel/hytale/server/core/entity/entities/player/data/PlayerConfigData.class": "e90b0006def06258b573b7358e864ea55fcbfab527f605a38faba902fa9873ef"
+      },
+      "open_gaps": [
+        "CraftingManager.craftItem body changed (9 of 52 bodies); benchHasRequiredAugmentTags and resolveCraftQuantity added.",
+        "CraftingRecipe methods +11 -9; MaterialQuantity methods +11 -9; ProcessingBenchBlock slot sets now ShortSet (fields +2 -2).",
+        "Recipe corpus 1,947 -> 2,047 (410 + 1,637 assets) is an (a) expectation; 16 of 24 pinned classes differ."
+      ]
+    },
+    "inventory": {
+      "EXPECTED_SERVER_SHA256": "23f71f03763422ce7c04df191db49cd0e7d87d43b12baad75c43fdc202410aff",
+      "EXPECTED_SEMANTIC_SHA256": null,
+      "CLASS_SHA256": {
+        "com/hypixel/hytale/server/core/inventory/Inventory.class": "ea0bbb3cd81880bbe4267d403365c8908641523253c3b3816af4f649993250b4",
+        "com/hypixel/hytale/server/core/inventory/InventoryComponent.class": "27fff18c35148cf1cb5d2b558a34e8896e3228ba53a21129c94f8627ec7f3cb8",
+        "com/hypixel/hytale/server/core/inventory/ItemStack.class": "eddd71681db28b929cf3bb43ee063345d116c0e812546a28839187675d5f7c24",
+        "com/hypixel/hytale/server/core/inventory/container/ItemContainer.class": "89246746c731b24a1e71749a3485bfe294995a421e5990da1803c3a1bc2cb709"
+      },
+      "open_gaps": [
+        "InventoryComponent adds DUMMY_SECTION_ID -10, ABILITIES_SECTION_ID -11, RUNE_BAG_SECTION_ID -12 (ABILITIES_LINES 2); the six-container transport (-2, -3, -1, -5, -8, -9) omits them.",
+        "ItemStack.fromPacket removed; 17 of 64 ItemStack bodies changed. Inventory.getActive* and ItemContainer.getCapacity are byte-identical in body. 4 of 4 pinned classes differ in bytes."
+      ]
+    },
+    "entity_geometry": {
+      "EXPECTED_SERVER_SHA256": "23f71f03763422ce7c04df191db49cd0e7d87d43b12baad75c43fdc202410aff",
+      "EXPECTED_SEMANTIC_SHA256": null,
+      "CLASS_SHA256": {
+        "com/hypixel/hytale/server/core/modules/entity/component/BoundingBox.class": "c63820397024aa9a88d0aab9f7646f52ce8212b665da6944780ec294317cab77",
+        "com/hypixel/hytale/server/core/modules/entity/component/EntityScaleComponent.class": "52fab36313f4aef0f596a68070ab5507ff9147e5bbec8acbf1cc8eb8b768fb71",
+        "com/hypixel/hytale/server/core/modules/entity/system/ModelSystems.class": "f353c928d079c8113210d890a450286622878adf87859ce08929772971b06b71",
+        "com/hypixel/hytale/server/core/modules/collision/TangiableEntitySpatialSystem.class": "ae04185012787bca3e3811732927d5932f49bfdad0e865a3a68a8ed2aba3a1c9",
+        "com/hypixel/hytale/server/npc/role/support/PositionCache.class": "9a12cfab97d768548472854e7908458bda82c77b9ef106a243861dd5c44ebc3e"
+      },
+      "open_gaps": [
+        "BoundingBox stores unscaledBox, scale and scaledDetailBoxes (fields +3); applyRotation, setBoundingBox and getDetailBoxes changed (7 of 16 bodies); the claimed rotation-adjusted AABB is not re-derived.",
+        "PositionCache changed as in perception (hasLineOfSight among 17 of 84 bodies); the claimed entity LOS rule (entity_body_blocks_los: False) is not re-derived. 3 of 5 pinned classes are identical."
+      ]
+    }
+  }
+}

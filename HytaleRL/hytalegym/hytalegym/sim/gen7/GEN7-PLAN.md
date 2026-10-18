@@ -296,6 +296,12 @@ render admits 1,485 recipes (1,446 commit alone, 1,305 at a fresh bench; all 211
 diagram actions (stage 5, 447 timed rows need processing benches), a live Region-step run of the executor path, and the fieldcraft
 timed recipe `Weapon_Axe_Crude` (no bench requirement; native timing unmeasured).
 
+**Phase 5, the source-pin audits on 0.7.2 (2026-10-18; FIDELITY-0.7.2.md section (ad)).** 0 of 11 pass before and after; the
+harness now fails closed on recorded 0.7.2 rows instead of crashing (absent-safe digests; pins keyed by the audited jar's
+release line in `worldgen/source_pin_baselines.py` and `source_pin_baselines_072.json`; the 0.5 line byte-identical on the 0.5.10
+control). Each audit's finding names the simulator work it implies (the table in (ad)); the terrain recapture stays gated on all
+eleven. Next: re-derive the claims per audit or run a live differential, the inventory row first (the likeliest false alarm).
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the
