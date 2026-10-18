@@ -273,3 +273,8 @@ def validate(payload: Any) -> None:
     """
 
     validate_against_schema(payload, SHARED_STATE_JSON_SCHEMA)
+
+
+EXECUTIVE_SECTION_JSON_SCHEMA: dict[str, Any] = _EXECUTIVE_SECTION_SCHEMA
+"""The executive section's schema: ExecutiveState's keys plus the words per goal (intent, when, note) and
+``notes``. What the LLM replies in (``executive/anthropic_backend.py``)."""

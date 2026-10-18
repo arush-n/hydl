@@ -44,6 +44,7 @@ Conventions:
 
 from __future__ import annotations
 
+import re
 import json
 import math
 from dataclasses import dataclass
@@ -96,7 +97,7 @@ BELIEF_FEATURE_NAMES: tuple[str, ...] = (
 )
 BELIEF_FEATURE_COUNT: int = len(BELIEF_FEATURE_NAMES)
 
-_EXECUTIVE_KEYS = frozenset({"version", "issued_tick", "goals", "budget", "facts"})
+_EXECUTIVE_KEYS = frozenset({"version", "issued_tick", "goals", "budget", "facts", "squads", "objectives"})
 _GOAL_KEYS = frozenset(
     {
         "skill_id",
@@ -106,9 +107,13 @@ _GOAL_KEYS = frozenset(
         "horizon_seconds",
         "deadline_tick",
         "condition",
+        "addressee",
+        "objective",
     }
 )
 _CONDITION_KEYS = frozenset({"kind", "argument"})
+_SQUAD_KEYS = frozenset({"name", "lanes"})
+_OBJECTIVE_KEYS = frozenset({"id", "text", "status", "deadline_tick"})
 _BUDGET_KEYS = frozenset(
     {"jev_latency_ms", "search_expansions", "executive_calls_per_minute"}
 )
@@ -257,6 +262,72 @@ CONDITION_ARGUMENT_UNITS: dict[str, str] = {
 """The kinds that take a numeric argument, with the unit of the number (fraction: 0 to 1 of full health)."""
 
 
+ADDRESSEE_ALL: str = "all"
+"""The addressee of a goal meant for every lane; the others are ``lane:<n>`` and ``squad:<name>``."""
+_ADDRESSEE = re.compile(r"^(?:all|lane:\d+|squad:[a-z][a-z0-9_]*)$")
+_IDENT = re.compile(r"^[a-z][a-z0-9_]*$")
+OBJECTIVE_STATUSES: tuple[str, ...] = ("open", "done", "dropped")
+"""The states of an executive objective."""
+
+
+@dataclass(frozen=True)
+class Squad:
+    """A named group of lanes the executive addresses goals to (host-side record, SYSTEM_ONE 9.15).
+
+    Attributes:
+        name: ``[a-z][a-z0-9_]*``; referenced by goals as ``squad:<name>``.
+        lanes: The member lanes, non-negative ints, each once.
+
+    Raises:
+        TypeError: If a field has the wrong type.
+        ValueError: If the name is malformed or a lane repeats.
+    """
+
+    name: str
+    lanes: tuple[int, ...]
+
+    def __post_init__(self) -> None:
+        _text(self.name, "Squad.name")
+        if not _IDENT.match(self.name):
+            raise ValueError(f"Squad.name must match [a-z][a-z0-9_]*, got {self.name!r}")
+        lanes = tuple(_non_negative_int(lane, "Squad.lanes[]") for lane in self.lanes)
+        if len(set(lanes)) != len(lanes):
+            raise ValueError(f"Squad {self.name!r} repeats a lane: {lanes}")
+        object.__setattr__(self, "lanes", lanes)
+
+
+@dataclass(frozen=True)
+class Objective:
+    """A long-term aim of the executive with a stable id that goals point at (host-side record, SYSTEM_ONE 9.15).
+
+    Attributes:
+        id: ``[a-z][a-z0-9_]*``, unique in the state.
+        text: What the objective is, in the LLM's words (may be empty).
+        status: One of OBJECTIVE_STATUSES.
+        deadline_tick: A non-negative tick, or None.
+
+    Raises:
+        TypeError: If a field has the wrong type.
+        ValueError: If the id is malformed, the status unknown, or the deadline negative.
+    """
+
+    id: str
+    text: str = ""
+    status: str = "open"
+    deadline_tick: int | None = None
+
+    def __post_init__(self) -> None:
+        _text(self.id, "Objective.id")
+        if not _IDENT.match(self.id):
+            raise ValueError(f"Objective.id must match [a-z][a-z0-9_]*, got {self.id!r}")
+        if not isinstance(self.text, str):
+            raise TypeError("Objective.text must be a string")
+        if self.status not in OBJECTIVE_STATUSES:
+            raise ValueError(f"Objective.status must be one of {OBJECTIVE_STATUSES}, got {self.status!r}")
+        if self.deadline_tick is not None:
+            object.__setattr__(self, "deadline_tick", _non_negative_int(self.deadline_tick, "Objective.deadline_tick"))
+
+
 @dataclass(frozen=True)
 class Condition:
     """A goal's typed condition: when the goal applies (host-side record, SYSTEM_ONE 9.12).
@@ -305,6 +376,9 @@ class GoalSpec:
             non-negative int, or None for no deadline.
         condition: The typed condition under which the goal applies, a
             :class:`Condition`, or None when it always applies (SYSTEM_ONE 9.12).
+        addressee: Who the goal is for: ``all`` (default), ``lane:<n>`` (one lane)
+            or ``squad:<name>`` (a squad of the state; SYSTEM_ONE 9.15).
+        objective: The id of the objective this goal serves, or None.
 
     Raises:
         TypeError: If a field has the wrong Python type.
@@ -318,6 +392,8 @@ class GoalSpec:
     horizon_seconds: float = 10.0
     deadline_tick: int | None = None
     condition: Condition | None = None
+    addressee: str = ADDRESSEE_ALL
+    objective: str | None = None
 
     def __post_init__(self) -> None:
         """Validate the fields and normalize them to their documented types."""
@@ -350,6 +426,13 @@ class GoalSpec:
             raise TypeError(
                 f"GoalSpec.condition must be a Condition or None, got {type(self.condition).__name__}"
             )
+        _text(self.addressee, "GoalSpec.addressee")
+        if not _ADDRESSEE.match(self.addressee):
+            raise ValueError(f"GoalSpec.addressee must be all, lane:<n> or squad:<name>, got {self.addressee!r}")
+        if self.objective is not None:
+            _text(self.objective, "GoalSpec.objective")
+            if not _IDENT.match(self.objective):
+                raise ValueError(f"GoalSpec.objective must match [a-z][a-z0-9_]*, got {self.objective!r}")
 
 
 @dataclass(frozen=True)
@@ -411,6 +494,8 @@ class ExecutiveState:
         goals: At most ``MAX_GOALS`` :class:`GoalSpec` values.
         budget: The :class:`ComputeBudget` in force.
         facts: Non-empty strings the executive judges relevant.
+        squads: The named lane groups goals may address (SYSTEM_ONE 9.15).
+        objectives: The long-term aims with stable ids that goals may point at.
 
     Raises:
         TypeError: If a field has the wrong Python type.
@@ -423,6 +508,8 @@ class ExecutiveState:
     goals: tuple[GoalSpec, ...]
     budget: ComputeBudget
     facts: tuple[str, ...]
+    squads: tuple[Squad, ...] = ()
+    objectives: tuple[Objective, ...] = ()
 
     def __post_init__(self) -> None:
         """Validate every field and normalize sequences to tuples."""
@@ -449,6 +536,27 @@ class ExecutiveState:
         object.__setattr__(
             self, "facts", _text_tuple(self.facts, "ExecutiveState.facts")
         )
+        squads = tuple(self.squads)
+        for position, squad in enumerate(squads):
+            if not isinstance(squad, Squad):
+                raise TypeError(f"ExecutiveState.squads[{position}] must be a Squad")
+        names = [squad.name for squad in squads]
+        if len(set(names)) != len(names):
+            raise ValueError(f"ExecutiveState.squads repeats a name: {names}")
+        object.__setattr__(self, "squads", squads)
+        objectives = tuple(self.objectives)
+        for position, objective in enumerate(objectives):
+            if not isinstance(objective, Objective):
+                raise TypeError(f"ExecutiveState.objectives[{position}] must be an Objective")
+        ids = [objective.id for objective in objectives]
+        if len(set(ids)) != len(ids):
+            raise ValueError(f"ExecutiveState.objectives repeats an id: {ids}")
+        object.__setattr__(self, "objectives", objectives)
+        for slot, goal in enumerate(goals):
+            if goal.addressee.startswith("squad:") and goal.addressee[6:] not in names:
+                raise ValueError(f"goal {slot} addresses unknown squad {goal.addressee[6:]!r}")
+            if goal.objective is not None and goal.objective not in ids:
+                raise ValueError(f"goal {slot} points at unknown objective {goal.objective!r}")
 
     def to_json(self) -> str:
         """Serialize to canonical JSON text that matches EXECUTIVE_STATE_JSON_SCHEMA.
@@ -517,6 +625,10 @@ class ExecutiveState:
                 executive_calls_per_minute=budget["executive_calls_per_minute"],
             ),
             facts=_json_array(root["facts"], "ExecutiveState.facts"),
+            squads=tuple(_squad_from_mapping(item) for item in _json_array(root["squads"], "ExecutiveState.squads")),
+            objectives=tuple(
+                _objective_from_mapping(item) for item in _json_array(root["objectives"], "ExecutiveState.objectives")
+            ),
         )
 
 
@@ -535,6 +647,8 @@ def _executive_mapping(state: ExecutiveState) -> dict[str, Any]:
                 "horizon_seconds": goal.horizon_seconds,
                 "deadline_tick": goal.deadline_tick,
                 "condition": _condition_mapping(goal.condition),
+                "addressee": goal.addressee,
+                "objective": goal.objective,
             }
             for goal in state.goals
         ],
@@ -544,6 +658,11 @@ def _executive_mapping(state: ExecutiveState) -> dict[str, Any]:
             "executive_calls_per_minute": state.budget.executive_calls_per_minute,
         },
         "facts": list(state.facts),
+        "squads": [{"name": squad.name, "lanes": list(squad.lanes)} for squad in state.squads],
+        "objectives": [
+            {"id": item.id, "text": item.text, "status": item.status, "deadline_tick": item.deadline_tick}
+            for item in state.objectives
+        ],
     }
 
 
@@ -593,6 +712,18 @@ def _condition_from_mapping(item: Any) -> Condition | None:
     return Condition(kind=entry["kind"], argument=entry["argument"])
 
 
+def _squad_from_mapping(item: Any) -> Squad:
+    entry = _json_object(item, "ExecutiveState.squads[]")
+    _exact_keys(entry, _SQUAD_KEYS, "squad")
+    return Squad(name=entry["name"], lanes=tuple(_json_array(entry["lanes"], "squad.lanes")))
+
+
+def _objective_from_mapping(item: Any) -> Objective:
+    entry = _json_object(item, "ExecutiveState.objectives[]")
+    _exact_keys(entry, _OBJECTIVE_KEYS, "objective")
+    return Objective(id=entry["id"], text=entry["text"], status=entry["status"], deadline_tick=entry["deadline_tick"])
+
+
 def _goal_from_mapping(item: Any) -> GoalSpec:
     """Build one GoalSpec from its JSON object, with exact key checking."""
 
@@ -606,6 +737,8 @@ def _goal_from_mapping(item: Any) -> GoalSpec:
         horizon_seconds=entry["horizon_seconds"],
         deadline_tick=entry["deadline_tick"],
         condition=_condition_from_mapping(entry["condition"]),
+        addressee=entry["addressee"],
+        objective=entry["objective"],
     )
 
 
@@ -615,7 +748,7 @@ EXECUTIVE_STATE_JSON_SCHEMA: dict[str, Any] = {
     "description": "Executive state E_t from experimental/neural_agent/contracts.py.",
     "type": "object",
     "additionalProperties": False,
-    "required": ["version", "issued_tick", "goals", "budget", "facts"],
+    "required": ["version", "issued_tick", "goals", "budget", "facts", "squads", "objectives"],
     "properties": {
         "version": {"type": "integer", "minimum": 0, "maximum": 2147483647},
         "issued_tick": {"type": "integer", "minimum": 0, "maximum": 2147483647},
@@ -633,6 +766,8 @@ EXECUTIVE_STATE_JSON_SCHEMA: dict[str, Any] = {
                     "horizon_seconds",
                     "deadline_tick",
                     "condition",
+                    "addressee",
+                    "objective",
                 ],
                 "properties": {
                     "skill_id": {"type": "string", "minLength": 1},
@@ -665,6 +800,15 @@ EXECUTIVE_STATE_JSON_SCHEMA: dict[str, Any] = {
                             "argument": {"type": ["number", "null"]},
                         },
                     },
+                    "addressee": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Who the goal is for: all, lane:<n> for one NPC, or squad:<name> for a squad listed in squads.",
+                    },
+                    "objective": {
+                        "type": ["string", "null"],
+                        "description": "The id of the objective this goal serves, or null.",
+                    },
                 },
             },
         },
@@ -685,6 +829,34 @@ EXECUTIVE_STATE_JSON_SCHEMA: dict[str, Any] = {
         "facts": {
             "type": "array",
             "items": {"type": "string", "minLength": 1},
+        },
+        "squads": {
+            "type": "array",
+            "description": "Named groups of lanes (NPCs) that goals may address as squad:<name>.",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["name", "lanes"],
+                "properties": {
+                    "name": {"type": "string", "minLength": 1},
+                    "lanes": {"type": "array", "items": {"type": "integer", "minimum": 0}},
+                },
+            },
+        },
+        "objectives": {
+            "type": "array",
+            "description": "Your long-term aims with stable ids; goals point at them through objective.",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["id", "text", "status", "deadline_tick"],
+                "properties": {
+                    "id": {"type": "string", "minLength": 1},
+                    "text": {"type": "string"},
+                    "status": {"type": "string", "enum": list(OBJECTIVE_STATUSES)},
+                    "deadline_tick": {"type": ["integer", "null"], "minimum": 0},
+                },
+            },
         },
     },
 }
@@ -734,9 +906,11 @@ def executive_arrays(
 ) -> ExecutiveArrays:
     """Lower an ExecutiveState into the batched arrays that the JEV reads.
 
-    The same state is replicated to every lane. Goal ``g`` of ``state`` fills
-    slot ``g``. Unused slots hold ``skill_index`` -1, ``goal_valid`` False and
-    zero priority and parameters.
+    Goal ``g`` of ``state`` fills slot ``g`` on every lane, and is valid
+    (``goal_valid``) only on the lanes its addressee names: every lane for
+    ``all``, one lane for ``lane:<n>``, the squad's members for ``squad:<name>``
+    (SYSTEM_ONE 9.15). Unused slots hold ``skill_index`` -1, ``goal_valid`` False
+    and zero priority and parameters.
 
     Args:
         state: The executive state E_t to lower.
@@ -781,7 +955,8 @@ def executive_arrays(
         skill_index[:, slot] = index_of[goal.skill_id]
         priority[:, slot] = goal.priority
         params[:, slot, : len(goal.params)] = goal.params
-        goal_valid[:, slot] = True
+        for lane in _addressed_lanes(goal.addressee, lanes, state.squads):
+            goal_valid[lane, slot] = True
 
     budget_row = np.asarray(
         [
@@ -799,6 +974,21 @@ def executive_arrays(
         budget=jnp.asarray(np.tile(budget_row, (lanes, 1))),
         version=jnp.full((lanes,), state.version, dtype=jnp.int32),
     )
+
+
+def _addressed_lanes(addressee: str, lanes: int, squads: Sequence[Squad]) -> tuple[int, ...]:
+    """The lanes (below ``lanes``) a goal with ``addressee`` is valid on."""
+
+    if addressee == ADDRESSEE_ALL:
+        return tuple(range(lanes))
+    if addressee.startswith("lane:"):
+        lane = int(addressee[5:])
+        return (lane,) if lane < lanes else ()
+    name = addressee[6:]
+    for squad in squads:
+        if squad.name == name:
+            return tuple(lane for lane in squad.lanes if lane < lanes)
+    return ()
 
 
 def empty_executive_arrays(batch: int) -> ExecutiveArrays:
@@ -1519,6 +1709,10 @@ __all__ = [
     "Condition",
     "CONDITION_KINDS",
     "CONDITION_ARGUMENT_UNITS",
+    "ADDRESSEE_ALL",
+    "OBJECTIVE_STATUSES",
+    "Objective",
+    "Squad",
     "JevBudget",
     "JevInstance",
     "JevMode",

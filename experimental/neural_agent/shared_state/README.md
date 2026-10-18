@@ -17,7 +17,7 @@ Import path: `experimental.neural_agent.shared_state` (unchanged by the 2026-10-
 | `sections/events.py` | 69 | `EventsSection`: active interrupt events per lane. Writer: the runtime through the session. |
 | `document.py` | 243 | `SharedState`: the document, `write(section, value, writer=, tick=)`, versions, JSON round trip, `_snapshot`. |
 | `views/briefing.py` | 447 | The LLM's view as typed rows: per-NPC situation in words, goal in force with its condition as the decision layer read it, current request with its latest status, last outcome, events; questions; rejections; status counts; the delta since the LLM's version. |
-| `views/render.py` | 354 | `ViewOptions(format, tick_seconds, lanes, delta, rejections)`; renderers `to_markdown`, `to_json`, `to_compact`; `estimate_tokens`; the information-budget CLI. |
+| `views/render.py` | 380 | `ViewOptions(format, tick_seconds, lanes, squad, delta, rejections)`; renderers `to_markdown`, `to_json`, `to_compact`; `estimate_tokens`; the information-budget CLI. |
 | `views/llm.py` | 24 | `view_for_llm(state, options=None)`: the briefing rendered (markdown by default). |
 | `views/jev.py`, `views/skills.py` | 128, 58 | The typed view the decision layer reads; the payload view the skills read. |
 | `writers.py` | 238 | `SessionScribe` (belief, events, skills, decision at the host cadence; outcomes on report), `information_request_record`, `goal_reading`. |
@@ -46,7 +46,9 @@ never shown as zero; the latent is never shown; the "since your version" block l
 after the LLM's `issued_tick`; lists are bounded by the section limits, so a long episode does not grow the
 view.
 
-## Next (task #46)
+## Squads and objectives (2026-10-18, SYSTEM_ONE 9.15)
 
-Squads: an addressee per goal, one notepad per squad with a lane per NPC, a squad summary row above the NPC
-rows. Objectives with stable ids that goals point at, with outcomes rolled up per objective.
+A goal's `addressee` (`all`, `lane:<n>`, `squad:<name>`) and the executive's `squads` decide on which lanes the
+goal is valid; the briefing shows each goal's addressee and objective, the squads, an objectives table with the
+outcomes of the goals' skills rolled up, and each NPC's squads. `ViewOptions(squad="red")` renders one squad
+from the shared notepad. Next: the backend writing the full executive section with words, then the first live run.

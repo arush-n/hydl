@@ -10,7 +10,7 @@ another session). Map last updated **2026-10-18**; the dated state of everything
 | | |
 |---|---|
 | Decision record | `agents/design/ADR-001-three-level-agent.md`. Local-only (excluded through `.git/info/exclude`); pinned by sha256 `6d81f8b7fb660fe0e66c9be9555c6eddf57ae3840dc07daf3d88442219768594` in `docs/ARCHITECTURE.md` section 8. |
-| Shared interface | [`contracts.py`](contracts.py), sha256 `4f9af3aac67c54d967101c491241b8b14caa67d9ca307db97f1423d0e432498c`. The only module the others import shared names from; the pin is refreshed on every edit. |
+| Shared interface | [`contracts.py`](contracts.py), sha256 `65a056b0eded18af62910ee30f379a4e145d6f713c5f3f4daac812911dc887a3`. The only module the others import shared names from; the pin is refreshed on every edit. |
 | Where things stand | [`docs/MIDDLE_LAYER.md`](docs/MIDDLE_LAYER.md) (the decision layer: measured, built, designed, failed, per gate), [`docs/LEDGER.md`](docs/LEDGER.md) (every measurement with its command), [`skill_agent/BUILD.md`](skill_agent/BUILD.md) (the lower layer). |
 | The decisions that shape the design | [`docs/SYSTEM_ONE.md`](docs/SYSTEM_ONE.md) sections 8.12 and 9.9 to 9.13: typed fields are the contract, words are context; behaviour programs; the request stream; how the LLM communicates. |
 
@@ -34,7 +34,7 @@ present in this clone).
 
 | Path | What it is | Gate |
 |---|---|---|
-| [`contracts.py`](contracts.py) | The shared contract: constants, `GoalSpec` (with the typed `Condition`), `ExecutiveState` and its JSON schema, the lowered arrays, `ManagedGoal` / `make_goal`, `SkillContract` and the control table, the JEV protocol. | `test_na_contracts.py` |
+| [`contracts.py`](contracts.py) | The shared contract: constants, `GoalSpec` (typed `Condition`, `addressee`, `objective`), `ExecutiveState` with `Squad`s and `Objective`s and its JSON schema, the per-lane lowering, `ManagedGoal` / `make_goal`, `SkillContract` and the control table, the JEV protocol. | `test_na_contracts.py` |
 | [`shared_state/`](shared_state/__init__.py) | The scratchpad S_t as a package: `_common` (constants, validation), `schema` (JSON Schema, `validate`), `sections/` (executive, belief, decision, requests, skills, events: one module each), `document` (`SharedState`), `views/` (`briefing` and `render`: the LLM's briefing in markdown / json / compact behind `ViewOptions`; `jev`, `skills`: the other readers' views), `writers` (the session's scribe; `shared_state_writers.py` is an import shim). The import path `experimental.neural_agent.shared_state` is unchanged. | `test_na_shared_state.py` |
 | [`requests.py`](requests.py) | The request stream between Levels 2 and 1: `ActionRequest`, `RequestArgs`, `RequestStatus` (with `signal`), validation with rejection codes, `ArgumentSchema`. | `test_na_requests.py` |
 | [`session.py`](session.py) | One continuous run of the stack: executive seam, host deciders (the commitment-honouring seam, misses, `on_tick`), the scribe, the questions channel. | `test_na_session.py` |

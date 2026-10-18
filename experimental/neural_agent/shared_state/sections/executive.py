@@ -18,6 +18,9 @@ from experimental.neural_agent.contracts import (
     Condition,
     ExecutiveState,
     GoalSpec,
+    ADDRESSEE_ALL,
+    Objective,
+    Squad,
 )
 from experimental.neural_agent.executive.store import validate_against_schema
 
@@ -40,7 +43,8 @@ class GoalEntry:
     """One goal as the LLM writes it: GoalSpec's typed fields plus its own words.
 
     Attributes:
-        skill_id, priority, params, constraints, horizon_seconds, deadline_tick, condition: As in
+        skill_id, priority, params, constraints, horizon_seconds, deadline_tick, condition, addressee,
+        objective: As in
             :class:`GoalSpec`, and validated by it. ``constraints`` labels (for example
             ``"on_damage"``) stay typed hints beside the words.
         intent: What the LLM wants from this goal, free text. May be empty.
@@ -55,6 +59,8 @@ class GoalEntry:
     horizon_seconds: float = 10.0
     deadline_tick: int | None = None
     condition: Condition | None = None
+    addressee: str = ADDRESSEE_ALL
+    objective: str | None = None
     intent: str = ""
     when: str = ""
     note: str = ""
@@ -94,6 +100,7 @@ class ExecutiveSection:
             version, not the document version), validated by it.
         goals: At most ``MAX_GOALS`` :class:`GoalEntry` values; goal k is slot k when lowered.
         notes: The LLM's working notes, the idea behind the goals. May be empty.
+        squads, objectives: As in :class:`ExecutiveState` (SYSTEM_ONE 9.15).
     """
 
     version: int = 0
@@ -102,25 +109,31 @@ class ExecutiveSection:
     budget: ComputeBudget = field(default_factory=ComputeBudget)
     facts: tuple[str, ...] = ()
     notes: str = ""
+    squads: tuple[Squad, ...] = ()
+    objectives: tuple[Objective, ...] = ()
 
     def __post_init__(self) -> None:
         """Validate through ExecutiveState and normalize the sequences to tuples."""
 
         goals = _instances(self.goals, GoalEntry, "ExecutiveSection.goals")
         state = ExecutiveState(
-            self.version, self.issued_tick, tuple(entry_to_spec(goal) for goal in goals), self.budget, self.facts
+            self.version, self.issued_tick, tuple(entry_to_spec(goal) for goal in goals), self.budget, self.facts,
+            squads=self.squads, objectives=self.objectives,
         )
         object.__setattr__(self, "version", state.version)
         object.__setattr__(self, "issued_tick", state.issued_tick)
         object.__setattr__(self, "goals", goals)
         object.__setattr__(self, "facts", state.facts)
+        object.__setattr__(self, "squads", state.squads)
+        object.__setattr__(self, "objectives", state.objectives)
         _string(self.notes, "ExecutiveSection.notes")
 
     def to_executive_state(self) -> ExecutiveState:
         """Return E_t without the words: every typed field kept, the text dropped."""
 
         return ExecutiveState(
-            self.version, self.issued_tick, tuple(entry_to_spec(goal) for goal in self.goals), self.budget, self.facts
+            self.version, self.issued_tick, tuple(entry_to_spec(goal) for goal in self.goals), self.budget, self.facts,
+            squads=self.squads, objectives=self.objectives,
         )
 
     @classmethod
@@ -130,7 +143,7 @@ class ExecutiveSection:
         if not isinstance(state, ExecutiveState):
             raise TypeError(f"state must be an ExecutiveState, got {type(state).__name__}")
         goals = tuple(spec_to_entry(goal) for goal in state.goals)
-        return cls(state.version, state.issued_tick, goals, state.budget, state.facts)
+        return cls(state.version, state.issued_tick, goals, state.budget, state.facts, squads=state.squads, objectives=state.objectives)
 
     def to_dict(self) -> dict[str, Any]:
         """Return the JSON-shaped mapping: ExecutiveState's keys, the words per goal, and ``notes``."""
@@ -158,5 +171,8 @@ class ExecutiveSection:
             spec_to_entry(spec, **{key: goal[key] for key in _TEXT_FIELDS})
             for spec, goal in zip(state.goals, mapping["goals"])
         )
-        return cls(state.version, state.issued_tick, goals, state.budget, state.facts, mapping["notes"])
+        return cls(
+            state.version, state.issued_tick, goals, state.budget, state.facts, mapping["notes"],
+            squads=state.squads, objectives=state.objectives,
+        )
 

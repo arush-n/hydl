@@ -10,15 +10,15 @@ whether the delta block is included.
 
 from __future__ import annotations
 
-from .briefing import briefing
-from .render import ViewOptions, render
+from .render import ViewOptions
 
 
 def view_for_llm(state, options: ViewOptions | None = None) -> str:
     """Render the briefing of ``state`` for the LLM (markdown unless ``options`` says otherwise)."""
 
-    options = options or ViewOptions()
-    return render(briefing(state, lanes=options.lanes, rejections=options.rejections), options)
+    from .render import view
+
+    return view(state, options)
 
 
 __all__ = ["view_for_llm"]

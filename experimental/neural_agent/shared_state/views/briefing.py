@@ -86,6 +86,20 @@ class GoalRow:
     intent: str
     when: str
     note: str
+    addressee: str
+    objective: str | None
+
+
+@dataclass(frozen=True)
+class ObjectiveRow:
+    """One executive objective with the goals that serve it and the outcomes of those goals' skills."""
+
+    id: str
+    text: str
+    status: str
+    deadline_tick: int | None
+    goal_slots: tuple[int, ...]
+    outcomes: dict[str, int]
 
 
 @dataclass(frozen=True)
@@ -159,6 +173,7 @@ class NpcRow:
     request: RequestRow | None
     last_outcome: OutcomeRow | None
     events: tuple[str, ...]
+    squads: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -169,6 +184,8 @@ class ExecutiveRow:
     facts: tuple[str, ...]
     notes: str
     budget: dict[str, float]
+    squads: tuple[tuple[str, tuple[int, ...]], ...]
+    objectives: tuple[ObjectiveRow, ...]
 
 
 @dataclass(frozen=True)
@@ -344,9 +361,20 @@ def briefing(state: SharedState, *, lanes: Sequence[int] | None = None, rejectio
             intent=goal.intent,
             when=goal.when,
             note=goal.note,
+            addressee=goal.addressee,
+            objective=goal.objective,
         )
         for slot, goal in enumerate(executive.goals)
     )
+    objective_rows = []
+    for item in executive.objectives:
+        slots = tuple(slot for slot, goal in enumerate(executive.goals) if goal.objective == item.id)
+        served = {executive.goals[slot].skill_id for slot in slots}
+        counts: dict[str, int] = {}
+        for report in skills.outcomes:
+            if report.skill_id in served:
+                counts[report.outcome.name] = counts.get(report.outcome.name, 0) + 1
+        objective_rows.append(ObjectiveRow(item.id, item.text, item.status, item.deadline_tick, slots, counts))
     budget = executive.budget
     executive_row = ExecutiveRow(
         version=executive.version,
@@ -359,6 +387,8 @@ def briefing(state: SharedState, *, lanes: Sequence[int] | None = None, rejectio
             "search_expansions": float(budget.search_expansions),
             "executive_calls_per_minute": budget.executive_calls_per_minute,
         },
+        squads=tuple((squad.name, tuple(squad.lanes)) for squad in executive.squads),
+        objectives=tuple(objective_rows),
     )
 
     def outcome_row(report: Any) -> OutcomeRow:
@@ -391,6 +421,7 @@ def briefing(state: SharedState, *, lanes: Sequence[int] | None = None, rejectio
                 request=None if request is None else _request_row(request, skills.statuses),
                 last_outcome=outcome_row(outcomes_here[-1]) if outcomes_here else None,
                 events=tuple(events.active[lane]) if lane < len(events.active) else (),
+                squads=tuple(squad.name for squad in executive.squads if lane in squad.lanes),
             )
         )
 
@@ -435,6 +466,7 @@ __all__ = [
     "GoalRow",
     "InForceRow",
     "NpcRow",
+    "ObjectiveRow",
     "OutcomeRow",
     "QuestionRow",
     "RejectionRow",

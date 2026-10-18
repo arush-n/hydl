@@ -157,7 +157,7 @@ explicit, typed and inspectable, and it is where real LLM wording will be learne
 | 4 | Fine-tune ModernBERT-base on the Mac GPU; iterate | 3 | minutes per run; a day of iteration | I1, B1-B3 |
 | 5 | Calibration and latency: temperature scaling, ECE, int8, the probe | 4 | half a day | I3, I4 |
 | 6 | Integration: the instance interprets once per version, executes programs, emits requests; decision section shows plan and stream; js1 arm through the composition driver | 2, 5 | ~1 day | I2, B4, G1 unchanged |
-| 7 | Offline LLM-side pieces: predicate vocabulary and typed target in the prompt and schema; the backend writes the executive section; objectives list; per-squad views | 6 | vocabulary and typed target DONE (2026-10-17 late); the rest ~half a day | prompt bytes stable; no live call |
+| 7 | Offline LLM-side pieces: predicate vocabulary and typed target in the prompt and schema; the backend writes the executive section; objectives list; per-squad views | 6 | DONE 2026-10-17 to 18 (SYSTEM_ONE 9.14 and 9.15): vocabulary, typed target, patterned directions, addressees and squads, objectives, the squad view, and the backend replying in the section schema with the briefing in its user turn | prompt bytes stable; no live call: holds (fake client only) |
 | 8 | Fallbacks if 4 misses: more states, more layers, then the decoder path | 4 | as needed | I1 |
 | later | Stage C on outcomes; live LLM run; the real skill library replaces the stubs; group scratchpad | the lower level | - | G4, G5 |
 

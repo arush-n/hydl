@@ -954,6 +954,32 @@ at b = 0 and 0.95 at b = 0.2, PASS. The generator's own free wordings remain cov
 held-out). Caveat as in 9.12: the perturbations are ours; a live LLM's departures will be measured when the
 executive runs live, and the question channel is the safety net for what neither reader handles.
 
+### 9.15 Squads and objectives: the hierarchy on the notepad (2026-10-18)
+
+Owner rulings: "there are both options" (one NPC per scratchpad, and squads sharing one); the LLM "keeps track of
+long term goals". Built as typed fields of the executive contract, so the deciders need no change:
+- **Addressee.** Every goal names who it is for: `all` (the default), `lane:<n>` (one NPC) or `squad:<name>`.
+  `ExecutiveState.squads` lists the squads (name, member lanes). The lowering to per-lane arrays
+  (`contracts.executive_arrays`) marks a goal valid only on the lanes its addressee names, and every instance
+  already decides from `goal_valid`, so a goal for lane 0 cannot be chosen on lane 1 (test_na_typed_rule: three
+  lanes, three addressees, three different choices on the same belief).
+- **Objectives.** `ExecutiveState.objectives` holds the LLM's long-term aims with stable ids (status open, done
+  or dropped, an optional deadline); a goal may point at one through `objective`. The briefing rolls the
+  outcomes of the skills those goals name up per objective, so the LLM sees progress against its own aims
+  without re-deriving it.
+- **The view follows the hierarchy.** The briefing shows each goal's addressee and objective, the squads with
+  their lanes, an objectives table, and each NPC's squads; `ViewOptions(squad="red")` renders one squad's
+  briefing from the shared notepad, which is the "both options" ruling: one notepad can serve one NPC or a
+  squad, and a squad view is a filter, not a second document.
+- The prompt and the schema descriptions state the addressee forms and the objectives list.
+- **The LLM's words round trip (same day).** The Claude adapter now replies in the executive *section* schema
+  (`shared_state.EXECUTIVE_SECTION_JSON_SCHEMA`: the typed fields plus intent, when and note per goal, and
+  notes), keeps the parsed section as `last_section`, and the harness writes that section to the notepad, so
+  the words the LLM wrote are what the readers of 9.12 to 9.14 read back. When the notepad is shared, the
+  harness binds it onto the backend and the user turn carries the briefing (8.10): the LLM reads its own view,
+  not a bare E_t. Plan step 7 of MIDDLE_LAYER.md is complete; what remains on the LLM side is the first live run,
+  which stays behind the rule that the lower level finishes first.
+
 ## References
 
 - [JEV] TypeSafe AI, "Introducing System One Models & Jev", 2026. https://typesafe.ai/blog/introducing-system-one-models-and-jev

@@ -38,6 +38,7 @@ class ViewOptions:
         tick_seconds: Length of one tick, for the seconds shown beside tick counts (0.045 in the gen-5
             simulator, 1/30 in gen 7).
         lanes: The lanes to show, or None for all (a squad's members when the scratchpad is shared).
+        squad: A squad name of the executive section whose member lanes are shown; overrides ``lanes``.
         delta: Include the block of what happened since the LLM's own version.
         rejections: How many of the newest rejected requests to show.
     """
@@ -45,6 +46,7 @@ class ViewOptions:
     format: str = "markdown"
     tick_seconds: float = 0.045
     lanes: tuple[int, ...] | None = None
+    squad: str | None = None
     delta: bool = True
     rejections: int = 5
 
@@ -126,27 +128,37 @@ def to_markdown(b: Briefing, options: ViewOptions) -> str:
     if not ex.goals:
         lines.append("none")
     else:
-        lines.append("| slot | skill | priority | condition | horizon s | deadline tick | intent | when | note |")
-        lines.append("|---|---|---:|---|---:|---|---|---|---|")
+        lines.append("| slot | skill | for | objective | priority | condition | horizon s | deadline tick | intent | when | note |")
+        lines.append("|---|---|---|---|---:|---|---:|---|---|---|---|")
         for g in ex.goals:
             deadline = "none" if g.deadline_tick is None else str(g.deadline_tick)
             lines.append(
-                f"| {g.slot} | {g.skill_id} | {g.priority:g} | {g.condition} | {g.horizon_seconds:g} | {deadline} "
+                f"| {g.slot} | {g.skill_id} | {g.addressee} | {g.objective or '-'} | {g.priority:g} | {g.condition} | {g.horizon_seconds:g} | {deadline} "
                 f"| {g.intent or '-'} | {g.when or '-'} | {g.note or '-'} |"
             )
     lines.append(f"facts: {'; '.join(ex.facts) if ex.facts else 'none'}")
     lines.append(f"notes: {ex.notes or 'none'}")
+    if ex.squads:
+        lines.append("squads: " + "; ".join(f"{name} = lanes {list(lanes)}" for name, lanes in ex.squads))
+    if ex.objectives:
+        lines.append("")
+        lines.append("## Your objectives")
+        lines.append("| id | status | deadline tick | text | goals | outcomes of their skills |")
+        lines.append("|---|---|---|---|---|---|")
+        for o in ex.objectives:
+            outcomes = ", ".join(f"{k} {v}" for k, v in sorted(o.outcomes.items())) or "-"
+            lines.append(f"| {o.id} | {o.status} | {o.deadline_tick if o.deadline_tick is not None else 'none'} | {o.text or '-'} | {list(o.goal_slots)} | {outcomes} |")
     lines.append("")
     lines.append(f"## NPCs (belief as of tick {b.tick}; unknown means not known, never zero)")
     if not b.npcs:
         lines.append("none")
     else:
-        lines.append("| lane | situation | goal in force | current request | last outcome | events |")
-        lines.append("|---:|---|---|---|---|---|")
+        lines.append("| lane | squads | situation | goal in force | current request | last outcome | events |")
+        lines.append("|---:|---|---|---|---|---|---|")
         for npc in b.npcs:
             events = ", ".join(npc.events) if npc.events else "-"
             lines.append(
-                f"| {npc.lane} | {situation_text(npc.situation, ts)} | {_goal_text(npc)} | {_request_text(npc)} "
+                f"| {npc.lane} | {', '.join(npc.squads) or '-'} | {situation_text(npc.situation, ts)} | {_goal_text(npc)} | {_request_text(npc)} "
                 f"| {_outcome_text(npc, ts)} | {events} |"
             )
     lines.append("")
@@ -193,7 +205,12 @@ def to_compact(b: Briefing, options: ViewOptions) -> str:
     lines = [f"S_t v{b.version} t{b.tick}; E_t v{ex.version} issued t{ex.issued_tick}"]
     for g in ex.goals:
         words = " ".join(f"{k}={v!r}" for k, v in (("intent", g.intent), ("when", g.when), ("note", g.note)) if v)
-        lines.append(f"goal {g.slot}: {g.skill_id} p={g.priority:g} if={g.condition} horizon={g.horizon_seconds:g}s{' ' + words if words else ''}")
+        lines.append(f"goal {g.slot}: {g.skill_id} to={g.addressee}{' for=' + g.objective if g.objective else ''} p={g.priority:g} if={g.condition} horizon={g.horizon_seconds:g}s{' ' + words if words else ''}")
+    for name, lanes in ex.squads:
+        lines.append(f"squad {name}: lanes {list(lanes)}")
+    for o in ex.objectives:
+        outcomes = " ".join(f"{k}={v}" for k, v in sorted(o.outcomes.items()))
+        lines.append(f"objective {o.id} {o.status} deadline={o.deadline_tick} goals={list(o.goal_slots)}{' ' + outcomes if outcomes else ''}{' ' + repr(o.text) if o.text else ''}")
     if ex.facts:
         lines.append("facts: " + "; ".join(ex.facts))
     if ex.notes:
@@ -235,7 +252,13 @@ def view(state: Any, options: ViewOptions | None = None) -> str:
     """The LLM's view of ``state``: build the briefing for ``options.lanes`` and render it."""
 
     options = options or ViewOptions()
-    return render(briefing(state, lanes=options.lanes, rejections=options.rejections), options)
+    lanes = options.lanes
+    if options.squad is not None:
+        members = {squad.name: squad.lanes for squad in state.executive.squads}
+        if options.squad not in members:
+            raise ValueError(f"unknown squad {options.squad!r}; the executive lists {sorted(members)}")
+        lanes = members[options.squad]
+    return render(briefing(state, lanes=lanes, rejections=options.rejections), options)
 
 
 # ---------------------------------------------------------------------------------------------- budget CLI

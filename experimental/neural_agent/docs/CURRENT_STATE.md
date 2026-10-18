@@ -27,7 +27,8 @@ for the gen-7 simulator), and the gen-7 simulator itself (phase 3 of 6 running).
 | The patterned language for the LLM's words (a direction in the prompt and the schema, not a grammar) and the pattern reader (skill by catalogue id or alias; the clause by the cue reader); P7 1.000 at no breakage, 0.9925 with every perturbation | built 2026-10-18 (`executive/patterned.py`, `jev/system_one/pattern_reader.py`, SYSTEM_ONE 9.14) |
 | Questions from the decision layer to the LLM (`DecisionSection.information_requests`, shown in the LLM view) | built `59d2047`; the LLM's answering loop is not exercised (no live call) |
 | The LLM's view as a briefing (per-NPC rows in words, goals with how they were read, questions, rejections, the delta since the LLM's version; markdown / json / compact; 8 lanes in 943 estimated tokens) and `DecisionSection.readings` | built 2026-10-18 (`shared_state/views/`, `shared_state/README.md`) |
-| The backend writing the full executive section (words included), objectives list, per-squad views, the group scratchpad | designed (`MIDDLE_LAYER.md` plan step 7; task #31) |
+| Squads and objectives in the contract (`Squad`, `Objective`, a goal's `addressee` and `objective`), lowered per lane; the briefing shows squads, an objectives table with outcomes rolled up, and renders one squad on request (`ViewOptions(squad=...)`) | built 2026-10-18 (SYSTEM_ONE 9.15; task #31) |
+| The Claude adapter replies in the executive section schema (typed fields plus the words), the harness writes the words to the notepad, and the user turn carries the briefing when the notepad is shared | built 2026-10-18 (fake client only; no live call by rule) |
 
 ## 3. Level 2, the decision layer (`jev/`, `requests.py`, `session.py`)
 

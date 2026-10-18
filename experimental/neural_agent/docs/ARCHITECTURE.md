@@ -251,7 +251,7 @@ SHA-256 values and sizes taken on 2026-10-16 at the snapshot. A reader with a co
 | `HytaleRL/hytalegym/hytalegym/jax/training/types.py` | `dad43b7094bca873dc1c2ecd85538f21c2e7181308b0c2adec65b11b3bb1d60a` | not recorded | `PPOConfig` defaults |
 | `adk/architecture/hierarchy.py` | `2ca882c5738fd3d925b8170c54ba00205e893c5c69db1bf34aa31ae04464d594` | not recorded | orchestration rules D2 to D4 |
 | `adk/architecture/decision_context.py` | `189f5fbad5d7c74ff05b0359f138cf3a1b8a809a03e862c543ded7fdadd8cfa0` | not recorded | `manager_decision_due` (D1) |
-| `experimental/neural_agent/contracts.py` | `4f9af3aac67c54d967101c491241b8b14caa67d9ca307db97f1423d0e432498c` | 44,249 bytes, 2026-10-16 20:00:18 | the shared contract |
+| `experimental/neural_agent/contracts.py` | `65a056b0eded18af62910ee30f379a4e145d6f713c5f3f4daac812911dc887a3` | 44,249 bytes, 2026-10-16 20:00:18 | the shared contract |
 
 Stale pins: see section 7, item 20.
 

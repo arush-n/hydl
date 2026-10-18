@@ -9,7 +9,7 @@ cache can serve it. The volatile part comes after the cache breakpoint::
                    keys), with cache_control {"type": "ephemeral"} (the 5-minute TTL)
     messages       one user turn: tick, required_version, the current E_t JSON, the reports
     output_config  {"effort": effort, "format": {"type": "json_schema",
-                   "schema": wire_schema(EXECUTIVE_STATE_JSON_SCHEMA)}}
+                   "schema": wire_schema(EXECUTIVE_SECTION_JSON_SCHEMA)}}
 
 No ``thinking`` field is sent. On claude-opus-5-5 thinking is adaptive and always on, and
 ``output_config.effort`` sets its depth (python README, "Extended Thinking").
@@ -51,7 +51,6 @@ import anthropic
 from experimental.neural_agent.contracts import (
     CONDITION_ARGUMENT_UNITS,
     CONDITION_KINDS,
-    EXECUTIVE_STATE_JSON_SCHEMA,
     ExecutiveState,
     GoalReport,
     SkillOutcome,
@@ -60,6 +59,7 @@ from experimental.neural_agent.executive.baselines import CallUsage
 from experimental.neural_agent.executive.reports import EventRecord
 from experimental.neural_agent.executive.patterned import PATTERN_DIRECTIONS
 from experimental.neural_agent.executive.store import validate_catalog
+from experimental.neural_agent.shared_state import EXECUTIVE_SECTION_JSON_SCHEMA, ExecutiveSection, view_for_llm
 
 DEFAULT_MODEL = "claude-opus-5-5"
 EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
@@ -89,7 +89,7 @@ def build_system_prompt(skill_ids: Sequence[str]) -> str:
     kinds_json = json.dumps(list(CONDITION_KINDS), ensure_ascii=True)
     units_json = json.dumps(dict(CONDITION_ARGUMENT_UNITS), ensure_ascii=True, sort_keys=True)
     schema_json = json.dumps(
-        EXECUTIVE_STATE_JSON_SCHEMA, sort_keys=True, separators=(",", ":"), allow_nan=False
+        EXECUTIVE_SECTION_JSON_SCHEMA, sort_keys=True, separators=(",", ":"), allow_nan=False
     )
     return (
         "You are the executive of a hierarchical game agent (ADR-001 D3). You do not act in the "
@@ -104,10 +104,17 @@ def build_system_prompt(skill_ids: Sequence[str]) -> str:
         "ticks); every other kind takes argument null. The decision model evaluates the typed condition "
         "exactly on its belief, so write it whenever a goal is conditional.\n"
         f"{PATTERN_DIRECTIONS}\n"
-        "Each user turn gives tick, required_version, the current E_t, and the reports that arrived "
-        "since your last call. A report is a goal outcome (COMPLETED, INTERRUPTED, FAILED or TIMEOUT) "
-        "or an interrupt event.\n"
-        "Reply with the whole new E_t as one JSON object. Set version to required_version and "
+        "Each goal has an addressee: 'all' (every NPC), 'lane:<n>' (one NPC) or 'squad:<name>' for a squad you "
+        "list in squads (name, lanes); a goal is in force only on the lanes it addresses. objectives are your "
+        "long-term aims with stable ids (status open, done or dropped); a goal may name the objective it serves, "
+        "and outcomes roll up per objective in your view.\n"
+        "Each user turn gives tick, required_version, the current E_t, the reports that arrived since your "
+        "last call and, when the notepad is shared, your briefing of it: every NPC's situation, the goals in "
+        "force with how your words were read, the questions to you, the rejections and what happened since "
+        "your version. A report is a goal outcome (COMPLETED, INTERRUPTED, FAILED or TIMEOUT) or an "
+        "interrupt event.\n"
+        "Reply with the whole new executive section as one JSON object: the typed fields, your words per "
+        "goal (intent, when, note) and your notes. Set version to required_version and "
         "issued_tick to tick. Keep every goal that still applies, and change only what the reports "
         "show is wrong. If nothing changed, return the current goals unchanged with the new version "
         "and tick.\n"
@@ -138,11 +145,13 @@ def build_user_turn(
     current: ExecutiveState,
     reports: Sequence[GoalReport | EventRecord],
     tick: int,
+    briefing: str | None = None,
 ) -> str:
     """Return the volatile user turn as JSON with sorted keys.
 
     The turn holds ``tick``, ``required_version`` (current version plus one), the current
-    E_t, and the reports. It is the only part of the request that changes per call.
+    E_t, the reports and, when given, ``briefing``: the LLM's view of the shared notepad
+    (``shared_state.view_for_llm``). It is the only part of the request that changes per call.
 
     Raises:
         TypeError: If ``current`` is not an ExecutiveState, ``tick`` is not an integer, or a
@@ -162,6 +171,8 @@ def build_user_turn(
         "current": json.loads(current.to_json()),
         "reports": [_report_payload(item) for item in reports],
     }
+    if briefing is not None:
+        payload["briefing"] = briefing
     return json.dumps(payload, sort_keys=True, allow_nan=False)
 
 
@@ -265,7 +276,9 @@ class AnthropicExecutiveBackend:
         self.effort = effort
         self._client = client if client is not None else anthropic.Anthropic()
         self._system = build_system_prompt(skill_ids)
-        self._wire = wire_schema(EXECUTIVE_STATE_JSON_SCHEMA)
+        self._wire = wire_schema(EXECUTIVE_SECTION_JSON_SCHEMA)
+        self.shared_state: Any = None  # bound by the harness when the notepad is shared: the briefing goes in the user turn
+        self.last_section: ExecutiveSection | None = None  # the section the last accepted reply parsed to, words included
 
     @property
     def system_prompt(self) -> str:
@@ -298,7 +311,8 @@ class AnthropicExecutiveBackend:
             tick: The simulation tick of this call.
 
         Returns:
-            The parsed ExecutiveState and the CallUsage of the call.
+            The parsed ExecutiveState (the typed part of the section the LLM replied with; the
+            whole section, words included, is ``last_section``) and the CallUsage of the call.
 
         Raises:
             ValueError: If the reply stopped for any reason other than ``end_turn`` (for
@@ -313,7 +327,15 @@ class AnthropicExecutiveBackend:
             system=[
                 {"type": "text", "text": self._system, "cache_control": {"type": "ephemeral"}}
             ],
-            messages=[{"role": "user", "content": build_user_turn(current, reports, tick)}],
+            messages=[
+                {
+                    "role": "user",
+                    "content": build_user_turn(
+                        current, reports, tick,
+                        briefing=None if self.shared_state is None else view_for_llm(self.shared_state),
+                    ),
+                }
+            ],
             output_config={
                 "effort": self.effort,
                 "format": {"type": "json_schema", "schema": self._wire},
@@ -327,9 +349,11 @@ class AnthropicExecutiveBackend:
         if text is None:
             raise ValueError("executive reply has no text block")
         try:
-            state = ExecutiveState.from_dict(json.loads(text))
-        except TypeError as error:
-            raise ValueError(f"executive reply is not a valid ExecutiveState: {error}") from error
+            section = ExecutiveSection.from_dict(json.loads(text))
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"executive reply is not a valid executive section: {error}") from error
+        self.last_section = section
+        state = section.to_executive_state()
         usage = response.usage
         return state, CallUsage(
             model=self.model,

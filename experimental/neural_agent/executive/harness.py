@@ -87,11 +87,22 @@ class ExecutiveHarness:
         self._trigger = trigger
         self._clock = clock
         self._shared_state = shared_state
+        if shared_state is not None and hasattr(backend, "shared_state"):
+            backend.shared_state = shared_state  # the backend's user turn then carries the briefing
         self._call_lock = threading.Lock()
         self._worker: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._last_call_tick: int | None = None
         self._last_error: str | None = None
+
+    def _section_for(self, state: ExecutiveState) -> ExecutiveSection:
+        """The executive section to write for ``state``: the backend's parsed section when it has one for
+        this state (words included), else the typed fields alone."""
+
+        section = getattr(self._backend, "last_section", None)
+        if isinstance(section, ExecutiveSection) and section.to_executive_state() == state:
+            return section
+        return ExecutiveSection.from_executive_state(state)
 
     @property
     def last_error(self) -> str | None:
@@ -214,7 +225,7 @@ class ExecutiveHarness:
             if self._shared_state is not None:
                 self._shared_state.write(
                     "executive",
-                    ExecutiveSection.from_executive_state(state),
+                    self._section_for(state),
                     writer=SECTION_WRITERS["executive"],
                     tick=tick,
                 )

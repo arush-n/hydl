@@ -100,6 +100,7 @@ from .document import (
     SharedState,
 )
 from .schema import (
+    EXECUTIVE_SECTION_JSON_SCHEMA,
     SHARED_STATE_JSON_SCHEMA,
     validate,
 )
@@ -159,6 +160,7 @@ __all__ = [
     "SECTION_NAMES",
     "SECTION_WRITERS",
     "SHARED_STATE_JSON_SCHEMA",
+    "EXECUTIVE_SECTION_JSON_SCHEMA",
     "STATUS_HISTORY",
     "BeliefLane",
     "BeliefSection",
