@@ -46,7 +46,7 @@ for the gen-7 simulator), and the gen-7 simulator itself (phase 3 of 6 running).
 | Request stream (sections, statuses with `signal`, validation with 8 rejection codes, `any_of` schemas, correspondence rules) | built and measured R1 to R6 with the lower layer (`5ce0456`, `e62f654`, `3439c67`) |
 | Host seam honouring the skills' commitments | default since `0cf8c05` |
 | Per-tick observer `on_tick` for the combiner; `--host-budget-ms` on the driver | built `ffe11c5`, `8707eec` |
-| Joint check of executor and combiner at 512 ticks | measured 2026-10-18: identical at a 200 ms host budget (0 non-timing differences, 0 misses both, 24,680 running statuses through the per-tick hook); at the default 20 ms the joint run diverged through 3 latency misses, not logic; the rejected-request path is still unexercised (0 rejections in 8,088 grants; the lower layer is writing a forced-target-loss test) |
+| Joint check of executor and combiner at 512 ticks | measured 2026-10-18: identical at a 200 ms host budget (0 non-timing differences, 0 misses both, 24,680 running statuses through the per-tick hook); at the default 20 ms the joint run diverged through 3 latency misses, not logic; the rejected-request path is exercised since `9b6c571`: `test_sa_joint.py` forces three entity_unknown rejections, a question to the LLM at the third, then withdrawal; the 20 ms run is identical on `9b6c571` and on `5c523a8` (`7734dcf`; run 1 had one load-flake miss at load 13.5, run 2 alone was identical with 0 misses on both sides) |
 | An intent the library cannot serve (#32): the nearest catalogue id serves with a question, descriptions only suggest, the harness leaves an unresolvable goal out of the version instead of refusing it (`jev/system_one/nearest_skill.py`, `SYSTEM_ONE.md` 9.16) | built 2026-10-18; gate: 4 of 7 absent families served from the expected group on all phrasings, 3 asked about; description matching measured as noise |
 | Learned heads beside the exact path (replace, params, confidence; P1d relabelling), calibration (G5) | designed / deferred until real skills |
 
@@ -56,9 +56,9 @@ for the gen-7 simulator), and the gen-7 simulator itself (phase 3 of 6 running).
 |---|---|
 | Stand-ins (pursuit candidate v0001, scripted evader, idle) and the dispatcher | built; the composition task runs on them |
 | Lower layer phase A (the other session): 12-head surface (+9 for 0.7.2, six scopes), catalogue parser (139 rows, 19 activities), protocol, combiner with stub bodies, parity, library, body contract, 32 NPC traces at 1/30 s | built, 763 tests at hand-off |
-| Phase B: behaviour-cloning dataset, freezing (shared encoder plus per-skill adapter; frozen skills bit-identical when a skill is added), joint wiring with the executor, progress names and stop reasons on every contract, bounded done-id window | built `baff062`, `0f17bc8`, `e62f654`, `3439c67`, `39b450e`; 827 tests |
-| Phase C: real skill competence tests (E2 to E6 of `skill_agent/BUILD.md`) | blocked on the gen-7 simulator's locomotion phase |
-| Asks to the owner from the lower layer | a body-turn label rule (built like the head-turn one); the training observation is too thin (own state plus opponent, no terrain); push, review of the catalogue edits, the uncommitted pursuit fix |
+| Phase B: behaviour-cloning dataset, freezing (shared encoder plus per-skill adapter; frozen skills bit-identical when a skill is added), joint wiring with the executor, progress names and stop reasons on every contract, bounded done-id window | built `baff062`, `0f17bc8`, `e62f654`, `3439c67`, `39b450e`, `14db188`, `9b6c571`, `cbd4e00` (body-yaw label, dataset v2), `5286797` (terrain, meters and visibility, dataset v3), `19c642f` (sim_adapter), `e07de22` (an already-expired request is rejected once), `63d85dd` (bench_bodies); package gate 867 passed, 2 skipped, 1 xfailed on the 2026-10-18 tree (baseline 863 plus 4 new) |
+| Phase C: real skill competence tests (E2 to E6 of `skill_agent/BUILD.md`) | blocked on three things: the gen-7 locomotion phase (walk resume after landing; the Region library recaptured on 0.7.2), the owner's training go-ahead, and the owner's motion-model choice (the player model has no live oracle; FIDELITY-0.7.2 (e), P2 item 1). Measured (`63d85dd`, ledger): as built, trained bodies cost about 1 ms per agent per skill at batch 8; the combiner calls each body per agent and freezing's verb program reruns the trunk on every call, so p95 is 12.5 ms at 3 skills per agent and 24.5 / 44.9 ms at 6 (shared / distinct verbs), over the 15 ms bar; one trunk pass per tick plus per-verb adapter programs keeps every case within the bar (worst 10.0 ms), a body-contract decision still open |
+| Asks to the owner from the lower layer | the body-turn label and the terrain observation are done (`cbd4e00`, `5286797`); remaining: push, review of the catalogue edits, the uncommitted pursuit fix in `arena/training/runs/pursuit_run.py`, the training go-ahead, the motion-model choice, the one-trunk-pass body-contract change |
 
 ## 5. The simulator port to Hytale 0.7.2 (`HytaleRL/hytalegym/hytalegym/sim/`)
 
@@ -130,7 +130,7 @@ Still uncommitted, by design:
 - **The arena session's files** (console/**, arena/training/**, worldgen/region/*, jax/training/multi_actor/*,
   HytaleRL/examples/*, worlds/region.py, root .gitignore; dated 2026-10-13 to 17). Asked which are theirs; no answer
   yet. Not touched.
-- **In-flight files of live agents**: `sim/gen7/*` (phase 4), `skill_agent/*` (the lower layer), `lm_reader.py` (P6).
+- **In-flight files of live agents**: `sim/gen7/*` is this session's (the content-values agent, #64); `skill_agent/*` and `LEDGER.md` have nothing in flight (the lower layer's lane is committed through `63d85dd`).
 
 Follow-ups for whoever owns `tests/fidelity/combat` (from the peer session's section (i) run, 2026-10-18): six
 crossbow tests look up the head `world_move_none_plus_compass`, which `ARSENAL_POLICY_ACTION_HEAD_NAMES` has at
