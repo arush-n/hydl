@@ -114,7 +114,13 @@ bridge). Concurrent construct lanes share four overlay files under the lock prot
 legal-observation gaps the lower-layer session reported: the certified pair path ignores `view_sector_full_angle_radians`
 (perceptible at any bearing) and the v3 row blanking has no sensor-range term (an opponent beyond range 16 still publishes
 defense and stamina rows); both land opt-in with the identity fingerprints unchanged (d8477b63 / b02ee274) and the swap plan
-regenerated after the commit; the FOV16/FOV32 definition and the angle were asked of the peer. Queued: the simulator half of #71, the terrain recapture itself, the stub mechanics (#69), a live Region-step run of the
+regenerated after the commit; the peer defined FOV16/FOV32 as a 120-degree full sector at ranges 16 and 32. Landed in `c613d22`:
+both options are perception keywords (`view_sector_full_angle_radians`, `legal_observation_sensor_range`) on the pair path, the
+sector centred on the head yaw and gating the agent's entry, line of sight, the selector gate and the engagement target; the
+policy flat with an opponent behind the agent equals the no-opponent flat for four loadouts; fingerprints and the three digests
+unchanged; named gaps: non-line-of-sight events on the step's engagement id, the multi-entity body-yaw cone, the 16-block case
+inferred, the NPC cone unmodelled. Also landed: the audits' section (aa) correction (`44d3d69`: the -44.7 was the pinned head
+yaw, not pitch) and the lock protocol's render check (`a6f55a6`). Queued: the simulator half of #71, the terrain recapture itself, the stub mechanics (#69), a live Region-step run of the
 timed executor path.
 Committed earlier: the
 crafting oracle stage 3 (`274aaec`, timed bench crafts with probe events; pin `5FE609E2`), phase 4j (`a534e83`: the Trork
