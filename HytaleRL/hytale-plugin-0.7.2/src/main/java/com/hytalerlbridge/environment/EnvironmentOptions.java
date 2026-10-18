@@ -57,7 +57,8 @@ public record EnvironmentOptions(
             "Secondary",
             "Ability1",
             "Ability2",
-            "Ability3"
+            "Ability3",
+            "Ability4"
         );
     private static final int MAX_NATIVE_WORLD_HOTBAR_ENTRIES = 16;
     private static final int MAX_NATIVE_WORLD_HOTBAR_SLOT = 31;

@@ -33,7 +33,8 @@ public record NativePolicyCombatBindingSpec(
         "Secondary",
         "Ability1",
         "Ability2",
-        "Ability3"
+        "Ability3",
+        "Ability4"
     );
 
     public NativePolicyCombatBindingSpec {

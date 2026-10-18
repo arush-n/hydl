@@ -180,6 +180,11 @@ the slot-4 reload still fails because the bridge requests `Ability3` while the 0
 0.7.2, so the group facing tests need a lever decision before they can pass; defect (1) above is withdrawn as a bridge
 fault.
 
+**Bridge status, phase 4d (2026-10-18; FIDELITY-0.7.2.md section (m)).** The bridge accepts `Ability4` by name on the
+request path (jar `32EF5EDD`), and the 0.7.2 crossbow reload runs to completion under it live, matching the Primary
+reload's ammo transitions; the wire and evidence numbering stay 0.5's. Open: the gen-7 content binding of the reload row
+as `Ability4` (peer session), and the interrupt case, where Primary is not offered during the reload (cause not isolated).
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the

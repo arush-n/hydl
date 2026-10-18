@@ -709,3 +709,35 @@ materials). Blocked by materials only: 80; by benches only (type or tier): 262; 
 source item), so a construct for them is straightforward, but the arsenal crafting inventory publishes no resource
 types (``ABSENT_ID`` for every slot), so it needs an item-to-resource-type table as well, and it adds at most 80
 recipes. The bulk is benches and timed crafting; which scope the skill library needs is an owner decision.
+
+## (m) Phase 4d: Ability4 on the bridge request path (2026-10-18; receipts `~/.claude/jobs/31947bd7/tmp/phase4d/receipts/`)
+
+Owner ruling: fidelity. The 0.7.2 crossbow binds its reload root `Root_Common_StatAmmoReload_Entry` under
+`Interactions.Ability4`; the bridge requested slot 4 as `Ability3` (the 0.5.7 classification) and the reload failed
+on tick 2 ("Missing replacement interactions ... for var Reload_Start on item null", section (k)). The bridge now
+accepts `Ability4` by name in the two request-path allow-lists (`NativePolicyCombatBindingSpec.INTERACTION_TYPES`,
+`EnvironmentOptions.NATIVE_COMBAT_INTERACTION_TYPES`; jar `32EF5EDD`, pin updated). The 25-entry wire table
+(`NativeInteractionTypes.WIRE_TYPES`) and the Python `INTERACTION_TYPE_NAMES` are unchanged: `Ability4` travels by
+name only; `InteractionType.valueOf` resolved it without an edit.
+
+| Row | What ran | Measured | Status |
+|---|---|---|---|
+| 6c reload, `Ability3` on `8720BC76` | authored slot 4 requested, 12 ticks, seed 570057 (`r1_ability3_pinned_*`) | accepted and started tick 2, `native_ability_failed` true, finished tick 2, ammo 0.0; the `Reload_Start on item null` SEVERE | pre-fix, reproduced |
+| 6c reload, `Ability4` on `32EF5EDD` | probe sets the reload row to `Ability4` in memory, 100 ticks (`r3_ability4_fix1_patched_*`) | accepted tick 2, never failed, chain ran to tick 95; ammo and arrows follow the Primary test's ten expected transitions (ticks 1, 2, 27, 37, 47, 57, 67, 77, 87, 95); no SEVERE, world accepting tasks | MATCH (reload runs) |
+| 6c Primary reload, official test | `test_crossbow_primary_reloads_six_physical_arrows_at_30_tps` on the new jar, repo pin | passed, 857.7 s | unchanged |
+| 6c interrupt, official test | unchanged Python profile (row still `Ability3`) | fails at `assert not row["failed"]` with the pre-fix symptom | waits on the Python binding |
+| 6c interrupt, row patched to `Ability4` in the test process | 64 ticks | reload runs without failure; Primary (authored slot 0) is advertised only on ticks 1-2 and 96-100, so the interrupt never fires and the episode truncates; the 0.7.2 asset's Repeat `InterruptedBy [Primary, Secondary]` permits it; which bridge legality term closes Primary during the reload (canRun over running chains, or cooldown) is not isolated | OPEN |
+
+Contract for the simulator side (the gen-7 content binding, peer session): crossbow row, compact slot 2 (authored
+slot 4): `native_combat_ability_interaction_ids[2] = "Root_Common_StatAmmoReload_Entry"`,
+`native_combat_ability_interaction_types[2] = "Ability4"`; slot 0 `Root_Weapon_Crossbow_Primary_Signature` /
+`Primary`, slot 1 `Weapon_Crossbow_Signature_BigArrow` / `Ability1`, guard `Root_Weapon_Crossbow_Secondary_Guard` /
+`Secondary` unchanged; group actors the same at the reload index. Until the 0.7.2 profile binds the row as
+`Ability4`, `evidence.py` 1018-1027 (bound only when the bridge type equals the profile type) never advertises the
+slot. The bridge reports `native_ability_interaction_type` "Ability4" and the root id for the row.
+
+Java gates: full `gradlew test --rerun --no-build-cache --offline` 111 suites, 386 tests, 0 failures (384 before
+the two new tests); `NativePolicyCombatBindingSpecTest` 3, `EnvironmentOptionsTest` 21, `SourceFileSizeRatchetTest`
+2, 0 failures (coordinator re-run); `tests/test_server_versions.py` 7 passed. Jar reproducibility: unchanged sources
+rebuilt to `8720BC76` exactly. Claim most likely wrong (agent): that the `Ability4` context hands the reload the
+crossbow as its held item; inferred from the absence of the `on item null` error, not read from the context.
