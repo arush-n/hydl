@@ -389,6 +389,32 @@ context = Dense(concat(mean, max, marked mean, self token))     tokens[t] = the 
 These were measured on 2026-10-17 at a machine load of about 21 on 18 cores [ledger: B1]. The bodies
 were stand-ins, so a trained body's own heads come on top of the encoder's cost.
 
+**Trained bodies, as built, cost about 1 ms per agent per skill** (`bench_bodies.py`, 2026-10-18
+[ledger]). A trained body is a freezing verb (section 2.9): the trunk and the verb's adapter in one
+compiled program. The combiner calls each granted body once per agent per tick, so every call runs the
+trunk again on one agent. The bench times that path against two batched layouts that choose the same
+factors [test: test_sa_bench_bodies.py]. Batch 8, p95 per tick in ms, with every agent holding the same
+skills (shared) or its own (distinct):
+
+| skills per agent | as built (shared / distinct) | trunk once per tick, adapter per agent and skill | trunk once, adapters batched per skill (shared) |
+|---|---|---|---|
+| 1 | 7.1 / 7.7 | 2.8 + 0.3 | 2.7 + 0.3 |
+| 2 | 8.4 / 8.6 | 4.4 + 0.3 | 1.5 + 0.4 |
+| 3 | 12.5 / 13.6 | 5.8 + 0.5 | 1.7 + 0.5 |
+| 6 | 24.5 / 44.9 | 9.0 + 1.0 | 1.9 + 1.0 |
+
+The first column includes the combiner. The other two are the bodies' work plus the combiner's
+bookkeeping alone (`StubBody`), measured separately and summed.
+- **As built, the bar holds up to three skills per agent at 8 agents**, and leaves little room for the
+  belief and the decision. At six it fails, and with distinct skills it exceeds the 33.3 ms tick.
+- **One trunk pass per tick keeps every measured case within the bar** (worst 10.0 ms). Each verb's
+  adapter stays compiled alone and never stacked, so freezing's guarantee is unchanged.
+- **Not changed:** where the trunk runs. Taking it out of the body changes the body contract, which was
+  decided with the architecture review session.
+
+Caveats: freezing's default sizes (trunk width 64, two layers, context 128; adapter hidden 64), random
+weights, CPU, one run at a load of about 6 on 18 cores.
+
 ### 2.8 Behaviour cloning from the native traces (`training/bc_dataset.py`, `training/bc_smoke.py`, B2)
 
 **The dataset.** The 32 native 0.7.2 traces become 21,088 rows, one per native-controlled frame, at the
