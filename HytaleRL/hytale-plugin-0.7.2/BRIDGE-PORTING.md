@@ -68,9 +68,25 @@ port's own document (the model is PORT-0.7.2.md, "What 0.7.2 changed, and how th
 
 ## 6. Size ratchet
 
-- `src/test/java/com/hytalerlbridge/SourceFileSizeRatchetTest.java` caps `NativeEnvironmentSession.java` at 9,700
-  lines. Other files get 1,500. The file is 9,682 lines at HEAD (`wc -l`; commit a534e83 reports 9,682 of 9,700).
-- New code goes into helper classes. The ratchet comment says the file is being split into `nativebackend/session/*`.
+- `src/test/java/com/hytalerlbridge/SourceFileSizeRatchetTest.java` caps `NativeEnvironmentSession.java` at 8,600 lines
+  (lowered from 9,700 on 2026-10-18 after the split below). Other files get 1,500. The file is 8,439 lines (`wc -l`,
+  2026-10-18), down from 9,691.
+- The split lives in `nativebackend/session/` (package `com.hytalerlbridge.nativebackend.session`), beside the existing
+  `region/`, `navigation/` and `info/` packages. Phase 4p moved 36 methods, 5 constants and 1 record into nine classes in
+  `session/` and `region/RegionLightBuilder` (1,753 lines in total): PrivilegedSnapshotBuilders 251, PerceptionBuilders 206,
+  WorldgenEvidenceBuilders 212, MutableBlockBuilders 342, SnapshotBuilders 180, InventoryReaders 116, SpawnEquipment 135,
+  FixtureBuilders 144, PolicyCombatKeys 117, RegionLightBuilder 50.
+- Rule for a move: the body stays byte-identical; the session fields it reads come first as parameters with the same names;
+  the session calls `Class.method(state..., args...)`; a moved method that calls another moved method passes the state
+  through. Classes in `session/` cannot see `nativebackend` package-private types (PendingStep, WorldVerbTelemetry, the
+  trace systems), so a method that depends on them stays in the session. Not moved on purpose: the tick loop, the step
+  state machine, the ability request gate and busy gate, the capability capture beside the guard fork decision, the spawn
+  path around the headless Player removal, the reset sequence around the crafting oracle, and every method that writes a
+  session field.
+- Gate for a split: compile, the full suite unchanged (421 tests on 2026-10-18), the ratchet, then a live smoke
+  (`tools/smoke_bridge_072.py`), the six-arrow reload test and a hold probe on a scratch jar before the pin moves. The live
+  runs exercise reset, steps and the ability path, not every moved capture builder; those moves rest on body identity and
+  the unit tests.
 
 ## 7. Fixtures, probes and the live protocol
 

@@ -35,7 +35,6 @@ import com.hypixel.hytale.server.core.asset.type.blockhitbox.BlockBoundingBoxes;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockMovementSettings;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.RotationTuple;
-import com.hypixel.hytale.server.core.asset.type.fluid.Fluid;
 import com.hypixel.hytale.server.core.asset.type.fluidfx.config.FluidFX;
 import com.hypixel.hytale.server.core.asset.type.item.config.CraftingRecipe;
 import com.hypixel.hytale.server.core.asset.type.item.config.Item;
@@ -52,7 +51,6 @@ import com.hypixel.hytale.server.core.entity.entities.ProjectileComponent;
 import com.hypixel.hytale.server.core.entity.damage.DamageDataComponent;
 import com.hypixel.hytale.server.core.entity.knockback.KnockbackComponent;
 import com.hypixel.hytale.server.core.inventory.Inventory;
-import com.hypixel.hytale.server.core.inventory.InventoryComponent;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.modules.entity.component.HeadRotation;
@@ -60,15 +58,12 @@ import com.hypixel.hytale.server.core.modules.entity.component.BoundingBox;
 import com.hypixel.hytale.server.core.modules.entity.component.CollisionResultComponent;
 import com.hypixel.hytale.server.core.modules.entity.component.ModelComponent;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
-import com.hypixel.hytale.server.core.modules.entity.component.FromPrefabInstance;
-import com.hypixel.hytale.server.core.modules.entity.component.WorldGenId;
 import com.hypixel.hytale.server.core.modules.entity.damage.Damage;
 import com.hypixel.hytale.server.core.modules.entity.tracker.EntityTrackerSystems;
 import com.hypixel.hytale.server.core.modules.entity.player.ChunkTracker;
 import com.hypixel.hytale.server.core.modules.entitystats.EntityStatMap;
 import com.hypixel.hytale.server.core.modules.entitystats.EntityStatValue;
 import com.hypixel.hytale.server.core.modules.entitystats.EntityStatsModule;
-import com.hypixel.hytale.server.core.modules.interaction.BlockHarvestUtils;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Interaction;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.RootInteraction;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.client.ChargingInteraction;
@@ -92,10 +87,8 @@ import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.WorldConfig;
 import com.hypixel.hytale.server.core.universe.world.chunk.ChunkFlag;
 import com.hypixel.hytale.server.core.universe.world.chunk.BlockChunk;
-import com.hypixel.hytale.server.core.universe.world.chunk.ChunkColumn;
 import com.hypixel.hytale.server.core.universe.world.chunk.WorldChunk;
 import com.hypixel.hytale.server.core.universe.world.chunk.section.BlockSection;
-import com.hypixel.hytale.server.core.universe.world.chunk.section.FluidSection;
 import com.hypixel.hytale.server.core.universe.world.spawn.GlobalSpawnProvider;
 import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
@@ -128,7 +121,6 @@ import com.hypixel.hytale.server.npc.role.support.PositionCache;
 import com.hypixel.hytale.server.npc.role.support.StateSupport;
 import com.hypixel.hytale.server.npc.role.support.WorldSupport;
 import com.hypixel.hytale.server.npc.util.NPCPhysicsMath;
-import com.hypixel.hytale.server.spawning.spawnmarkers.SpawnMarkerEntity;
 import com.hypixel.hytale.server.worldgen.HytaleWorldGenProvider;
 import com.hytalerlbridge.action.AgentAction;
 import com.hytalerlbridge.action.group.NativeGroupAction;
@@ -144,9 +136,7 @@ import com.hytalerlbridge.combat.dodge.NativeDodgeBindingResolver;
 import com.hytalerlbridge.combat.dodge.NativeDodgeProgram;
 import com.hytalerlbridge.combat.guard.NativeGuardProgram;
 import com.hytalerlbridge.entity.PrivilegedEntityQuery;
-import com.hytalerlbridge.entity.PrivilegedEntityRow;
 import com.hytalerlbridge.entity.PrivilegedEntitySnapshot;
-import com.hytalerlbridge.entity.PrivilegedNpcGeometryRow;
 import com.hytalerlbridge.entity.PrivilegedNpcSnapshot;
 import com.hytalerlbridge.entity.PrivilegedNpcUuidQuery;
 import com.hytalerlbridge.environment.EnvironmentOptions;
@@ -177,9 +167,7 @@ import com.hytalerlbridge.observation.AudioFrame;
 import com.hytalerlbridge.observation.MovementStateFrame;
 import com.hytalerlbridge.observation.NativeActorEvidenceFrame;
 import com.hytalerlbridge.observation.NativeActorEvidenceRequest;
-import com.hytalerlbridge.observation.NativeInventoryFrame;
 import com.hytalerlbridge.observation.Observation;
-import com.hytalerlbridge.observation.ObservationEncoding;
 import com.hytalerlbridge.imitation.NpcAttackActionSnapshot;
 import com.hytalerlbridge.imitation.NpcObservationSnapshot;
 import com.hytalerlbridge.imitation.NpcTraceBatch;
@@ -201,7 +189,6 @@ import com.hytalerlbridge.worldgen.NativeLineOfSightProbe;
 import com.hytalerlbridge.worldgen.NativeMutableBlockCells;
 import com.hytalerlbridge.worldgen.NativeMutableBlockEvidence;
 import com.hytalerlbridge.worldgen.WorldgenStructureMarkerQuery;
-import com.hytalerlbridge.worldgen.WorldgenStructureMarkerRow;
 import com.hytalerlbridge.worldgen.WorldgenStructureMarkerSnapshot;
 import com.hytalerlbridge.worldgen.NativeWorldActionCapabilities;
 import com.hytalerlbridge.worldgen.NativeRegionManifest;
@@ -226,7 +213,6 @@ import it.unimi.dsi.fastutil.Pair;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -257,7 +243,6 @@ import com.hytalerlbridge.nativebackend.model.CapturedStatuses;
 import com.hytalerlbridge.nativebackend.model.CheckedRunnable;
 import com.hytalerlbridge.nativebackend.model.DoubleArrayKey;
 import com.hytalerlbridge.nativebackend.model.EntityModelEvidence;
-import com.hytalerlbridge.nativebackend.model.EntityReading;
 import com.hytalerlbridge.nativebackend.model.GeometryChunkCoverage;
 import com.hytalerlbridge.nativebackend.model.NativeArmorEntry;
 import com.hytalerlbridge.nativebackend.model.NativeCellSemantics;
@@ -268,7 +253,6 @@ import com.hytalerlbridge.nativebackend.policy.combat.NativePolicyCombatFacade;
 import com.hytalerlbridge.nativebackend.policy.combat.NativeGuardFork;
 import com.hytalerlbridge.nativebackend.model.RegionBlockSemanticKey;
 import com.hytalerlbridge.nativebackend.model.RegionCellKey;
-import com.hytalerlbridge.nativebackend.model.ResolvedDropRoute;
 import com.hytalerlbridge.nativebackend.model.TargetState;
 import com.hytalerlbridge.nativebackend.model.WorldVerbCell;
 import com.hytalerlbridge.nativebackend.fixture.TargetMemoryEvaluationFixture;
@@ -279,20 +263,15 @@ import com.hytalerlbridge.nativebackend.support.NativeWorldAccess;
 import com.hytalerlbridge.nativebackend.support.RegionLightCoverage;
 import com.hytalerlbridge.nativebackend.support.NativeMotionForceCapture;
 import com.hytalerlbridge.nativebackend.support.NativeCellSemanticsCache;
-import com.hytalerlbridge.nativebackend.support.PrivilegedNpcGeometryCapture;
 import static com.hytalerlbridge.nativebackend.support.EvidenceCapture.absentActor;
 import static com.hytalerlbridge.nativebackend.support.EvidenceCapture.captureActorEvidence;
 import static com.hytalerlbridge.nativebackend.support.EvidenceCapture.activeItemId;
 import static com.hytalerlbridge.nativebackend.support.GeometryContacts.appendTouchingGeometryContacts;
 import static com.hytalerlbridge.nativebackend.support.GeometryContacts.blocksDefaultNpcLineOfSight;
-import static com.hytalerlbridge.nativebackend.support.DropRouting.canonicalDropOutcomeKey;
-import static com.hytalerlbridge.nativebackend.support.DropRouting.canonicalDropStack;
-import static com.hytalerlbridge.nativebackend.support.EvidenceCapture.canonicalEntityType;
 import static com.hytalerlbridge.nativebackend.support.NativeKeys.canonicalWorldVerbInventoryState;
 import static com.hytalerlbridge.nativebackend.support.EvidenceCapture.captureEntityModelEvidence;
 import static com.hytalerlbridge.nativebackend.support.EvidenceCapture.captureMovementStates;
 import static com.hytalerlbridge.nativebackend.support.EvidenceCapture.captureRoleOpacity;
-import static com.hytalerlbridge.nativebackend.support.EvidenceCapture.captureStatuses;
 import static com.hytalerlbridge.nativebackend.support.SupportMath.clamp;
 import static com.hytalerlbridge.nativebackend.support.InteractionSupport.clearMarkedTargets;
 import static com.hytalerlbridge.nativebackend.support.InteractionSupport.clearNativeCombat;
@@ -315,20 +294,27 @@ import static com.hytalerlbridge.nativebackend.support.SupportMath.normalizeDegr
 import static com.hytalerlbridge.nativebackend.support.SupportMath.normalizeRadians;
 import static com.hytalerlbridge.nativebackend.support.SupportMath.requireFinite;
 import static com.hytalerlbridge.nativebackend.support.SupportMath.requireNavigationCapacity;
-import static com.hytalerlbridge.nativebackend.support.DropRouting.resolveDropRoute;
 import static com.hytalerlbridge.nativebackend.support.InteractionSupport.resolveNativeInteractionBinding;
 import static com.hytalerlbridge.nativebackend.support.InteractionSupport.resolveNativeAbilityBindings;
 import static com.hytalerlbridge.nativebackend.support.InteractionSupport.resolvedWorldProbeRoot;
 import static com.hytalerlbridge.nativebackend.support.EvidenceCapture.sameEntity;
 import static com.hytalerlbridge.nativebackend.support.NativeKeys.sha256Hex;
 import static com.hytalerlbridge.nativebackend.support.NativeWorldVerbSupport.requestedUnsupportedWorldVerbs;
-import static com.hytalerlbridge.nativebackend.support.NativeWorldVerbSupport.requiredHotbarCapacity;
 import static com.hytalerlbridge.nativebackend.support.EvidenceCapture.stat;
-import com.hytalerlbridge.nativebackend.support.DropRouting;
 import com.hytalerlbridge.nativebackend.support.ExplosionAdmissionProbe;
 import com.hytalerlbridge.nativebackend.support.ExplosionMutationCapture;
 import com.hytalerlbridge.nativebackend.support.ExplosionDynamicsCapture;
 import com.hytalerlbridge.nativebackend.support.MutableBlockEpochGuard;
+import com.hytalerlbridge.nativebackend.session.PrivilegedSnapshotBuilders;
+import com.hytalerlbridge.nativebackend.session.PerceptionBuilders;
+import com.hytalerlbridge.nativebackend.session.WorldgenEvidenceBuilders;
+import com.hytalerlbridge.nativebackend.session.MutableBlockBuilders;
+import com.hytalerlbridge.nativebackend.session.SnapshotBuilders;
+import com.hytalerlbridge.nativebackend.session.InventoryReaders;
+import com.hytalerlbridge.nativebackend.session.SpawnEquipment;
+import com.hytalerlbridge.nativebackend.session.FixtureBuilders;
+import com.hytalerlbridge.nativebackend.session.PolicyCombatKeys;
+import com.hytalerlbridge.nativebackend.session.region.RegionLightBuilder;
 
 /** One isolated, server-authoritative Hytale 0.5.7 headless environment. */
 final class NativeEnvironmentSession
@@ -358,7 +344,6 @@ final class NativeEnvironmentSession
         HytaleCombatAssets.RULESET;
     private static final int WARMUP_TICKS = 16;
     private static final int BLOCK_RADIUS = GeometryContract.RADIUS;
-    private static final int INVENTORY_SIZE = 36;
     private static final double NAVIGATE_SUCCESS_RADIUS = 1.5;
     private static final double NEARBY_ENTITY_RADIUS =
         COMBAT_RULES.target().sensorRange();
@@ -398,7 +383,6 @@ final class NativeEnvironmentSession
             PredictedProjectile.getComponentType()
         )
     );
-    private static final int MAX_NEARBY_ENTITIES = 20;
     private static final double AGENT_STEERING_RELATIVE_TURN_SPEED =
         COMBAT_RULES.agent().steeringRelativeTurnSpeed();
     private static final double AGENT_JUMP_VELOCITY_GRAVITY_FLOOR =
@@ -447,9 +431,6 @@ final class NativeEnvironmentSession
     private static final double NATIVE_PROJECTILE_TARGET_OFFSET_Z = 10.0;
     private static final int PATH_FOLLOWER_WALL_Z = -3;
     private static final int PATH_FOLLOWER_WALL_HALF_WIDTH = 2;
-    private static final int DIVE_POOL_HALF_WIDTH = 8;
-    private static final int DIVE_POOL_MIN_Y = 65;
-    private static final int DIVE_POOL_MAX_Y = 75;
     private static final double DIVE_POOL_SPAWN_Y = 69.0;
     // These controlled fixtures cross the X/Z cell corner at (1, 0). One
     // block is only grazed; the other occupies the tied-axis destination.
@@ -459,8 +440,6 @@ final class NativeEnvironmentSession
     private static final String NATIVE_SERVER_VERSION = implementationVersion();
     private static final AtomicInteger HYTALE_GENERATOR_WORLD_COUNTER =
         new AtomicInteger(Integer.MIN_VALUE);
-
-    private record TraceLightSection(int chunkX, int chunkZ, int sectionY) {}
 
     private final HytaleNativeBackendProvider provider;
     private final ComponentType<EntityStore, NativeAgentMarker> markerType;
@@ -491,7 +470,7 @@ final class NativeEnvironmentSession
     private final List<Ref<ChunkStore>> loadedChunks = new ArrayList<>();
     private final Set<Long> loadedChunkIndices = new HashSet<>();
     private final Set<Long> geometryChunkIndices = new HashSet<>();
-    private final Map<TraceLightSection, Long> traceLightRequestTicks =
+    private final Map<PerceptionBuilders.TraceLightSection, Long> traceLightRequestTicks =
         new HashMap<>();
     private final NativeCellSemanticsCache nativeCellSemanticsCache =
         new NativeCellSemanticsCache();
@@ -958,7 +937,16 @@ final class NativeEnvironmentSession
         }
         AtomicReference<NativePerceptionChannels> captured = new AtomicReference<>();
         runOnWorld(
-            () -> captured.set(buildPerceptionChannels(positions)),
+            () -> captured.set(PerceptionBuilders.buildPerceptionChannels(
+                NATIVE_SERVER_VERSION,
+                seed,
+                traceLightRequestTicks,
+                world,
+                worldName,
+                worldgenProvider,
+                worldgenVersion,
+                positions
+            )),
             INITIALIZATION_TIMEOUT
         );
         NativePerceptionChannels result = captured.get();
@@ -1019,7 +1007,18 @@ final class NativeEnvironmentSession
         AtomicReference<NativeMutableBlockEvidence> captured =
             new AtomicReference<>();
         runOnWorld(
-            () -> captured.set(buildMutableBlockEvidence()),
+            () -> captured.set(MutableBlockBuilders.buildMutableBlockEvidence(
+                NATIVE_SERVER_VERSION,
+                nativeCellSemanticsCache,
+                seed,
+                spawnX,
+                spawnY,
+                spawnZ,
+                world,
+                worldName,
+                worldgenProvider,
+                worldgenVersion
+            )),
             INITIALIZATION_TIMEOUT
         );
         NativeMutableBlockEvidence result = captured.get();
@@ -1068,7 +1067,13 @@ final class NativeEnvironmentSession
             new AtomicReference<>();
         runOnWorld(
             () -> captured.set(
-                buildRegionLightSection(chunkX, chunkZ, sectionY)
+                RegionLightBuilder.buildRegionLightSection(
+                    loadedChunkIndices,
+                    world,
+                    chunkX,
+                    chunkZ,
+                    sectionY
+                )
             ),
             INITIALIZATION_TIMEOUT
         );
@@ -1123,7 +1128,16 @@ final class NativeEnvironmentSession
                     expectedWorldEpoch,
                     "on world thread"
                 );
-                captured.set(buildMutableBlockCells(positions));
+                captured.set(MutableBlockBuilders.buildMutableBlockCells(
+                    NATIVE_SERVER_VERSION,
+                    nativeCellSemanticsCache,
+                    seed,
+                    world,
+                    worldName,
+                    worldgenProvider,
+                    worldgenVersion,
+                    positions
+                ));
             },
             INITIALIZATION_TIMEOUT
         );
@@ -1192,7 +1206,9 @@ final class NativeEnvironmentSession
                         int y,
                         int z
                     ) {
-                        return explosionMutationCellState(
+                        return MutableBlockBuilders.explosionMutationCellState(
+                            nativeCellSemanticsCache,
+                            world,
                             x,
                             y,
                             z,
@@ -1204,7 +1220,8 @@ final class NativeEnvironmentSession
 
                     @Override
                     public void clearBlockHealth(int x, int y, int z) {
-                        BlockHealthSection health = explosionMutationBlockHealth(
+                        BlockHealthSection health = MutableBlockBuilders.explosionMutationBlockHealth(
+                            world,
                             x,
                             y,
                             z,
@@ -1305,7 +1322,12 @@ final class NativeEnvironmentSession
         AtomicReference<NativeDropProgramEvidence> captured =
             new AtomicReference<>();
         runOnWorld(
-            () -> captured.set(buildDropProgramEvidence(
+            () -> captured.set(WorldgenEvidenceBuilders.buildDropProgramEvidence(
+                NATIVE_SERVER_VERSION,
+                seed,
+                worldName,
+                worldgenProvider,
+                worldgenVersion,
                 blockAssetId,
                 route,
                 sampleCount
@@ -1700,7 +1722,15 @@ final class NativeEnvironmentSession
         AtomicReference<PrivilegedEntitySnapshot> captured =
             new AtomicReference<>();
         runOnWorld(
-            () -> captured.set(buildPrivilegedEntitySnapshot(query)),
+            () -> captured.set(PrivilegedSnapshotBuilders.buildPrivilegedEntitySnapshot(
+                NATIVE_SERVER_VERSION,
+                seed,
+                world,
+                worldName,
+                worldgenProvider,
+                worldgenVersion,
+                query
+            )),
             INITIALIZATION_TIMEOUT
         );
         PrivilegedEntitySnapshot result = captured.get();
@@ -1724,7 +1754,15 @@ final class NativeEnvironmentSession
         AtomicReference<PrivilegedNpcSnapshot> captured =
             new AtomicReference<>();
         runOnWorld(
-            () -> captured.set(buildPrivilegedNpcSnapshot(query)),
+            () -> captured.set(PrivilegedSnapshotBuilders.buildPrivilegedNpcSnapshot(
+                NATIVE_SERVER_VERSION,
+                seed,
+                world,
+                worldName,
+                worldgenProvider,
+                worldgenVersion,
+                query
+            )),
             INITIALIZATION_TIMEOUT
         );
         PrivilegedNpcSnapshot result = captured.get();
@@ -1838,7 +1876,16 @@ final class NativeEnvironmentSession
                 itemIds,
                 policyWorldActionRecipeCatalog,
                 policyWorldActionRecipeTableIdentity,
-                this::buildMutableBlockCells,
+                mutableBlockPositions -> MutableBlockBuilders.buildMutableBlockCells(
+                    NATIVE_SERVER_VERSION,
+                    nativeCellSemanticsCache,
+                    seed,
+                    world,
+                    worldName,
+                    worldgenProvider,
+                    worldgenVersion,
+                    mutableBlockPositions
+                ),
                 request
             )
         );
@@ -1856,7 +1903,15 @@ final class NativeEnvironmentSession
         AtomicReference<PrivilegedNpcSnapshot> captured =
             new AtomicReference<>();
         runOnWorld(
-            () -> captured.set(buildPrivilegedNpcSnapshotByUuid(query)),
+            () -> captured.set(PrivilegedSnapshotBuilders.buildPrivilegedNpcSnapshotByUuid(
+                NATIVE_SERVER_VERSION,
+                seed,
+                world,
+                worldName,
+                worldgenProvider,
+                worldgenVersion,
+                query
+            )),
             INITIALIZATION_TIMEOUT
         );
         PrivilegedNpcSnapshot result = captured.get();
@@ -2033,7 +2088,15 @@ final class NativeEnvironmentSession
         AtomicReference<WorldgenStructureMarkerSnapshot> captured =
             new AtomicReference<>();
         runOnWorld(
-            () -> captured.set(buildWorldgenStructureMarkers(query)),
+            () -> captured.set(WorldgenEvidenceBuilders.buildWorldgenStructureMarkers(
+                NATIVE_SERVER_VERSION,
+                seed,
+                world,
+                worldName,
+                worldgenProvider,
+                worldgenVersion,
+                query
+            )),
             INITIALIZATION_TIMEOUT
         );
         WorldgenStructureMarkerSnapshot result = captured.get();
@@ -2097,769 +2160,6 @@ final class NativeEnvironmentSession
         return result;
     }
 
-    private PrivilegedEntitySnapshot buildPrivilegedEntitySnapshot(
-        PrivilegedEntityQuery query
-    ) {
-        Store<EntityStore> store = world.getEntityStore().getStore();
-        Query<EntityStore> componentQuery = Query.and(
-            UUIDComponent.getComponentType(),
-            TransformComponent.getComponentType(),
-            Velocity.getComponentType()
-        );
-        List<PrivilegedEntityRow> matches = new ArrayList<>();
-        store.forEachChunk(componentQuery, (chunk, commandBuffer) -> {
-            for (int index = 0; index < chunk.size(); index++) {
-                UUIDComponent identity = chunk.getComponent(
-                    index,
-                    UUIDComponent.getComponentType()
-                );
-                TransformComponent transform = chunk.getComponent(
-                    index,
-                    TransformComponent.getComponentType()
-                );
-                Velocity velocity = chunk.getComponent(
-                    index,
-                    Velocity.getComponentType()
-                );
-                if (
-                    identity == null
-                        || transform == null
-                        || velocity == null
-                ) {
-                    continue;
-                }
-                Vector3d position = transform.getPosition();
-                if (!query.contains(position.x, position.y, position.z)) {
-                    continue;
-                }
-                Rotation3f rotation = transform.getRotation();
-                matches.add(PrivilegedEntityRow.of(
-                    identity.getUuid(),
-                    position.x,
-                    position.y,
-                    position.z,
-                    rotation.yaw(),
-                    rotation.pitch(),
-                    rotation.roll(),
-                    velocity.getX(),
-                    velocity.getY(),
-                    velocity.getZ()
-                ));
-            }
-        });
-        return PrivilegedEntitySnapshot.fromMatches(
-            NATIVE_SERVER_VERSION,
-            worldName,
-            worldgenProvider,
-            worldgenVersion,
-            seed,
-            query,
-            matches
-        );
-    }
-
-    private PrivilegedNpcSnapshot buildPrivilegedNpcSnapshot(
-        PrivilegedEntityQuery query
-    ) {
-        Store<EntityStore> store = world.getEntityStore().getStore();
-        Query<EntityStore> componentQuery = Query.and(
-            UUIDComponent.getComponentType(),
-            TransformComponent.getComponentType(),
-            Velocity.getComponentType(),
-            NPCEntity.getComponentType()
-        );
-        List<PrivilegedNpcGeometryRow> matches = new ArrayList<>();
-        store.forEachChunk(componentQuery, (chunk, commandBuffer) -> {
-            for (int index = 0; index < chunk.size(); index++) {
-                UUIDComponent identity = chunk.getComponent(
-                    index,
-                    UUIDComponent.getComponentType()
-                );
-                TransformComponent transform = chunk.getComponent(
-                    index,
-                    TransformComponent.getComponentType()
-                );
-                Velocity velocity = chunk.getComponent(
-                    index,
-                    Velocity.getComponentType()
-                );
-                NPCEntity npc = chunk.getComponent(
-                    index,
-                    NPCEntity.getComponentType()
-                );
-                if (
-                    identity == null
-                        || transform == null
-                        || velocity == null
-                        || npc == null
-                ) {
-                    continue;
-                }
-                Vector3d position = transform.getPosition();
-                if (!query.contains(position.x, position.y, position.z)) {
-                    continue;
-                }
-                Rotation3f rotation = transform.getRotation();
-                PrivilegedEntityRow spatial = PrivilegedEntityRow.ofNpc(
-                    identity.getUuid(),
-                    npc.getRoleName(),
-                    position.x,
-                    position.y,
-                    position.z,
-                    rotation.yaw(),
-                    rotation.pitch(),
-                    rotation.roll(),
-                    velocity.getX(),
-                    velocity.getY(),
-                    velocity.getZ()
-                );
-                matches.add(PrivilegedNpcGeometryCapture.capture(
-                    store,
-                    chunk.getReferenceTo(index),
-                    spatial
-                ));
-            }
-        });
-        return PrivilegedNpcSnapshot.fromMatches(
-            NATIVE_SERVER_VERSION,
-            worldName,
-            worldgenProvider,
-            worldgenVersion,
-            seed,
-            query,
-            matches
-        );
-    }
-
-    private PrivilegedNpcSnapshot buildPrivilegedNpcSnapshotByUuid(
-        PrivilegedNpcUuidQuery uuidQuery
-    ) {
-        Store<EntityStore> store = world.getEntityStore().getStore();
-        PrivilegedEntityQuery query = uuidQuery.spatialQuery();
-        Ref<EntityStore> reference = world.getEntityStore().getRefFromUUID(
-            uuidQuery.npcUuid()
-        );
-        List<PrivilegedNpcGeometryRow> matches = new ArrayList<>(1);
-        if (reference != null && reference.isValid()) {
-            UUIDComponent identity = store.getComponent(
-                reference,
-                UUIDComponent.getComponentType()
-            );
-            TransformComponent transform = store.getComponent(
-                reference,
-                TransformComponent.getComponentType()
-            );
-            Velocity velocity = store.getComponent(
-                reference,
-                Velocity.getComponentType()
-            );
-            NPCEntity npc = store.getComponent(
-                reference,
-                NPCEntity.getComponentType()
-            );
-            if (
-                identity != null
-                    && uuidQuery.npcUuid().equals(identity.getUuid())
-                    && transform != null
-                    && velocity != null
-                    && npc != null
-            ) {
-                Vector3d position = transform.getPosition();
-                if (query.contains(position.x, position.y, position.z)) {
-                    Rotation3f rotation = transform.getRotation();
-                    PrivilegedEntityRow spatial = PrivilegedEntityRow.ofNpc(
-                        identity.getUuid(),
-                        npc.getRoleName(),
-                        position.x,
-                        position.y,
-                        position.z,
-                        rotation.yaw(),
-                        rotation.pitch(),
-                        rotation.roll(),
-                        velocity.getX(),
-                        velocity.getY(),
-                        velocity.getZ()
-                    );
-                    matches.add(PrivilegedNpcGeometryCapture.capture(
-                        store,
-                        reference,
-                        spatial
-                    ));
-                }
-            }
-        }
-        return PrivilegedNpcSnapshot.fromMatches(
-            NATIVE_SERVER_VERSION,
-            worldName,
-            worldgenProvider,
-            worldgenVersion,
-            seed,
-            query,
-            matches
-        );
-    }
-
-    private NativePerceptionChannels buildPerceptionChannels(int[] positions) {
-        record Column(short height, int tint) {}
-
-        int samples = positions.length / 3;
-        byte[] available = new byte[samples];
-        byte[] validity = new byte[samples];
-        short[] heightmap = new short[samples];
-        byte[] skyLight = new byte[samples];
-        byte[] blockLightRgb = new byte[samples * 3];
-        int[] environment = new int[samples];
-        int[] tintArgb = new int[samples];
-        Map<Long, NativeWorldAccess.Column> chunks = new HashMap<>();
-        Map<Long, Column> columns = new HashMap<>();
-        Map<TraceLightSection, Boolean> lightReady = new HashMap<>();
-        long worldTick = world.getTick();
-
-        for (int sample = 0; sample < samples; sample++) {
-            int offset = sample * 3;
-            int x = positions[offset];
-            int y = positions[offset + 1];
-            int z = positions[offset + 2];
-            long chunkIndex = ChunkUtil.indexChunkFromBlock(x, z);
-            NativeWorldAccess.Column chunk = chunks.get(chunkIndex);
-            if (chunk == null) {
-                chunk = NativeWorldAccess.getChunkIfLoaded(world, chunkIndex);
-                if (chunk != null) chunks.put(chunkIndex, chunk);
-            }
-            if (chunk == null) continue;
-            NativeWorldAccess.Column blocks = chunk;
-            if (blocks == null) continue;
-
-            available[sample] = 1;
-            int localX = ChunkUtil.localCoordinate((long) x);
-            int localZ = ChunkUtil.localCoordinate((long) z);
-            int valid = NativePerceptionChannels.VALID_TINT_RGB;
-            long columnKey = ((long) x << 32) ^ (z & 0xffffffffL);
-            Column column = columns.get(columnKey);
-            if (column == null) {
-                column = new Column(
-                    blocks.getHeight(localX, localZ),
-                    blocks.getTint(localX, localZ)
-                );
-                columns.put(columnKey, column);
-            }
-            if (column.height() != NativePerceptionChannels.WORLD_HEIGHT) {
-                heightmap[sample] = column.height();
-                valid |= NativePerceptionChannels.VALID_HEIGHTMAP;
-            }
-            tintArgb[sample] = column.tint();
-
-            if (y >= 0 && y < NativePerceptionChannels.WORLD_HEIGHT) {
-                valid |= NativePerceptionChannels.VALID_ENVIRONMENT;
-                environment[sample] = blocks.getEnvironment(localX, y, localZ);
-                int sectionY = Math.floorDiv(y, ChunkUtil.SIZE);
-                TraceLightSection lightSection = new TraceLightSection(
-                    chunk.getX(), chunk.getZ(), sectionY
-                );
-                Boolean ready = lightReady.get(lightSection);
-                if (ready == null) {
-                    ready = RegionLightCapture.isAvailable(
-                        blocks.getSectionAtBlockY(y)
-                    );
-                    lightReady.put(lightSection, ready);
-                }
-                if (ready) {
-                    traceLightRequestTicks.remove(lightSection);
-                    valid |= NativePerceptionChannels.VALID_SKY_LIGHT
-                        | NativePerceptionChannels.VALID_BLOCK_LIGHT_RGB;
-                    skyLight[sample] = blocks.getSkyLight(localX, y, localZ);
-                    int rgb = sample * 3;
-                    blockLightRgb[rgb] = blocks.getRedBlockLight(localX, y, localZ);
-                    blockLightRgb[rgb + 1] = blocks.getGreenBlockLight(
-                        localX,
-                        y,
-                        localZ
-                    );
-                    blockLightRgb[rgb + 2] = blocks.getBlueBlockLight(
-                        localX,
-                        y,
-                        localZ
-                    );
-                } else {
-                    Long requested = traceLightRequestTicks.get(lightSection);
-                    if (requested == null || requested.longValue() != worldTick) {
-                        RegionLightCapture.invalidateEmptyPlaceholders(
-                            blocks.getSectionAtBlockY(y)
-                        );
-                        world.getChunkLighting().addToQueue(
-                            new Vector3i(chunk.getX(), sectionY, chunk.getZ())
-                        );
-                        traceLightRequestTicks.put(lightSection, worldTick);
-                    }
-                }
-            }
-            validity[sample] = (byte) valid;
-        }
-        return new NativePerceptionChannels(
-            NATIVE_SERVER_VERSION,
-            worldName,
-            worldgenProvider,
-            worldgenVersion,
-            seed,
-            positions,
-            available,
-            validity,
-            heightmap,
-            skyLight,
-            blockLightRgb,
-            environment,
-            tintArgb
-        );
-    }
-
-    private NativeMutableBlockEvidence buildMutableBlockEvidence() {
-        int x = (int) Math.floor(spawnX) + 8;
-        int y = (int) Math.floor(spawnY) + 1;
-        int z = (int) Math.floor(spawnZ) - 8;
-        Vector3i position = new Vector3i(x, y, z);
-        int blockIndex = ChunkUtil.indexBlock(x, y, z);
-        NativeWorldAccess.Column chunk = NativeWorldAccess.getChunkIfLoaded(
-            world,
-            ChunkUtil.indexChunkFromBlock(x, z)
-        );
-        if (chunk == null) {
-            throw new IllegalStateException(
-                "Mutable block evidence fixture chunk is not loaded"
-            );
-        }
-        if (NativeWorldAccess.getBlock(world, x, y, z) != 0 || chunk.getFluidId(
-            ChunkUtil.localCoordinate((long) x),
-            y,
-            ChunkUtil.localCoordinate((long) z)
-        ) != 0) {
-            throw new IllegalStateException(
-                "Mutable block evidence fixture cell is not initially empty"
-            );
-        }
-
-        BlockHealthModule module = BlockHealthModule.get();
-        Store<ChunkStore> chunkStore = world.getChunkStore().getStore();
-        BlockHealthSection health = module == null
-            ? null
-            : blockHealthSection(chunkStore, chunk, y);
-        if (health == null) {
-            throw new IllegalStateException(
-                "Mutable block evidence chunk has no BlockHealthSection"
-            );
-        }
-        Store<EntityStore> entityStore = world.getEntityStore().getStore();
-        WorldTimeResource time = entityStore.getResource(
-            WorldTimeResource.getResourceType()
-        );
-        if (time == null) {
-            throw new IllegalStateException(
-                "Mutable block evidence world has no game-time resource"
-            );
-        }
-
-        List<NativeMutableBlockEvidence.Row> rows = new ArrayList<>(5);
-        try {
-            health.clearHealth(blockIndex);
-            setControlledBlock(position, "Rock_Stone", true);
-            rows.add(RegionGeometryCapture.mutableBlockRow(nativeCellSemanticsCache, world, 
-                "initial",
-                position,
-                chunk,
-                health,
-                time.getGameTime()
-            ));
-
-            health.damage(x, y, z, 0.4f, time.getGameTime());
-            rows.add(RegionGeometryCapture.mutableBlockRow(nativeCellSemanticsCache, world, 
-                "damaged",
-                position,
-                chunk,
-                health,
-                time.getGameTime()
-            ));
-
-            // 0.5 repairBlock dropped the entry unless repaired health exceeded 1.0
-            // (bytecode: dcmpl/ifle), so 0.6 + 0.1 read back as undamaged.
-            // 0.7.2 has no repair call; clearing reproduces that result.
-            health.clearHealth(blockIndex);
-            rows.add(RegionGeometryCapture.mutableBlockRow(nativeCellSemanticsCache, world, 
-                "repaired",
-                position,
-                chunk,
-                health,
-                time.getGameTime()
-            ));
-
-            setControlledBlock(position, BlockType.EMPTY_KEY, false);
-            health.clearHealth(blockIndex);
-            rows.add(RegionGeometryCapture.mutableBlockRow(nativeCellSemanticsCache, world, 
-                "removed",
-                position,
-                chunk,
-                health,
-                time.getGameTime()
-            ));
-
-            setControlledBlock(position, "Rock_Stone", true);
-            rows.add(RegionGeometryCapture.mutableBlockRow(nativeCellSemanticsCache, world, 
-                "placed",
-                position,
-                chunk,
-                health,
-                time.getGameTime()
-            ));
-        } finally {
-            health.clearHealth(blockIndex);
-            NativeWorldAccess.setBlock(world, x, y, z, BlockType.EMPTY_KEY);
-        }
-        return new NativeMutableBlockEvidence(
-            NATIVE_SERVER_VERSION,
-            worldName,
-            worldgenProvider,
-            worldgenVersion,
-            seed,
-            new int[] {x, y, z},
-            rows
-        );
-    }
-
-    private WorldgenStructureMarkerSnapshot buildWorldgenStructureMarkers(
-        WorldgenStructureMarkerQuery query
-    ) {
-        Store<EntityStore> store = world.getEntityStore().getStore();
-        Query<EntityStore> componentQuery = Query.and(
-            UUIDComponent.getComponentType(),
-            TransformComponent.getComponentType(),
-            WorldGenId.getComponentType(),
-            FromPrefabInstance.getComponentType(),
-            SpawnMarkerEntity.getComponentType()
-        );
-        List<WorldgenStructureMarkerRow> matches = new ArrayList<>();
-        store.forEachChunk(componentQuery, (chunk, commandBuffer) -> {
-            for (int index = 0; index < chunk.size(); index++) {
-                UUIDComponent identity = chunk.getComponent(
-                    index,
-                    UUIDComponent.getComponentType()
-                );
-                TransformComponent transform = chunk.getComponent(
-                    index,
-                    TransformComponent.getComponentType()
-                );
-                WorldGenId worldgenId = chunk.getComponent(
-                    index,
-                    WorldGenId.getComponentType()
-                );
-                FromPrefabInstance prefabInstance = chunk.getComponent(
-                    index,
-                    FromPrefabInstance.getComponentType()
-                );
-                SpawnMarkerEntity marker = chunk.getComponent(
-                    index,
-                    SpawnMarkerEntity.getComponentType()
-                );
-                if (
-                    identity == null
-                        || transform == null
-                        || worldgenId == null
-                        || prefabInstance == null
-                        || marker == null
-                        || !query.accepts(marker.getSpawnMarkerId())
-                ) {
-                    continue;
-                }
-                Vector3d position = transform.getPosition();
-                if (!query.contains(position.x, position.y, position.z)) {
-                    continue;
-                }
-                Rotation3f rotation = transform.getRotation();
-                matches.add(WorldgenStructureMarkerRow.of(
-                    identity.getUuid(),
-                    marker.getSpawnMarkerId(),
-                    position.x,
-                    position.y,
-                    position.z,
-                    rotation.yaw(),
-                    rotation.pitch(),
-                    rotation.roll(),
-                    worldgenId.getWorldGenId(),
-                    prefabInstance.getPrefabInstanceId()
-                ));
-            }
-        });
-        return WorldgenStructureMarkerSnapshot.fromMatches(
-            NATIVE_SERVER_VERSION,
-            worldName,
-            worldgenProvider,
-            worldgenVersion,
-            seed,
-            query,
-            matches
-        );
-    }
-
-    private NativeMutableBlockCells buildMutableBlockCells(int[] positions) {
-        BlockHealthModule module = BlockHealthModule.get();
-        if (module == null) {
-            throw new IllegalStateException(
-                "Native mutable block capture has no BlockHealthModule"
-            );
-        }
-        Store<ChunkStore> chunkStore = world.getChunkStore().getStore();
-        Store<EntityStore> entityStore = world.getEntityStore().getStore();
-        WorldTimeResource time = entityStore.getResource(
-            WorldTimeResource.getResourceType()
-        );
-        if (time == null) {
-            throw new IllegalStateException(
-                "Native mutable block capture has no game-time resource"
-            );
-        }
-        List<NativeMutableBlockCells.Cell> cells = new ArrayList<>(
-            positions.length / 3
-        );
-        for (int offset = 0; offset < positions.length; offset += 3) {
-            int x = positions[offset];
-            int y = positions[offset + 1];
-            int z = positions[offset + 2];
-            int[] position = {x, y, z};
-            if (y < 0 || y >= NativePerceptionChannels.WORLD_HEIGHT) {
-                cells.add(new NativeMutableBlockCells.Cell(
-                    position,
-                    false,
-                    null
-                ));
-                continue;
-            }
-            NativeWorldAccess.Column chunk = NativeWorldAccess.getChunkIfLoaded(
-                world,
-                ChunkUtil.indexChunkFromBlock(x, z)
-            );
-            if (chunk == null) {
-                cells.add(new NativeMutableBlockCells.Cell(
-                    position,
-                    false,
-                    null
-                ));
-                continue;
-            }
-            BlockHealthSection health = blockHealthSection(chunkStore, chunk, y);
-            if (health == null) {
-                throw new IllegalStateException(
-                    "Loaded mutable block cell has no BlockHealthSection"
-                );
-            }
-            cells.add(new NativeMutableBlockCells.Cell(
-                position,
-                true,
-                RegionGeometryCapture.mutableBlockRow(nativeCellSemanticsCache, world, 
-                    "snapshot",
-                    new Vector3i(x, y, z),
-                    chunk,
-                    health,
-                    time.getGameTime()
-                )
-            ));
-        }
-        return new NativeMutableBlockCells(
-            NATIVE_SERVER_VERSION,
-            worldName,
-            worldgenProvider,
-            worldgenVersion,
-            seed,
-            cells
-        );
-    }
-
-    private NativeDropProgramEvidence buildDropProgramEvidence(
-        String blockAssetId,
-        String route,
-        int sampleCount
-    ) {
-        if (blockAssetId == null || blockAssetId.isBlank()) {
-            throw new IllegalArgumentException(
-                "Drop-program block asset ID cannot be blank"
-            );
-        }
-        if (
-            sampleCount < 1
-                || sampleCount > NativeDropProgramEvidence.MAX_SAMPLES
-        ) {
-            throw new IllegalArgumentException(
-                "Drop-program sample count exceeds capacity"
-            );
-        }
-        BlockType blockType = BlockType.getAssetMap().getAsset(blockAssetId);
-        if (blockType == null || blockType == BlockType.EMPTY) {
-            throw new IllegalArgumentException(
-                "Unknown block asset ID: " + blockAssetId
-            );
-        }
-        ResolvedDropRoute resolved = resolveDropRoute(blockType, route);
-        Map<List<NativeDropProgramEvidence.Stack>, Integer> counts =
-            new LinkedHashMap<>();
-        for (int sample = 0; sample < sampleCount; sample++) {
-            List<ItemStack> drops = BlockHarvestUtils.getDrops(
-                blockType,
-                resolved.quantity(),
-                resolved.itemId(),
-                resolved.dropListId()
-            );
-            if (drops == null) {
-                throw new IllegalStateException(
-                    "Native drop API returned null"
-                );
-            }
-            List<NativeDropProgramEvidence.Stack> stacks = drops.stream()
-                .filter(stack -> !ItemStack.isEmpty(stack))
-                .map(DropRouting::canonicalDropStack)
-                .toList();
-            if (
-                stacks.size()
-                    > NativeDropProgramEvidence.MAX_STACKS_PER_OUTCOME
-            ) {
-                throw new IllegalStateException(
-                    "Native drop stack capacity exceeded"
-                );
-            }
-            counts.merge(stacks, 1, Integer::sum);
-            if (
-                counts.size()
-                    > NativeDropProgramEvidence.MAX_OUTCOMES
-            ) {
-                throw new IllegalStateException(
-                    "Native drop outcome capacity exceeded"
-                );
-            }
-        }
-        List<NativeDropProgramEvidence.Outcome> outcomes = counts.entrySet()
-            .stream()
-            .map(entry -> new NativeDropProgramEvidence.Outcome(
-                entry.getValue(),
-                entry.getKey()
-            ))
-            .sorted(Comparator.comparing(
-                outcome -> canonicalDropOutcomeKey(outcome.stacks())
-            ))
-            .toList();
-        return new NativeDropProgramEvidence(
-            NATIVE_SERVER_VERSION,
-            worldName,
-            worldgenProvider,
-            worldgenVersion,
-            seed,
-            blockAssetId,
-            route,
-            resolved.quantity(),
-            resolved.itemId(),
-            resolved.dropListId(),
-            sampleCount,
-            outcomes
-        );
-    }
-
-    private void setControlledBlock(
-        Vector3i position,
-        String blockAssetId,
-        boolean expectedPresent
-    ) {
-        NativeWorldAccess.setBlock(
-            world,
-            position.x,
-            position.y,
-            position.z,
-            blockAssetId
-        );
-        boolean present = NativeWorldAccess.getBlock(
-            world,
-            position.x,
-            position.y,
-            position.z
-        ) != 0;
-        if (present != expectedPresent) {
-            throw new IllegalStateException(
-                "Mutable block fixture transition was rejected: "
-                    + blockAssetId
-            );
-        }
-    }
-
-
-    private NativeExplosionMutationProbe.CellState explosionMutationCellState(
-        int x,
-        int y,
-        int z,
-        BlockHealthModule healthModule,
-        Store<ChunkStore> chunkStore,
-        WorldTimeResource time
-    ) {
-        NativeWorldAccess.Column chunk = NativeWorldAccess.getChunkIfLoaded(
-            world,
-            ChunkUtil.indexChunkFromBlock(x, z)
-        );
-        if (chunk == null) {
-            throw new IllegalStateException(
-                "Explosion mutation scan chunk unloaded during capture"
-            );
-        }
-        BlockHealthSection health = explosionMutationBlockHealth(
-            x,
-            y,
-            z,
-            healthModule,
-            chunkStore
-        );
-        return NativeExplosionMutationProbe.CellState.fromMutableRow(
-            RegionGeometryCapture.mutableBlockRow(nativeCellSemanticsCache, world, 
-                "snapshot",
-                new Vector3i(x, y, z),
-                chunk,
-                health,
-                time.getGameTime()
-            )
-        );
-    }
-
-    private BlockHealthSection explosionMutationBlockHealth(
-        int x,
-        int y,
-        int z,
-        BlockHealthModule healthModule,
-        Store<ChunkStore> chunkStore
-    ) {
-        if (y < 0 || y >= NativePerceptionChannels.WORLD_HEIGHT) {
-            throw new IllegalArgumentException(
-                "Explosion mutation scan escaped the native Y domain"
-            );
-        }
-        NativeWorldAccess.Column chunk = NativeWorldAccess.getChunkIfLoaded(
-            world,
-            ChunkUtil.indexChunkFromBlock(x, z)
-        );
-        if (chunk == null) {
-            throw new IllegalStateException(
-                "Explosion mutation health chunk unloaded during capture"
-            );
-        }
-        BlockHealthSection health = blockHealthSection(chunkStore, chunk, y);
-        if (health == null) {
-            throw new IllegalStateException(
-                "Explosion mutation loaded chunk has no BlockHealthSection"
-            );
-        }
-        return health;
-    }
-
-    /** 0.7.2 keeps block health per section; 0.5 kept one BlockHealthChunk per column. */
-    private static BlockHealthSection blockHealthSection(
-        Store<ChunkStore> chunkStore,
-        NativeWorldAccess.Column chunk,
-        int y
-    ) {
-        Ref<ChunkStore> section = chunk.getSectionReference(ChunkUtil.chunkCoordinate(y));
-        return section == null
-            ? null
-            : chunkStore.getComponent(section, BlockHealthSection.getComponentType());
-    }
 
     private void requireWorldCaptureReady() {
         if (closed) {
@@ -3819,10 +3119,10 @@ final class NativeEnvironmentSession
                 new NativeAgentMarker(this, 0)
             );
             policyActorIdentities[0] = policyActorIdentity(0, store);
-            replaceNativeAgentArmor(npc);
+            SpawnEquipment.replaceNativeAgentArmor(nativeAgentArmorOverride, npc);
             equipNativeCombatItem(npc, store);
             if (options.hasNativeWorldHotbarOverride()) {
-                equipNativeWorldHotbar(npc, store);
+                SpawnEquipment.equipNativeWorldHotbar(agentRef, options, npc, store);
             }
             if (syntheticWorldInteractionsEnabled()) {
                 equipSyntheticWorldItems(npc, store);
@@ -4368,37 +3668,6 @@ final class NativeEnvironmentSession
             );
         }
         return uuid.getUuid().toString();
-    }
-
-    private NativeRegionLightSection buildRegionLightSection(
-        int chunkX,
-        int chunkZ,
-        int sectionY
-    ) {
-        long chunkIndex = ChunkUtil.indexChunk(chunkX, chunkZ);
-        if (!loadedChunkIndices.contains(chunkIndex)) {
-            throw new IllegalStateException(
-                "Region light chunk was not pinned before capture"
-            );
-        }
-        NativeWorldAccess.Column chunk = NativeWorldAccess.getChunkIfLoaded(world, chunkIndex);
-        if (chunk == null) {
-            throw new IllegalStateException(
-                "Region light chunk is not loaded"
-            );
-        }
-        NativeRegionLightSection result = RegionLightCapture.capture(
-            chunk,
-            chunkX,
-            chunkZ,
-            sectionY
-        );
-        if (!result.available()) {
-            world.getChunkLighting().addToQueue(
-                new Vector3i(chunkX, sectionY, chunkZ)
-            );
-        }
-        return result;
     }
 
     private void requestLegacyActorZeroTypedCraft(
@@ -6539,40 +5808,6 @@ final class NativeEnvironmentSession
         nativeAgentArmorOverride = List.copyOf(resolved);
     }
 
-    private void replaceNativeAgentArmor(NPCEntity npc) {
-        if (nativeAgentArmorOverride == null) return;
-        Inventory inventory = npc.getInventory();
-        if (inventory == null || inventory.getArmor() == null) {
-            throw new IllegalStateException(
-                "Native agent armor override requires an NPC armor inventory"
-            );
-        }
-        ItemContainer armor = inventory.getArmor();
-        for (NativeArmorEntry entry : nativeAgentArmorOverride) {
-            if (entry.slot() < 0 || entry.slot() >= armor.getCapacity()) {
-                throw new IllegalStateException(
-                    "Native NPC armor inventory has no slot for "
-                        + entry.itemId()
-                );
-            }
-        }
-        if (!armor.clear().succeeded()) {
-            throw new IllegalStateException(
-                "Native NPC rejected clearing its role-authored armor"
-            );
-        }
-        for (NativeArmorEntry entry : nativeAgentArmorOverride) {
-            if (!armor.setItemStackForSlot(
-                entry.slot(),
-                new ItemStack(entry.itemId())
-            ).succeeded()) {
-                throw new IllegalStateException(
-                    "Native NPC rejected armor item: " + entry.itemId()
-                );
-            }
-        }
-    }
-
     private void equipNativeCombatItem(
         NPCEntity npc,
         Store<EntityStore> store
@@ -6815,77 +6050,6 @@ final class NativeEnvironmentSession
         inventory.setActiveHotbarSlot(agentRef, (byte) 0, store);
     }
 
-    private void equipNativeWorldHotbar(
-        NPCEntity npc,
-        Store<EntityStore> store
-    ) {
-        Inventory inventory = npc.getInventory();
-        if (inventory == null || inventory.getHotbar() == null) {
-            throw new IllegalStateException(
-                "Native World hotbar override requires an NPC hotbar"
-            );
-        }
-        InventoryComponent.Hotbar hotbarComponent = store.getComponent(
-            agentRef,
-            InventoryComponent.Hotbar.getComponentType()
-        );
-        if (hotbarComponent == null) {
-            throw new IllegalStateException(
-                "Native World hotbar override requires a hotbar component"
-            );
-        }
-        int capacity = Short.toUnsignedInt(
-            hotbarComponent.getInventory().getCapacity()
-        );
-        int requiredCapacity = requiredHotbarCapacity(
-            options.nativeWorldHotbarSlots(),
-            capacity
-        );
-        if (requiredCapacity > capacity) {
-            List<ItemStack> remainder = new ArrayList<>();
-            hotbarComponent.ensureCapacity(
-                (short) requiredCapacity,
-                remainder
-            );
-            if (!remainder.isEmpty()) {
-                throw new IllegalStateException(
-                    "Native World hotbar expansion displaced existing items"
-                );
-            }
-            capacity = requiredCapacity;
-        }
-        ItemContainer hotbar = hotbarComponent.getInventory();
-        for (int index = 0;
-            index < options.nativeWorldHotbarSlots().size();
-            index++) {
-            int slot = options.nativeWorldHotbarSlots().get(index);
-            String itemId = options.nativeWorldHotbarItemIds().get(index);
-            int quantity = options.nativeWorldHotbarQuantities().get(index);
-            if (slot >= capacity) {
-                throw new IllegalStateException(
-                    "Native World hotbar slot " + slot
-                        + " exceeds NPC hotbar capacity " + capacity
-                );
-            }
-            if (Item.getAssetMap().getAsset(itemId) == null) {
-                throw new IllegalStateException(
-                    "Native World hotbar item is unknown: " + itemId
-                );
-            }
-            if (!hotbar.setItemStackForSlot(
-                (short) slot,
-                new ItemStack(itemId, quantity)
-            ).succeeded()) {
-                throw new IllegalStateException(
-                    "Native NPC rejected hotbar item "
-                        + itemId + " in slot " + slot
-                );
-            }
-        }
-        int activeSlot = options.nativeWorldHotbarSlots().get(0);
-        inventory.setActiveHotbarSlot(agentRef, (byte) activeSlot, store);
-    }
-
     private void installSyntheticPlayer(
         int actorId,
         Ref<EntityStore> actor,
@@ -6985,7 +6149,7 @@ final class NativeEnvironmentSession
             if (
                 fixture.equals(EnvironmentOptions.DIVE_MOTION_FIXTURE)
             ) {
-                createDiveMotionFixture();
+                FixtureBuilders.createDiveMotionFixture(world);
                 return;
             }
             if (fixture.equals("ledge")) {
@@ -7067,83 +6231,6 @@ final class NativeEnvironmentSession
                 }
             }
         }, INITIALIZATION_TIMEOUT);
-    }
-
-    private void createDiveMotionFixture() {
-        Fluid water = Fluid.getAssetMap().getAsset("Water_Source");
-        if (water == null || water == Fluid.EMPTY) {
-            throw new IllegalStateException(
-                "Installed assets do not provide Water_Source"
-            );
-        }
-        int fluidId = Fluid.getAssetMap().getIndex(water.getId());
-        byte fluidLevel = (byte) water.getMaxFluidLevel();
-        Store<ChunkStore> store = world.getChunkStore().getStore();
-        for (
-            int x = -DIVE_POOL_HALF_WIDTH;
-            x <= DIVE_POOL_HALF_WIDTH;
-            x++
-        ) {
-            for (
-                int z = -DIVE_POOL_HALF_WIDTH;
-                z <= DIVE_POOL_HALF_WIDTH;
-                z++
-            ) {
-                boolean wall = Math.abs(x) == DIVE_POOL_HALF_WIDTH
-                    || Math.abs(z) == DIVE_POOL_HALF_WIDTH;
-                for (int y = DIVE_POOL_MIN_Y; y <= DIVE_POOL_MAX_Y; y++) {
-                    if (wall) {
-                        NativeWorldAccess.setBlock(world, x, y, z, "Rock_Stone");
-                    } else if (y < DIVE_POOL_MAX_Y) {
-                        setFixtureFluid(
-                            store,
-                            x,
-                            y,
-                            z,
-                            fluidId,
-                            fluidLevel
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    private void setFixtureFluid(
-        Store<ChunkStore> store,
-        int x,
-        int y,
-        int z,
-        int fluidId,
-        byte fluidLevel
-    ) {
-        NativeWorldAccess.Column loaded = NativeWorldAccess.getChunkIfLoaded(
-            world,
-            ChunkUtil.indexChunkFromBlock(x, z)
-        );
-        WorldChunk chunk = loaded == null ? null : loaded.worldChunk();
-        if (chunk == null || chunk.getReference() == null) {
-            throw new IllegalStateException(
-                "Dive fixture chunk is not loaded"
-            );
-        }
-        ChunkColumn column = store.getComponent(
-            chunk.getReference(),
-            ChunkColumn.getComponentType()
-        );
-        if (column == null) {
-            throw new IllegalStateException(
-                "Dive fixture chunk has no column"
-            );
-        }
-        Ref<ChunkStore> section = column.getSection(
-            ChunkUtil.chunkCoordinate(y)
-        );
-        FluidSection fluidSection = store.ensureAndGetComponent(
-            section,
-            FluidSection.getComponentType()
-        );
-        fluidSection.setFluid(x, y, z, fluidId, fluidLevel);
     }
 
     private void initializeTask(Observation observation) {
@@ -7405,7 +6492,7 @@ final class NativeEnvironmentSession
         int baseX = (int) Math.floor(position.x);
         int baseY = (int) Math.floor(position.y);
         int baseZ = (int) Math.floor(position.z);
-        TargetState target = captureTargetState(store, position);
+        TargetState target = SnapshotBuilders.captureTargetState(targetRef, store, position);
         GeometryFrame geometry = RegionGeometryCapture.captureGeometry(nativeCellSemanticsCache, world, 
             store,
             agentRef,
@@ -7432,9 +6519,14 @@ final class NativeEnvironmentSession
             ? 0
             : Math.max(0, Math.min(24000, Math.round(time.getDayProgress() * 24000.0f)));
         Inventory inventory = npc.getInventory();
-        int[] inventoryIds = inventoryIds(inventory);
+        int[] inventoryIds = InventoryReaders.inventoryIds(itemIds, inventory);
         int activeHotbar = inventory == null ? 0 : Byte.toUnsignedInt(inventory.getActiveHotbarSlot());
-        List<int[]> nearbyEntities = captureNearbyEntities(store, position);
+        List<int[]> nearbyEntities = SnapshotBuilders.captureNearbyEntities(
+            agentRef,
+            NEARBY_ENTITY_RADIUS,
+            store,
+            position
+        );
         CombatSupport combat = role == null ? null : store.getComponent(agentRef, CombatSupport.getComponentType());
         CombatTelemetry combatTelemetry = new CombatTelemetry(
             combat != null && combat.isExecutingAttack(),
@@ -7494,7 +6586,7 @@ final class NativeEnvironmentSession
             geometry
         );
         observation = observation.withNativeInventory(
-            captureNativeInventory(inventory)
+            InventoryReaders.captureNativeInventory(itemIds, inventory)
         );
         observation = observation.withNativeActorEvidence(
             captureNativeActorEvidence(
@@ -7531,28 +6623,11 @@ final class NativeEnvironmentSession
             targetMovementStates,
             combatTelemetry,
             manaStat == null ? 0.0 : manaStat.getMax(),
-            stateName(store, agentRef),
-            stateName(store, targetRef),
-            statusText(store, agentRef),
-            statusText(store, targetRef)
+            SnapshotBuilders.stateName(store, agentRef),
+            SnapshotBuilders.stateName(store, targetRef),
+            SnapshotBuilders.statusText(store, agentRef),
+            SnapshotBuilders.statusText(store, targetRef)
         );
-    }
-
-    private static String stateName(Store<EntityStore> store, Ref<EntityStore> reference) {
-        if (reference == null || !reference.isValid()) return "";
-        StateSupport state = store.getComponent(reference, StateSupport.getComponentType());
-        return state == null ? "" : state.getStateName();
-    }
-
-    private static String statusText(Store<EntityStore> store, Ref<EntityStore> reference) {
-        if (reference == null || !reference.isValid()) return "";
-        StringBuilder text = new StringBuilder();
-        for (var status : captureStatuses(store, reference).statuses()) {
-            if (text.length() > 0) text.append(';');
-            text.append(status.effectId()).append('=')
-                .append(String.format(java.util.Locale.ROOT, "%.4f", status.remainingDurationSeconds()));
-        }
-        return text.toString();
     }
 
 
@@ -7601,200 +6676,6 @@ final class NativeEnvironmentSession
             "",
             ""
         );
-    }
-
-    private List<int[]> captureNearbyEntities(Store<EntityStore> store, Vector3d agentPosition) {
-        List<EntityReading> readings = new ArrayList<>();
-        Query<EntityStore> query = Query.and(
-            NPCEntity.getComponentType(),
-            TransformComponent.getComponentType()
-        );
-        store.forEachChunk(query, (chunk, commandBuffer) -> {
-            for (int index = 0; index < chunk.size(); index++) {
-                Ref<EntityStore> reference = chunk.getReferenceTo(index);
-                if (sameEntity(reference, agentRef)) continue;
-                NPCEntity entity = chunk.getComponent(index, NPCEntity.getComponentType());
-                TransformComponent entityTransform = chunk.getComponent(
-                    index,
-                    TransformComponent.getComponentType()
-                );
-                if (entity == null || entityTransform == null) continue;
-                Vector3d entityPosition = entityTransform.getPosition();
-                double dx = entityPosition.x - agentPosition.x;
-                double dz = entityPosition.z - agentPosition.z;
-                double distanceSquared = dx * dx + dz * dz;
-                if (distanceSquared >= NEARBY_ENTITY_RADIUS * NEARBY_ENTITY_RADIUS) continue;
-                double entityHealth = entityHealth(store, reference, entity);
-                if (entityHealth <= 0.0) continue;
-                readings.add(new EntityReading(
-                    new int[] {
-                        canonicalEntityType(entity.getRoleName()),
-                        ObservationEncoding.encodeNearbyEntityScalar(dx),
-                        ObservationEncoding.encodeNearbyEntityScalar(dz),
-                        ObservationEncoding.encodeNearbyEntityScalar(entityHealth)
-                    },
-                    distanceSquared,
-                    reference.getIndex()
-                ));
-            }
-        });
-        readings.sort(
-            Comparator.comparingDouble(EntityReading::distanceSquared)
-                .thenComparingInt(EntityReading::entityIndex)
-        );
-        List<int[]> encoded = new ArrayList<>(
-            Math.min(MAX_NEARBY_ENTITIES, readings.size())
-        );
-        for (int i = 0; i < readings.size() && i < MAX_NEARBY_ENTITIES; i++) {
-            encoded.add(readings.get(i).encoded());
-        }
-        return List.copyOf(encoded);
-    }
-
-    private TargetState captureTargetState(Store<EntityStore> store, Vector3d agentPosition) {
-        Ref<EntityStore> reference = targetRef;
-        if (reference == null || !reference.isValid()) return TargetState.absent();
-        NPCEntity entity = store.getComponent(reference, NPCEntity.getComponentType());
-        TransformComponent transform = store.getComponent(
-            reference,
-            TransformComponent.getComponentType()
-        );
-        if (entity == null || transform == null) return TargetState.absent();
-        double health = entityHealth(store, reference, entity);
-        EntityStatMap stats = store.getComponent(
-            reference,
-            EntityStatsModule.get().getEntityStatMapComponentType()
-        );
-        EntityStatValue healthStat = stat(stats, "Health");
-        Role role = entity.getRole();
-        double maxHealth = healthStat == null
-            ? (role == null ? health : role.getInitialMaxHealth())
-            : healthStat.getMax();
-        Vector3d targetPosition = transform.getPosition();
-        Velocity velocity = store.getComponent(reference, Velocity.getComponentType());
-        double distance = Math.hypot(
-            targetPosition.x - agentPosition.x,
-            targetPosition.z - agentPosition.z
-        );
-        double yawDegrees = normalizeDegrees(
-            Math.toDegrees(transform.getRotation().yaw())
-        );
-        HeadRotation head = store.getComponent(
-            reference,
-            HeadRotation.getComponentType()
-        );
-        double headYawDegrees = head == null
-            ? yawDegrees
-            : normalizeDegrees(Math.toDegrees(head.getRotation().yaw()));
-        double headPitchDegrees = head == null
-            ? normalizeDegrees(Math.toDegrees(transform.getRotation().pitch()))
-            : normalizeDegrees(Math.toDegrees(head.getRotation().pitch()));
-        double agentBearing = Math.toDegrees(Math.atan2(
-            -(agentPosition.x - targetPosition.x),
-            -(agentPosition.z - targetPosition.z)
-        ));
-        double facingError = normalizeDegrees(agentBearing - yawDegrees);
-        return new TargetState(
-            true,
-            entity.getRoleName(),
-            health,
-            maxHealth,
-            distance,
-            targetPosition.x,
-            targetPosition.y,
-            targetPosition.z,
-            yawDegrees,
-            headYawDegrees,
-            headPitchDegrees,
-            facingError,
-            velocity == null ? 0.0 : velocity.getX(),
-            velocity == null ? 0.0 : velocity.getZ()
-        );
-    }
-
-    private int[] inventoryIds(Inventory inventory) {
-        int[] result = new int[INVENTORY_SIZE];
-        if (inventory == null) return result;
-        int offset = copyContainer(inventory.getHotbar(), result, 0);
-        copyContainer(inventory.getStorage(), result, offset);
-        return result;
-    }
-
-    private NativeInventoryFrame captureNativeInventory(Inventory inventory) {
-        if (inventory == null) {
-            return NativeInventoryFrame.unavailable("inventory_unavailable");
-        }
-        ItemContainer storage = inventory.getStorage();
-        ItemContainer armor = inventory.getArmor();
-        ItemContainer hotbar = inventory.getHotbar();
-        ItemContainer utility = inventory.getUtility();
-        ItemContainer tools = inventory.getTools();
-        ItemContainer backpack = inventory.getBackpack();
-        return new NativeInventoryFrame(
-            true,
-            "",
-            hotbar == null ? -1 : inventory.getActiveHotbarSlot(),
-            utility == null ? -1 : inventory.getActiveUtilitySlot(),
-            tools == null ? -1 : inventory.getActiveToolsSlot(),
-            List.of(
-                captureNativeInventoryContainer("storage", -2, storage),
-                captureNativeInventoryContainer("armor", -3, armor),
-                captureNativeInventoryContainer("hotbar", -1, hotbar),
-                captureNativeInventoryContainer("utility", -5, utility),
-                captureNativeInventoryContainer("tools", -8, tools),
-                captureNativeInventoryContainer("backpack", -9, backpack)
-            )
-        );
-    }
-
-    private NativeInventoryFrame.Container captureNativeInventoryContainer(
-        String name,
-        int sectionId,
-        ItemContainer container
-    ) {
-        if (container == null) {
-            return NativeInventoryFrame.Container.unavailable(
-                name,
-                sectionId,
-                "inventory_container_unavailable"
-            );
-        }
-        int capacity = Short.toUnsignedInt(container.getCapacity());
-        List<NativeInventoryFrame.Slot> occupied = new ArrayList<>();
-        for (int slot = 0; slot < capacity; slot++) {
-            ItemStack stack = container.getItemStack((short) slot);
-            if (ItemStack.isEmpty(stack)) continue;
-            String itemId = stack.getItemId();
-            occupied.add(new NativeInventoryFrame.Slot(
-                slot,
-                itemId,
-                itemIds.getOrDefault(itemId, 0),
-                stack.getQuantity(),
-                stack.getDurability(),
-                stack.getMaxDurability(),
-                stack.getMetadata() != null
-            ));
-        }
-        return new NativeInventoryFrame.Container(
-            name,
-            sectionId,
-            true,
-            "",
-            capacity,
-            occupied
-        );
-    }
-
-    private int copyContainer(ItemContainer container, int[] destination, int offset) {
-        if (container == null || offset >= destination.length) return offset;
-        int capacity = Short.toUnsignedInt(container.getCapacity());
-        for (int slot = 0; slot < capacity && offset < destination.length; slot++, offset++) {
-            ItemStack stack = container.getItemStack((short) slot);
-            if (!ItemStack.isEmpty(stack)) {
-                destination[offset] = itemIds.getOrDefault(stack.getItemId(), 0);
-            }
-        }
-        return offset;
     }
 
     private Map<String, Object> buildInfo(
@@ -7863,7 +6744,7 @@ final class NativeEnvironmentSession
         info.put("world_template", options.world());
         info.put(
             "fidelity_fixture",
-            fidelityFixtureDescription()
+            FixtureBuilders.fidelityFixtureDescription(options, taskId)
         );
         info.put(
             "block_ticking_enabled",
@@ -7955,23 +6836,45 @@ final class NativeEnvironmentSession
         );
         info.put(
             "native_group_action_policy_combat_bound",
-            nativePolicyCombatBoundByActor()
+            PolicyCombatKeys.nativePolicyCombatBoundByActor(
+                nativeCombatAbilities,
+                nativeDodgeLeftInteraction,
+                nativeDodgeRightInteraction,
+                nativeGuardInteraction,
+                nativePolicyCombatHandles
+            )
         );
         info.put(
             "native_group_action_ability_slot_masks",
-            nativePolicyCombatAbilityMasksByActor()
+            PolicyCombatKeys.nativePolicyCombatAbilityMasksByActor(
+                nativeCombatAbilities,
+                nativePolicyCombatHandles,
+                nativePolicyCombatSpecs
+            )
         );
         info.put(
             "native_group_action_guard_available",
-            nativePolicyCombatGuardByActor()
+            PolicyCombatKeys.nativePolicyCombatGuardByActor(
+                nativeGuardInteraction,
+                nativePolicyCombatHandles,
+                nativePolicyCombatSpecs
+            )
         );
         info.put(
             "native_group_action_dodge_available",
-            nativePolicyCombatDodgeByActor()
+            PolicyCombatKeys.nativePolicyCombatDodgeByActor(
+                nativeDodgeLeftInteraction,
+                nativeDodgeRightInteraction,
+                nativePolicyCombatHandles
+            )
         );
         info.put(
             "native_group_action_item_ids",
-            nativePolicyCombatItemIdsByActor()
+            PolicyCombatKeys.nativePolicyCombatItemIdsByActor(
+                nativePolicyCombatHandles,
+                nativePolicyCombatSpecs,
+                options
+            )
         );
         info.put(
             "native_group_action_requested_entity_ids",
@@ -8700,42 +7603,6 @@ final class NativeEnvironmentSession
         return String.join(",", requested);
     }
 
-    private String fidelityFixtureDescription() {
-        if (options.world().equals("hytale")) return "native_hytale_worldgen";
-        if (options.world().equals("hytale_generator")) {
-            return "native_hytale_generator_worldgen";
-        }
-        return switch (options.fidelityFixture()) {
-            case "ledge" -> "flat_floor;three_block_trench_z=-1..-5";
-            case "ceiling" -> "flat_floor;stone_ceiling_y=67";
-            case "half_block" -> "flat_floor;stone_half_block_z=-2";
-            case "los_wall" -> "flat_floor;los_wall_z=-1";
-            case "los_diagonal_graze" ->
-                "flat_floor;diagonal_los_grazes_block_x=1,z=0";
-            case "los_diagonal_block" ->
-                "flat_floor;diagonal_los_crosses_block_x=1,z=-1";
-            case EnvironmentOptions.TARGET_MEMORY_FIXTURE ->
-                "flat_floor;natural_brawler;dynamic_sealed_occluder";
-            case EnvironmentOptions.PATH_FOLLOWER_FIXTURE ->
-                "flat_floor;chase_attack;stone_wall_z=-3,x=-2..2";
-            case EnvironmentOptions.NATIVE_PROJECTILE_DUEL_FIXTURE ->
-                "flat_floor;outlander_hunter_vs_kweebec;range=10";
-            case EnvironmentOptions.DIVE_MOTION_FIXTURE ->
-                "flat_floor;sealed_water_source_pool_xz=-7..7,y=65..74";
-            case EnvironmentOptions.SYNTHETIC_WORLD_VERBS_FIXTURE ->
-                "flat_floor;fixture_only_synthetic_adventure_player;"
-                    + "place_x=1;break_x=-1";
-            case EnvironmentOptions.SYNTHETIC_BLOCK_USE_FIXTURE ->
-                "flat_floor;fixture_only_headless_npc;"
-                    + "authored_use_block=Deco_Lantern;x=1";
-            case EnvironmentOptions.FALLING_BLOCK_FIXTURE ->
-                "flat_floor;native_falling_block_trace";
-            default -> taskId.equals("native_fidelity") && !options.hasSpawn()
-                ? "flat_floor;stone_wall_z=-4"
-                : "flat_floor";
-        };
-    }
-
     private double horizontalDistance(double x, double z) {
         return Math.hypot(x - targetX, z - targetZ);
     }
@@ -8995,8 +7862,15 @@ final class NativeEnvironmentSession
             targetPresent
         );
         CapturedRoleOpacity roleOpacity = captureRoleOpacity(store, ref, geometry);
-        NativePerceptionChannels localPerception = buildPerceptionChannels(
-            geometryCubePositions(geometry)
+        NativePerceptionChannels localPerception = PerceptionBuilders.buildPerceptionChannels(
+            NATIVE_SERVER_VERSION,
+            seed,
+            traceLightRequestTicks,
+            world,
+            worldName,
+            worldgenProvider,
+            worldgenVersion,
+            PerceptionBuilders.geometryCubePositions(geometry)
         );
         CombatSupport combat = role == null ? null : store.getComponent(ref, CombatSupport.getComponentType());
         TraceAttackCandidates candidates = traceAttackCandidates(attackActions);
@@ -9052,7 +7926,7 @@ final class NativeEnvironmentSession
         boolean perceptionAvailable = perception.available()
             && (!targetPresent || geometry.targetLineOfSightValid());
         if (!perceptionAvailable) targetPerceptible = false;
-        NativeActorEvidenceFrame.Actor targetEvidence = actorPerceptibility(
+        NativeActorEvidenceFrame.Actor targetEvidence = PerceptionBuilders.actorPerceptibility(
             target.actor(),
             targetPerceptible
         );
@@ -9083,7 +7957,7 @@ final class NativeEnvironmentSession
             targetEvidence,
             actionCapabilityEvidence,
             geometry,
-            captureNativeInventory(npc.getInventory()),
+            InventoryReaders.captureNativeInventory(itemIds, npc.getInventory()),
             roleOpacity.available(),
             roleOpacity.cellMask(),
             localPerception,
@@ -9135,7 +8009,7 @@ final class NativeEnvironmentSession
                 "trace_target_is_not_controlled_target"
             );
         }
-        TargetState target = captureTargetState(store, actorPosition);
+        TargetState target = SnapshotBuilders.captureTargetState(targetRef, store, actorPosition);
         return captureNativeActorEvidence(
             store,
             geometry,
@@ -9147,35 +8021,19 @@ final class NativeEnvironmentSession
         );
     }
 
-    private static int[] geometryCubePositions(GeometryFrame geometry) {
-        return geometryCubePositions(
-            geometry.originX(), geometry.originY(), geometry.originZ()
-        );
-    }
-
     private void primeNpcTracePerception(TransformComponent transform) {
         if (transform == null) return;
         Vector3d position = transform.getPosition();
-        buildPerceptionChannels(geometryCubePositions(
-            (int) Math.floor(position.x),
-            (int) Math.floor(position.y),
-            (int) Math.floor(position.z)
-        ));
-    }
-
-    private static int[] geometryCubePositions(int originX, int originY, int originZ) {
-        int[] result = new int[GeometryContract.CELL_COUNT * 3];
-        for (int dx = -GeometryContract.RADIUS; dx <= GeometryContract.RADIUS; dx++) {
-            for (int dy = -GeometryContract.RADIUS; dy <= GeometryContract.RADIUS; dy++) {
-                for (int dz = -GeometryContract.RADIUS; dz <= GeometryContract.RADIUS; dz++) {
-                    int index = GeometryContract.cellIndex(dx, dy, dz) * 3;
-                    result[index] = originX + dx;
-                    result[index + 1] = originY + dy;
-                    result[index + 2] = originZ + dz;
-                }
-            }
-        }
-        return result;
+        PerceptionBuilders.buildPerceptionChannels(
+            NATIVE_SERVER_VERSION,
+            seed,
+            traceLightRequestTicks,
+            world,
+            worldName,
+            worldgenProvider,
+            worldgenVersion,
+            PerceptionBuilders.geometryCubePositions((int) Math.floor(position.x), (int) Math.floor(position.y), (int) Math.floor(position.z))
+        );
     }
 
     private static TraceAttackCandidates traceAttackCandidates(
@@ -9200,39 +8058,6 @@ final class NativeEnvironmentSession
             source.size(),
             source.size() > emittedCount,
             activeSlot
-        );
-    }
-
-    private static NativeActorEvidenceFrame.Actor actorPerceptibility(
-        NativeActorEvidenceFrame.Actor actor,
-        boolean perceptible
-    ) {
-        if (!actor.present() || actor.perceptible() == perceptible) return actor;
-        return new NativeActorEvidenceFrame.Actor(
-            actor.entityId(),
-            true,
-            perceptible,
-            actor.roleId(),
-            actor.itemId(),
-            actor.itemRuntimeIndex(),
-            actor.activeAbilitySlot(),
-            actor.position(),
-            actor.velocity(),
-            actor.motionForce(),
-            actor.yawDegrees(),
-            actor.pitchDegrees(),
-            actor.headYawDegrees(),
-            actor.health(),
-            actor.maxHealth(),
-            actor.resourceValues(),
-            actor.resourceMaximums(),
-            actor.resourceAvailable(),
-            actor.defenseValues(),
-            actor.defenseAvailable(),
-            actor.statuses(),
-            actor.actorWorldValues(),
-            actor.actorWorldAvailable(),
-            actor.movementStates()
         );
     }
 
@@ -9567,83 +8392,6 @@ final class NativeEnvironmentSession
         return options.fidelityFixture().equals(
             EnvironmentOptions.NATIVE_PROJECTILE_DUEL_FIXTURE
         );
-    }
-
-    private String nativePolicyCombatBoundByActor() {
-        boolean[] values = new boolean[nativePolicyCombatHandles.length];
-        values[0] = nativeGuardInteraction != null
-            || !nativeCombatAbilities.isEmpty()
-            || nativeDodgeLeftInteraction != null
-            || nativeDodgeRightInteraction != null;
-        for (int actorId = 1; actorId < values.length; actorId++) {
-            values[actorId] = nativePolicyCombatHandles[actorId] != null;
-        }
-        return joinActorBooleans(values);
-    }
-
-    private String nativePolicyCombatAbilityMasksByActor() {
-        int[] values = new int[nativePolicyCombatHandles.length];
-        values[0] = nativeCombatAbilities.isEmpty()
-            ? 0
-            : (1 << nativeCombatAbilities.size()) - 1;
-        for (int actorId = 1; actorId < values.length; actorId++) {
-            NativePolicyCombatBindingSpec spec =
-                nativePolicyCombatSpecs[actorId];
-            values[actorId] = spec == null ? 0 : spec.abilityMaskBits();
-        }
-        return joinActorInts(values);
-    }
-
-    private String nativePolicyCombatGuardByActor() {
-        boolean[] values = new boolean[nativePolicyCombatHandles.length];
-        values[0] = nativeGuardInteraction != null;
-        for (int actorId = 1; actorId < values.length; actorId++) {
-            NativePolicyCombatBindingSpec spec =
-                nativePolicyCombatSpecs[actorId];
-            values[actorId] = spec != null && spec.hasGuard();
-        }
-        return joinActorBooleans(values);
-    }
-
-    private String nativePolicyCombatDodgeByActor() {
-        boolean[] values = new boolean[nativePolicyCombatHandles.length];
-        values[0] = nativeDodgeLeftInteraction != null
-            && nativeDodgeRightInteraction != null;
-        for (int actorId = 1; actorId < values.length; actorId++) {
-            values[actorId] = nativePolicyCombatHandles[actorId] != null;
-        }
-        return joinActorBooleans(values);
-    }
-
-    private String nativePolicyCombatItemIdsByActor() {
-        String[] values = new String[nativePolicyCombatHandles.length];
-        values[0] = options.hasNativeCombatItem()
-            ? options.nativeCombatItemId()
-            : "";
-        for (int actorId = 1; actorId < values.length; actorId++) {
-            NativePolicyCombatBindingSpec spec =
-                nativePolicyCombatSpecs[actorId];
-            values[actorId] = spec == null ? "" : spec.itemId();
-        }
-        return String.join(",", values);
-    }
-
-    private static String joinActorBooleans(boolean[] values) {
-        StringBuilder result = new StringBuilder();
-        for (int index = 0; index < values.length; index++) {
-            if (index > 0) result.append(',');
-            result.append(values[index] ? '1' : '0');
-        }
-        return result.toString();
-    }
-
-    private static String joinActorInts(int[] values) {
-        StringBuilder result = new StringBuilder();
-        for (int index = 0; index < values.length; index++) {
-            if (index > 0) result.append(',');
-            result.append(values[index]);
-        }
-        return result.toString();
     }
 
     private static NativePolicyActorState[] createPolicyActorStates() {
