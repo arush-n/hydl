@@ -231,6 +231,25 @@ for 3.0 s), walking out of reach cancels with a refund, a second request queues 
 open: processing benches are container placement plus game time (the bridge world's clock is paused, so the bench never
 advanced), the Armory is a click-craft; both need a different route than `craft_recipe`.
 
+**Handoff of the simulator lane from the fidelity session (2026-10-18, via the owner).** Done on gen 7: the NPC jump arc (8
+of 10 live runs pass, 2 of 10 on stock), daggers (15 of 15 live), guard rules and the guard-release choice, dodge timing,
+the crossbow reload on `Ability4`, mana refill (0.298 s per point live against 0.300 s), line of sight on full blocks
+(partial blocks unmeasured), sword knockback (values from the 0.7.2 files, never measured live), crafting at 1,168 of 2,047
+recipes. Content values still on the gen-5 numbers: of 69 compared side by side, 50 are equal in both versions, 5 are
+covered by existing patches, and 14 differ and are to apply: sword timing (6 attack-window times and 4 hold times, for
+example 0.85 to 0.739 s), shortbow damage 6/9/12/16 to 1/2/4/7 and launch speed 15/30/50/70 to 12/22/35/50, the iron
+crossbow combo damage 27 to 13, and potions. Broken: the potion reader crashes on 0.7.2 (the stamina potion no longer applies
+its 15 s cooldown effect, the simulator still does); weapon durability (57 maximum and 82 loss-per-hit changes across 143
+weapons) lives in a data file the gen-7 build cannot override yet. Open: timing that needs new state (walking resuming
+after a landing, the 0.35 s wait before a new guard, melee and kunai attack start, the one-tick structural craft, shortbow
+ammo at reset); mechanics that exist only as stubs (hit interrupt and flinch, runes, hookshot, climbing, gliding, riding,
+player swimming, smaller rules); crafting bench tiers above 1, memories, timed and processing recipes on the simulator
+side; recapturing the terrain library on 0.7.2 (all three saved libraries are 0.5.7 captures); the 11 source-pin audits
+(0 of 11 pass on 0.7.2); gen-7 contracts and checkpoints. Dropped lead: the left and right sword swings' knockback mode
+"Add" is not a 0.7.2 change (both versions say Add; gen 5 runs them as Set through an existing calibration). From here this
+session owns both lanes and runs the simulator items in sequence (they share `overlay.py`) with the bridge items in
+parallel.
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the
