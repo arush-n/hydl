@@ -233,7 +233,7 @@ def test_gen7_overlay_applies_its_patches_and_step_clock(gen7):
 def test_step_clock_rows_are_the_swap_plan_source_sites():
     from hytalegym.sim.gen7.overlay import STEP_CLOCK, STEP_CLOCK_SITES
 
-    assert STEP_CLOCK_SITES == {"sites": 362, "in_source": 314, "redirected": 13, "consumers": 301,
+    assert STEP_CLOCK_SITES == {"sites": 369, "in_source": 321, "redirected": 13, "consumers": 308,
                                 "outside_source": 48}
     assert len(STEP_CLOCK) == 13 and all(r.line and r.family == "profile" for r in STEP_CLOCK)
     assert {r.field for r in STEP_CLOCK} == {"step_duration.nominal_seconds", "step_duration.loaded_seconds",

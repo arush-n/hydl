@@ -1,5 +1,5 @@
 {
- "head": "83fe6eb32d1fc1416e5f0f366e31c1a2dcc50917",
+ "head": "9f12f0d420504605222eab3d005c27910ca87005",
  "redirect_count": 90,
  "redirects": [
   {
@@ -11,7 +11,7 @@
    "head_line": 79,
    "kind": "module_constant",
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
-   "status": "uncommitted",
+   "status": "clean",
    "symbol": "PLAYER_JUMP_FORCE",
    "symbol_kind": null,
    "target": "PLAYER_JUMP_FORCE",
@@ -26,7 +26,7 @@
    "head_line": 83,
    "kind": "module_constant",
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
-   "status": "uncommitted",
+   "status": "clean",
    "symbol": "PLAYER_VARIABLE_JUMP_FALL_FORCE",
    "symbol_kind": null,
    "target": "PLAYER_VARIABLE_JUMP_FALL_FORCE",
@@ -41,7 +41,7 @@
    "head_line": 89,
    "kind": "module_constant",
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
-   "status": "uncommitted",
+   "status": "clean",
    "symbol": "PLAYER_BASE_SPEED",
    "symbol_kind": null,
    "target": "PLAYER_BASE_SPEED",
@@ -56,7 +56,7 @@
    "head_line": 100,
    "kind": "module_constant",
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
-   "status": "uncommitted",
+   "status": "clean",
    "symbol": "PLAYER_GAIT_SPEED_MULTIPLIERS",
    "symbol_kind": null,
    "target": "PLAYER_GAIT_SPEED_MULTIPLIERS",
@@ -71,7 +71,7 @@
    "head_line": 113,
    "kind": "module_constant",
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
-   "status": "uncommitted",
+   "status": "clean",
    "symbol": "PLAYER_GAIT_FORWARD_SPEED_MULTIPLIERS",
    "symbol_kind": null,
    "target": "PLAYER_GAIT_FORWARD_SPEED_MULTIPLIERS",
@@ -86,7 +86,7 @@
    "head_line": 114,
    "kind": "module_constant",
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
-   "status": "uncommitted",
+   "status": "clean",
    "symbol": "PLAYER_GAIT_BACKWARD_SPEED_MULTIPLIERS",
    "symbol_kind": null,
    "target": "PLAYER_GAIT_BACKWARD_SPEED_MULTIPLIERS",
@@ -101,7 +101,7 @@
    "head_line": 115,
    "kind": "module_constant",
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
-   "status": "uncommitted",
+   "status": "clean",
    "symbol": "PLAYER_GAIT_STRAFE_SPEED_MULTIPLIERS",
    "symbol_kind": null,
    "target": "PLAYER_GAIT_STRAFE_SPEED_MULTIPLIERS",
@@ -116,7 +116,7 @@
    "head_line": 150,
    "kind": "module_constant",
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
-   "status": "uncommitted",
+   "status": "clean",
    "symbol": "PLAYER_AIR_DRAG_MIN",
    "symbol_kind": null,
    "target": "PLAYER_AIR_DRAG_MIN",
@@ -131,7 +131,7 @@
    "head_line": 151,
    "kind": "module_constant",
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
-   "status": "uncommitted",
+   "status": "clean",
    "symbol": "PLAYER_AIR_DRAG_MAX",
    "symbol_kind": null,
    "target": "PLAYER_AIR_DRAG_MAX",
@@ -146,7 +146,7 @@
    "head_line": 152,
    "kind": "module_constant",
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
-   "status": "uncommitted",
+   "status": "clean",
    "symbol": "PLAYER_AIR_DRAG_MIN_SPEED",
    "symbol_kind": null,
    "target": "PLAYER_AIR_DRAG_MIN_SPEED",
@@ -161,7 +161,7 @@
    "head_line": 153,
    "kind": "module_constant",
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
-   "status": "uncommitted",
+   "status": "clean",
    "symbol": "PLAYER_AIR_DRAG_MAX_SPEED",
    "symbol_kind": null,
    "target": "PLAYER_AIR_DRAG_MAX_SPEED",
@@ -176,7 +176,7 @@
    "head_line": 157,
    "kind": "module_constant",
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
-   "status": "uncommitted",
+   "status": "clean",
    "symbol": "PLAYER_AIR_CONTROL_MIN_SPEED",
    "symbol_kind": null,
    "target": "PLAYER_AIR_CONTROL_MIN_SPEED",
@@ -191,7 +191,7 @@
    "head_line": 158,
    "kind": "module_constant",
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
-   "status": "uncommitted",
+   "status": "clean",
    "symbol": "PLAYER_AIR_CONTROL_MAX_SPEED",
    "symbol_kind": null,
    "target": "PLAYER_AIR_CONTROL_MAX_SPEED",
@@ -206,7 +206,7 @@
    "head_line": 159,
    "kind": "module_constant",
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
-   "status": "uncommitted",
+   "status": "clean",
    "symbol": "PLAYER_AIR_CONTROL_MIN_MULTIPLIER",
    "symbol_kind": null,
    "target": "PLAYER_AIR_CONTROL_MIN_MULTIPLIER",
@@ -221,7 +221,7 @@
    "head_line": 160,
    "kind": "module_constant",
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
-   "status": "uncommitted",
+   "status": "clean",
    "symbol": "PLAYER_AIR_CONTROL_MAX_MULTIPLIER",
    "symbol_kind": null,
    "target": "PLAYER_AIR_CONTROL_MAX_MULTIPLIER",
@@ -237,7 +237,7 @@
    "head_line": 194,
    "kind": "module_constant",
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
-   "status": "uncommitted",
+   "status": "clean",
    "symbol": "PLAYER_STAMINA_MAXIMUM",
    "symbol_kind": null,
    "target": "PLAYER_STAMINA_MAXIMUM",
@@ -253,7 +253,7 @@
    "head_line": 195,
    "kind": "module_constant",
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
-   "status": "uncommitted",
+   "status": "clean",
    "symbol": "PLAYER_STAMINA_MINIMUM",
    "symbol_kind": null,
    "target": "PLAYER_STAMINA_MINIMUM",
@@ -269,7 +269,7 @@
    "head_line": 196,
    "kind": "module_constant",
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
-   "status": "uncommitted",
+   "status": "clean",
    "symbol": "PLAYER_SPRINT_STAMINA_DRAIN_PER_SECOND",
    "symbol_kind": null,
    "target": "PLAYER_SPRINT_STAMINA_DRAIN_PER_SECOND",
@@ -285,7 +285,7 @@
    "head_line": 197,
    "kind": "module_constant",
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
-   "status": "uncommitted",
+   "status": "clean",
    "symbol": "PLAYER_STAMINA_REGEN_PER_SECOND",
    "symbol_kind": null,
    "target": "PLAYER_STAMINA_REGEN_PER_SECOND",
@@ -301,7 +301,7 @@
    "head_line": 198,
    "kind": "module_constant",
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
-   "status": "uncommitted",
+   "status": "clean",
    "symbol": "PLAYER_STAMINA_REGEN_DELAY_RECOVERY_PER_SECOND",
    "symbol_kind": null,
    "target": "PLAYER_STAMINA_REGEN_DELAY_RECOVERY_PER_SECOND",
@@ -317,7 +317,7 @@
    "head_line": 199,
    "kind": "module_constant",
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
-   "status": "uncommitted",
+   "status": "clean",
    "symbol": "PLAYER_SPRINT_STAMINA_REGEN_DELAY_SECONDS",
    "symbol_kind": null,
    "target": "PLAYER_SPRINT_STAMINA_REGEN_DELAY_SECONDS",
@@ -333,7 +333,7 @@
    "head_line": 200,
    "kind": "module_constant",
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
-   "status": "uncommitted",
+   "status": "clean",
    "symbol": "PLAYER_BROKEN_STAMINA_REGEN_DELAY_SECONDS",
    "symbol_kind": null,
    "target": "PLAYER_BROKEN_STAMINA_REGEN_DELAY_SECONDS",
@@ -1380,14 +1380,14 @@
    "consumer:per_tick_division": 1,
    "consumer:tick_rate_constant": 5,
    "consumer:timing_key": 4,
-   "engine:delta_field": 269,
+   "engine:delta_field": 276,
    "engine:nominal_tick_literal": 4,
    "engine:ruleset_json": 4,
    "engine:tick_rate_constant": 43,
    "engine:tick_rate_multiplication": 1,
    "engine:timing_key": 17
   },
-  "site_count": 362,
+  "site_count": 369,
   "sites": [
    {
     "head_line": 258,
@@ -1552,7 +1552,7 @@
     "token": "server_ticks_per_second"
    },
    {
-    "head_line": 926,
+    "head_line": 964,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/item_programs.py",
     "scope": "engine",
@@ -1561,7 +1561,7 @@
     "token": "dt_seconds"
    },
    {
-    "head_line": 945,
+    "head_line": 983,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/item_programs.py",
     "scope": "engine",
@@ -1570,7 +1570,7 @@
     "token": "dt_seconds"
    },
    {
-    "head_line": 995,
+    "head_line": 1033,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/item_programs.py",
     "scope": "engine",
@@ -1579,7 +1579,7 @@
     "token": "dt_seconds"
    },
    {
-    "head_line": 1046,
+    "head_line": 1084,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/item_programs.py",
     "scope": "engine",
@@ -2416,7 +2416,7 @@
     "token": "dt_seconds"
    },
    {
-    "head_line": 68,
+    "head_line": 69,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/runtime/kernel.py",
     "scope": "engine",
@@ -2425,7 +2425,7 @@
     "token": "dt_seconds"
    },
    {
-    "head_line": 78,
+    "head_line": 79,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/runtime/kernel.py",
     "scope": "engine",
@@ -2434,7 +2434,7 @@
     "token": "dt_seconds"
    },
    {
-    "head_line": 85,
+    "head_line": 86,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/runtime/kernel.py",
     "scope": "engine",
@@ -2443,7 +2443,7 @@
     "token": "dt_seconds"
    },
    {
-    "head_line": 118,
+    "head_line": 134,
     "kind": "tick_rate_constant",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/runtime/motion.py",
     "scope": "engine",
@@ -2452,7 +2452,7 @@
     "token": "server_ticks_per_second"
    },
    {
-    "head_line": 184,
+    "head_line": 200,
     "kind": "tick_rate_constant",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/runtime/motion.py",
     "scope": "engine",
@@ -2461,7 +2461,7 @@
     "token": "agent_force_reference_ticks_per_second"
    },
    {
-    "head_line": 187,
+    "head_line": 203,
     "kind": "tick_rate_constant",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/runtime/motion.py",
     "scope": "engine",
@@ -2470,7 +2470,7 @@
     "token": "server_ticks_per_second"
    },
    {
-    "head_line": 341,
+    "head_line": 357,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/runtime/motion.py",
     "scope": "engine",
@@ -2479,7 +2479,7 @@
     "token": "dt_seconds"
    },
    {
-    "head_line": 361,
+    "head_line": 377,
     "kind": "tick_rate_constant",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/runtime/motion.py",
     "scope": "engine",
@@ -2488,7 +2488,7 @@
     "token": "server_ticks_per_second"
    },
    {
-    "head_line": 362,
+    "head_line": 378,
     "kind": "tick_rate_constant",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/runtime/motion.py",
     "scope": "engine",
@@ -2497,7 +2497,7 @@
     "token": "server_ticks_per_second"
    },
    {
-    "head_line": 371,
+    "head_line": 387,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/runtime/motion.py",
     "scope": "engine",
@@ -2506,7 +2506,7 @@
     "token": "dt_seconds"
    },
    {
-    "head_line": 387,
+    "head_line": 403,
     "kind": "tick_rate_constant",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/runtime/motion.py",
     "scope": "engine",
@@ -2515,7 +2515,7 @@
     "token": "safe_ticks_per_second"
    },
    {
-    "head_line": 388,
+    "head_line": 404,
     "kind": "tick_rate_constant",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/runtime/motion.py",
     "scope": "engine",
@@ -2524,7 +2524,7 @@
     "token": "server_ticks_per_second"
    },
    {
-    "head_line": 389,
+    "head_line": 405,
     "kind": "tick_rate_constant",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/runtime/motion.py",
     "scope": "engine",
@@ -2533,7 +2533,7 @@
     "token": "server_ticks_per_second"
    },
    {
-    "head_line": 390,
+    "head_line": 406,
     "kind": "tick_rate_constant",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/runtime/motion.py",
     "scope": "engine",
@@ -2542,7 +2542,7 @@
     "token": "server_ticks_per_second"
    },
    {
-    "head_line": 400,
+    "head_line": 416,
     "kind": "tick_rate_constant",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/runtime/motion.py",
     "scope": "engine",
@@ -2551,7 +2551,7 @@
     "token": "safe_ticks_per_second"
    },
    {
-    "head_line": 609,
+    "head_line": 625,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/runtime/motion.py",
     "scope": "engine",
@@ -2560,7 +2560,7 @@
     "token": "dt_seconds"
    },
    {
-    "head_line": 616,
+    "head_line": 632,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/runtime/motion.py",
     "scope": "engine",
@@ -2569,7 +2569,7 @@
     "token": "dt_seconds"
    },
    {
-    "head_line": 630,
+    "head_line": 646,
     "kind": "tick_rate_constant",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/runtime/motion.py",
     "scope": "engine",
@@ -2578,7 +2578,7 @@
     "token": "server_ticks_per_second"
    },
    {
-    "head_line": 654,
+    "head_line": 670,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/runtime/motion.py",
     "scope": "engine",
@@ -2587,7 +2587,7 @@
     "token": "dt_seconds"
    },
    {
-    "head_line": 667,
+    "head_line": 683,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/runtime/motion.py",
     "scope": "engine",
@@ -2596,7 +2596,7 @@
     "token": "dt_seconds"
    },
    {
-    "head_line": 810,
+    "head_line": 826,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/runtime/motion.py",
     "scope": "engine",
@@ -2605,7 +2605,7 @@
     "token": "dt_seconds"
    },
    {
-    "head_line": 822,
+    "head_line": 838,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/runtime/motion.py",
     "scope": "engine",
@@ -3505,7 +3505,7 @@
     "token": "motion_delta"
    },
    {
-    "head_line": 997,
+    "head_line": 993,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/agent.py",
     "scope": "engine",
@@ -3577,7 +3577,7 @@
     "token": "_motion_delta"
    },
    {
-    "head_line": 237,
+    "head_line": 246,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/step.py",
     "scope": "engine",
@@ -3586,7 +3586,7 @@
     "token": "motion_delta"
    },
    {
-    "head_line": 237,
+    "head_line": 246,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/step.py",
     "scope": "engine",
@@ -3595,7 +3595,7 @@
     "token": "last_motion_delta_seconds"
    },
    {
-    "head_line": 240,
+    "head_line": 249,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/step.py",
     "scope": "engine",
@@ -3604,7 +3604,7 @@
     "token": "motion_delta"
    },
    {
-    "head_line": 244,
+    "head_line": 253,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/step.py",
     "scope": "engine",
@@ -3613,7 +3613,7 @@
     "token": "motion_delta"
    },
    {
-    "head_line": 257,
+    "head_line": 266,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/step.py",
     "scope": "engine",
@@ -3622,7 +3622,7 @@
     "token": "motion_delta"
    },
    {
-    "head_line": 387,
+    "head_line": 396,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/step.py",
     "scope": "engine",
@@ -3631,7 +3631,7 @@
     "token": "motion_delta_override_seconds"
    },
    {
-    "head_line": 390,
+    "head_line": 399,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/step.py",
     "scope": "engine",
@@ -3640,7 +3640,7 @@
     "token": "motion_delta_override_seconds"
    },
    {
-    "head_line": 391,
+    "head_line": 400,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/step.py",
     "scope": "engine",
@@ -3649,7 +3649,7 @@
     "token": "motion_delta"
    },
    {
-    "head_line": 391,
+    "head_line": 400,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/step.py",
     "scope": "engine",
@@ -3658,7 +3658,7 @@
     "token": "_motion_delta"
    },
    {
-    "head_line": 397,
+    "head_line": 406,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/step.py",
     "scope": "engine",
@@ -3667,7 +3667,7 @@
     "token": "motion_delta"
    },
    {
-    "head_line": 398,
+    "head_line": 407,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/step.py",
     "scope": "engine",
@@ -3676,7 +3676,7 @@
     "token": "motion_delta_override_seconds"
    },
    {
-    "head_line": 401,
+    "head_line": 410,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/step.py",
     "scope": "engine",
@@ -3685,7 +3685,7 @@
     "token": "motion_delta"
    },
    {
-    "head_line": 407,
+    "head_line": 416,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/step.py",
     "scope": "engine",
@@ -3694,7 +3694,7 @@
     "token": "last_motion_delta_seconds"
    },
    {
-    "head_line": 407,
+    "head_line": 416,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/step.py",
     "scope": "engine",
@@ -3703,7 +3703,7 @@
     "token": "motion_delta"
    },
    {
-    "head_line": 409,
+    "head_line": 418,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/step.py",
     "scope": "engine",
@@ -3712,7 +3712,7 @@
     "token": "motion_delta"
    },
    {
-    "head_line": 445,
+    "head_line": 454,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/step.py",
     "scope": "engine",
@@ -3721,7 +3721,7 @@
     "token": "motion_delta"
    },
    {
-    "head_line": 470,
+    "head_line": 479,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/step.py",
     "scope": "engine",
@@ -3730,7 +3730,7 @@
     "token": "motion_delta"
    },
    {
-    "head_line": 481,
+    "head_line": 490,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/step.py",
     "scope": "engine",
@@ -3739,7 +3739,7 @@
     "token": "motion_delta"
    },
    {
-    "head_line": 497,
+    "head_line": 506,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/step.py",
     "scope": "engine",
@@ -3748,7 +3748,7 @@
     "token": "motion_delta"
    },
    {
-    "head_line": 643,
+    "head_line": 652,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/step.py",
     "scope": "engine",
@@ -3757,7 +3757,7 @@
     "token": "motion_delta_seconds"
    },
    {
-    "head_line": 643,
+    "head_line": 652,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/step.py",
     "scope": "engine",
@@ -3820,7 +3820,7 @@
     "token": "motion_delta_seconds"
    },
    {
-    "head_line": 593,
+    "head_line": 602,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
     "scope": "engine",
@@ -3829,7 +3829,7 @@
     "token": "nominal_dt"
    },
    {
-    "head_line": 593,
+    "head_line": 602,
     "kind": "timing_key",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
     "scope": "engine",
@@ -3838,7 +3838,7 @@
     "token": "nominal_delta_seconds"
    },
    {
-    "head_line": 594,
+    "head_line": 603,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
     "scope": "engine",
@@ -3847,7 +3847,7 @@
     "token": "loaded_dt"
    },
    {
-    "head_line": 594,
+    "head_line": 603,
     "kind": "timing_key",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
     "scope": "engine",
@@ -3856,7 +3856,7 @@
     "token": "loaded_delta_seconds"
    },
    {
-    "head_line": 595,
+    "head_line": 604,
     "kind": "tick_rate_constant",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
     "scope": "engine",
@@ -3865,7 +3865,7 @@
     "token": "ticks_per_second"
    },
    {
-    "head_line": 595,
+    "head_line": 604,
     "kind": "timing_key",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
     "scope": "engine",
@@ -3874,7 +3874,7 @@
     "token": "ticks_per_second"
    },
    {
-    "head_line": 597,
+    "head_line": 606,
     "kind": "timing_key",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
     "scope": "engine",
@@ -3883,7 +3883,7 @@
     "token": "motion_timing_profile_count"
    },
    {
-    "head_line": 604,
+    "head_line": 613,
     "kind": "timing_key",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
     "scope": "engine",
@@ -3892,7 +3892,7 @@
     "token": "motion_timing_profile_count"
    },
    {
-    "head_line": 651,
+    "head_line": 657,
     "kind": "tick_rate_constant",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
     "scope": "engine",
@@ -3917,6 +3917,69 @@
     "symbol": "_motion_delta",
     "text": "_motion_delta = _environment._motion_delta",
     "token": "_motion_delta"
+   },
+   {
+    "head_line": 226,
+    "kind": "delta_field",
+    "module": "HytaleRL/hytalegym/hytalegym/jax/training/arsenal.py",
+    "scope": "engine",
+    "symbol": "make_arsenal_ppo_environment._step_detailed",
+    "text": "motion_delta_seconds=None,",
+    "token": "motion_delta_seconds"
+   },
+   {
+    "head_line": 228,
+    "kind": "delta_field",
+    "module": "HytaleRL/hytalegym/hytalegym/jax/training/arsenal.py",
+    "scope": "engine",
+    "symbol": "make_arsenal_ppo_environment._step_detailed",
+    "text": "if motion_delta_seconds is None:",
+    "token": "motion_delta_seconds"
+   },
+   {
+    "head_line": 240,
+    "kind": "delta_field",
+    "module": "HytaleRL/hytalegym/hytalegym/jax/training/arsenal.py",
+    "scope": "engine",
+    "symbol": "make_arsenal_ppo_environment._step_detailed",
+    "text": "motion_delta_seconds=motion_delta_seconds,",
+    "token": "motion_delta_seconds"
+   },
+   {
+    "head_line": 240,
+    "kind": "delta_field",
+    "module": "HytaleRL/hytalegym/hytalegym/jax/training/arsenal.py",
+    "scope": "engine",
+    "symbol": "make_arsenal_ppo_environment._step_detailed",
+    "text": "motion_delta_seconds=motion_delta_seconds,",
+    "token": "motion_delta_seconds"
+   },
+   {
+    "head_line": 273,
+    "kind": "delta_field",
+    "module": "HytaleRL/hytalegym/hytalegym/jax/training/arsenal.py",
+    "scope": "engine",
+    "symbol": "make_arsenal_ppo_environment.step_detailed_fidelity",
+    "text": "motion_delta_seconds,",
+    "token": "motion_delta_seconds"
+   },
+   {
+    "head_line": 282,
+    "kind": "delta_field",
+    "module": "HytaleRL/hytalegym/hytalegym/jax/training/arsenal.py",
+    "scope": "engine",
+    "symbol": "make_arsenal_ppo_environment.step_detailed_fidelity",
+    "text": "motion_delta_seconds=motion_delta_seconds,",
+    "token": "motion_delta_seconds"
+   },
+   {
+    "head_line": 282,
+    "kind": "delta_field",
+    "module": "HytaleRL/hytalegym/hytalegym/jax/training/arsenal.py",
+    "scope": "engine",
+    "symbol": "make_arsenal_ppo_environment.step_detailed_fidelity",
+    "text": "motion_delta_seconds=motion_delta_seconds,",
+    "token": "motion_delta_seconds"
    },
    {
     "head_line": 169,
@@ -4000,7 +4063,7 @@
     "token": "motion_delta"
    },
    {
-    "head_line": 251,
+    "head_line": 255,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/training/multi_actor/runtime.py",
     "scope": "engine",
@@ -4315,7 +4378,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 644,
+    "head_line": 645,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
@@ -4324,7 +4387,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 1028,
+    "head_line": 1029,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
@@ -4333,7 +4396,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 1248,
+    "head_line": 1249,
     "kind": "timing_key",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
@@ -4342,7 +4405,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 1248,
+    "head_line": 1249,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
@@ -4351,7 +4414,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 1315,
+    "head_line": 1316,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
@@ -4360,7 +4423,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 1315,
+    "head_line": 1316,
     "kind": "timing_key",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
