@@ -100,9 +100,12 @@ pitfalls in `sim/PORTING.md` at `03090b0`). Timed bench crafts on the simulator 
 `timed_crafting`, switch `crafting_time`; seven CombatState leaves; inputs out on R+1, output on R+90 for 3.0 s, queue one
 deep, 7-block reach cancel with refund; all seven stage-3 receipts replay; the render admits 1,485 recipes, 1,446 commit
 alone, 1,305 at a fresh bench, all 211 timed commits finish; quick gate 197, identity 4; open: the executor path inside a live
-Region step, the processing and diagram actions, the fieldcraft `Weapon_Axe_Crude`). Running:
-the eleven source-pin audits on 0.7.2 (#68, phase 5,
-bridge 5556), the timing items 2 to 4 measured with the learner-row harness plus the tick-0 head read of #75 (#73, bridge
+Region step, the processing and diagram actions, the fieldcraft `Weapon_Axe_Crude`). The eleven source-pin audits on 0.7.2 (`d069a3e`, section (ad), phase 5): 0 of 11 pass before and after, now failing closed on
+recorded 0.7.2 rows (absent-safe digests; pins keyed by the audited jar's release line in `worldgen/source_pin_baselines.py`
+and `source_pin_baselines_072.json`; the 0.5 line byte-identical on the 0.5.10 control); each audit's finding names the
+simulator work it implies; the terrain recapture stays gated on all eleven; next is claim re-derivation per audit, the
+inventory row first. Running:
+the timing items 2 to 4 measured with the learner-row harness plus the tick-0 head read of #75 (#73, bridge
 5560, measurement first; constructs after the timed-crafts commit frees the overlay), and the phase 4n test follow-ups
 (#74, bridge 5558: the duel harness pitch, the expectations 13 and 82; the ancient-steel scalar construct as a spec), and
 stage 5 on the simulator (processing benches and the Armory click-craft as constructs replaying the six `v6_*` receipts; no
