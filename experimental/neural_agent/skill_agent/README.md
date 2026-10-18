@@ -658,6 +658,37 @@ verb.
 **Speed (A1): not settled.** At batch 8, p95 of trunk plus generalist was 15.08 ms against the 15 ms bar (trunk
 10.4, generalist 3.8; median total 6.0), at a machine load of 53 to 75 on 18 cores. A quiet-machine run decides it.
 
+### 2.14 The legal observation adapter (`observation_adapter.py`, 2026-10-18)
+
+**What it is.** `legal_tokens(observation, *, capacities, body_yaw_degrees)` turns the environment's legal observation
+into the trunk's token sets. It never reads the simulator state; the signature takes none.
+- *Self:* meters, grounded, body yaw, pitch and speed.
+- *Entity:* the opponent in slot 0 when the observation marks it perceptible.
+- *Other types:* empty for now (no blocks on the flat world; inventory and kit come later).
+
+**Frames, measured** (body 90°, head 45°):
+- The opponent row is already in the body frame (`observation/v1/runtime/encoder.py`:108, :178), so the adapter does
+  not rotate it.
+- The self row's yaw is the head yaw (:323). The body yaw is not published as a value, so the caller passes it: it is
+  the agent's own state. Omitting it is an error, never a silent head-yaw fallback.
+
+**Leakage.** Two worlds whose hidden opponent sits in different places give identical tokens, and moving a visible
+opponent changes them (the positive control). Perceptibility here means:
+- alive;
+- line of sight;
+- within 16 blocks planar and 24 blocks in 3-D.
+
+The pair path applies no field of view yet; the simulator lane is adding it as an opt-in.
+[test: test_sa_observation_adapter.py, 10 tests, mutation-checked]
+
+**What the legal observation does not provide:**
+- roles other than hostile;
+- a last-seen position or age (hidden means an empty slot);
+- held-item durability;
+- the speed units in blocks per second.
+
+Positions are quantised to 0.1 block.
+
 ## 3. For the agent building the gen-7 simulator
 
 **What you receive.** Each tick you get one choice per head per agent, in this order. A head no request
