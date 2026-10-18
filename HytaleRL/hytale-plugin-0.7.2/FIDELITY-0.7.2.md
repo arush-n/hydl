@@ -981,3 +981,33 @@ at the contact deadline with `target_health` still 105.0: the same cancelled pro
 open item for both. The guard-fork gate still has no live test.
 Claim most likely wrong (agent): that the execution value 4 is a Python resolution artefact rather than what the engine
 runs; the engine's child selection was not read.
+
+## (r) Phase 4h: the accepted Primary child and the reload stat-modifier row (2026-10-18; Python only; receipts `~/.claude/jobs/31947bd7/tmp/phase4h/receipts/`)
+
+Owner ruling: fidelity. Jar `A4487CF3` and the pin unchanged; `jax/combat/observation/v3/native/evidence.py` +22/-2.
+- **Accepted child.** An accepted Primary root now takes its execution child from the row before admission (native
+  admission reads the state at the start of the tick after the request); the row holding the shot's spend (ammo 1.0 to
+  0.0) had selected the reload child. Forced Primary at tick 38: tick 39 reads execution 0 (was 4), root 0. What the
+  engine ran at 39 (confirmed from the wire): ammo 1.0 to 0.0, arrows 4 to 4, only slot 0 active, signature 0 of 101,
+  so the standard shot; the child id itself is not on the wire (inferred).
+- **Reload stat-modifier row.** The 0.7.2 reload adds an arrow through `Common_StatAmmoReload_StatModifier`, an instant
+  `ApplyEffect` with `StatModifiers Ammo +1` (and `HorizontalSpeedMultiplier` 0.75, unchecked against the wire). The
+  bridge reports it for one tick at each add (ticks 36, 46, ... 86, one tick before the ammo change) under its template
+  id with zero duration; `_statuses` flagged it unknown, mechanics failure bit 4 made the learner observation invalid,
+  and the true mask bits fell from 83 to 8 on those ticks. The id is now omitted as a derived mechanic (its gain is in
+  `resource_values`); every other unknown status still fails closed. Placement note: 0.5.7 omissions live in
+  `rulesets/hytale_0_5_7/native_status_projection_v2.json`; no 0.7.2 ruleset directory exists yet, so the id is a
+  constant in `evidence.py` until the 0.7.2 ruleset is created at the cutover.
+
+| Row | What ran | Measured | Status |
+|---|---|---|---|
+| mask against wire legality, slots 0 to 4, ticks 26 to 86 | seed 570057, reload bound `Ability4` in the probe, jar `A4487CF3` | 6 mismatches before (slot 0 at 36, 46, 56, 66, 76, 86), none after; true mask bits 83 on the add ticks | MATCH |
+| 6c interrupt, official test with the `Ability4` patch | `test_crossbow_primary_interrupts_reload_at_first_repeat_window` | PASSED, 1 passed in 90.3 s | MATCH |
+| 6c Primary six-arrow reload, unpatched | official test | PASSED, 1 passed in 194.6 s | unchanged |
+
+Unit tests (tests/jax, untracked): two added, the pre-admission child and the stat-modifier row; both pass; a clean baseline
+of the native observation and evidence tests shows no test changing status (20 pre-existing failures on both sides:
+16 `test_native_transport.py` fixture drift, 2 actor-major host, 1 differential, 1 needing a live listener). Coordinator
+re-run: the targeted five pass. Not done: the active-path recompute in `_projection_state` still reads the current row
+(same class, untested path); the crossbow combo and signature tests were not re-run after this change; the 0.7.2
+projection table.

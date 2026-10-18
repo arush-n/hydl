@@ -213,6 +213,12 @@ when the reload adds an arrow. The combo hits land and are cancelled by the serv
 defect; filter not isolated); the signature cases were a harness ray on the body yaw (fixed in the fidelity session's
 harness). Next for the bridge: the crafting oracle stages of CRAFTING-ORACLE.md.
 
+**Phase 4h (2026-10-18; FIDELITY-0.7.2.md section (r)).** The Python evidence side now resolves an accepted root's child
+from the pre-admission row and omits the reload's instant stat-modifier status, so the learner mask equals the wire's
+legality on every tick and the official crossbow interrupt test passes with the `Ability4` binding; the Primary reload
+test still passes. The crossbow row 6c is complete apart from the server-cancelled projectile damage (combo and
+signature), the next bridge investigation.
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the

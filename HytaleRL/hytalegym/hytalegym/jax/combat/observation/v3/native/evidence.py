@@ -129,6 +129,16 @@ NATIVE_ACTOR_EVIDENCE_UNKNOWN_STATUS_FAILURE = (
 _UNKNOWN_STATUS_FAILURE = np.uint32(
     NATIVE_ACTOR_EVIDENCE_UNKNOWN_STATUS_FAILURE
 )
+# Crossbow reload adds one arrow through Common_StatAmmoReload_StatModifier, an
+# instant ApplyEffect whose only effect is StatModifiers Ammo +1 (0.7.2 assets).
+# The bridge reports that inline effect for one tick under its template name,
+# with zero duration. Its ammo gain is already in resource_values, so it is a
+# derived mechanic and is omitted. Other unknown statuses still fail closed.
+_DERIVED_NATIVE_STATUS_IDS = frozenset(
+    {
+        "***Template_Weapon_Crossbow_InteractionVars_Reload_StatModifier_Interactions_0_EffectId",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -205,6 +215,7 @@ class NativeActorEvidenceAssembler:
                 NATIVE_STATUS_PROJECTION_OMIT_DERIVED_MECHANIC,
             }
         )
+        self._omitted_native_statuses |= _DERIVED_NATIVE_STATUS_IDS
         self.native_profile = hytale_0_5_7_native_profile_bindings(
             agent_profile
         )
@@ -328,6 +339,7 @@ class NativeActorEvidenceAssembler:
         self._tracked_ability_execution_slot = -1
         self._tracked_ability_elapsed_seconds = 0.0
         self._pending_authored_ability_slot = -1
+        self._previous_row_resources: tuple[np.ndarray, np.ndarray] | None = None
         self._last_guard_held = False
         self._cooldowns = np.zeros(
             (ENTITY_COUNT, ABILITY_CAPACITY),
@@ -676,10 +688,18 @@ class NativeActorEvidenceAssembler:
             actors,
             self.config.mechanics_rules,
         )
+        # Native admission reads the state at the start of the tick after the
+        # request, so the accepted child is chosen from the previous row. This row
+        # already carries the shot's spend, which would select the reload child.
+        previous = self._previous_row_resources
+        self._previous_row_resources = (resources, resource_available)
+        admission_resources, admission_available = (
+            previous if previous is not None else (resources, resource_available)
+        )
         self._record_accepted_ability(
             info,
-            resources,
-            resource_available,
+            admission_resources,
+            admission_available,
         )
         delta_seconds, _ = self._advance_clocks(
             world_tick,
