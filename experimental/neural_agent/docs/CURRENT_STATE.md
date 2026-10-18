@@ -113,13 +113,24 @@ crossbow tests look up the head `world_move_none_plus_compass`, which `ARSENAL_P
 no revision, so they raise before measuring; two static placement tests pin the 0.5.7 `Assets.zip`; the
 reload-interrupt test gets "World thread is not accepting tasks" from the bridge. Harness problems, not mechanics.
 
-Open for the owner from phase 4c: whether slot 4 maps to `Ability4` for 0.7.2 items (a wire-contract change, Java plus
-the Python slot table) or the crossbow interrupt case stays a known failure; whether the group facing tests move to the
-body lever (recommended) or the camera is made to drive policy-bound bodies (changes parity for every policy that
-turns with the camera); and the fixture-only attitude override of `1159f8f`. Repo hygiene: both bridge plugins' Java
-tests (111 files for 0.7.2) are untracked because `HytaleRL/.gitignore` ignores `**/test/`; left as found.
+Ruled by the owner on 2026-10-18 (late), one line each ("do whatever has fidelity / your choice / whatever matches
+fidelity / whatever is best"), and in progress:
+- Slot 4 drives the 0.7.2 crossbow reload under `Ability4`: the bridge accepts and reports it by name (phase 4d agent,
+  task #50; the 25-index wire and evidence numbering stay 0.5's); the gen-7 content binding follows in the peer's lane.
+- Group facing tests use the body lever (the peer's two-lever and turn tests); no bridge change.
+- F1c becomes a gen-7 construct (task #52; the peer takes it after the engine batch below lands).
+- The deferred gen-5 engine edits are committed next, during a hold on `sim/gen7` and `sim/common` after the peer's 5d
+  construct commit, with `sim/gen5/identity.json` re-recorded from the new HEAD (task #51). The one engine-file patch
+  anchor (`slope_wall_limits_parameters` on `combat/types.py`) survives the edit; the `npc_jump` construct becomes a
+  by-value no-op because the batch gives `npc_walk` the native jump formula on gen 5 too.
+- The head-yaw self row flagged in `c0d5f9b` is correct: the simulator's self row is the head frame (`_self_features`
+  reads `agent_head_yaw`); commented in both agent copies (`e4888df`), no behaviour change. The 0.7.2 policy agent copy
+  of 2026-10-16 is committed (`31d08be`, 131 files, validation in its PORT-0.7.2.md).
+- The fixture-only attitude override of `1159f8f` stays (gated to `hit_interrupt_duel`).
+Repo hygiene, left as found: both bridge plugins' Java tests (111 files for 0.7.2) are untracked because
+`HytaleRL/.gitignore` ignores `**/test/`.
 
-Open for the owner: pushing (nothing is pushed); the reviewer's one flagged question in the v6 contract
+Open for the owner: pushing (nothing is pushed; the standing rule stands until asked); the reviewer's one flagged question in the v6 contract
 (`PublicServerEvidenceSource.java` self row now uses head yaw and pitch, unexplained); whether to re-extract
 `sim/gen5/data` from a 0.5.7 archive or relabel it 0.5.10.
 
@@ -134,7 +145,8 @@ in groups. Lower layer: `e62f654`, `3439c67`, `0f17bc8`, `39b450e`, `9b6c571`, `
 Night: `1f0af14` identity gate against the repaired HEAD; `ebc2e41` P6; `3cb4416` the peer's fidelity section (i);
 `1159f8f` the phase 4b bridge half (readouts, `hit_interrupt_duel`, jar pin `8B09661F`); `235565b` the nearest-skill
 resolver (#32, SYSTEM_ONE 9.16); `2b88082` the gen-7 mana pool construct with fidelity section (j) and phase 4c recorded;
-`7f56001` this document; `4066417` phase 4c (AbilitySlots fix, pin `8720BC76`, fidelity section (k)).
+`7f56001` this document; `4066417` phase 4c (AbilitySlots fix, pin `8720BC76`, fidelity section (k)); `37fdef4` this
+document; `e4888df` the head-frame comment; `31d08be` the 0.7.2 policy agent copy.
 
 ## 9. Layout
 
