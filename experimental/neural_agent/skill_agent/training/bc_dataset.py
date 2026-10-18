@@ -31,8 +31,11 @@ Labels on the gen-7 layout (``surface.head_names("gen7")``, 21 heads)
     45-degree sectors of the heading); ``yaw_delta_bins`` and ``pitch_delta_bins`` are the look-delta bin nearest
     the requested head angle minus the current one; ``base_action`` is SKILL_ATTACK on an executed Primary
     interaction and SKILL_IDLE where the attack is available and not executed, supervised where it is available
-    and (not executed or Primary). Every other head stays neutral and unsupervised. Arena zero-fills the unlabelled
-    cells of body_yaw_delta_bins (0 is its -45 degree bin); the dataset keeps the gen-7 no-op there (the centre).
+    and (not executed or Primary). A fifth rule is ours, not arena's (``body_yaw=True``, the default since v2):
+    ``body_yaw_delta_bins`` on every body-steering row is the bin nearest the requested body yaw (control-mask bit
+    1) minus the current one, else the centre bin, as head steering labels yaw. Every other head stays neutral and
+    unsupervised. Arena zero-fills the unlabelled cells of body_yaw_delta_bins (0 is its -45 degree bin); the
+    dataset keeps the gen-7 no-op there (the centre). ``body_yaw=False`` gives exactly arena's labels.
 
 Native jitter
     Per supervised head: the fraction of pairs of rows of one trace at consecutive ticks (t and t + 1), both
@@ -75,7 +78,7 @@ from hytalegym.worldgen import load_native_npc_trace_artifact
 SERVER_VERSION = "0.7.2"
 WORLDS: tuple[str, ...] = ("flat", "hytale_generator")
 MOVEMENT_EPSILON = 1.0e-6
-DEFAULT_OUT = DEFAULT_TRACE_ROOT / "bc_dataset_v1.npz"
+DEFAULT_OUT = DEFAULT_TRACE_ROOT / "bc_dataset_v2.npz"  # v2: the body-yaw label (v1: arena's four heads only)
 SCENARIO = re.compile(r"^(?P<matchup>.+)_(?P<world>flat|hytale_generator)_r(?P<repeat>\d+)$")
 
 HEAD_NAMES: tuple[str, ...] = surface.head_names("gen7")
@@ -86,6 +89,7 @@ _HEAD_SIZE = dict(zip(HEAD_NAMES, surface.head_sizes("gen7"), strict=True))
 _MOVE = HEAD_NAMES.index("locomotion_gait_compass")
 _YAW = HEAD_NAMES.index("yaw_delta_bins")
 _PITCH = HEAD_NAMES.index("pitch_delta_bins")
+_BODY_YAW = HEAD_NAMES.index("body_yaw_delta_bins")
 _BASE = HEAD_NAMES.index("base_action")
 _STATE = {name: index for index, name in enumerate(STATE_COLUMNS)}
 _CONTROL = {name: index for index, name in enumerate(CONTROL_COLUMNS)}
@@ -95,6 +99,7 @@ _POSITION = [_STATE["x"], _STATE["y"], _STATE["z"]]
 _VELOCITY = [_STATE["vx"], _STATE["vy"], _STATE["vz"]]
 # Bits of a trace's control_mask (NATIVE_NPC_TRACE_CONTROL_MASK_LAYOUT).
 _BODY_TRANSLATION = 1 << 0
+_BODY_YAW_REQUESTED = 1 << 1
 _HEAD_YAW_REQUESTED = 1 << 3
 _HEAD_PITCH_REQUESTED = 1 << 4
 _BODY_STEERING = 1 << 5
@@ -270,7 +275,8 @@ def _agent_frame(vectors: np.ndarray, yaw: np.ndarray) -> np.ndarray:
     return np.stack((-sine * x - cosine * z, cosine * x - sine * z, y), axis=1)
 
 
-def label_frames(capture: Any, frames: Sequence[int] | np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def label_frames(capture: Any, frames: Sequence[int] | np.ndarray, *,
+                 body_yaw: bool = True) -> tuple[np.ndarray, np.ndarray]:
     """Gen-7 labels of the frames ``frames`` of ``capture``: ``(actions int32[n, 21], supervised bool[n, 21])``.
 
     The rules of arena's ``native_npc_demonstrations(capture, project_attack_execution=True)`` for its four heads
@@ -309,6 +315,18 @@ def label_frames(capture: Any, frames: Sequence[int] | np.ndarray) -> tuple[np.n
     )
     supervised[head, _YAW] = True
     supervised[head, _PITCH] = True
+
+    # Body turn (not an arena rule; added 2026-10-17 with the owner's go-ahead): a body-steering row labels the
+    # body-yaw bins as head steering labels the yaw bins, since the gym decodes both heads with one signed-delta
+    # codebook (observation/v3/policy/surface.py): desired = the requested body yaw (control-mask bit 1), else
+    # the current body yaw (the centre bin).
+    if body_yaw:
+        body_now = state[:, _STATE["body_yaw"]]
+        body_wanted = np.where((mask & _BODY_YAW_REQUESTED) != 0, control[:, _CONTROL["body_yaw"]], body_now)
+        actions[body, _BODY_YAW] = _signed_choice(
+            body_wanted[body], body_now[body], _HEAD_SIZE["body_yaw_delta_bins"], wrap=True
+        )
+        supervised[body, _BODY_YAW] = True
 
     # Base action: only a Primary interaction proves the melee attack; other authored roots are not labelled.
     causes = [capture.attack_execution_cause[int(frame)] for frame in index]
@@ -380,13 +398,13 @@ def _load_capture(path: Path) -> Any:
     return capture
 
 
-def _trace_rows(own: Any, other: Any, index: int) -> tuple[dict[str, np.ndarray], int]:
+def _trace_rows(own: Any, other: Any, index: int, body_yaw: bool = True) -> tuple[dict[str, np.ndarray], int]:
     """The rows of ``own`` joined to ``other`` on tick, and the number of ticks that joined."""
 
     _, own_frames, other_frames = np.intersect1d(own.tick, other.tick, return_indices=True)
     native = np.asarray(own.native_control, dtype=bool)[own_frames]
     frames, partners = own_frames[native], other_frames[native]
-    actions, supervised = label_frames(own, frames)
+    actions, supervised = label_frames(own, frames, body_yaw=body_yaw)
     self_tokens, entity_tokens = token_features(own.state[frames], other.state[partners])
     rows = {
         "self_tokens": self_tokens[:, None, :],
@@ -399,8 +417,11 @@ def _trace_rows(own: Any, other: Any, index: int) -> tuple[dict[str, np.ndarray]
     return rows, int(own_frames.size)
 
 
-def build_dataset(root: str | Path = DEFAULT_TRACE_ROOT) -> BCDataset:
-    """Build the dataset from every scenario folder under ``root`` (the module docstring gives the rules)."""
+def build_dataset(root: str | Path = DEFAULT_TRACE_ROOT, *, body_yaw: bool = True) -> BCDataset:
+    """Build the dataset from every scenario folder under ``root`` (the module docstring gives the rules).
+
+    ``body_yaw`` adds the body-yaw label (``label_frames``); without it the labels are exactly arena's.
+    """
 
     scenarios = _scenarios(root)
     if not scenarios:
@@ -417,7 +438,7 @@ def build_dataset(root: str | Path = DEFAULT_TRACE_ROOT) -> BCDataset:
         captures = [_load_capture(path) for path in paths]
         for own_index in (0, 1):
             own, other = captures[own_index], captures[1 - own_index]
-            rows, joined_ticks = _trace_rows(own, other, len(names))
+            rows, joined_ticks = _trace_rows(own, other, len(names), body_yaw)
             parts.append(rows)
             names.append(scenario)
             roles.append(own.role)
@@ -434,7 +455,8 @@ def build_dataset(root: str | Path = DEFAULT_TRACE_ROOT) -> BCDataset:
         trace_repeat=tuple(repeats),
         trace_joined_ticks=tuple(joined),
         head_names=HEAD_NAMES,
-        receipt={"server_version": SERVER_VERSION, "bridge_sha256": sorted(bridges)},
+        receipt={"server_version": SERVER_VERSION, "bridge_sha256": sorted(bridges),
+                 "label_rules": ["arena_native_npc_demonstrations", *(["body_yaw_from_body_steering"] if body_yaw else [])]},
     )
 
 
@@ -442,8 +464,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Behaviour-cloning dataset from the recorded native NPC traces.")
     parser.add_argument("--root", type=Path, default=DEFAULT_TRACE_ROOT)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    parser.add_argument("--arena-only", action="store_true", help="arena's labels only: no body-yaw label")
     args = parser.parse_args(argv)
-    dataset = build_dataset(args.root)
+    dataset = build_dataset(args.root, body_yaw=not args.arena_only)
     destination = dataset.save_npz(args.out)
     stats = dataset.stats()
     jitter = dataset.native_jitter()

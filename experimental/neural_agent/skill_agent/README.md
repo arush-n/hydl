@@ -422,9 +422,17 @@ other. 1,500 steps take about 6 s on CPU. Held-out agreement against the majorit
   rows, is never learned.
 - **Why:** a self token and an opponent token cannot show terrain or the NPC's own internal state.
 
-**Not labelled.** Body turning: 13,593 of the 21,088 frames request a body yaw, and arena's projection has
-no rule for it, so a cloned body learns no body turning. Adding that rule is a reviewed projection change,
-left open.
+**Body turning (v2, 2026-10-17, with the owner's go-ahead).** Arena's projection has no rule for the
+body's own turn, though every frame steers the body and 13,593 of 21,088 request a body yaw. The dataset
+now adds one, built like the head-yaw rule: on a body-steering row, the bin nearest the requested body yaw
+minus the current one, else the centre. The gym decodes both heads with one codebook.
+- `build_dataset(body_yaw=False)` still gives exactly arena's labels, and the differential test checks the
+  other heads against arena as before.
+- The label is supervised on all 21,088 rows; the centre bin is 78 %, and native jitter is 0.054.
+- Held out, the smoke's body-yaw agreement is 0.733 and 0.725 (two seeds, base 0.772) with the generator
+  world held out, and 0.864 (base 0.792) with flat held out.
+- Like the other heads, it learns the training world and not the other one.
+[test: test_the_body_yaw_rule_labels_the_requested_body_turn; test_labels_equal_arena_projection_on_every_trace]
 
 ### 2.9 Freezing: adding a skill never changes a frozen one (`freezing.py`, B4, proof E13)
 
