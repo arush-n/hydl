@@ -191,6 +191,19 @@ present (jar `B56FD38E`; schema and contract identities unchanged), so the nativ
 trained on; the live learner-row look case passes on the new pin on both seeds (4 passed, every value and mask; it
 failed at tick 1 with 13 values before).
 
+**Construct status, the fidelity session's commits of 2026-10-18 (FIDELITY-0.7.2.md section (o)); sim/gen7, sim/common/profile.py
+and tests/sim only, each passing tests/sim and the identity gate before committing.** `490b1d4` the 5d guard cancel window
+(13 of 13 attacks match the 0.7.2 root RunTime; the thrust 3-6 is its own row); `69422d7` the 6c crossbow binding
+(the render sends Primary, Ability1, Ability4); `e8a1fc7` F1c (the server's fall-speed update with the previous tick's
+duration and cubic drag; jump in place, jump held, jump held with forward and ledge walk pass live on both seeds, stock
+passes only the ledge walk; residual: native walks again only on the third tick after landing); `ff51431` and
+`4661d5c` the 5f dodge (force on tick 3, stamina cost on tick 4, invulnerability and cooldown on the acceptance tick 2;
+dodge_left passes every value and mask on the render, stock fails from tick 2); `6aaf21d` crafting stage 0 (the
+bench-context commit: 197 of 197 offered recipes commit on the render against 2 on stock; gen 5 keeps its defect,
+BASELINES.md section 6). tests/sim 102 -> 114. The learner rows on the final render pass 6 of 14 live on `B56FD38E`
+(stock 4). Next there: crafting stage 1 (resource-type inputs with output exclusions, +66 recipes), then the stages of
+section 2b above; bench types 1 to 3 need the bridge oracle first (this session's lane).
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the

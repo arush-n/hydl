@@ -80,7 +80,9 @@ maps `agent_head_yaw` from it, so the native self row is the head frame the poli
 look case passes on both seeds on the new pin (the peer's run, `b2acf2f`). Phase 4d is committed (`9f12f0d`, pin
 `32EF5EDD` then): the bridge accepts `Ability4` by name and the 0.7.2 crossbow reload runs live; the peer's content
 binding is in (`69422d7`), and the interrupt case (Primary not offered during the reload) stays open. The peer has
-also landed F1c as a gen-7 construct (`e8a1fc7`). Phase 4c is committed (`4066417`): the headless entity gets an `AbilitySlots`
+also landed F1c (`e8a1fc7`), the 5f dodge timing (`ff51431`, `4661d5c`) and crafting stage 0 (`6aaf21d`, 197 of 197
+offered recipes commit on the render) as gen-7 constructs, with fidelity section (o) (`0e45fc6`); tests/sim 114; the
+learner rows pass 6 of 14 on the final render against 4 on stock. Phase 4c is committed (`4066417`): the headless entity gets an `AbilitySlots`
 component, so the reload interrupt no longer stops the world (pin `8720BC76`); the group yaw finding was withdrawn as a
 bridge fault (the camera lever steers the head by design, on 0.5 as on 0.7.2; the group tests need `body_delta_yaw`);
 the slot-4 `Ability3` versus `Ability4` mapping is an owner decision (`FIDELITY-0.7.2.md` (k)). The peer session (hydl-1f) owns the fidelity tests under `tests/fidelity` and, since `2b88082`,
