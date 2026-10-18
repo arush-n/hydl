@@ -497,6 +497,27 @@ Reading:
   selection of obstacles and height changes, and more worlds, are the next things to try. BUILD.md 7b
   records the choice.
 
+**The compass was labelled in the wrong frame (v4, 2026-10-18).**
+- *The finding.* The traces' steering translation is a world heading: the NPC's next velocity points along it (median
+  0.0 degrees apart on the 5,445 moving native frames). The gym's compass is body-relative: choice d moves along the
+  body angle (d - 1) x 45 degrees (`apply_world_move_override`, `step.py`).
+- *The bug.* Arena's rule, which v1 to v3 mirror, takes the world heading's sector, and that is right only at body yaw
+  0. The NPCs' median body yaw while moving is 107 degrees, so 90.6 % of the moving frames had the wrong label.
+- *The fix.* v4 takes the sector in the commanded body frame: the body yaw plus the body-yaw label's decoded delta.
+- *The proof.* Decoded through the engine's rule, v4's labels land within 45 degrees of where the NPC went on 93.6 %
+  of those frames (median error 0.1 degrees). Arena's rule reaches 15.6 % (median 90.7 degrees).
+  [test: test_the_compass_label_reproduces_the_native_heading_through_the_engines_rule]
+- *The effect.* Same smoke, three seeds, held-out agreement of the compass against the majority baseline:
+
+| held out | v3 (world frame) | v4 (body frame) | baseline |
+|---|---|---|---|
+| generated world | 0.642 | 0.764 (0.759, 0.770, 0.763) | 0.593 |
+| flat | 0.686 | 0.766 (0.670, 0.858, 0.772) | 0.745 |
+
+So the compass was held back by its labels as well as by the data. Arena's own imitation stack has the same rule
+(`arena/training/imitation/native_imitation.py`, `_compass_choice`), which is outside this folder and reported to the
+owner. `--arena-only` (`body_frame_compass=False`) keeps arena's labels exactly for the parity test.
+
 Known limit: the opponent's position comes from its true state even on the 0.4 % of rows where it is not
 perceptible. The legal observation mode would hide it.
 

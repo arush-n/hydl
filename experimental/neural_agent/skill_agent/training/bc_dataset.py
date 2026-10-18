@@ -46,7 +46,7 @@ Labels on the gen-7 layout (``surface.head_names("gen7")``, 21 heads)
     no supervision. Four heads take the rules of arena's ``native_npc_demonstrations(capture,
     project_attack_execution=True)``, copied here and checked row for row by the tests (this module never
     imports arena): ``locomotion_gait_compass`` is the movement compass (0 standing still, 1 to 8 the eight
-    45-degree sectors of the heading); ``yaw_delta_bins`` and ``pitch_delta_bins`` are the look-delta bin nearest
+    45-degree sectors of the heading; see the compass note below); ``yaw_delta_bins`` and ``pitch_delta_bins`` are the look-delta bin nearest
     the requested head angle minus the current one; ``base_action`` is SKILL_ATTACK on an executed Primary
     interaction and SKILL_IDLE where the attack is available and not executed, supervised where it is available
     and (not executed or Primary). A fifth rule is ours, not arena's (``body_yaw=True``, the default since v2):
@@ -54,6 +54,16 @@ Labels on the gen-7 layout (``surface.head_names("gen7")``, 21 heads)
     1) minus the current one, else the centre bin, as head steering labels yaw. Every other head stays neutral and
     unsupervised. Arena zero-fills the unlabelled cells of body_yaw_delta_bins (0 is its -45 degree bin); the
     dataset keeps the gen-7 no-op there (the centre). ``body_yaw=False`` gives exactly arena's labels.
+
+Compass frame (v4, 2026-10-18)
+    The trace's steering translation (control body_x, body_z) is a WORLD heading: on the 5,445 moving native frames
+    the NPC's next velocity points along it (median 0.0 degrees apart; 93.4 % within 30). The gym's compass is
+    BODY-relative (``apply_world_move_override``: choice d moves along the body angle (d - 1) * 45 degrees, resolved
+    against the commanded body yaw). Arena's rule takes the world heading's sector, which is right only at body yaw 0,
+    and the NPCs' median body yaw is 107 degrees, so on 90.6 % of those frames it labelled the wrong sector. Since v4 the
+    label is the heading's sector in the commanded body frame: the current body yaw plus the delta this frame's
+    body-yaw label decodes to (``body_frame_compass=True``, the default). ``body_frame_compass=False`` keeps arena's
+    rule for the parity test.
 
 Native jitter
     Per supervised head: the fraction of pairs of rows of one trace at consecutive ticks (t and t + 1), both
@@ -114,7 +124,8 @@ from hytalegym.worldgen import load_native_npc_trace_artifact
 SERVER_VERSION = "0.7.2"
 WORLDS: tuple[str, ...] = ("flat", "hytale_generator")
 MOVEMENT_EPSILON = 1.0e-6
-DEFAULT_OUT = DEFAULT_TRACE_ROOT / "bc_dataset_v3.npz"  # v3: geometry, meters, visibility (v2: body yaw; v1: arena's)
+DEFAULT_OUT = DEFAULT_TRACE_ROOT / "bc_dataset_v4.npz"  # v4: compass in the body frame (v3: geometry, meters,
+# visibility; v2: body yaw; v1: arena's)
 GEOMETRY_CAPACITY = 64
 """Geometry tokens per row: the candidate cells nearest the NPC (``geometry_features``)."""
 SCENARIO = re.compile(r"^(?P<matchup>.+)_(?P<world>flat|hytale_generator)_r(?P<repeat>\d+)$")
@@ -323,9 +334,28 @@ class BCDataset:
 
 
 def _compass_choice(x: np.ndarray, z: np.ndarray, moving: np.ndarray) -> np.ndarray:
-    """The movement compass: 0 when not moving, else 1 + the 45-degree sector of atan2(x, -z)."""
+    """Arena's movement compass: 0 when not moving, else 1 + the 45-degree sector of atan2(x, -z) of the WORLD heading.
+
+    That equals the body-relative compass the gym decodes only at body yaw 0 (``_body_compass_choice``).
+    """
 
     angle = np.mod(np.arctan2(x, -z), 2.0 * np.pi)
+    choice = (np.floor(angle / (np.pi / 4.0) + 0.5).astype(np.int32) % 8) + 1
+    return np.where(moving, choice, 0)
+
+
+def _body_compass_choice(x: np.ndarray, z: np.ndarray, yaw: np.ndarray, moving: np.ndarray) -> np.ndarray:
+    """The gym's movement compass: 0 when not moving, else 1 + the 45-degree sector of the world heading (x, z) seen
+    from a body at ``yaw`` (radians): 1 forward, 2 forward-right, 3 right, ... 8 forward-left.
+
+    This is the frame ``apply_world_move_override`` decodes: choice d moves along the body angle (d - 1) * 45 degrees,
+    resolved against the commanded body heading (``jax/combat/runtime/step.py``). The forward and right vectors are
+    ``_agent_frame``'s. At yaw 0 it equals ``_compass_choice``.
+    """
+
+    forward = -np.sin(yaw) * x - np.cos(yaw) * z
+    right = np.cos(yaw) * x - np.sin(yaw) * z
+    angle = np.mod(np.arctan2(right, forward), 2.0 * np.pi)
     choice = (np.floor(angle / (np.pi / 4.0) + 0.5).astype(np.int32) % 8) + 1
     return np.where(moving, choice, 0)
 
@@ -354,11 +384,13 @@ def _agent_frame(vectors: np.ndarray, yaw: np.ndarray) -> np.ndarray:
 
 
 def label_frames(capture: Any, frames: Sequence[int] | np.ndarray, *,
-                 body_yaw: bool = True) -> tuple[np.ndarray, np.ndarray]:
+                 body_yaw: bool = True, body_frame_compass: bool = True) -> tuple[np.ndarray, np.ndarray]:
     """Gen-7 labels of the frames ``frames`` of ``capture``: ``(actions int32[n, 21], supervised bool[n, 21])``.
 
     The rules of arena's ``native_npc_demonstrations(capture, project_attack_execution=True)`` for its four heads
-    (the module docstring lists them). Every other head keeps its neutral choice, unsupervised.
+    (the module docstring lists them), except the compass when ``body_frame_compass``: then the heading's sector is
+    taken in the commanded body frame, the frame the gym decodes it in. Every other head keeps its neutral choice,
+    unsupervised.
     """
 
     index = np.asarray(frames, dtype=np.int64)
@@ -374,11 +406,24 @@ def label_frames(capture: Any, frames: Sequence[int] | np.ndarray, *,
     planar = np.hypot(control[:, _CONTROL["body_x"]], control[:, _CONTROL["body_z"]])
     planar_only = np.abs(control[:, _CONTROL["body_y"]]) <= MOVEMENT_EPSILON
     move = body & (~translation | planar_only)
-    actions[move, _MOVE] = _compass_choice(
-        control[move, _CONTROL["body_x"]],
-        control[move, _CONTROL["body_z"]],
-        translation[move] & (planar[move] > MOVEMENT_EPSILON),
-    )
+    moving = translation[move] & (planar[move] > MOVEMENT_EPSILON)
+    if body_frame_compass:
+        # The engine resolves the compass against the commanded body yaw after this tick's body-yaw delta
+        # (step.py), so the frame is the current body yaw plus the delta the body-yaw label decodes to (none when
+        # that label is off, or the row requests no body yaw: the centre bin decodes to 0).
+        frame_yaw = state[:, _STATE["body_yaw"]].copy()
+        if body_yaw:
+            body_now = state[:, _STATE["body_yaw"]]
+            requested = (mask & _BODY_YAW_REQUESTED) != 0
+            wanted = np.where(requested, control[:, _CONTROL["body_yaw"]], body_now)
+            table = np.asarray(look_delta_values(_HEAD_SIZE["body_yaw_delta_bins"]), dtype=np.float64)
+            delta = table[_signed_choice(wanted, body_now, _HEAD_SIZE["body_yaw_delta_bins"], wrap=True)]
+            frame_yaw = np.where(body, body_now + np.deg2rad(delta), body_now)
+        actions[move, _MOVE] = _body_compass_choice(
+            control[move, _CONTROL["body_x"]], control[move, _CONTROL["body_z"]], frame_yaw[move], moving
+        )
+    else:
+        actions[move, _MOVE] = _compass_choice(control[move, _CONTROL["body_x"]], control[move, _CONTROL["body_z"]], moving)
     supervised[move, _MOVE] = True
 
     # Look: a head-steering row labels the bins. Without a request the desired angle is the current one (centre bin).
@@ -562,13 +607,14 @@ def _load_capture(path: Path) -> Any:
     return capture
 
 
-def _trace_rows(own: Any, other: Any, index: int, body_yaw: bool = True) -> tuple[dict[str, np.ndarray], int]:
+def _trace_rows(own: Any, other: Any, index: int, body_yaw: bool = True,
+                body_frame_compass: bool = True) -> tuple[dict[str, np.ndarray], int]:
     """The rows of ``own`` joined to ``other`` on tick, and the number of ticks that joined."""
 
     _, own_frames, other_frames = np.intersect1d(own.tick, other.tick, return_indices=True)
     native = np.asarray(own.native_control, dtype=bool)[own_frames]
     frames, partners = own_frames[native], other_frames[native]
-    actions, supervised = label_frames(own, frames, body_yaw=body_yaw)
+    actions, supervised = label_frames(own, frames, body_yaw=body_yaw, body_frame_compass=body_frame_compass)
     self_tokens, entity_tokens = token_features(own.state[frames], other.state[partners])
     self_tokens[:, _METER_COLUMNS] = meter_features([own.actor_evidence[int(frame)] for frame in frames])
     perceptible, seen = _visibility(own.observation)  # the age counts every frame of the trace, not only the rows
@@ -591,10 +637,12 @@ def _trace_rows(own: Any, other: Any, index: int, body_yaw: bool = True) -> tupl
     return rows, int(own_frames.size)
 
 
-def build_dataset(root: str | Path = DEFAULT_TRACE_ROOT, *, body_yaw: bool = True) -> BCDataset:
+def build_dataset(root: str | Path = DEFAULT_TRACE_ROOT, *, body_yaw: bool = True,
+                  body_frame_compass: bool = True) -> BCDataset:
     """Build the dataset from every scenario folder under ``root`` (the module docstring gives the rules).
 
-    ``body_yaw`` adds the body-yaw label (``label_frames``); without it the labels are exactly arena's.
+    ``body_yaw`` adds the body-yaw label, and ``body_frame_compass`` takes the compass in the commanded body frame
+    (``label_frames``). With both False the labels are exactly arena's.
     """
 
     scenarios = _scenarios(root)
@@ -612,7 +660,7 @@ def build_dataset(root: str | Path = DEFAULT_TRACE_ROOT, *, body_yaw: bool = Tru
         captures = [_load_capture(path) for path in paths]
         for own_index in (0, 1):
             own, other = captures[own_index], captures[1 - own_index]
-            rows, joined_ticks = _trace_rows(own, other, len(names), body_yaw)
+            rows, joined_ticks = _trace_rows(own, other, len(names), body_yaw, body_frame_compass)
             parts.append(rows)
             names.append(scenario)
             roles.append(own.role)
@@ -630,7 +678,9 @@ def build_dataset(root: str | Path = DEFAULT_TRACE_ROOT, *, body_yaw: bool = Tru
         trace_joined_ticks=tuple(joined),
         head_names=HEAD_NAMES,
         receipt={"server_version": SERVER_VERSION, "bridge_sha256": sorted(bridges),
-                 "label_rules": ["arena_native_npc_demonstrations", *(["body_yaw_from_body_steering"] if body_yaw else [])],
+                 "label_rules": ["arena_native_npc_demonstrations",
+                                 *(["body_yaw_from_body_steering"] if body_yaw else []),
+                                 *(["compass_in_commanded_body_frame"] if body_frame_compass else [])],
                  "observation": ["self", "entity", "geometry"]},
     )
 
@@ -639,9 +689,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Behaviour-cloning dataset from the recorded native NPC traces.")
     parser.add_argument("--root", type=Path, default=DEFAULT_TRACE_ROOT)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
-    parser.add_argument("--arena-only", action="store_true", help="arena's labels only: no body-yaw label")
+    parser.add_argument("--arena-only", action="store_true",
+                        help="arena's labels only: no body-yaw label, and arena's world-frame compass")
     args = parser.parse_args(argv)
-    dataset = build_dataset(args.root, body_yaw=not args.arena_only)
+    dataset = build_dataset(args.root, body_yaw=not args.arena_only, body_frame_compass=not args.arena_only)
     destination = dataset.save_npz(args.out)
     stats = dataset.stats()
     jitter = dataset.native_jitter()
