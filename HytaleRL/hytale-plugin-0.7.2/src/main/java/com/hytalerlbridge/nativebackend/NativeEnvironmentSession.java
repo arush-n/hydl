@@ -3955,9 +3955,8 @@ final class NativeEnvironmentSession
                 head == null ? 0.0f : head.getRotation().pitch(),
                 discoverAttackActions(target.getRole())
             );
-            if (installHeadlessWorldVerbContextAtReset()) {
-                installSyntheticPlayer(1, targetRef, store);
-            }
+            // The target stays an NPC: a headless Player context here makes the 0.7.2 PvP filter
+            // cancel the agent's damage (PvP is off), so no context is installed for actor 1.
             initializeNativePolicyCombat(1, targetRef, target, store);
         }, INITIALIZATION_TIMEOUT);
     }

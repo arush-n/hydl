@@ -250,6 +250,12 @@ side; recapturing the terrain library on 0.7.2 (all three saved libraries are 0.
 session owns both lanes and runs the simulator items in sequence (they share `overlay.py`) with the bridge items in
 parallel.
 
+**Phase 4j (2026-10-18; FIDELITY-0.7.2.md section (u); jar `CAFAD9B7`).** The crossbow damage that never reached the target
+was the bridge's own doing: the world-verb fixture gave the Trork a headless Player and the PvP-off world cancelled player-on-
+player damage. The target is an NPC again; the combo hits land (61 to 51 to 41 to 28) and the iron signature tests pass. Open:
+the ancient-steel combo (no hits) and Big Arrow (82 applied against 105), and the combo test's third-contact expectation (27 is
+the gen-5 value; 0.7.2 authors 13).
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the

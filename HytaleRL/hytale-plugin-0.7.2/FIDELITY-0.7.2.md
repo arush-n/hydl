@@ -1117,3 +1117,31 @@ established; the processing oracle and the diagram probe are not built (WIP unde
 Java: full `gradlew test --rerun --no-build-cache` 116 suites, 414 tests, 0 failures (baseline 409); the seven touched classes
 35 tests, 0 failures (coordinator re-run); `tests/test_server_versions.py` 7 passed; the repository build equals the scratch
 build. Claim most likely wrong (agent): that the teleport-plus-`validateWindows` cancel reproduces a client-driven walk away.
+
+## (u) Phase 4j: the cancelled crossbow damage was the bridge's headless Player on the Trork (2026-10-18; receipts `~/.claude/jobs/31947bd7/tmp/phase4j/receipts/`)
+
+Cancelling system, confirmed per stage: `DamageSystems.PlayerDamageFilterSystem`, PvP-off branch (the victim has a `Player`
+component, `isPvpEnabled()` is false, the damage source has a `Player`; 0.7.2 bytecode, decompile lines 1368-1404). Scratch
+stage probes at each filter boundary showed every shot flip from `cancelled=false` after the NPC filter to `cancelled=true`
+after the player filter (combo 3 of 3, signature 4 of 4), with dead, invulnerable, intangible, effect invulnerability, the
+desync flag, the NPC-damage config and `canCauseDamage` all as expected. Cause: `installSyntheticPlayer(1, targetRef)` (HEAD
+line 3959, gated by the world-verb fixture) gave the Trork target a headless `Player`, and the fixture world is PvP-off
+(line 3505). A real Trork has no `Player`, so the rule never runs on it: a real player's hit on an NPC is not cancelled. Fix:
+the target gets no headless Player (3 lines out, 2 comment lines in; the agent keeps its own); jar `CAFAD9B7`, pin updated.
+
+| Row | Before | After |
+|---|---|---|
+| combo probe, iron, seed 570057, 150 ticks | shots accepted 97/107/117, `target_health` 61.0 throughout | accepted 97/108/119, health 61 to 51 to 41 to 28 at ticks 100, 111, 122 (the recorded 10, 10, 13) |
+| combo tests (4) | all truncated, `hit_ticks []` | iron, both seeds: `hit_ticks [100, 111, 122]`, damage [10, 10, 13] against the test's [10, 10, 27] (the 27 is the gen-5 value; 0.7.2 authors 13, the content-values task applies it, the test expectation follows); ancient steel, both seeds: still truncated with no hits (open) |
+| signature tests (4) | 4 of 4 fail, every final-stage event cancelled | iron 2 of 2 pass; ancient steel 2 of 2 fail at 82 applied against 105 expected, a reduction upstream of every filter (open) |
+| Big Arrow without world verbs | no cancel, 78 applied, target 61 to 0 at tick 3 | unchanged |
+| six-arrow reload | pass | pass; the interrupt case on the stock `Ability3` row fails at line 315 as in (p) |
+
+Gates: full `gradlew test --rerun --no-build-cache` on HEAD plus the edit, 116 suites, 414 tests, 0 failures (the stage 5
+agent's in-flight oracle files excluded); `SourceFileSizeRatchetTest` 2 of 2 (the session file 9,682 of 9,700 lines);
+`tests/test_server_versions.py` 7 passed. Not run: the other world-verb and compare suites that could see the target's
+Player removed (`tests/worldgen/test_native_crafting.py`, `test_native_world_actions.py`, `tests/fidelity/test_jax_native_combat_compare.py`,
+`test_world_fidelity_live.py`, the flame staff and block-use compares, `test_native_actor_evidence.py`); a verification run
+follows. Alternative not taken: `setPvpEnabled(true)` would also stop the cancel but would keep the NPC a Player (player
+knockback and death rules). Claim most likely wrong (agent): that removing the target's Player is harmless everywhere; the
+target now follows NPC knockback and death rules (inferred, not measured).
