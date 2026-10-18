@@ -156,6 +156,9 @@ public record NativeActorEvidenceFrame(
     /**
      * Copied per-entity server facts. Stable IDs are host-resolved from the
      * reset-pinned asset strings; runtime asset indices are diagnostic only.
+     * {@code yawDegrees} is the body transform yaw, which only the body lever
+     * turns; {@code headYawDegrees} is the HeadRotation yaw, which the look
+     * (camera) lever turns.
      */
     public record Actor(
         int entityId,
@@ -170,6 +173,7 @@ public record NativeActorEvidenceFrame(
         MotionForce motionForce,
         double yawDegrees,
         double pitchDegrees,
+        double headYawDegrees,
         double health,
         double maxHealth,
         double[] resourceValues,
@@ -231,6 +235,7 @@ public record NativeActorEvidenceFrame(
                 : movementStates;
             requireFinite(yawDegrees, "yawDegrees");
             requireFinite(pitchDegrees, "pitchDegrees");
+            requireFinite(headYawDegrees, "headYawDegrees");
             requireFinite(health, "health");
             requireFinite(maxHealth, "maxHealth");
             if (statuses.size() > STATUS_CAPACITY) {

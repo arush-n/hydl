@@ -877,22 +877,23 @@ class NativeActorEvidenceAssembler:
                 ],
                 dtype=jnp.float32,
             ),
-            # The bridge reports one orientation per actor and no separate
-            # agent head, unlike `target_head_yaw_degrees` above. For a
-            # bridge-driven actor that single pitch IS the look pitch -- the
-            # body never pitches, because `body.setTranslation` only ever gets
-            # a planar vector -- so it seeds the head, and the body stays
-            # level. Head yaw takes the reported yaw for the same reason: both
-            # steerings are commanded to it and only a slow separates them.
-            # PROTOCOL GAP: a slowed native actor's head would lag its body and
-            # the bridge cannot currently express that.
+            # The bridge reports the body yaw (`yaw_degrees`, the body
+            # transform) and the look yaw (`head_yaw_degrees`, HeadRotation).
+            # The agent head takes `head_yaw_degrees` when the bridge sends it.
+            # A bridge without it (the gen-5 plugin) falls back to the body yaw,
+            # which is exact only while both levers turn together. Pitch is the
+            # look pitch: the body never pitches, because `body.setTranslation`
+            # only ever gets a planar vector, so `pitch` stays zero and the body
+            # stays level.
             pitch=jnp.zeros((1,), dtype=jnp.float32),
             agent_head_pitch=jnp.asarray(
                 [agent["pitch_degrees"]],
                 dtype=jnp.float32,
             ),
             agent_head_yaw=jnp.asarray(
-                yaw[:, AGENT_ENTITY],
+                yaw[:, AGENT_ENTITY]
+                if agent.get("head_yaw_degrees") is None
+                else [agent["head_yaw_degrees"]],
                 dtype=jnp.float32,
             ),
             tick_count=jnp.asarray([episode_tick], dtype=jnp.int32),

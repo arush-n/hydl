@@ -9154,6 +9154,7 @@ final class NativeEnvironmentSession
             actor.motionForce(),
             actor.yawDegrees(),
             actor.pitchDegrees(),
+            actor.headYawDegrees(),
             actor.health(),
             actor.maxHealth(),
             actor.resourceValues(),

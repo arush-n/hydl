@@ -230,6 +230,7 @@ public final class EvidenceCapture {
             0.0,
             0.0,
             0.0,
+            0.0,
             new double[NativeActorEvidenceFrame.RESOURCE_COUNT],
             new double[NativeActorEvidenceFrame.RESOURCE_COUNT],
             new boolean[NativeActorEvidenceFrame.RESOURCE_COUNT],
@@ -468,6 +469,12 @@ public final class EvidenceCapture {
                 ? transform.getRotation().pitch()
                 : head.getRotation().pitch()
         );
+        // HeadRotation is the look; yawDegrees above is the body. A missing
+        // HeadRotation falls back to the body yaw, as pitch falls back to the
+        // transform pitch.
+        double headYawDegrees = head == null
+            ? yawDegrees
+            : normalizeDegrees(Math.toDegrees(head.getRotation().yaw()));
         return new CapturedActorEvidence(
             new NativeActorEvidenceFrame.Actor(
                 entityId,
@@ -486,6 +493,7 @@ public final class EvidenceCapture {
                 motionForce,
                 yawDegrees,
                 pitchDegrees,
+                headYawDegrees,
                 health,
                 maxHealth,
                 resourceValues,

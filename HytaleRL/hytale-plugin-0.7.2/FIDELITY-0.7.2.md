@@ -741,3 +741,32 @@ the two new tests); `NativePolicyCombatBindingSpecTest` 3, `EnvironmentOptionsTe
 2, 0 failures (coordinator re-run); `tests/test_server_versions.py` 7 passed. Jar reproducibility: unchanged sources
 rebuilt to `8720BC76` exactly. Claim most likely wrong (agent): that the `Ability4` context hands the reload the
 crossbow as its held item; inferred from the absence of the `on item null` error, not read from the context.
+
+## (n) Phase 4e: the agent's head yaw on the evidence wire (2026-10-18; receipts `~/.claude/jobs/31947bd7/tmp/phase4e/receipts/`)
+
+Gap (the fidelity session's reading, confirmed live here): the actor evidence row's `yaw_degrees` is the body
+transform's yaw, while the simulator's self row is the head frame (`observation/v1/runtime/encoder.py`
+`_self_features` reads `agent_head_yaw`), and `evidence.py` mapped `agent_head_yaw` from that body yaw. With the
+two levers (section (k)) a camera-only look never reached the native row. Probe on pinned `32EF5EDD` (group actor
+one, `camera_delta_yaw` +30 on four ticks, seeds 570057 and 913771): wire `yaw_degrees` 0.00 on every tick while the
+Java-read HeadRotation yaw ran 21.7, 43.5, 45.0, 45.0, 23.6, 1.9, -19.4, -39.3, -45.0; the wire carried no head yaw.
+
+Fix, additive: the actor row gains `head_yaw_degrees` (HeadRotation, the same source as `pitch_degrees`; falls back to
+the body yaw when HeadRotation is absent) in policy evidence rows (24 keys); NPC trace actor rows keep their 23-key
+shape, which `native_npc_traces.py` validates exactly. `decode.py` reads the field when present (None otherwise) and
+`evidence.py` takes `agent_head_yaw` from it, else from `yaw_degrees`, so the gen-5 plugin and older captures still
+decode; the stale "one commanded yaw" comments in `evidence.py` and `runtime/agent.py` are corrected (comment only).
+No identity moved: actor evidence schema v4, version 4, contract `D47E87B2` unchanged. Jar `B56FD38E` (built here from
+the repository sources, hash equal to the agent's candidate), pin updated.
+
+| Row | What ran | Measured | Status |
+|---|---|---|---|
+| look, bridge side | candidate jar, the same probe, 18 actor-one rows over two seeds | wire `head_yaw_degrees` 18.0, 36.8, 45.0, 45.0, 27.0, 8.2, -9.8, -28.5, -45.0, equal to the direct HeadRotation read on all 18 rows; `yaw_degrees` 0.00 throughout (head timing differs between boots, so compare within a run) | MATCH |
+| look, decoder | synthetic wire, body 10 and head -45 | `combat.yaw` 10.0 and `agent_head_yaw` -45.0; without the key 10.0; the original code gave 10.0 (the gap) | MATCH (synthetic) |
+| look, live learner row (ticks 1 to 2) | `test_dynamic_learner_row_world_inputs.py` look case on `B56FD38E` | not run (the before run was stopped on time; the fidelity session owns the test and runs it on the new pin) | PENDING |
+
+Gates: Java full `gradlew test` 111 suites, 387 tests, 0 failures (agent); `NativeActorEvidenceWireTest` 3,
+`NpcTraceWireTest` 3, `NativeActorEvidenceFrameTest` 5, `SourceFileSizeRatchetTest` 2, 0 failures (coordinator);
+Python decoder and evidence tests 89 passed and 1 failed for want of a live listener (coordinator); the agent's 402-test
+offline run showed no failure that the unchanged code did not also show; `tests/test_server_versions.py` 7 passed.
+Not read directly: the policy agent's own HeadRotation (no telemetry for actor zero; the same code path is inferred).

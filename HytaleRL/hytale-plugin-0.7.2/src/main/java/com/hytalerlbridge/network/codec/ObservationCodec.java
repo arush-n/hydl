@@ -233,7 +233,7 @@ public final class ObservationCodec {
         packer.packString("actors");
         packer.packArrayHeader(evidence.actors().size());
         for (NativeActorEvidenceFrame.Actor actor : evidence.actors()) {
-            packNativeActor(packer, actor);
+            packNativeActor(packer, actor, true);
         }
 
         packer.packString("abilities");
@@ -269,11 +269,24 @@ public final class ObservationCodec {
     }
 
 
+    /** One actor row in the 23-key shape that native_npc_traces.py validates exactly. */
     public static void packNativeActor(
         MessagePacker packer,
         NativeActorEvidenceFrame.Actor actor
     ) throws IOException {
-        packer.packMapHeader(23);
+        packNativeActor(packer, actor, false);
+    }
+
+    /**
+     * One actor row. Policy evidence adds {@code head_yaw_degrees}, the
+     * HeadRotation yaw beside the body yaw {@code yaw_degrees}.
+     */
+    private static void packNativeActor(
+        MessagePacker packer,
+        NativeActorEvidenceFrame.Actor actor,
+        boolean headYaw
+    ) throws IOException {
+        packer.packMapHeader(headYaw ? 24 : 23);
         packer.packString("entity_id");
         packer.packInt(actor.entityId());
         packer.packString("present");
@@ -298,6 +311,10 @@ public final class ObservationCodec {
         packer.packDouble(actor.yawDegrees());
         packer.packString("pitch_degrees");
         packer.packDouble(actor.pitchDegrees());
+        if (headYaw) {
+            packer.packString("head_yaw_degrees");
+            packer.packDouble(actor.headYawDegrees());
+        }
         packer.packString("health");
         packer.packDouble(actor.health());
         packer.packString("max_health");

@@ -238,6 +238,14 @@ def _actor(value: Any, entity_id: int) -> dict[str, Any]:
         "motion_force": motion_force,
         "yaw_degrees": _number(row.get("yaw_degrees"), "yaw_degrees"),
         "pitch_degrees": _number(row.get("pitch_degrees"), "pitch_degrees"),
+        # HeadRotation yaw (the look), from bridges that send it. Absent (the
+        # gen-5 plugin, older captures) decodes to None, and evidence.py then
+        # takes the body yaw.
+        "head_yaw_degrees": (
+            None
+            if row.get("head_yaw_degrees") is None
+            else _number(row["head_yaw_degrees"], "head_yaw_degrees")
+        ),
         "health": _number(row.get("health"), "health"),
         "max_health": _number(row.get("max_health"), "max_health"),
         "resource_values": _array(
@@ -477,6 +485,7 @@ def _absent_actor_has_evidence(actor) -> bool:
         or actor["active_ability_slot"] != -1
         or actor["yaw_degrees"] != 0.0
         or actor["pitch_degrees"] != 0.0
+        or actor["head_yaw_degrees"] not in (None, 0.0)
         or actor["health"] != 0.0
         or actor["max_health"] != 0.0
         or actor["statuses"]

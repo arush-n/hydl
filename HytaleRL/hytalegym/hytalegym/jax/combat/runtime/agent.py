@@ -367,11 +367,12 @@ def _head_steering(
         maxHeadRotation = interval * headSpeed * headSteering.relativeTurnSpeed
                                    * effectHorizontalSpeedMultiplier
 
-    Only the head carries that last factor, and for this actor it is the *only*
-    thing that ever separates the two seams: the bridge commands body and head
-    to the same yaw (`NativeEnvironmentSession` 3957 and 3964) and both base
-    ceilings are 360 deg/s, so an unslowed head and body turn together and the
-    window never binds. Slow the actor -- fluid, or a charge's
+    Only the head carries that last factor, so a slow is one way to separate
+    the two seams. The bridge can also command them apart with its two levers,
+    `camera_delta_yaw` for the head and `body_delta_yaw` for the body
+    (`NativeEnvironmentSession` 2959-2964 and 3109-3112); both base ceilings
+    are 360 deg/s, so an unslowed head and body turned together never part and
+    the window never binds. Slow the actor -- fluid, or a charge's
     ``HorizontalSpeedMultiplier`` -- and the head falls behind its own chest,
     which is when the window starts to matter.
 

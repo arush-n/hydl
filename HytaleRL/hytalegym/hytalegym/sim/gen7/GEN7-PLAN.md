@@ -185,6 +185,11 @@ request path (jar `32EF5EDD`), and the 0.7.2 crossbow reload runs to completion 
 reload's ammo transitions; the wire and evidence numbering stay 0.5's. Open: the gen-7 content binding of the reload row
 as `Ability4` (peer session), and the interrupt case, where Primary is not offered during the reload (cause not isolated).
 
+**Bridge status, phase 4e (2026-10-18; FIDELITY-0.7.2.md section (n)).** The actor evidence row carries
+`head_yaw_degrees` (HeadRotation) beside the body `yaw_degrees`, and the decoder maps `agent_head_yaw` from it when
+present (jar `B56FD38E`; schema and contract identities unchanged), so the native self row is the head frame the policy
+trained on; the live learner-row look case on the new pin is the fidelity session's to run.
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the
