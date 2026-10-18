@@ -30,7 +30,7 @@ def test_gen5_profile_is_todays_behaviour() -> None:
 #: walk jump velocity (phase 3b, 2026-10-18).
 IMPLEMENTED_SWITCHES = {"line_of_sight", "npc_walk_jump_velocity", "dagger_swing_damage", "mana_pool", "guard_cancel_window",
                        "native_binding_types", "npc_jump_arc",
-                       "bench_crafting"}
+                       "bench_crafting", "crafting_materials"}
 
 
 #: Switches a gen-7 decision leaves at the gen-5 default: the module stays a stub and is never reached
@@ -57,7 +57,7 @@ def test_every_changed_switch_has_an_owning_module_and_refuses_until_implemented
     "module_name",
     sorted(set(mechanics.CONSTRUCT_MODULES.values()) - {"line_of_sight", "npc_jump", "dagger_damage", "mana_pool", "guard_window",
                                                          "native_bindings", "npc_jump_arc",
-                                                         "bench_crafting"}),
+                                                         "bench_crafting", "crafting_materials"}),
 )
 def test_stub_entry_points_raise(module_name: str) -> None:
     module = importlib.import_module(f"hytalegym.sim.gen7.mechanics.{module_name}")

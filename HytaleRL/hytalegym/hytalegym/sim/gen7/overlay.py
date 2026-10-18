@@ -84,6 +84,11 @@ _BENCH_CRAFTING = (
     "(l): 2 of 197 offered recipes commit before the construct); a native bench-craft differential is open "
     "(no live bench-craft test on 0.7.2 yet)"
 )
+_CRAFTING_MATERIALS = (
+    "tests/sim/test_crafting_materials.py (admission, resolution, legality from a resource type, the output "
+    "exclusion, the Region commit); on the live 0.7.2 catalog 263 recipes are offered and all 263 commit, the 66 "
+    "with resource inputs stocked with a non-output item that carries the type (FIDELITY-0.7.2.md (o) follow-up)"
+)
 _GUARD_NOTE = (
     "0.7.2 removes Rules.Interrupting [Primary] from this family's guard root "
     "(ASSET-DIFF-0.7.2.md:237-243, 266-322); the cancel now comes from the attack roots' InterruptedBy "
@@ -293,6 +298,25 @@ HOOKS = (
          "more than 16 legal recipes: the first 16 in table order (canonical recipe-id order), row available, "
          "source_count the full count, diagnostics ACTOR_RECIPE_DIAGNOSTIC_CAPACITY (truncated), "
          "capacity_exceeded False; shapes, radix and contract stamps unchanged"),
+    Hook("crafting_materials_item_table", "combat/arsenal/world_actions/crafting.py", "compile_region_fieldcraft_assets",
+         f"{_MECHANICS}.crafting_materials:item_resource_types", "crafting_materials", "active", "11",
+         _CRAFTING_MATERIALS, "the archive's item ResourceTypes as a table, item semantic id -> resource semantic ids"),
+    Hook("crafting_materials_admission", "combat/arsenal/world_actions/crafting.py", "_lossless_region_crafting",
+         f"{_MECHANICS}.crafting_materials:admission", "crafting_materials", "active", "11", _CRAFTING_MATERIALS,
+         "a resource-type input that excludes exactly its recipe's outputs (applyOutputExclusions); outputs stay "
+         "concrete items; the four raw-fish recipes, whose input excludes more, stay out"),
+    Hook("crafting_materials_resolution", "combat/arsenal/world_actions/crafting.py", "_resolved_recipe",
+         f"{_MECHANICS}.crafting_materials:resolution", "crafting_materials", "active", "11", _CRAFTING_MATERIALS,
+         "such inputs keep their resource type in the packed table"),
+    Hook("crafting_materials_inventory", "combat/arsenal/world_actions/crafting.py", "_crafting_inventory",
+         f"{_MECHANICS}.crafting_materials:inventory_resource_types", "crafting_materials", "active", "11",
+         _CRAFTING_MATERIALS, "each input slot's resource types, for the candidate provider's legality"),
+    Hook("crafting_materials_commit", "crafting/inventory_adapter.py", "craft_into_combat_inventory",
+         f"{_MECHANICS}.crafting_materials:commit_resource_types", "crafting_materials", "active", "11",
+         _CRAFTING_MATERIALS, "the commit catalog's slot resource types (the executor builds them absent)"),
+    Hook("crafting_materials_exclusions", "crafting/runtime.py", "_slot_matches",
+         f"{_MECHANICS}.crafting_materials:output_exclusions", "crafting_materials", "active", "11",
+         _CRAFTING_MATERIALS, "a resource-type input never consumes a slot holding one of its recipe's outputs"),
     Hook("dodge_action_head", "combat/observation/v3/policy/layout.py", "split_locomotion_choice",
          f"{_MECHANICS}.dodge:construct", "dodge_action_head", "stub", "9",
          "test_native_policy_dodge_boundary_matches_advertised_capability and "

@@ -83,6 +83,11 @@ class Constructs:
     # row closed) or "recipe_bench" (commit under a bench the recipe names; keep the first 16 legal recipes in
     # table order). Owner: sim/gen7/mechanics/bench_crafting.py (row 11, stage 0).
     bench_crafting: str = "fieldcraft_context"
+    # Region crafting inputs: "concrete_only" (HEAD: a recipe enters only when every input names an item) or
+    # "resource_types" (a resource-type input that excludes exactly its recipe's outputs, the server's
+    # applyOutputExclusions, with slot resource types from the archive's items). Owner: sim/gen7/mechanics/
+    # crafting_materials.py (row 11, stage 1).
+    crafting_materials: str = "concrete_only"
     # Walk controller while descending: "free_fall" (0.5.x) or
     # "minimum_descent_rate" (0.7.2 code change, unmeasured). P2.
     walk_descent: str = "free_fall"

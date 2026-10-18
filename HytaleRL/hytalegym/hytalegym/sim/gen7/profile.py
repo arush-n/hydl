@@ -43,6 +43,7 @@ PROFILE = SimProfile(
         guard_cancel_window="attack_root",
         native_binding_types="item_interactions",
         bench_crafting="recipe_bench",
+        crafting_materials="resource_types",
         walk_descent="minimum_descent_rate",
         # 0.7.2 MaxSlopeAngleDegrees / MaxWallAngleDegrees have no server reader (jar scan, 2026-10-18):
         # gen 7 matches gen 5 on this field; the two parameters stay as rendered data (decision, phase 3b).

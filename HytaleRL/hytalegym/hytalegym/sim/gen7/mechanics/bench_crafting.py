@@ -35,6 +35,7 @@ types 1-3.
 from __future__ import annotations
 
 from functools import wraps
+from inspect import unwrap
 from typing import Any
 
 SWITCH = "bench_crafting"
@@ -57,7 +58,8 @@ def bench_commit(original: Any, profile: Any) -> Any:
 
     if not _enabled(profile):
         return original
-    jnp = original.__globals__["jnp"]
+    # Another construct may wrap the same function first (crafting_materials): read the engine module's globals.
+    jnp = unwrap(original).__globals__["jnp"]
 
     @wraps(original)
     def craft_into_combat_inventory(table, state, layout, context, recipe_index, catalog, **kwargs):
