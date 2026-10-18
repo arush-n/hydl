@@ -1,5 +1,17 @@
 # probes — measured facts for composing `HierarchicalAgentCore` on AgentKit
 
+## Files in this folder (map, 2026-10-18)
+
+| File | Lines | What it measured |
+|---|---:|---|
+| `probe_events.py` | 359 | `DecisionEvent`s, episode ends, reward and health through the ADK hierarchy (the tables below). |
+| `probe_jev_latency.py` | 95 | Decision latency of J0 and J1 inside a compiled call (`out/jev_latency.json`). |
+| `probe_timing.py` | 83 | Compile versus run time of the pursuit-candidate hierarchy rollout on CPU (`out/timing.json`). |
+
+Not a build target, no gate, not imported by the package; `out/` is gitignored. Later latency measurements live
+where they are gated: `../jev/system_one/probe_latency.py` (G2) and the composition driver's JEV columns. The
+rest of this document is the measured record of 2026-10-16.
+
 Measured 2026-10-16 on CPU (`jax.default_backend() == "cpu"`), one seed
 (`jax.random.PRNGKey(0)`). Every number below comes from `out/events.json` or
 `out/timing.json` as written by the probes in this folder. Nothing here is

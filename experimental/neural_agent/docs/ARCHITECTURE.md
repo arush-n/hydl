@@ -10,6 +10,16 @@ Labels follow ADR section 0: IMPLEMENTED, VALIDATED, COMMITTED, HYPOTHESIS.
 
 ## 1. Package map
 
+**Map as of 2026-10-18.** The current map is the top-level [`README.md`](../README.md) plus one `README.md` per
+folder (`belief/`, `executive/`, `jev/`, `jev/system_one/`, `jev/lm/`, `eval/`, `tasks/`, `skill_library/`,
+`probes/`, `docs/`, and the lower layer's `skill_agent/`); the dated snapshot is [`CURRENT_STATE.md`](CURRENT_STATE.md).
+The paragraphs below describe the layout of 2026-10-16 and are kept as the record; since then the package gained
+`shared_state.py` and `shared_state_writers.py` (the scratchpad S_t), `requests.py` (the request stream),
+`jev/programs.py`, `jev/correspondence.py`, `jev/typed_rule.py`, `jev/system_one/` (J-S1 and the reading
+experiments), `executive/goal_language.py` and `export.py`, `eval/record_traces.py` and `record_dagger.py`,
+`tasks/arenas.py`, the J1 training line (`jev/train_j1.py`, `eval_j1.py`, `sim_goal_env.py`, `j1_actor_critic.py`),
+and `skill_agent/` (the lower layer, another session). `skills/` is `skill_library/`.
+
 **`contracts.py`** (present). The one module that other modules import shared names from. It defines the constants (`MAX_GOALS = 4`, `PARAM_WIDTH = 4`, `SKILL_STATE_WIDTH = 128`, `ACTION_HEADS = 12`, `BELIEF_LATENT_WIDTH = 64`, `TICKS_SATURATION = 256.0`, `SKILL_IDLE = "idle"`). It defines the host records `GoalSpec`, `ComputeBudget`, `ExecutiveState`, `SkillContract`, `GoalReport`, `JevBudget` and `JevStats`, and the batched PyTrees `SharedBeliefState`, `ExecutiveArrays` and `GoalPayload`. It also provides the functions `executive_arrays`, `empty_executive_arrays`, `make_goal`, `idle_goal`, `event_mask` and `feature_index`, the protocols `Skill` and `JevInstance`, and the JSON schema `EXECUTIVE_STATE_JSON_SCHEMA`. `__all__` lists 31 names (checked after the 20:00:18 change). Its contract tests are `tests/experimental/neural_agent/test_na_contracts.py`, which `.gitignore` excludes (see section 7).
 
 **`__init__.py`** (present). Imports no submodules. It holds `__version__ = "0.1.0"` and the package docstring.
@@ -174,6 +184,22 @@ Each module is IMPLEMENTED only once its tests pass in the Verify stage. A box i
 - **The fix, in progress.** `tasks/composition.py` `classify` (modified 22:06 local) now requires an evade entry that a damage tick triggered at most `EVADE_TRIGGER_WINDOW_TICKS = 40` ticks before it, and a resumed pursuit between that entry and the catch. A catch after any other evade entry is `composed_loose`, which is reported and never counted as a success. Since 22:20 local, `eval/run_composition.py` records both keys (`_score_run`) and takes `--arena`: `flat_pursuit`, the arena of this smoke, has catches and no damage, and `combat_baseline`, the new default, has damage and no catches. So under the strict rule neither arena composes without the damage injection, which is an ablation (ADR-001 D5). The smoke has not been re-run under the strict rule: `eval/out/` holds nothing newer than 21:59. FORMULAS B5 raises a unit question about the 40-tick window.
 
 ---
+
+**Added 2026-10-17 to 2026-10-18** (gates in `tests/experimental/neural_agent/`; measurements in `LEDGER.md`):
+
+- [x] `shared_state.py`, `shared_state_writers.py`. The scratchpad S_t: sections executive / belief / decision / skills / events / requests, one writer each, versioned, closed JSON schema, views per reader; the decision section carries the layer's questions to the LLM (`information_requests`). Gate: `test_na_shared_state.py`.
+- [x] `requests.py`. The request stream between the middle and lower layers: `ActionRequest`, `RequestArgs`, `RequestStatus` (with `signal`), `validate` with its rejection codes, `ArgumentSchema` with `any_of`. Gate: `test_na_requests.py`.
+- [x] `jev/programs.py`, `jev/correspondence.py`. Behaviour programs executed exactly on the host fast path; the correspondence rules over the status stream. Gate: `test_na_programs.py`. Measured: P4 (0.512 vs 0.531), under the commitment seam 0.474 vs lower bound 0.423.
+- [x] `jev/typed_rule.py`. The exact typed path (`jtyped`). Gate: `test_na_typed_rule.py`. Measured: equals the teacher on every decision; online 43/82 = 0.524 against j0 43/81 = 0.531, 0 misses.
+- [x] `jev/system_one/` (heads, trunk, data, train_supervised, calibrate, instance, probe_latency). J-S1. Gates: `test_na_system_one.py`. Measured: G1 to G3 pass; G4 rate pass on seeds 0, 1, 2; 0-miss part deferred to an unloaded machine.
+- [x] `jev/system_one/interpret.py`, `interpret_benchmark.py`, `finetune_pilot.py`, `catalogue_matching.py`, `lm_reader.py`, `condition_rules.py`. The reading experiments and the fallback reader. Gates: `test_na_interpret.py`, `test_na_finetune_pilot.py`, `test_na_catalogue_matching.py`, `test_na_lm_reader.py`, `test_na_condition_rules.py`. Verdicts: `SYSTEM_ONE.md` 9.11 to 9.13.
+- [x] `executive/goal_language.py`. The goal-language generator and teacher. Gate: `test_na_goal_language.py`.
+- [x] `executive/export.py`. E_t history export. Gate: `test_na_executive_export.py`.
+- [x] `eval/record_traces.py`, `eval/record_dagger.py`. J0 traces for J1; DAgger relabelling for js1. Gates: `test_na_record_traces.py`, `test_na_record_dagger.py`.
+- [x] `jev/train_j1.py`, `eval_j1.py`, `sim_goal_env.py`, `j1_actor_critic.py`. The J1 line (behaviour cloning on real J0 traces, semi-MDP PPO). Gates: `test_na_jev_bc.py`, `test_na_sim_goal_env.py`, `test_na_jev_ppo.py`. Status: measured 2026-10-17; superseded as the primary instance by J-S1.
+- [x] `tasks/arenas.py`. Arena selection. Gate: `test_na_arenas.py`.
+- [x] `session.py` (grown): the executive seam, host deciders with the commitment-honouring seam (default since 0cf8c05), the scratchpad scribe, information requests, the per-tick `on_tick` observer. Gate: `test_na_session.py`.
+- [ ] `skill_agent/`. The lower layer, built by another session (`skill_agent/BUILD.md`, `README.md`). Gates: `test_sa_*.py`.
 
 ## 7. Conflicts and open items
 

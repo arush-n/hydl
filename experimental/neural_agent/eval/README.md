@@ -1,5 +1,31 @@
 # experimental/neural_agent/eval
 
+## Files in this folder (map, 2026-10-18)
+
+| File | Lines | What it is |
+|---|---:|---|
+| `run_composition.py` | 1424 | The CLI. Runs the chosen arms on the composition task (`../tasks/`) and writes `metrics.csv`, `REPORT.md` (every metric with its formula and source) and, for a host-mode arm, `scratchpad_<arm>.json` and `scratchpad_<arm>_llm_view.md`. Flags: `--arms`, `--runner eager|compiled` (host-mode arms need `eager`), `--arena`, `--ticks`, `--batch`, `--episodes`, `--seed`, `--host-respects-commitment` (default on since 2026-10-17; `--no-...` restores the earlier seam), `--host-budget-ms` (default 20; a slower host decision is a miss). |
+| `arms.py` | 977 | The arm registry `ARMS`: `flat`, `j0`, `shuffled`, `j1`, `j_lm`, `js1`, `jprog`, `jtyped`; the host decider factories; `J0_LATENCY_BUDGET_MS`; `NA_PROGRAM` / `NA_NO_REISSUE` for `jprog`. |
+| `metrics.py` | 472 | Pure metric functions over the recorded per-tick arrays (the definitions below). |
+| `eager_loop.py` | 226 | The Python-driven hierarchical step loop that host-mode deciders run in. |
+| `traces.py` | 302 | The decision-trace dataset of the learned J1 line. |
+| `record_traces.py` | 160 | Record J0 decision traces on an arena and merge them into a J1 training set. |
+| `record_dagger.py` | 736 | DAgger-style relabelling for the learned decider `js1`: the rule labels the learner's own states. |
+
+Gates: `test_na_eval.py`, `test_na_eager_loop.py`, `test_na_record_traces.py`, `test_na_record_dagger.py`.
+The standard comparison every ledger entry since 2026-10-17 uses:
+
+```sh
+PYTHONPATH=/Users/arush/hydl JAX_PLATFORMS=cpu .venv/bin/python -m experimental.neural_agent.eval.run_composition \
+  --arms j0,jtyped --runner eager --arena combat_open_flat --ticks 512 --batch 8 --episodes 8 --seed 0 --out <dir>
+```
+
+An arm passes when its success rate is not below `j0`'s Wilson lower bound on the same seed, interrupts are
+answered, commitment violations are 0 and misses are 0 at the measured latency. Metric differences between two
+runs of the same arm are first checked against the misses column: a miss keeps the previous goal and the
+trajectory diverges from there (joint check, 2026-10-18). `out/` holds historical runs (gitignored); the ledger
+entries that cite them are the evidence. The rest of this document is the 2026-10-17 record of what is measured.
+
 Evaluation of the composition arms of ADR-001's three-level agent (sections 8 and 9).
 Last updated **2026-10-17** (UTC; the local clock read 2026-10-16 evening, CDT). Source: `metrics.py`, `arms.py`, `traces.py`, `run_composition.py`, and `tasks/composition.py` for the verdicts.
 
