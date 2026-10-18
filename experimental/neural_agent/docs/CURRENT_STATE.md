@@ -90,4 +90,5 @@ forced-target-loss test.
 ## 9. Layout
 
 The package map is the top-level `README.md`; every folder has a `README.md`; the formulas and citations
-that used to sit in the README are `ORCHESTRATION.md`. No module moved (other sessions import the paths).
+that used to sit in the README are `ORCHESTRATION.md`. The scratchpad became a package (`shared_state/`:
+sections, document, views, writers) on 2026-10-18 with its import path unchanged; no other module moved.

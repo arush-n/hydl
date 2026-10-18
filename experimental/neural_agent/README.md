@@ -35,7 +35,7 @@ present in this clone).
 | Path | What it is | Gate |
 |---|---|---|
 | [`contracts.py`](contracts.py) | The shared contract: constants, `GoalSpec` (with the typed `Condition`), `ExecutiveState` and its JSON schema, the lowered arrays, `ManagedGoal` / `make_goal`, `SkillContract` and the control table, the JEV protocol. | `test_na_contracts.py` |
-| [`shared_state.py`](shared_state.py), [`shared_state_writers.py`](shared_state_writers.py) | The scratchpad S_t: sections executive / belief / decision / skills / events / requests, one writer each, versioned, closed schema; `view_for_llm`; the session's scribe. | `test_na_shared_state.py` |
+| [`shared_state/`](shared_state/__init__.py) | The scratchpad S_t as a package: `_common` (constants, validation), `schema` (JSON Schema, `validate`), `sections/` (executive, belief, decision, requests, skills, events: one module each), `document` (`SharedState`), `views/` (`llm`, `jev`, `skills`: one view per reader), `writers` (the session's scribe; `shared_state_writers.py` is an import shim). The import path `experimental.neural_agent.shared_state` is unchanged. | `test_na_shared_state.py` |
 | [`requests.py`](requests.py) | The request stream between Levels 2 and 1: `ActionRequest`, `RequestArgs`, `RequestStatus` (with `signal`), validation with rejection codes, `ArgumentSchema`. | `test_na_requests.py` |
 | [`session.py`](session.py) | One continuous run of the stack: executive seam, host deciders (the commitment-honouring seam, misses, `on_tick`), the scribe, the questions channel. | `test_na_session.py` |
 | [`belief/`](belief/README.md) | B_t: `SharedBelief` and its 10 features per lane. | `test_na_belief.py` |
@@ -81,7 +81,7 @@ Lint: `ruff check --isolated --no-respect-gitignore --select E4,E7,E9,F <files>`
 - `contracts.py` is pinned by sha256 in `README.md`, `SKILL.md`, `docs/ARCHITECTURE.md`, `jev/SKILL.md` and two tests; refresh the pin on every edit.
 - Private inputs under `agent_skills/` are read, never staged or copied into tracked files.
 - `skill_agent/` belongs to the lower-layer session; coordinate through its `BUILD.md` and messages rather than editing it.
-- Code paths are stable: other sessions import `experimental.neural_agent.{contracts,shared_state,requests,session}`; a move needs re-export shims and an owner decision.
+- Code paths are stable: other sessions import `experimental.neural_agent.{contracts,shared_state,requests,session}`; a split keeps the import path through the package's `__init__` (as `shared_state/` does since 2026-10-18), and a move needs re-export shims and an owner decision.
 
 ## Limits
 
