@@ -54,14 +54,13 @@ def native_npc_null_config_force_velocity(
     authored_velocity: jax.Array,
     params: CombatParams,
 ) -> jax.Array:
-    """Map an authored force vector onto the controlled native NPC path.
+    """Map an authored force onto Hytale's server-side null-config NPC path.
 
-    Native ``simulateTick0`` executes ``ApplyForceInteraction`` without the
-    authored client ``VelocityConfig``.  ``MotionControllerBase`` therefore
-    applies the entity knockback scale followed by its legacy horizontal
-    motion-controller factor and movement resistance.  Keeping this mapping
-    as one compiled primitive prevents generic force events and dodge launch
-    from silently drifting apart.
+    Native ``ApplyForceInteraction.simulateTick0`` enqueues a null-config
+    velocity instruction. ``MotionControllerBase`` applies the entity
+    knockback scale followed by its legacy motion-controller factor and
+    movement resistance. This path remains the explicit execution profile for
+    pure server-side NPC motion such as the native-null-config dodge model.
     """
 
     knockback_scale = jnp.asarray(params.agent_knockback_scale)
@@ -79,6 +78,23 @@ def native_npc_null_config_force_velocity(
         axis=-1,
     )
     return velocity * axis_scale
+
+
+def native_client_configured_force_velocity(
+    authored_velocity: jax.Array,
+    params: CombatParams,
+) -> jax.Array:
+    """Map a client-published force onto the configured role path.
+
+    The policy bridge publishes the native ``ApplyForce`` packet and routes
+    that packet through the controlled role. On the configured split-velocity
+    path Hytale applies only the role knockback scale at admission; the
+    interaction's authored ``VelocityConfig`` is consumed later by the motion
+    controller for damping. The caller must preserve those authored
+    resistance fields instead of substituting null-config defaults.
+    """
+
+    return authored_velocity * jnp.asarray(params.agent_knockback_scale)[..., None]
 
 
 def resolve_dodge_launch_velocity(
