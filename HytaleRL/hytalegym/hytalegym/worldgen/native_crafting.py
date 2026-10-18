@@ -8,6 +8,8 @@ import json
 import math
 from typing import Any, Mapping
 
+from hytalegym.server_versions import server_profile
+
 
 NATIVE_CRAFTING_CATALOG_SCHEMA = (
     "hytalerl_native_crafting_catalog_evidence_v2"
@@ -199,6 +201,10 @@ class NativeCraftingCatalogEvidence:
         if value.get("version") != NATIVE_CRAFTING_CATALOG_VERSION:
             raise ValueError("bridge returned the wrong crafting version")
         bridge = _sha256(_string(value, "bridge_sha256"), "bridge_sha256")
+        recipe_count = (
+            server_profile(_string(value, "server_version")).crafting_recipe_count
+            or NATIVE_CRAFTING_RECIPE_CAPACITY
+        )
         if (
             expected_bridge_sha256 is not None
             and bridge.lower()
@@ -209,10 +215,8 @@ class NativeCraftingCatalogEvidence:
         ):
             raise ValueError("crafting catalog came from a different bridge")
         if (
-            _integer(value, "expected_recipe_count")
-            != NATIVE_CRAFTING_RECIPE_CAPACITY
-            or _integer(value, "recipe_count")
-            != NATIVE_CRAFTING_RECIPE_CAPACITY
+            _integer(value, "expected_recipe_count") != recipe_count
+            or _integer(value, "recipe_count") != recipe_count
             or value.get("native_recipe_identity")
             != "CraftRecipeAction.recipeId_string"
             or value.get("headless_npc_execution_supported") is not False
@@ -238,7 +242,7 @@ class NativeCraftingCatalogEvidence:
         )
         ids = tuple(recipe.recipe_id for recipe in recipes)
         if (
-            len(recipes) != NATIVE_CRAFTING_RECIPE_CAPACITY
+            len(recipes) != recipe_count
             or ids != tuple(sorted(set(ids)))
         ):
             raise ValueError("native crafting catalog is partial or unordered")

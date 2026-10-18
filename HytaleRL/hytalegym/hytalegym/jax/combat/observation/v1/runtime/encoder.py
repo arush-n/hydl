@@ -493,17 +493,18 @@ def _target_features(
     distance = jnp.linalg.norm(offset, axis=1)
     safe_planar = jnp.maximum(planar_distance, jnp.float32(1.0e-6))
     radius = jnp.float32(NEARBY_ENTITY_RADIUS_BLOCKS)
+    inverse_radius = jnp.float32(1.0) / radius
     target_speed = _positive(params.target_chase_speed)
     target_f32 = jnp.stack(
         (
-            forward / radius,
-            right / radius,
-            offset[:, 1] / radius,
+            forward * inverse_radius,
+            right * inverse_radius,
+            offset[:, 1] * inverse_radius,
             velocity_forward / target_speed,
             velocity_right / target_speed,
             relative_velocity[:, 1] / _positive(params.vertical_speed_scale),
-            planar_distance / radius,
-            distance / radius,
+            planar_distance * inverse_radius,
+            distance * inverse_radius,
             evidence.health_fraction,
             right / safe_planar,
             forward / safe_planar,

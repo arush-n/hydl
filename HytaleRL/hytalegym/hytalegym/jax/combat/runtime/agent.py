@@ -981,35 +981,36 @@ def _tick_agent_geometry_motion(
         normal_speed,
         0.0,
     )
-    legacy_landed = motion.grounded & ~grounded_at_start & (proposed_vy < 0.0)
     legacy_velocity = legacy_velocity.at[:, 1].set(
         jnp.where(
-            legacy_landed,
-            proposed_vy * params.landing_velocity_scale,
-            jnp.where(
-                grounded_at_start | motion.ceiling_contact,
-                0.0,
-                legacy_velocity[:, 1],
-            ),
+            grounded_at_start | motion.ceiling_contact,
+            0.0,
+            legacy_velocity[:, 1],
         )
     )
+    legacy_landed = motion.grounded & ~grounded_at_start & (proposed_vy < 0.0)
     actual_velocity = (safe_position - position) / jnp.maximum(
         motion_delta[:, None], jnp.finfo(jnp.float32).tiny
     )
+    # Hytale's NPC velocity component is the resolved position delta divided
+    # by tick duration. Preserve that observable on a geometry-backed landing
+    # instead of substituting the calibrated pre-collision fall velocity.
     next_velocity = jnp.where(
-        walk_controller[:, None],
+        (walk_controller | legacy_landed)[:, None],
         actual_velocity,
         legacy_velocity,
-    )
-    next_residual = jnp.where(
-        walk_controller,
-        False,
-        legacy_landed,
     )
     next_lock = jnp.where(residual, False, control_lock)
     ground = _aabb_grounded_result(geometry, safe_position)
     agent_grounded = ground.grounded & ~impulse
     walk_landed = walk_airborne & agent_grounded & (proposed_vy < 0.0)
+    # Preserve downward contact velocity for the controller's grounded settle
+    # step; grounded alone is not sufficient to make a jump immediately eligible.
+    next_residual = jnp.where(
+        walk_controller,
+        walk_landed & (next_velocity[:, 1] < 0.0),
+        legacy_landed,
+    )
     walk_left_ground = walk_grounded & ~agent_grounded
     next_fall_speed = jnp.where(
         walk_controller,

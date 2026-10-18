@@ -19,7 +19,6 @@ from hytalegym.jax.combat.arsenal.programs.scheduling import (
     event_uses_progressive_selector,
 )
 from hytalegym.jax.combat.mechanics import (
-    APPLIED_RESISTANCE_STYLE_FORCE_VELOCITY,
     CombatMechanicsRules,
     CombatMechanicsState,
     RESOURCE_COUNT,
@@ -29,7 +28,7 @@ from hytalegym.jax.combat.mechanics import (
     clear_statuses,
     empty_damage_events,
     empty_status_applications,
-    native_npc_null_config_force_velocity,
+    native_client_configured_force_velocity,
 )
 from hytalegym.jax.combat.types import (
     AGENT_ENTITY,
@@ -519,12 +518,17 @@ def _apply_force_events(
     primary_requested = requested & (~primary_targets_other | other_target_available)
     velocity = local_force_velocity(flat.f32, source_yaw)
     velocity = adjust_vertical_force(velocity, flat.f32, flat.i32)
-    velocity = native_npc_null_config_force_velocity(velocity, params)
+    # The policy bridge publishes ApplyForce as a client packet and routes it
+    # through the controlled role. That path preserves the event's authored
+    # VelocityConfig; the null-config transform belongs to the separate native
+    # NPC execution profile used by dodge motion.
+    velocity = native_client_configured_force_velocity(velocity, params)
     inputs = (
         jnp.swapaxes(primary_requested, 0, 1),
         jnp.swapaxes(target, 0, 1),
         jnp.swapaxes(other, 0, 1),
         jnp.swapaxes(velocity, 0, 1),
+        jnp.swapaxes(flat.f32, 0, 1),
         jnp.swapaxes(flat.i32, 0, 1),
         jnp.swapaxes(other_target_available, 0, 1),
     )
@@ -535,6 +539,7 @@ def _apply_force_events(
             victim,
             other_entity,
             event_velocity,
+            event_f32,
             i32,
             other_available,
         ) = values
@@ -561,56 +566,37 @@ def _apply_force_events(
                 applied_air_resistance=_set_entity_where(
                     state.applied_air_resistance,
                     target,
-                    jnp.broadcast_to(
-                        params.agent_force_air_drag_min,
-                        enabled.shape,
-                    ),
+                    event_f32[:, EF_AIR_RESISTANCE],
                     enabled,
                 ),
                 applied_air_resistance_max=_set_entity_where(
                     state.applied_air_resistance_max,
                     target,
-                    jnp.broadcast_to(
-                        params.agent_force_air_drag_max,
-                        enabled.shape,
-                    ),
+                    event_f32[:, EF_AIR_RESISTANCE_MAX],
                     enabled,
                 ),
                 applied_ground_resistance=_set_entity_where(
                     state.applied_ground_resistance,
                     target,
-                    jnp.broadcast_to(
-                        params.agent_force_ground_drag_base,
-                        enabled.shape,
-                    ),
+                    event_f32[:, EF_GROUND_RESISTANCE],
                     enabled,
                 ),
                 applied_ground_resistance_max=_set_entity_where(
                     state.applied_ground_resistance_max,
                     target,
-                    jnp.broadcast_to(
-                        params.agent_force_ground_drag_base,
-                        enabled.shape,
-                    ),
+                    event_f32[:, EF_GROUND_RESISTANCE_MAX],
                     enabled,
                 ),
                 applied_resistance_threshold=_set_entity_where(
                     state.applied_resistance_threshold,
                     target,
-                    jnp.broadcast_to(
-                        params.agent_force_air_drag_max_speed,
-                        enabled.shape,
-                    ),
+                    event_f32[:, EF_RESISTANCE_THRESHOLD],
                     enabled,
                 ),
                 applied_resistance_style=_set_entity_where(
                     state.applied_resistance_style,
                     target,
-                    jnp.full(
-                        enabled.shape,
-                        APPLIED_RESISTANCE_STYLE_FORCE_VELOCITY,
-                        dtype=jnp.int32,
-                    ),
+                    i32[:, EI_RESISTANCE_STYLE],
                     enabled,
                 ),
                 applied_dampen_y=_set_entity_where(

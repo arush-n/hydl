@@ -153,6 +153,15 @@ def _apply_action(
         1.0,
     )
     jump = actions[:, ACTION_JUMP] > 0.5
+    landing_recovery = state.agent_grounded & state.grounded_with_residual_velocity
+    # A jump submitted during this native contact-settle state is deferred; the
+    # controller also suppresses planar steering for that attempted-jump step.
+    # Ordinary movement without a jump request remains available while grounded.
+    jump_recovery = landing_recovery & jump
+    forward = jnp.where(jump_recovery, 0.0, forward)
+    back = jnp.where(jump_recovery, 0.0, back)
+    left = jnp.where(jump_recovery, 0.0, left)
+    right = jnp.where(jump_recovery, 0.0, right)
     attack = actions[:, ACTION_ATTACK] > 0.5
 
     desired_yaw = _normalize_degrees(state.desired_yaw + actions[:, ACTION_YAW_DELTA])
@@ -264,7 +273,7 @@ def _apply_action(
         next_regen_delay,
     )
 
-    grounded_jump = jump & state.agent_grounded
+    grounded_jump = jump & state.agent_grounded & ~landing_recovery
     agent_velocity = state.velocity[:, AGENT_ENTITY]
     agent_velocity = agent_velocity.at[:, 1].set(
         jnp.where(

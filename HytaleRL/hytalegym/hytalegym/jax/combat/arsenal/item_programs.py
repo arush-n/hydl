@@ -64,6 +64,44 @@ _CATALOG_PATH = (
 )
 
 
+def _authored_ability_charge_time_seconds(loadout: AbilityLoadout) -> np.ndarray:
+    """Resolve an item node's ability-relative authored release boundary.
+
+    Charging roots store their selected-child release time in the hold table,
+    while non-charging abilities use the legacy first charge-pool value.  The
+    catalog token is the former for prototype bows; reading only the charge
+    pool silently turns every authored bow boundary into zero.
+    """
+
+    legacy = np.asarray(
+        loadout.ability_charge_times_seconds[..., 0],
+        dtype=np.float32,
+    )
+    thresholds = np.asarray(
+        loadout.ability_hold_threshold_seconds,
+        dtype=np.float32,
+    )
+    children = np.asarray(loadout.ability_hold_child_slot, dtype=np.int32)
+    counts = np.asarray(loadout.ability_hold_count, dtype=np.int32)
+    ability_slots = np.arange(
+        thresholds.shape[2],
+        dtype=np.int32,
+    )[None, None, :, None]
+    hold_rows = np.arange(
+        thresholds.shape[3],
+        dtype=np.int32,
+    )[None, None, None, :]
+    selected_rows = (hold_rows < counts[..., None]) & (
+        children == ability_slots
+    )
+    has_selected_release = np.any(selected_rows, axis=-1)
+    release_time = np.max(
+        np.where(selected_rows, thresholds, np.float32(0.0)),
+        axis=-1,
+    )
+    return np.where(has_selected_release, release_time, legacy)
+
+
 @dataclass(frozen=True)
 class ItemProgramCatalogRow:
     """One authored ability-to-node binding retained for audit reporting."""
@@ -269,6 +307,9 @@ def pack_item_programs_for_loadout(
     ability_id = np.asarray(loadout.ability_id, dtype=np.int32)
     ability_mask = np.asarray(loadout.ability_mask, dtype=np.bool_)
     weapon_id = np.asarray(loadout.weapon_id, dtype=np.int32)
+    ability_charge_time_seconds = _authored_ability_charge_time_seconds(
+        loadout
+    )
     if ability_id.shape != ability_mask.shape or ability_id.ndim != 3:
         raise ValueError("loadout ability ID/mask fields must share shape [B,N,A]")
     if weapon_id.shape != ability_id.shape[:2]:
@@ -369,10 +410,7 @@ def pack_item_programs_for_loadout(
         )
         raw_time = template.get("time_seconds")
         if raw_time == ABILITY_CHARGE_TIME:
-            authored_time = np.asarray(
-                loadout.ability_charge_times_seconds[..., 0],
-                dtype=np.float32,
-            )
+            authored_time = ability_charge_time_seconds
         else:
             authored_time = np.float32(
                 _required_number(template, "time_seconds")

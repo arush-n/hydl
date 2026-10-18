@@ -237,11 +237,19 @@ def _recapture_world_evidence_unlocked(
     )
     candidate_fixtures = stage / "fixtures"
     candidate_fixtures.mkdir(exist_ok=resume)
+    installed_version = source_pin_report["installed_build"].get(
+        "implementation_version"
+    )
+    if not isinstance(installed_version, str) or not installed_version:
+        raise RuntimeError(
+            "source-pin report lacks the installed Hytale implementation version"
+        )
     projection_contract, traversal_recording = build_evidence_candidates(
         fixture_root,
         candidate_fixtures,
         bridge_sha256=expected_bridge,
         captured_at_utc=datetime.now(UTC).date().isoformat(),
+        server_version=installed_version,
     )
 
     region_manifest = region_root / "manifest.json"
@@ -318,6 +326,7 @@ def _recapture_world_evidence_unlocked(
             host=host,
             port=port,
             control_seed=selected_control,
+            bridge=bridge,
             recording_directory=candidate_fixtures,
         ),
         *_world_action_probe_commands(
@@ -345,6 +354,7 @@ def _recapture_world_evidence_unlocked(
             cwd=package_root,
             env=environment,
             check=True,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         )
 
     library = RegionArtifactLibrary.load(region_manifest)
@@ -536,6 +546,7 @@ def _navigation_probe_commands(
     host: str,
     port: int,
     control_seed: int,
+    bridge: Path,
     recording_directory: Path,
 ) -> tuple[tuple[str, tuple[str, ...]], ...]:
     common = (
@@ -554,6 +565,8 @@ def _navigation_probe_commands(
                 host,
                 "--port",
                 str(port),
+                "--deployed-bridge",
+                str(bridge),
                 "--control-selection-key",
                 str(control_seed),
             ),
@@ -705,6 +718,7 @@ def build_evidence_candidates(
     *,
     bridge_sha256: str,
     captured_at_utc: str,
+    server_version: str,
 ) -> tuple[Path, Path]:
     """Build bridge-only candidate manifests while retaining frozen arrays."""
 
@@ -716,6 +730,7 @@ def build_evidence_candidates(
     projection_name = "native_region_seed_projection_contract.json"
     projection = _read_json(source / projection_name)
     projection["evidence_bridge_sha256"] = bridge
+    projection["server_version"] = server_version
     projection_path = target / projection_name
     _write_json(projection_path, projection)
     load_region_seed_projection_contract(projection_path).require_evidence_bridge(

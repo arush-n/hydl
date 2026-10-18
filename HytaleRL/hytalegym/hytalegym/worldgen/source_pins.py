@@ -14,8 +14,8 @@ from zipfile import BadZipFile, ZipFile
 from hytalegym.worldgen.region.contract import HYTALE_SERVER_VERSION
 
 
-SOURCE_PIN_STALENESS_SCHEMA = "hytalerl_world_source_pin_staleness_v9"
-SOURCE_PIN_STALENESS_VERSION = 9
+SOURCE_PIN_STALENESS_SCHEMA = "hytalerl_world_source_pin_staleness_v10"
+SOURCE_PIN_STALENESS_VERSION = 10
 
 _AUDITS = (
     (
@@ -46,7 +46,7 @@ _AUDITS = (
     (
         "mutable_blocks",
         "surrogate_mutable_block_source_audit.py",
-        False,
+        True,
     ),
     (
         "explosion_mutation",
@@ -118,21 +118,24 @@ def verify_installed_world_source_pins(
             capture_output=True,
             text=True,
             check=False,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         )
-        if completed.returncode:
-            detail = (completed.stderr or completed.stdout).strip()
-            raise RuntimeError(
-                f"World source-pin audit failed ({name}): "
-                f"{detail[-1000:] or 'no diagnostic'}"
-            )
         try:
             report = json.loads(completed.stdout)
         except json.JSONDecodeError as error:
+            detail = (completed.stderr or completed.stdout).strip()
             raise RuntimeError(
-                f"World source-pin audit emitted invalid JSON ({name})"
+                f"World source-pin audit failed ({name}): "
+                f"{detail[-1000:] or 'invalid JSON'}"
             ) from error
         if not isinstance(report, dict):
             raise RuntimeError(f"World source-pin audit root is not an object ({name})")
+        if completed.returncode and not _source_audit_semantics_match(report):
+            detail = (completed.stderr or completed.stdout).strip()
+            raise RuntimeError(
+                f"World source-pin audit failed ({name}): "
+                f"{detail[-1000:] or 'semantic mismatch'}"
+            )
         reports[name] = report
     return world_source_pin_staleness_report(server_path, reports)
 
@@ -156,10 +159,12 @@ def world_source_pin_staleness_report(
     server_path = Path(server_jar).resolve()
     identity = installed_hytale_server_identity(server_path)
     observed_version = identity["implementation_version"]
-    if observed_version != expected_version:
+    if _hytale_release_line(observed_version) != _hytale_release_line(
+        expected_version
+    ):
         raise RuntimeError(
             "installed Hytale version invalidates World source pins: "
-            f"observed={observed_version} expected={expected_version}"
+            f"observed={observed_version} expected release line={expected_version}"
         )
     expected_names = tuple(name for name, _, _ in _AUDITS)
     if set(reports) != set(expected_names):
@@ -171,14 +176,14 @@ def world_source_pin_staleness_report(
     audit_rows = []
     for name in expected_names:
         report = reports[name]
-        if report.get("matches_0_5_7_baseline") is not True:
-            raise RuntimeError(f"World source pin is stale: {name}")
+        if not _source_audit_semantics_match(report):
+            raise RuntimeError(f"World source semantics are stale: {name}")
         observed_server = _sha256_text(report.get("server_sha256"), name)
         expected_server = _sha256_text(
             report.get("expected_server_sha256"),
             name,
         )
-        if observed_server != server_sha256 or expected_server != server_sha256:
+        if observed_server != server_sha256:
             raise RuntimeError(f"World source pin targets another server build: {name}")
         semantic = _sha256_text(report.get("semantic_sha256"), name)
         expected_semantic = _sha256_text(
@@ -194,6 +199,10 @@ def world_source_pin_staleness_report(
             {
                 "name": name,
                 "schema": schema,
+                "baseline_server_sha256": expected_server,
+                "server_hash_matches_baseline": (
+                    expected_server == server_sha256
+                ),
                 "semantic_sha256": semantic,
                 "verified_class_count": _mapping_size(
                     report.get("class_sha256"),
@@ -211,10 +220,14 @@ def world_source_pin_staleness_report(
         "version": SOURCE_PIN_STALENESS_VERSION,
         "status": "current",
         "expected_hytale_version": expected_version,
+        "accepted_release_line": ".".join(
+            str(component) for component in _hytale_release_line(expected_version)
+        ),
         "installed_build": identity,
         "audits": audit_rows,
         "invalidation": (
-            "version, server JAR, pinned class, pinned asset, or semantic drift"
+            "release line, pinned class, pinned asset, or semantic drift; "
+            "full server-JAR hash is retained as provenance"
         ),
     }
     result["report_semantic_sha256"] = _semantic_sha256(result)
@@ -244,6 +257,27 @@ def installed_hytale_server_identity(
         "implementation_revision": revision,
         "server_jar_sha256": _file_sha256(path),
     }
+
+
+def _hytale_release_line(version: str) -> tuple[int, int]:
+    """Return the major/minor line used for patch-compatible source pins."""
+
+    components = version.split(".")
+    if len(components) < 2 or any(
+        not component.isdigit() for component in components[:2]
+    ):
+        raise RuntimeError(f"Hytale version is invalid: {version!r}")
+    return int(components[0]), int(components[1])
+
+
+def _source_audit_semantics_match(report: Mapping[str, object]) -> bool:
+    """Accept a patch build only when the audited semantic contract is exact."""
+
+    return (
+        isinstance(report.get("semantic_sha256"), str)
+        and isinstance(report.get("expected_semantic_sha256"), str)
+        and report["semantic_sha256"] == report["expected_semantic_sha256"]
+    )
 
 
 def _manifest_fields(raw: bytes) -> dict[str, str]:

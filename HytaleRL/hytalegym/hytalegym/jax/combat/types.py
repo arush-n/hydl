@@ -587,6 +587,15 @@ def default_combat_params(
     agent_base_speed = (
         agent["max_speed"] if motion_model == "npc_walk" else PLAYER_BASE_SPEED
     )
+    agent_jump_velocity = (
+        math.sqrt(
+            2.0
+            * agent["jump_velocity_gravity_floor"]
+            * agent["jump_height_parameter"]
+        )
+        if motion_model == "npc_walk"
+        else PLAYER_JUMP_FORCE
+    )
     return CombatParams(
         microticks=jnp.asarray(microticks, dtype=i32),
         target_active=jnp.asarray(target_active, dtype=jnp.bool_),
@@ -618,13 +627,10 @@ def default_combat_params(
             else AGENT_MOTION_PLAYER,
             dtype=i32,
         ),
-        # The NPC formula this replaces --
-        # ``sqrt(2 * jump_velocity_gravity_floor * jump_height_parameter)`` --
-        # assumes the ascent runs at the walk controller's gravity floor (10.0),
-        # but the ascent is integrated at ``engine.gravity`` (32.0), so it
-        # apexed at 0.41 blocks and could not clear a one-block step. The agent
-        # is given the player's jump force instead; see PLAYER_JUMP_FORCE.
-        agent_jump_velocity=jnp.asarray(PLAYER_JUMP_FORCE, dtype=f32),
+        # Native Walk uses the authored gravity-floor/height conversion. The
+        # player profile instead uses the separately audited MovementConfig
+        # force; keep both choices at the motion-model boundary.
+        agent_jump_velocity=jnp.asarray(agent_jump_velocity, dtype=f32),
         agent_variable_jump_fall_gravity=jnp.asarray(
             PLAYER_VARIABLE_JUMP_FALL_FORCE, dtype=f32
         ),
@@ -654,9 +660,8 @@ def default_combat_params(
         agent_force_per_axis_deadzone=jnp.asarray(
             force_damping["per_axis_deadzone"], dtype=f32
         ),
-        # Taken from the player MovementConfig directly, not from the NPC
-        # ruleset, for the same reason ``agent_jump_velocity`` is: the learner
-        # is a player, and the NPC ruleset has no airborne steering at all.
+        # Taken from the player MovementConfig directly: the NPC Walk profile
+        # has no airborne steering, while the learner profile does.
         agent_air_drag_min=jnp.asarray(PLAYER_AIR_DRAG_MIN, dtype=f32),
         agent_air_drag_max=jnp.asarray(PLAYER_AIR_DRAG_MAX, dtype=f32),
         agent_air_drag_min_speed=jnp.asarray(PLAYER_AIR_DRAG_MIN_SPEED, dtype=f32),
