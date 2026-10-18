@@ -901,3 +901,28 @@ passes 6 of the 14 cases and stock passes 4:
 
 Each failing case also carries the inventory group, but the test tolerates that group alone (the permitted
 NPC-container signature), so it is not what fails these cases.
+
+## (p) Phase 4f: why the crossbow interrupt is never offered, and the shots that do not show (2026-10-18; diagnosis, no repository change; receipts `~/.claude/jobs/31947bd7/tmp/phase4f/receipts/`)
+
+Baseline on the pinned jar `B56FD38E`, stock engine, both seeds: 12 tests, 3 pass (the Primary six-arrow reload; big
+arrow 46.0 and 78.0), 9 fail: the interrupt at `test_native_crossbow_reload.py:315` (the stock `Ability3` binding fails
+the reload on tick 2, section (m)); the four combo cases at lines 611 and 689 (`assert not report["truncated"]`, shots
+accepted, `hit_ticks []`); the four signature cases at line 305 (`events=[]`).
+
+| Row | What ran | Measured | Status |
+|---|---|---|---|
+| 6c interrupt, advertised set | scratch diagnostic jars (stock plus logs, busy shortcut bypassed for forced requests), reload bound `Ability4` in the probe, seed 570057 | `canRun(Primary)`, `canRun(Ability1)` and `canRun(Ability4)` false from the reload's third capture to tick 29 with `available` and `combatAvail` true, so `host_legal` (`NativeInteractionCapabilityView.java` 41, folded in at `NativeEnvironmentSession.java` about 8762-8785) never offers Primary | cause CONFIRMED |
+| 6c interrupt, engine admission | forced Primary at tick 30 on the same jar | `applyRules` admits it (`admitted=true` while `canRun=false`), the reload is cancelled (exec -1 at tick 30) and Primary runs from tick 31 with root 0, accepted and started: the authored one-tick interrupt at the Repeat window after the 0.8 s interruptible time; at tick 38 with Primary running the request is refused (`native_interaction_rejected_charge`) | server ACCEPTS the interrupt |
+| 6c interrupt, stock busy shortcut | forced Primary at ticks 30 and 38 on stock `B56FD38E` | rejected as `native_combat_busy` by the session shortcut (`NativeEnvironmentSession.java` 4723-4725, `trackedAgentAbilityChain != null`); the engine is never consulted; the reload progresses normally (ammo 1.0, arrows 5 to 4 at tick 37) | second bridge defect |
+| 6c combo (iron, seed 570057) | scratch jar, NPC trace | the shot at tick 96 is admitted, launches along yaw 0 and pitch 0 from (0.5, 66.0, 0.5) (head and body both 0 at spawn, target straight ahead at 2.5 blocks), reaches `ProjectileHit` at row 98 and the trace records damage 10, 10 and 13 at rows 98, 108 and 118 with `actor_source` true; the bridge's `target_health` stays 61.0 for 150 ticks | hits land; readout or attribution OPEN |
+| launch orientation | source reading | the bridge publishes `TargetUtil.getLook` (HeadRotation) as the projectile's position and rotation (`NativeSyntheticCombatClient.publishActorLook` 727-735), the same source as a player's launch; not measured with head different from body | consistent (inferred) |
+| signature (4) | source reading, live check pending | `projectiles/harness/targeting.py` 212 reads `yaw_degrees` (the body) and builds the ray from it with the head pitch while the test steers the head, so the ray never moves and no activation is requested | harness defect (inferred) |
+
+Mechanism (inferred from the 0.7.2 decompile, `InteractionManager.applyRules` about 1184-1236, not logged per call): `canRun`
+passes no cancel list, so the recursion into the reload's predicted, unfinished fork `Reload_Effects` refuses Primary;
+admission passes a cancel list once the parent interrupt matches and skips the fork. Proposed bridge fix, not implemented:
+`host_legal` from a side-effect-free admission dry run (the private static `applyRules` with a fresh cancel list, never
+`cancelChains`; cooldown kept; fall back to `canRun` if the method is absent) and no `native_combat_busy` reject for a
+request the dry run admits. It changes the learner mask wherever admission and `canRun` differ, in the direction the
+server behaves. Claim most likely wrong (agent): that the predicted fork is what makes `canRun` false, and that a real
+player's reload carries the same predicted fork (the bridge leases remote-client mode for policy chains).
