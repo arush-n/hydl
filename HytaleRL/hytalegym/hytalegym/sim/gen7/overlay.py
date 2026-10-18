@@ -191,6 +191,23 @@ PATCHES = (
           "jump_in_place12): FAIL 0.30 / 0.18 m before, PASS (<= 1.1e-5 m) after, with the npc_jump_arc construct",
           "the planar suppression on that tick (jump_recovery) stays; not modelled: native walks again only on "
           "the third tick after landing (the engine on the first), which needs engine state"),
+    Patch("guard_release_closes_guard_choice", "combat/observation/v3/encoding/encoder.py",
+          "        & (\n            state.mechanics.guard_active[:, AGENT_ENTITY]\n            | (\n                movement_enabled\n",
+          "        & (\n"
+          "            # Gen 7 (row 5d): a guard being released (active, no longer held) closes the \"on\" choice, as on\n"
+          "            # the live 0.7.2 bridge for the tick after the release request; the engine refuses that re-raise too.\n"
+          "            (state.mechanics.guard_active[:, AGENT_ENTITY] & state.mechanics.guard_held[:, AGENT_ENTITY])\n"
+          "            | (\n"
+          "                ~state.mechanics.guard_active[:, AGENT_ENTITY]\n"
+          "                & movement_enabled\n",
+          "5d",
+          "the shield mask probe (shield_mask_probe.py, jar A4487CF3, both seeds: guard held 12 ticks, released on 13; "
+          "native closes guard_off_on \"on\" on tick 13 only) and the learner-row guard_held_release cases",
+          "mask only: the engine already refuses a re-raise while the guard is still active (can_prepare_guard). Not "
+          "modelled: natively a new guard also waits about 0.35 s from the last guard's start, the default "
+          "interaction cooldown (hold-duration probe: after holds of 2, 4 and 6 ticks the choice reopens on tick 11), "
+          "which needs a mechanics state field; and the shield bash, a Primary fork of Guard_Wield in the 0.7.2 asset, "
+          "is never advertised natively during a held guard (a bridge legality item, #61)"),
     Patch("crafting_table_capacity", "crafting/contract.py",
           "# Installed 0.5.7 has 403 explicit plus 1,544 item-generated recipes.\n"
           "RECIPE_TABLE_CAPACITY = 1947\n",
