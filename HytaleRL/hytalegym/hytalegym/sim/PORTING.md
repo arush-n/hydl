@@ -67,6 +67,13 @@ Each step ends with its gate, a command with a pass bar.
 - Gate times follow machine load. Recorded identity-gate times: 5 min 25 s to 7 min 42 s in most commit messages of
   2026-10-18; 28 min 17 s and 49 min 54 s (the latter at load 85 to 105); 24 and 36 min in GEN7-PLAN 2b. Gates run on the
   shared working tree, so other sessions' uncommitted test edits change the result.
+- A bridge pin move invalidates every artefact keyed by the bridge SHA: the world-evidence history under
+  `HytaleRL/artifacts/worldgen/world-evidence-history/<sha>`, the recordings' `bridge_sha256`, the traversal and
+  token-contract cascade manifests and the stability baseline constant. On 2026-10-18, after six pin moves in one day,
+  twelve untracked worldgen tests failed on exactly that (receipts under the session's `test_fixtures/`). Republish
+  those artefacts once the pin settles, not after every bridge commit; until then read those failures as staleness.
+- Five more untracked tests need `HYTALE_ASSETS_ZIP` (or `APPDATA`) set to the install's `Assets.zip`; without it
+  they fail on the asset lookup before reaching any bridge code.
 - The gen-7 tools name gen 7: `sim_port.regen_swap_plan` checks `hytalegym.sim.gen7.overlay`, and `fidelity_index.py`
   reads `FIDELITY-0.7.2.md`.
 
