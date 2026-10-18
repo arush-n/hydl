@@ -1058,3 +1058,27 @@ oracle keys; a reset-option helper for the harness; JAX `bench_tier_level` from 
 level pinned to `native_memories_level`; the structural queue as ORDERED input with one-tick landing. Claim most likely wrong
 (agent): that unbound probe outcomes equal a candidate-bound production craft's; the probe bypasses two gates and uses the
 readout as its expected identity.
+
+**(o) addendum 2: guard release and structural crafting (0218d69, 025ee62, 325f938).**
+
+Row 5d, guard release (patch `guard_release_closes_guard_choice`). Shield mask probe (A4487CF3, both seeds, guard held
+12 ticks, then released): natively the guard's "on" choice is closed on the release tick only. The engine offered it
+while still refusing the re-raise in its own mechanics (`can_prepare_guard` needs the guard inactive). The gen-7
+learner mask now closes it while the guard is active and no longer held. Live, learner rows on the render, all 14
+cases: that mismatch is gone and nothing else moved.
+
+A hold-duration probe (A6C310DD; holds of 2, 4 and 6 ticks) shows that a new guard also waits about 0.35 s from the
+last guard's start: the default interaction cooldown, which reopens the choice on tick 11 whatever the hold. That
+needs a mechanics state field and stays a row. The shield bash, a Primary fork of `Guard_Wield` in the 0.7.2 asset,
+is never advertised natively during a held guard; that is bridge item #61.
+
+Row 11, structural crafting. The Builders bench (`Bench.Type` StructuralCrafting, type 3) is a Region bench in gen 7
+(three patches on `combat/arsenal/world_actions/crafting.py`). It crafts from the player's inventory, as the live
+oracle of (s) shows: the bridge moves the input into the window's slot for the server's ordered queue. On the 0.7.2
+catalog, through a render (`receipts/crafting_structural_count_render.json`), 1,168 recipes are offered (stage 1:
+263) and all 1,168 commit; 903 of the 910 structural recipes are admissible, and 778 of the 1,168 use resource-type
+inputs. Natively the output lands one tick after the request (the bridge's queued path; a native player's window
+timing is not yet measured), while the engine commits on the request tick; that stays a row.
+
+For deployment, `worldgen/native_action_resolution.py` accepts type-3 craft requests on the 0.7 server line (0.5.7
+keeps refusing them), with `NativeCraftingExecutionContext.structural_bench()`.

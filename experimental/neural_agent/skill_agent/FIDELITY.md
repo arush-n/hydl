@@ -341,3 +341,17 @@ Write `pass` only when the row's pass bar is met on the receipt the entry names.
 - receipt: `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md` section (o), stage 1; `crafting_stage1_*` in this session's scratchpad `fid/receipts/`
 - result: stage 1 (commit 486388e) admits resource-type inputs with the server's output exclusions: 263 recipes offered (stage 0: 197) and all 263 commit, including the 66 with resource inputs
 - verdict: fail: 263 of 2,047 recipes are committable; memories, bench tiers, timed recipes and bench types 1-3 need native evidence or new engine mechanics
+
+## 2026-10-18 — Crafting: fail
+- command: the 0.7.2 catalog count through a render of 0218d69 + the structural patches (`structural_count.py`); the live crafting oracle of FIDELITY (s) for the structural semantics
+- server: Hytale 0.7.2 (HytaleServer.jar revision d769dc3d, SHA-256 23f71f03...0aff); bridge jar sha256 A6C310DDB511BD8FC230F743CCE8C1E0218AA520F2A6C5DAF2AD7839A19E6B8A (the oracle); catalog from 686BC4BC... (FIDELITY (i))
+- receipt: `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md` section (o), addendum 2; `crafting_structural_count_render.json` in this session's scratchpad `fid/receipts/`
+- result: with the structural (Builders) bench a Region bench (commit 025ee62), 1,168 recipes are offered and all 1,168 commit (stage 1: 263); native craft requests accept type 3 on 0.7 (325f938)
+- verdict: fail: 1,168 of 2,047 recipes are committable; bench tiers above 1, memories levels, timed and processing recipes remain, and the structural output's one-tick native landing is not modelled
+
+## 2026-10-18 — Guard: fail
+- command: `shield_mask_probe.py` and `shield_hold_probe.py` (learner-v3 path, iron shield) and the learner-row world-input cases on the gen-7 render with the guard release patch
+- server: Hytale 0.7.2 (HytaleServer.jar revision d769dc3d, SHA-256 23f71f03...0aff); bridge jar sha256 A4487CF3ECB206E242A2472627C8F85B89C620884AC6ECB0945221729873B536 (A6C310DD... for the hold probe)
+- receipt: `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md` section (o), addendum 2
+- result: the release-tick mask matches on the render (commit 0218d69); natively a new guard also waits about 0.35 s from the last guard's start, and the shield bash is never advertised during a held guard (bridge item #61)
+- verdict: fail: the guard cooldown (needs a mechanics state field) and the bash advertisement (bridge) remain
