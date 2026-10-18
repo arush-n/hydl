@@ -35,6 +35,7 @@ CONSTRUCT_MODULES = {
     "slope_limits": "slope_limits",
     "block_health_reset_on_write": "block_health",
     "weapon_durability": "durability",
+    "landing_walk_resume": "landing_walk",
 }
 
 

@@ -441,3 +441,18 @@ def test_gen7_durability_hook_wraps_the_catalog_loader(gen5, gen7):
     assert ("hytale_0_5_7_item_program_catalog = _render_hook_weapon_durability_catalog("
             "hytale_0_5_7_item_program_catalog, _render_profile_weapon_durability_catalog)") in text
     assert "_render_hook_weapon_durability_catalog" not in (gen5_out / "combat/arsenal/item_programs.py").read_text()
+
+
+def test_gen7_landing_walk_hook_and_countdown_render(gen5, gen7):
+    gen5_out, _ = gen5
+    out, manifest = gen7
+    applied = {item["id"]: item for item in manifest["applied"]}
+    assert applied["landing_walk_resume"]["kind"] == "hook" and applied["landing_walk_resume"]["fidelity_row"] == "1c"
+    assert applied["landing_walk_state_field"]["kind"] == "patch" and applied["landing_walk_state_init"]["kind"] == "patch"
+    step = (out / "combat/runtime/step.py").read_text()
+    assert ("_apply_action = _render_hook_landing_walk_resume(_apply_action, _render_profile_landing_walk_resume)"
+            in step)
+    assert "    agent_landing_hold_ticks: Array\n" in (out / "combat/types.py").read_text()
+    assert "        agent_landing_hold_ticks=zeros_i,\n" in (out / "combat/runtime/reset.py").read_text()
+    assert "agent_landing_hold_ticks" not in (gen5_out / "combat/types.py").read_text()
+    assert "agent_landing_hold_ticks" not in (gen5_out / "combat/runtime/reset.py").read_text()

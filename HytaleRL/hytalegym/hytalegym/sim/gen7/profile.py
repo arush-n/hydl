@@ -50,6 +50,7 @@ PROFILE = SimProfile(
         slope_limits=False,
         block_health_reset_on_write=True,
         weapon_durability="gen7_table",
+        landing_walk_resume="third_tick",
     ),
     # Owner ruling 2026-10-17: the agent operates at 30 Hz; one step duration.
     step_duration=StepDuration(nominal_seconds=1.0 / 30.0, loaded_seconds=1.0 / 30.0, timing_profile_count=1),

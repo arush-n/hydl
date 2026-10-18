@@ -271,6 +271,12 @@ runs (accepted at ticks 4 and 6 live). The learner row's bash mismatch shrinks t
 mismatches predate this. Open: the plain-root bash with no guard held, advertised by both layers though the asset makes it a
 fork only.
 
+**Timing constructs with state, item 1 (2026-10-18; FIDELITY-0.7.2.md section (z)).** After an accepted jump the gen-7 NPC walks
+again on the third tick after touchdown (`landing_walk_resume`, a `CombatState` countdown leaf), matching native within
+1.5e-5 m on two seeds where the unheld engine missed by 0.86 to 1.27 m; a landing without a jump is not held. Open: the guard
+cooldown, the attack start split and the shortbow reset ammo (findings recorded in the section); the player motion model's
+hold is unmeasured.
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the

@@ -201,6 +201,14 @@ _POTION = (
 )
 
 
+_LANDING_WALK = (
+    "native_motion_differential on the gen-7 render against the live 0.7.2 bridge, npc_walk, ledge fixture: "
+    "--steps 30 --jump-steps 1 (single jump then forward), --steps 12 --jump-steps 1 --forward-steps 0 (jump in "
+    "place) and --steps 30 --jump-steps 0 (walk off the ledge, no jump: must not be held), seeds 570057 and 913771; "
+    "bar 5e-4 m and 1e-3 m/s per step; after an accepted jump the walk starts on the third tick after touchdown "
+    "(native z first moves on L+3)"
+)
+
 PATCHES = (
     Patch("sword_swing_left_knockback", PROFILE_JAX,
           "    push = (0.0, 1.0, -1.0, 6.0)\n",
@@ -379,6 +387,20 @@ PATCHES = (
           "the restore (45 percent) and the 0.7 s ability are unchanged; the status goes and the cooldown is 30 s. "
           "Residual (inferred from the asset, not measured): the engine starts the cooldown at admission, the server "
           "when the 0.5 s charge completes (Consume_Charge_Potion_Fastest, Next 0.5)"),
+    # Row 1c, landing walk (construct landing_walk_resume): the countdown the construct reads and writes.
+    Patch("landing_walk_state_field", "combat/types.py",
+          "    agent_locomotion_stamina_regen_delay: Array\n",
+          "    agent_locomotion_stamina_regen_delay: Array\n"
+          "    # Gen 7 (row 1c, landing walk): ticks the npc_walk agent still holds its planar walk after touchdown.\n"
+          "    agent_landing_hold_ticks: Array\n",
+          "1c", _LANDING_WALK,
+          "the CombatState field the landing_walk construct reads and writes (int32 countdown; gen 5 does not apply this patch, so it has no field)"),
+    Patch("landing_walk_state_init", "combat/runtime/reset.py",
+          "        agent_locomotion_stamina_regen_delay=zeros_f,\n",
+          "        agent_locomotion_stamina_regen_delay=zeros_f,\n"
+          "        agent_landing_hold_ticks=zeros_i,\n",
+          "1c", _LANDING_WALK,
+          "the countdown starts at zero at reset (no hold before the first landing)"),
 )
 
 _MECHANICS = "hytalegym.sim.gen7.mechanics"
@@ -492,6 +514,11 @@ HOOKS = (
          "policy attack",
          "the catalog's weapon_items: max_durability and durability_loss_on_hit of all 143 rows from the 0.7.2 table "
          "(57 maxima and 82 losses change); the rest of the catalog, semantic_sha256 included, unchanged"),
+    Hook("landing_walk_resume", "combat/runtime/step.py", "_apply_action",
+         f"{_MECHANICS}.landing_walk:construct", "landing_walk_resume", "active", "1c", _LANDING_WALK,
+         "after an accepted jump, holds forward, back, left and right for the two grounded ticks after touchdown "
+         "(npc_walk only); a landing without a jump is not held; the jump request is not held; the native pause before "
+         "a re-jump (F1c) is the existing patch npc_rejump_after_landing"),
 )
 
 OVERLAY = Overlay(
