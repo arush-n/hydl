@@ -334,3 +334,10 @@ Write `pass` only when the row's pass bar is met on the receipt the entry names.
 - receipt: `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md` section (o); `crafting_commit_count_stage0.json` and `crafting_render_count_stage0.txt` in this session's scratchpad `fid/receipts/`
 - result: stage 0 (commit 6aaf21d): stock commits 2 of the 197 offered recipes, the render all 197, and above 16 legal recipes the render publishes the first 16 in table order instead of none; gen 5 keeps both limits by ruling
 - verdict: fail: 197 of 2,047 recipes are committable; materials, memories, tiers, timed recipes and bench types 1-3 are the next stages, and no native bench-craft differential exists yet
+
+## 2026-10-18 — Crafting: fail
+- command: an offline count on the live 0.7.2 catalog with the crafting_materials construct (stage 1), in-process and through a render of 8758cb3 + the construct (`stage1_count.py`); `tests/sim/test_crafting_materials.py`
+- server: Hytale 0.7.2 (HytaleServer.jar revision d769dc3d, SHA-256 23f71f03...0aff); catalog captured live on bridge jar 686BC4BC... (FIDELITY (i))
+- receipt: `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md` section (o), stage 1; `crafting_stage1_*` in this session's scratchpad `fid/receipts/`
+- result: stage 1 (commit 486388e) admits resource-type inputs with the server's output exclusions: 263 recipes offered (stage 0: 197) and all 263 commit, including the 66 with resource inputs
+- verdict: fail: 263 of 2,047 recipes are committable; memories, bench tiers, timed recipes and bench types 1-3 need native evidence or new engine mechanics

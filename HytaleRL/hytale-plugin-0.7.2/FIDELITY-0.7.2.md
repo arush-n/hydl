@@ -926,3 +926,24 @@ admission passes a cancel list once the parent interrupt matches and skips the f
 request the dry run admits. It changes the learner mask wherever admission and `canRun` differ, in the direction the
 server behaves. Claim most likely wrong (agent): that the predicted fork is what makes `canRun` false, and that a real
 player's reload carries the same predicted fork (the bridge leases remote-client mode for policy chains).
+
+**Row 11, stage 1: resource-type inputs (construct `crafting_materials`, 486388e).** A 0.7.2 recipe input can name a
+resource type ("any 4 Wood_Trunk"), and the server excludes the recipe's own outputs from it
+(`applyOutputExclusions`; 984 of the 988 resource inputs exclude exactly their outputs). The Region action admitted
+only concrete inputs, and its inventory published no slot resource types.
+
+Gen 7 makes three changes:
+- it admits a resource input that excludes exactly its recipe's outputs;
+- it reads the archive's item `ResourceTypes` at compile time into a table (1,010 items carry them, at most 7 each),
+  which feeds both the provider's legality and the commit catalog;
+- a resource input never consumes a slot holding one of its recipe's outputs.
+
+The four raw-fish recipes, whose input also excludes a source item, stay out. On the live 0.7.2 catalog
+(`receipts/crafting_stage1_scope.json`, `crafting_stage1_count_{patch,render}.json`), the construct offers 263
+recipes, up from 197. They use 11 resource types, each carried by 2 to 123 items. All 263 commit through
+`execute_region_fieldcraft`, in-process and through a render; each resource input is stocked with the first item
+carrying the type that is not an output. Next stages, which need native evidence or new engine mechanics:
+- memories levels: the learner's native memories level is unknown;
+- bench tiers: the world's bench tier state;
+- timed recipes: a multi-tick craft lifecycle;
+- bench types 1-3: the other session's oracle (item 55).
