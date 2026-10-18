@@ -216,6 +216,14 @@ inside that loop (DLPack hand-off per step, or a torch collector against the JAX
 higher steps per second on this machine for the same body; E11 measures both on the same task before
 the choice is final. No other criterion.
 
+Owner, 2026-10-18 (late): "it is your choice on whatever works better, i dont care if it is jax or pytorch". The choice
+is delegated:
+- The skill brain starts in JAX: it runs in-graph with the simulator for DAgger and RL rollouts, and reuses the encoder,
+  freezing and combiner.
+- C1 times a PyTorch learner on the M5 Max GPU (MPS) for the same network and data. The learner moves to PyTorch only on
+  a clear end-to-end win, and the numbers go to the ledger.
+- The hand-off is checked: JAX to PyTorch is zero-copy on the CPU through DLPack, and the values match.
+
 ## 4. The gen-7 environment and its verification
 
 **Status (2026-10-18, late).** The bridge to the live 0.7.2 server is done. The gen-7 simulator is a
