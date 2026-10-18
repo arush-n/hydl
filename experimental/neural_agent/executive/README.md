@@ -15,6 +15,7 @@ Standing rule: **no live LLM call until the lower level is finished**; the tests
 | `anthropic_backend.py` | 339 | The Claude adapter behind the seam: `build_system_prompt` (role, catalogue, the condition vocabulary and units, the JSON Schema), `wire_schema` (the structured-output subset). Tested through an injected client only. |
 | `smoke_anthropic.py` | 56 | One real call when `ANTHROPIC_API_KEY` is set. Never run by the tests. |
 | `export.py` | 61 | E_t history as JSON lines. |
+| `patterned.py` | 170 | The patterned language: `PATTERN_DIRECTIONS` (the prose the system prompt carries), the canonical clause per condition kind, and a generator of patterned goals with controlled breakage for P7 (SYSTEM_ONE 9.14). |
 | `goal_language.py` | 752 | The goal-language generator and teacher: `INTENT_FAMILIES`, the nine `CONDITION_FAMILIES` with their paraphrases, `sample_state` (an executive section in the LLM's words, with the typed `condition` when hinted), `Predicate.evaluate`, `teacher` (the exact rule M13), `split_wordings` (the held-out wording split every reading experiment uses). |
 
 Gates: `test_na_executive.py`, `test_na_executive_export.py`, `test_na_goal_language.py`.

@@ -58,6 +58,7 @@ from experimental.neural_agent.contracts import (
 )
 from experimental.neural_agent.executive.baselines import CallUsage
 from experimental.neural_agent.executive.reports import EventRecord
+from experimental.neural_agent.executive.patterned import PATTERN_DIRECTIONS
 from experimental.neural_agent.executive.store import validate_catalog
 
 DEFAULT_MODEL = "claude-opus-5-5"
@@ -102,6 +103,7 @@ def build_system_prompt(skill_ids: Sequence[str]) -> str:
         f"with the unit of that number, are {units_json} (fraction: 0 to 1 of full health; ticks: decision "
         "ticks); every other kind takes argument null. The decision model evaluates the typed condition "
         "exactly on its belief, so write it whenever a goal is conditional.\n"
+        f"{PATTERN_DIRECTIONS}\n"
         "Each user turn gives tick, required_version, the current E_t, and the reports that arrived "
         "since your last call. A report is a goal outcome (COMPLETED, INTERRUPTED, FAILED or TIMEOUT) "
         "or an interrupt event.\n"

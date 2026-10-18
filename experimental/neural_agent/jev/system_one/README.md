@@ -28,6 +28,7 @@ large enough to be accurate.
 | `finetune_pilot.py` | 716 | P2: fine-tuned small encoders as condition readers. | 0.75 / 0.82 kind FAIL, polarity and negation lost |
 | `catalogue_matching.py` | 572 | P3: intent to skill by description over the owner's 139-row catalogue (skill rows through `../../skill_agent/catalogue.py` since B5). | 0.42 FAIL: the typed `skill_id` is the selector |
 | `lm_reader.py` | 1304 | P6: instruction-tuned decoders (Qwen3 0.6B to 14B) with schema-constrained output, once per version. | running; 4B passes kind 0.975 and number 0.997, fails skill 0.769 |
+| `pattern_reader.py` | 230 | The pattern reader of SYSTEM_ONE 9.14: the skill from the catalogue's ids and aliases (anchored id first), the clause through `condition_rules`; gate P7 (`python -m ... pattern_reader --seed 0`). | 1.000 at no breakage, 0.9925 with every perturbation, PASS |
 | `condition_rules.py` | 377 | The deterministic fallback reader: feature, comparator and negation cues to `(kind, argument, confidence)`; below CLEAR is an information request. CLI: `python -m experimental.neural_agent.jev.system_one.condition_rules --seed 0`. | 1.000 kind and argument on held-out wordings, seeds 0 to 2, PASS (cue tables know the generator's vocabulary) |
 
 Gates: `test_na_system_one.py`, `test_na_interpret.py`, `test_na_finetune_pilot.py`,

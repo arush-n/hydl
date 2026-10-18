@@ -108,7 +108,8 @@ UNSEEN_CUES: tuple[str, ...] = (
     "hidden", "hide", "hides", "behind cover", "cover", "concealed", "vanish", "vanishes", "vanished",
     "lose line of sight", "lost line of sight", "nothing is in sight", "nothing in sight", "no sign",
     "unseen", "invisible", "lost", "lose", "losing", "lost track", "haven't seen", "not seen",
-    "nobody has spotted", "missing", "gone", "cold", "trail", "disappeared", "no longer",
+    "nobody has spotted", "missing", "gone", "cold", "trail", "disappeared", "no longer", "not visible",
+    "isn't visible", "is not visible", "not in sight", "not in view", "no line of sight", "no visual contact",
 )
 DISTANCE_CUES: tuple[str, ...] = (
     "closer", "close", "closes", "within", "away", "range", "gap", "distance", "near", "nearer", "apart",

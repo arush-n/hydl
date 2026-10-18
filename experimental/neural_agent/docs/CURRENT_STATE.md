@@ -24,6 +24,7 @@ for the gen-7 simulator), and the gen-7 simulator itself (phase 3 of 6 running).
 | E_t store, schema, reports, scheduler, harness, Claude adapter behind an injected client | built; 60+ tests; no live call |
 | Scratchpad S_t with one writer per section, versioned, closed schema, LLM view | built (`00a8fc7`, grown since) |
 | Typed goal `condition` (nine kinds, enum in the schema), the vocabulary and units in the system prompt | built `1b76c0e` |
+| The patterned language for the LLM's words (a direction in the prompt and the schema, not a grammar) and the pattern reader (skill by catalogue id or alias; the clause by the cue reader); P7 1.000 at no breakage, 0.9925 with every perturbation | built 2026-10-18 (`executive/patterned.py`, `jev/system_one/pattern_reader.py`, SYSTEM_ONE 9.14) |
 | Questions from the decision layer to the LLM (`DecisionSection.information_requests`, shown in the LLM view) | built `59d2047`; the LLM's answering loop is not exercised (no live call) |
 | The LLM's view as a briefing (per-NPC rows in words, goals with how they were read, questions, rejections, the delta since the LLM's version; markdown / json / compact; 8 lanes in 943 estimated tokens) and `DecisionSection.readings` | built 2026-10-18 (`shared_state/views/`, `shared_state/README.md`) |
 | The backend writing the full executive section (words included), objectives list, per-squad views, the group scratchpad | designed (`MIDDLE_LAYER.md` plan step 7; task #31) |
@@ -77,7 +78,7 @@ forced-target-loss test.
 1. Push the local commits (nothing is pushed).
 2. Install `peft` in the shared venv so P6's LoRA step can run, or skip LoRA.
 3. Planned versus general compile for the simulator callers (numbers in `sim/BASELINES.md` section 5).
-4. The cleanup deletions proposed on 2026-10-17 (`jev/lm/anthropic_quick.py`, `tasks/events.py`, the sibling-refusal path, unused constants, the synthetic PPO environment).
+4. (done 2026-10-18) The cleanup deletions: `jev/lm/anthropic_quick.py`, `tasks/events.py`, the unused `MINIMUM_COMMITMENT_SECONDS`, the synthetic PPO environment and the MLP stand-in; the "sibling-refusal path" named on 2026-10-17 could not be identified in the code and was left alone.
 5. `HytaleRL/.gitignore` exception for `tests/sim/`; `pyproject` package data for `sim/*/data`; the content sha in the contract stamp (uncommitted `publication.py`); the 53 uncommitted `HytaleRL/` files held by other sessions.
 6. The lower layer's asks: body-turn label rule; a richer training observation (terrain).
 7. Review of the lower layer's private catalogue edits and the uncommitted pursuit fix.

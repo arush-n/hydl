@@ -920,6 +920,40 @@ linguistic on the tick") is not misread:
   output, and 8B and 14B if the 4B misses a bar; bars kind 0.95, number exact 0.98, skill 0.90 over the
   real catalogue given in the prompt; latency reported, not traded against accuracy.
 
+### 9.14 Patterned language: structure in the output, prompted not enforced (owner, 2026-10-18)
+
+Owner: "the issue is likely in the structuring not the actual models themselves ... they need to be structured in
+their outputs, however structure may break to a degree so it needs to be structured enough in nature such that
+the middle layer can interpret it properly, it does not have to follow a defined structure but the natural
+language should follow a pattern, this should not be enforced in a forced way rather it should be prompted /
+given as a direction / rule so interpretation is easier while no content or thinking of the LLM is lost."
+
+What this changes. The reading failures of 9.11 and 9.12 were failures of shape: an intent that never named its
+skill (description matching, 0.42 over the real catalogue) and a condition whose side a sentence embedding
+could not keep. The remedy is a pattern for the words, given to the LLM as a direction in the system prompt
+(`executive/patterned.py` `PATTERN_DIRECTIONS`) and in the goal schema's field descriptions, and a reader that
+takes the pattern first (`jev/system_one/pattern_reader.py`):
+- `intent` starts with the skill's catalogue id, then a few words on what the skill is for ("pursuit: close the
+  distance and keep pressure"); `when` is one clause with a feature word, a comparator and a number with its unit
+  ("when the target is closer than 3 blocks", "when my health is below 30%", "when hit"), or "always"; `note` is
+  free, so nothing the LLM thinks is cut.
+- The pattern reader finds the skill by the catalogue's ids and aliases (an anchored id wins: leading, or after
+  "using" / "with"; else the longest id; several rows with no anchor is a WEAK reading; no id is NONE, never a
+  guess) and reads the clause with the cue reader of 9.12 (which also reads a condition that moved into the
+  intent). What it cannot read with confidence goes to the decoder reader (P6: 4B and above read conditions at
+  the bar) and then to the LLM as a question (the decision section's `information_requests`).
+- The typed fields stay the contract: a typed `skill_id` and `condition` are always acted on as written; the
+  pattern makes the words-only case readable and lets the layer check that words and typed fields agree.
+
+Measured (P7, ledger; `pattern_reader --seed 0`, 400 goals per level over the real catalogue's 119 rows, every
+condition kind, perturbations applied with probability b: the id moved later, an alias, a comparator synonym,
+the unit dropped, a filler phrase, the clause order swapped, the number in words): skill and condition read
+together 1.000 at b = 0, 0.9975 at b = 0.2, 0.995 at b = 0.5, 0.9925 at b = 1 (every perturbation applied);
+description-only intents (the 9.11 case) produce no skill guess 400 of 400 times, all flagged unsure. Bars: 0.98
+at b = 0 and 0.95 at b = 0.2, PASS. The generator's own free wordings remain covered by the 9.12 reader (1.000
+held-out). Caveat as in 9.12: the perturbations are ours; a live LLM's departures will be measured when the
+executive runs live, and the question channel is the safety net for what neither reader handles.
+
 ## References
 
 - [JEV] TypeSafe AI, "Introducing System One Models & Jev", 2026. https://typesafe.ai/blog/introducing-system-one-models-and-jev

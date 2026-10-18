@@ -50,8 +50,20 @@ def _object_schema(properties: dict[str, Any]) -> dict[str, Any]:
 _GOAL_ENTRY_SCHEMA: dict[str, Any] = copy.deepcopy(EXECUTIVE_STATE_JSON_SCHEMA["properties"]["goals"]["items"])
 _GOAL_ENTRY_SCHEMA["required"] = [*_GOAL_ENTRY_SCHEMA["required"], *_TEXT_FIELDS]
 _GOAL_ENTRY_SCHEMA["properties"].update(
-    intent={"type": "string", "description": "What you want from this goal, in your own words; may be empty."},
-    when={"type": "string", "description": "When this goal applies, in your own words; may be empty."},
+    intent={
+        "type": "string",
+        "description": (
+            "What you want from this goal, in your own words: start with the skill's catalogue id, then a few"
+            " words on what the skill is for; may be empty."
+        ),
+    },
+    when={
+        "type": "string",
+        "description": (
+            "When this goal applies, in your own words, as one clause: a feature word, a comparator and a number"
+            " with its unit, or 'always'; may be empty."
+        ),
+    },
     note={"type": "string", "description": "Anything else about this goal; may be empty."},
 )
 _EXECUTIVE_SECTION_SCHEMA = _object_schema(
