@@ -198,6 +198,28 @@ Each teacher is one entry in a registry, as skills are in `library.py`. The entr
 3. Pursuit: the planner plus target prediction, then RL against the scripted evader.
 4. The combat teachers, after the simulator's combat rows pass.
 
+## 2e. Complex actions: what changes, and what we watch for (owner, 2026-10-18: "for more complex actions we need to be aware")
+
+The scripted-teacher recipe fits simple actions (navigation, gaze, aim), where the rules give an exact answer. Complex
+actions break that assumption in the ways below. Each complex family gets its own teacher plan and certificate
+extension before it trains.
+
+| What gets harder | Example skills | How it is handled | Added check |
+|---|---|---|---|
+| No exact teacher exists: the right answer depends on an adaptive opponent | melee and ranged duels, guard and dodge, evade, group fights | trained teachers in cheat mode against a pool of opponents (scripted NPC AI, earlier checkpoints, clones of native behaviour), not one fixed opponent, which a teacher learns to exploit | win and damage rates against held-out opponents, including native NPC AI on the live server |
+| Several valid strategies (left or right flank, different combos); a student copying two of them can average into a bad middle action | combat, go_around around wide obstacles, hide | one teacher strategy per episode, history in the policy's input, and a strategy latent or action chunks if averaging shows up (MaskedMimic's latent, ACT's chunks) | per-head and per-episode consistency of the student's choices |
+| Timing on cues: the teacher knows the exact hit tick, a player sees only the wind-up | guard, dodge, parry, punish, combo windows | the teacher reads only cues a player could see (the enemy's visible state), or the cue is added to the legal tokens | T5 on timing; requires the simulator's combat timing rows to pass (row 5f) |
+| Hidden information and memory: the target is out of sight | search_for, track, hide, ambush | the student gets belief inputs (last-seen positions, from the shared belief) and attention history; the teacher may use only the same information | T5 under FOV16 and FOV32 |
+| Long horizons: minutes, many steps | build a structure, crafting chains, mine-then-place | not learned as one skill. Activities stay the middle layer's programs over one-dimensional skills (owner ruling), and each learned skill stays seconds long | each program step's skill certified on its own |
+| Several body parts at once (move, aim, attack) | a melee approach, strafing fire | one generalist conditioned on all granted requests outputs every scope in one pass, so coordination is learned and the combiner still owns the grants | the composition checks of proof A2, extended per family |
+| Other agents' behaviour changes over time | squads, cooperation, PvP-like play | local reaction at the low level; coordination stays in the middle layer (squads and addressees in the executive contract) | evaluation against opponent pools, not one script |
+| Lower simulator fidelity for complex mechanics | combat timing (5f), ranged hits, crafting tiers, runes (absent) | a family trains only when its fidelity rows pass (E14), and the live replay T4 is mandatory | T4 with a larger sample |
+| Reward hacking: a degenerate winning trick | corner camping, an AI pathing bug | T7 inspection, live replay, and adversarial evaluation against new opponents | T7 by family |
+
+The order follows from this. First, simple skills with scripted teachers, which prove the whole pipeline. Next,
+reactive skills with trained teachers against simple opponents (pursuit, evade). Last, combat, with opponent pools,
+after its fidelity rows pass.
+
 ## 3. Build before any run (stage 1; no training)
 
 | Step | What | Gate |
