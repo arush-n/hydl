@@ -620,6 +620,13 @@ This is T1 and T3 of the certificate on a small sample, not the full certificate
 **Measured.** Run-forward moves at exactly 5.0 blocks/s along the body's forward vector after the ramp (the speed is
 min(5, 10 k / 30) on tick k, so it reaches 5.0 at tick 15). [test: test_sa_simple_tasks.py, 10 tests]
 
+**Line of sight: open-flat by default (2026-10-18).** The environment's own default capabilities are fail-closed:
+they deny line of sight, so under the legal observation the other entity is never perceptible, even 5 blocks in
+front. The flat tasks therefore default to `open_flat_arsenal_world_capabilities`, which is right for a world with no
+blocks and is what the neural_agent's legal open-flat arena uses. `world_capabilities="fail_closed"` keeps the old
+behaviour. The pair path applies no field of view, a simulator gap now in the simulator lane as an opt-in
+(TRAINING_PLAN 2e; BUILD E12 defines FOV16 and FOV32).
+
 **Two settings the defaults would get wrong:**
 - The default motion-timing band gives 0.045 s ticks on two of three profiles (gen 5's loaded tick), so the
   environment pins profile 0, the 1/30 s tick of the 30 Hz ruling.

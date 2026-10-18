@@ -27,6 +27,7 @@ from hytalegym.jax.combat.arsenal.environment import (
     _EmptyArsenalActionSurfaceEvidence,
     fail_closed_arsenal_world_capabilities,
     make_arsenal_environment,
+    open_flat_arsenal_world_capabilities,
 )
 from hytalegym.jax.combat.arsenal.profiles.hytale_0_5_7 import hytale_0_5_7_loadouts
 from hytalegym.jax.combat.arsenal.runtime import arsenal_runtime_config, reset_arsenal_batch
@@ -115,7 +116,7 @@ def _wrap_degrees(value: jax.Array) -> jax.Array:
     return jnp.mod(value + 180.0, 360.0) - 180.0
 
 
-def _carry_from_runtime(runtime, params: CombatParams, config: ArsenalRuntimeConfig):
+def _carry_from_runtime(runtime, params: CombatParams, config: ArsenalRuntimeConfig, capability_provider=None):
     """Compose the carry the environment's own reset composes, for an explicit runtime.
 
     ``ArsenalEnvironment.reset`` takes only keys (``environment.py:1625``), so an explicit
@@ -128,7 +129,8 @@ def _carry_from_runtime(runtime, params: CombatParams, config: ArsenalRuntimeCon
 
     batch, entity_count = runtime.combat.health.shape
     token_config = normalize_world_geometry_policy_config(None)
-    capabilities = fail_closed_arsenal_world_capabilities(runtime, params)
+    capabilities = (fail_closed_arsenal_world_capabilities(runtime, params) if capability_provider is None
+                    else capability_provider(runtime, params))
     features = empty_injected_world_features(batch)
     tokens = empty_world_geometry_policy_tokens(batch, token_config)
     light_tokens = empty_actor_light_policy_tokens(batch, token_config.token_capacity)
@@ -215,8 +217,15 @@ def make_flat_npc_environment(
     legal_observation: bool = True,
     maximum_turn_degrees: float = 45.0,
     loadout_profile: str = DEFAULT_LOADOUT,
+    world_capabilities: str = "open_flat",
 ) -> FlatTaskEnvironment:
-    """Build the flat npc_walk environment with ``batch`` independent lanes."""
+    """Build the flat npc_walk environment with ``batch`` independent lanes.
+
+    ``world_capabilities`` is "open_flat" by default: line of sight is clear on a flat world with no blocks, so the
+    other entity is perceptible within the sensor range, as in the neural_agent's legal open-flat arena. "fail_closed"
+    keeps the environment's default, which denies line of sight, so the legal observation never shows the other
+    entity. Field of view is not applied on the two-entity path, a simulator gap reported to its lane.
+    """
 
     if isinstance(batch, bool) or not isinstance(batch, int) or batch < 1:
         raise ValueError(f"batch must be a positive int, got {batch!r}")
@@ -232,8 +241,15 @@ def make_flat_npc_environment(
     # and target_active=False keeps it from acting.
     loadouts = hytale_0_5_7_loadouts([loadout_profile] * batch)
     config = arsenal_runtime_config(loadouts, legal_observation=legal_observation)
+    if world_capabilities not in ("open_flat", "fail_closed"):
+        raise ValueError(f"world_capabilities must be 'open_flat' or 'fail_closed', got {world_capabilities!r}")
+
+    def open_flat(state, flat_params):
+        return open_flat_arsenal_world_capabilities(state, flat_params, config=config)
+
+    provider = open_flat if world_capabilities == "open_flat" else None
     environment = make_arsenal_environment(
-        params, config, maximum_turn_degrees=maximum_turn_degrees
+        params, config, maximum_turn_degrees=maximum_turn_degrees, world_capability_provider=provider
     )
     plan = plan_arsenal_compilation(params, config)
 
@@ -260,7 +276,7 @@ def make_flat_npc_environment(
             projectile_capacity=plan.projectile_capacity,
             area_capacity=plan.area_capacity,
         )
-        return _carry_from_runtime(runtime, params, config)
+        return _carry_from_runtime(runtime, params, config, provider)
 
     return FlatTaskEnvironment(
         batch=batch,
