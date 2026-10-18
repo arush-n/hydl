@@ -133,6 +133,32 @@ brackets).
 7. **One change per run, and short runs:** one axis per experiment, a hypothesis and stop rule stated before it
    runs, and a ledger entry with its numbers.
 
+## 2c. How a teacher is shown to be good (the teacher certificate)
+
+A teacher teaches only after it passes these checks, and each result is recorded in the ledger. The bars are starting
+proposals, to be reset from measured data (the first measurement is the scripted planner's own T1).
+
+| Check | What it measures | Starting bar |
+|---|---|---|
+| T1 Success | the skill's own done rule (the catalogue's "done" column) on unseen test worlds (report seeds), >= 256 episodes x 4 seeds, with intervals | navigation: >= 95 % of the goals the path tables say are reachable; other families set from their references |
+| T2 Efficiency | time to success against a reference: the shortest-path time at the pace asked (navigation), the native NPC traces (pursuit, combat) | median <= 1.2 x the reference |
+| T3 Obedience | the request's arguments honoured (pace, radius, target), only legal actions | 100 % legal; E4's bars |
+| T4 Reality | a sample of its episodes replayed on the live 0.7.2 server through the bridge | live success within 5 points of simulated, end positions within tolerance |
+| T5 Imitability | a small student trained on its labels, legal observation only | teacher minus student <= 10 points; otherwise restrict what the teacher sees |
+| T6 Recovery | the teacher started from states the student actually visits | success >= T1's bar minus 5 points |
+| T7 Inspection | a sample of episodes rendered, and failures sorted (stuck, timeout, fall, unreachable) | no failure class caused by a teacher bug |
+
+What each check catches:
+- T4 catches a teacher that wins only because the simulator is wrong (today's known gaps: the walk resume after
+  landing, unsupported terrain). RL teachers exploit simulator errors.
+- T5 catches a teacher that relies on information the student never has. For example, it walks straight to a target
+  hidden behind a wall (the imitation gap). The fix is to show the teacher less, or to give the student the memory
+  that would let it infer the same thing (the belief's last-seen position).
+- T6 makes DAgger's labels trustworthy in the places the student actually drifts to.
+
+A teacher need not be perfect, because stage 3's practice can go past it. But a systematic teacher error is copied
+into the student, which is why nothing teaches before its certificate.
+
 ## 3. Build before any run (stage 1; no training)
 
 | Step | What | Gate |
