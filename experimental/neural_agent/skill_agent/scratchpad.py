@@ -23,9 +23,13 @@ Wiring without touching the session (B3). ``CombiningDecider`` wraps the middle 
 forwarded), and each ``decide`` returns the executor's goal unchanged and then runs the combiner on S_t at
 the session's clock tick, after the executor has written its requests. Each lane gets one context: the
 belief's single target is a known entity (``TARGET_ENTITY``, the executor's convention) when
-``ticks_since_target_seen`` is known and below saturation, the executor's own rule. The combiner runs on
-decision ticks only, so the stream shows grants, rejections, deferrals and withdrawals, not ``running``
-between decisions; a per-tick run needs a session hook (the middle layer's file).
+``ticks_since_target_seen`` is known and below saturation, the executor's own rule. A session that calls a
+decider's ``on_tick(clock_tick, transition, hierarchy_state)`` on every tick (the middle layer's hook) gets the
+combiner on every tick too, so ``running`` statuses reach the stream between decisions; each tick is combined
+once. Once the hook has been seen, ``decide`` no longer combines: the combiner's work stays out of the decision's
+timed budget (the session counts a decide over ``host_budget_ms`` as a miss and keeps the old goal, which a 512-tick
+joint run showed: 3 misses under load, a diverging run). The executor reads the statuses at its next decision
+either way. An older session calls only ``decide``, and the combiner then runs inside it on decision ticks.
 """
 
 from __future__ import annotations
@@ -118,6 +122,8 @@ class CombiningDecider:
         object.__setattr__(self, "world_bounds", world_bounds)
         object.__setattr__(self, "last_steps", {})
         object.__setattr__(self, "status_counts", Counter())
+        object.__setattr__(self, "_combined_tick", None)
+        object.__setattr__(self, "_hooked", False)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(object.__getattribute__(self, "_inner"), name)
@@ -132,18 +138,35 @@ class CombiningDecider:
 
     def decide(self, transition: Any, hierarchy_state: Any, executive: Any, /) -> Any:
         goal = self._inner.decide(transition, hierarchy_state, executive)
-        state = self._bound.get("scratchpad")
-        if state is not None:
-            seen = target_seen(transition.hierarchy_step.belief_update.belief)
-            tick = int(self._bound.get("current_tick", 0))
-            steps = combine_from_scratchpad(state, self.combiner, tick, lane_contexts(seen, self.world_bounds))
-            object.__setattr__(self, "last_steps", steps)
-            for step in steps.values():
-                for status in step.statuses:
-                    self.status_counts[status.kind] += 1
-                    if status.kind == "rejected":
-                        self.status_counts[f"rejected:{status.reason.split(':', 1)[0]}"] += 1
+        if not self._hooked:  # a session without the per-tick hook: combine here, on decision ticks
+            self._combine(int(self._bound.get("current_tick", 0)), transition)
         return goal
+
+    def on_tick(self, clock_tick: int, transition: Any, hierarchy_state: Any) -> None:
+        """The session's per-tick hook (it calls a decider's ``on_tick`` after the tick's scratchpad sections are
+        written): the combiner runs on every tick, so ``running`` statuses reach the stream between decisions.
+        A tick the decision already combined is not combined again. The inner decider's own hook, if any, runs
+        first."""
+
+        object.__setattr__(self, "_hooked", True)
+        inner = getattr(self._inner, "on_tick", None)
+        if callable(inner):
+            inner(clock_tick, transition, hierarchy_state)
+        self._combine(int(clock_tick), transition)
+
+    def _combine(self, tick: int, transition: Any) -> None:
+        state = self._bound.get("scratchpad")
+        if state is None or tick == self._combined_tick:
+            return
+        object.__setattr__(self, "_combined_tick", tick)
+        seen = target_seen(transition.hierarchy_step.belief_update.belief)
+        steps = combine_from_scratchpad(state, self.combiner, tick, lane_contexts(seen, self.world_bounds))
+        object.__setattr__(self, "last_steps", steps)
+        for step in steps.values():
+            for status in step.statuses:
+                self.status_counts[status.kind] += 1
+                if status.kind == "rejected":
+                    self.status_counts[f"rejected:{status.reason.split(':', 1)[0]}"] += 1
 
 
 __all__ = ["ANY_WORLD", "SKILLS_WRITER", "TARGET_ENTITY", "CombiningDecider", "combine_from_scratchpad", "lane_contexts",

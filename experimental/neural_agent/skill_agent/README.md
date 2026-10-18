@@ -592,8 +592,14 @@ program [ledger].
   returns the executor's goal unchanged, then runs the combiner on S_t at the session's clock tick.
   - Each lane's context marks the belief's single target (entity 0) known when the belief has seen it
     within saturation, the executor's own rule.
-  - The session file is not touched, so the combiner runs on decision ticks only: grants, rejections,
-    deferrals and withdrawals reach the stream, and per-tick `running` statuses would need a session hook.
+  - It also implements the middle layer's per-tick hook: the session calls a decider's `on_tick` on every
+    tick. So the combiner runs on every tick, once per tick even when a decision happened on it, and
+    `running` statuses reach the stream between decisions. A session without the hook combines on
+    decision ticks only. [test: test_the_per_tick_hook_combines_every_tick_once_and_streams_running_between_decisions]
+  - Once the hook has been seen, the decision itself does no combining, so the combiner's time stays out of
+    the session's timed decision budget. When the combiner ran inside the decision, a 512-tick run at the
+    20 ms budget had 3 misses where the baseline had none, and the run diverged.
+    [test: test_once_the_hook_is_seen_decide_leaves_the_combining_to_it]
   - [test: test_the_combining_decider_forwards_the_session_bindings_and_runs_the_combiner_after_each_decision]
 - **The joint check** (`joint_check.py`, B3's gate). It runs the composition arms flat, j0, shuffled and
   jprog-J0 (64 ticks, batch 8, seed 0) with and without the wrapper.
@@ -601,6 +607,11 @@ program [ledger].
   - In the jprog run the combiner wrote 232 statuses: 120 accepted (one per lane per decision) and 112
     withdrawn (each decision replaces the last request).
   - There were no rejections, so the executor had nothing to correct [ledger: B3 joint].
+- **The rejected path, forced** (`test_sa_joint.py`). It uses the middle layer's real program executor
+  behind the wrapper, with a belief that shows the target but has not seen it within saturation.
+  - The combiner rejects each pursuit request as entity unknown.
+  - The executor re-samples the step twice, asks the LLM once on the third rejection, and withdraws.
+  - With the target seen, the same loop grants every request.
 
 The guide in section 1 prints:
 
