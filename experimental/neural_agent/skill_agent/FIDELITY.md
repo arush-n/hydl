@@ -243,3 +243,45 @@ Write `pass` only when the row's pass bar is met on the receipt the entry names.
 - receipt: `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md` (commit cdeace2), table (a) rows 14; raw receipts in that report's `R/` folder (outside the repository)
 - result: no native differential is defined; the simulator's legal mode exists (observation/v3 encoder) and is off by default
 - verdict: pending: the three-world leakage test is skill_agent work, not yet built
+
+## 2026-10-18 — Melee: fail
+- command: `cd HytaleRL && python -m pytest -p port_redirect -p render_redirect -p lease_redirect -p no:cacheprovider --jax-cpu --timeout 600 -rA -q -m native_server hytalegym/tests/fidelity/combat`, and the same flags on the 12-test selected set, once on the gen-7 render of 30c6136 (overlay a900937b...) and once on stock gen 5; bridge from `tools/launch_bridge_072.py --bridge-port 5570 --game-port 25570`
+- server: Hytale 0.7.2 (HytaleServer.jar revision d769dc3d, SHA-256 23f71f03...0aff); bridge jar sha256 686BC4BC3DAE481AE857875961DAE75C02E2F4102B75B9B4193E60246EF80012
+- receipt: `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md` section (i), rows 5c-5f; junit XML and logs in this session's scratchpad `fid/receipts/` (outside the repository)
+- result: the render and stock agree on every melee test. Bronze dagger 5.0 native vs 3.0 (this render's 5c entry stops short of bronze; section (h) has 15 of 15 after b8318ec); iron sword hit tick 9 vs 7; kunai accepted offsets 0, 11, 22, 33, 62, 91 vs 0, 10, 20, 30, 60, 90; cobalt battleaxe, scrap NPC mace and thorium sword contacts match. Knockback (5b) and guard attack-cancel (5d) have no live test; the hit interrupt (5a) is a stub in the render
+- verdict: fail: dispatch timing (5f) differs on the render; dagger damage after b8318ec is not re-measured here
+
+## 2026-10-18 — Ranged: fail
+- command: `cd HytaleRL && python -m pytest -p port_redirect -p render_redirect -p lease_redirect -p no:cacheprovider --jax-cpu --timeout 600 -rA -q -m native_server hytalegym/tests/fidelity/combat`, and the same flags on the 12-test selected set, once on the gen-7 render of 30c6136 (overlay a900937b...) and once on stock gen 5; bridge from `tools/launch_bridge_072.py --bridge-port 5570 --game-port 25570`
+- server: Hytale 0.7.2 (HytaleServer.jar revision d769dc3d, SHA-256 23f71f03...0aff); bridge jar sha256 686BC4BC3DAE481AE857875961DAE75C02E2F4102B75B9B4193E60246EF80012
+- receipt: `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md` section (i), rows 6a-6c; junit XML and logs in this session's scratchpad `fid/receipts/` (outside the repository)
+- result: the render and stock agree. The shortbow outer roots and ranged scalar variants deal no native damage in 10 runs where the simulator deals 5 to 19; the shortbow projectile contact is 1.0 native vs 6.0; the iron spear throw and the crossbow Big Arrow contacts match. On the render only (stock hit the 600 s timeout): the iron crossbow combo, three accepted shots and no native contact before the episode truncates. The six-arrow reload compile did not finish in 600 s on the render (stock passes in 289 s)
+- verdict: fail: native projectiles register less than the simulator predicts (cause not isolated)
+
+## 2026-10-18 — Stamina, oxygen, signature energy, durability tables: fail
+- command: `cd HytaleRL && python -m pytest -p port_redirect -p render_redirect -p lease_redirect -p no:cacheprovider --jax-cpu --timeout 600 -rA -q` on `test_jax_native_combat_compare.py::test_native_shield_bash_resource_cost_matches_and_regen_phase_is_explicit` (in the selected set), on the gen-7 render of 30c6136 and on stock gen 5
+- server: Hytale 0.7.2 (HytaleServer.jar revision d769dc3d, SHA-256 23f71f03...0aff); bridge jar sha256 686BC4BC3DAE481AE857875961DAE75C02E2F4102B75B9B4193E60246EF80012
+- receipt: `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md` section (i), row 8; junit XML in this session's scratchpad `fid/receipts/` (outside the repository)
+- result: the shield bash resource cost and regeneration phase match on the render and on stock (one stamina differential); the durability tables were not re-measured
+- verdict: fail: the durability tables of the 2026-10-17 entry stand; the shield bash stamina cost passes
+
+## 2026-10-18 — Dodge: pass
+- command: `cd HytaleRL && python -m pytest -p port_redirect -p render_redirect -p lease_redirect -p no:cacheprovider --jax-cpu --timeout 600 -rA -q -m native_server hytalegym/tests/fidelity/combat`, and the same flags on the 12-test selected set, once on the gen-7 render of 30c6136 (overlay a900937b...) and once on stock gen 5
+- server: Hytale 0.7.2 (HytaleServer.jar revision d769dc3d, SHA-256 23f71f03...0aff); bridge jar sha256 686BC4BC3DAE481AE857875961DAE75C02E2F4102B75B9B4193E60246EF80012
+- receipt: `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md` section (i), row 9; junit XML in this session's scratchpad `fid/receipts/` (outside the repository)
+- result: the dodge boundary and lateral dodge mechanics tests pass on the render and on stock; the overlapping-hit test still measures nothing (its control hit never lands). The render keeps the gen-5 dodge head (row 9 is pending in the overlay)
+- verdict: pass: impulse and timing match on the two passing differentials
+
+## 2026-10-18 — Crafting: fail
+- command: `python run_tool.py crafting_catalog_capture.py --port 5570 --out <receipts>/crafting_manifest_072.json` (run_tool.py loads the port, render and lease redirects; the capture script is a copy of the 2026-10-17 check's), once on the gen-7 render of 30c6136 and once on stock
+- server: Hytale 0.7.2 (HytaleServer.jar revision d769dc3d, SHA-256 23f71f03...0aff); bridge jar sha256 686BC4BC3DAE481AE857875961DAE75C02E2F4102B75B9B4193E60246EF80012
+- receipt: `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md` section (i), row 11; `crafting_capture_gen{7,5}.json` in this session's scratchpad `fid/receipts/` (outside the repository)
+- result: native 2,047 recipes, semantic hash cca78db6... equal on seeds 570057 and 1194077737, 22 bench ids, 19 recipes without a bench, campfire 3. The render's recipe table holds 2,047 and fits the catalog (stock 1,947, does not); the packer still rejects it on both (988 excluded-material inputs)
+- verdict: fail: the packer rejects the 0.7.2 catalog
+
+## 2026-10-18 — Reset timing: pending
+- command: `python run_tool.py reset_timing_probe.py --port 5570 --seeds 0 1 2 --steps 6` (the probe is a copy of the 2026-10-17 check's), survive task
+- server: Hytale 0.7.2 (HytaleServer.jar revision d769dc3d, SHA-256 23f71f03...0aff); bridge jar sha256 686BC4BC3DAE481AE857875961DAE75C02E2F4102B75B9B4193E60246EF80012
+- receipt: `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md` section (i), row 4; `reset_timing.json` in this session's scratchpad `fid/receipts/` (outside the repository)
+- result: 4 engine ticks on every step for the three seeds; world tick 22 at reset, 26 after the first step; native tick rate 30
+- verdict: pending: the offset repeats the 2026-10-17 entry and is documented; it is not yet applied in the session clock

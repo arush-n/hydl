@@ -482,3 +482,66 @@ Receipts: `~/.claude/jobs/31947bd7/tmp/phase4/` (`receipts/`, `jump/`, `los/`, `
 **Native compares after the fix (2026-10-18; gen-7 render, run from `cd HytaleRL` through the shim, bridge 5556, jar 686BC4BC...0012).** 23 selected tests (the 14 dynamic learner rows, the queue drain, three dodge tests: lateral, alternating lateral at two seeds, policy boundary; the shield bash; the three learner-v3 tests): 0 contract-mismatch refusals (test output and bridge log), 8 passed, 15 failed as measurements. Fourteen dynamic learner rows report raw observation mismatches (width 8272; 107 to 109 features; maximum error 1.0; world, resource and guard groups). `test_native_learner_v3_full_row_matches_source_aligned_jax` reports three float32 entries (maximum error 7.45e-9) against an exact-zero assertion. Stock-engine attribution is not run here. Identity gate (gen 5, pinned to 8707eec because HEAD does not import): 4 passed (36:34). Receipts: `~/.claude/jobs/31947bd7/tmp/phase4/receipts/native_compares_gen7.log`, `final2_identity_pinned_8707eec.txt`.
 
 **Still open:** row 2b partial boxes (the bottom-box `Rock_Stone_Half` cannot be placed to separate the rules from the spawn geometry; needs a rotation API or an eye offset); row 1d slope motion; row 1e descent; row 1c residual (F1c, an engine-wide change needing the owner's decision); Part B constructs (hit interrupt, knockback model, mana, hookshot, dodge head, projectile tiers) not started.
+
+## (i) The native combat suite on the committed gen-7 render and on stock gen 5 (2026-10-18)
+
+Render: `python -m hytalegym.sim.common.render --generation gen7 --out <scratchpad>` at 30c6136 (committed files, read
+with `git cat-file`): overlay sha256 a900937b...d944 (`overlay.py` add745e5..., `render.py` 9946de82...), 41 applied
+entries (rows 1c, 1d, 2b, 5b, 5c, 5d, 11), 73 pending (among them 5a, 7a, 7b, 9). Its 5c entry predates the
+all-materials dagger change of (h) (b8318ec). Stock gen 5: the repository's `hytalegym.jax` as it stood, a working tree
+that carried other sessions' uncommitted `jax/combat` edits, so a difference between the two columns
+would not be the overlay's alone; none that is a measurement survived (below). Bridge: the 0.7.2 jar
+686BC4BC...0012, `tools/launch_bridge_072.py --bridge-port 5570 --game-port 25570` (5556 left to the other session).
+The tests hard-code 127.0.0.1:5556, so three pytest plugins in the test process move that connect to 5570, keep the
+native lease files in the scratchpad and mount the render as `hytalegym.jax` (`render.redirect_imports`). Command per
+engine: `cd HytaleRL && python -m pytest -p port_redirect -p render_redirect -p lease_redirect -p no:cacheprovider
+--jax-cpu --timeout 600 -rA -q -m native_server hytalegym/tests/fidelity/combat` (42 tests), then the same flags on
+seven node ids (12 tests: in `test_jax_native_combat_compare.py` the pure contract, iron sword, dodge boundary, lateral
+dodge, five shortbow outer roots and shield bash; `test_arsenal_projectile_native_compare.py`). The first gen-7 pass
+(02:41Z) lost 25 of the 54 tests to the anchor fault in (h)'s contract note. The gen-7 column below is the re-run
+(04:08Z-05:50Z) on a copy of the render with that one line pointing at `HytaleRL/artifacts/worldgen` (`diff -r`: that
+line only), which hashes D47E87B2 in the test process with the manifest found. Stock ran 02:47Z-03:57Z. The
+crafting capture and the reset probe ran in the first pass; neither goes through the learner-v3 contract. Receipts,
+outside the repository: `/private/tmp/claude-501/-Users-arush-hydl/08774414-bd8c-46e1-9f45-7a7528846bf4/scratchpad/fid/receipts/`
+(`{combat,selected}_{gen7a,gen5}.{xml,log}`, `contract_hook_gen7a.txt`, `crafting_capture_gen{7,5}.json`,
+`reset_timing.json`).
+
+| Row | Differential (what ran) | Gen-7 render | Stock gen 5 | Bar | Status |
+|---|---|---|---|---|---|
+| 5c | seeded scalar contact, bronze daggers | native 5.0, JAX 3.0 | same | damage exact | MISMATCH on this render: its 5c entry stops short of bronze ((h): 15 of 15 after b8318ec) |
+| 5c, 5e | seeded scalar contacts: cobalt battleaxe, scrap NPC mace, thorium sword | pass | pass | damage and hit tick exact | MATCH |
+| 5f | iron sword program | native hit tick 9, expected 7 | same | exact | MISMATCH |
+| 5f | kunai charge bank, root-relative accepted offsets | native 0, 11, 22, 33, 62, 91 (89 in the first gen-7 pass); JAX 0, 10, 20, 30, 60, 90 | same | exact | MISMATCH, about one tick per throw; the 30 Hz clock leaves the JAX offsets unchanged |
+| 6a | shortbow outer roots, five seeds | native 0.0; JAX 6, 9, 12, 16, 19 | same | damage exact | MISMATCH: no native damage |
+| 6a | seeded ranged scalar variants: adamantite, copper (2), flame (2) shortbows | native 0.0; JAX 14, 5, 13, 12, 15 | same | damage exact | MISMATCH: no native damage |
+| 6a | shortbow projectile contact, open and wall | native 1.0, JAX 6.0 | same | damage exact | MISMATCH |
+| 6b | iron spear throw contact, open and wall | pass | pass | damage and hit tick exact | MATCH |
+| 6c | crossbow Big Arrow contact, two seeds | pass | pass | observable damage bound | MATCH |
+| 6c | iron crossbow third contact consumes the combo, two seeds (native capture) | shots accepted at ticks 97, 108, 118; no contact before the native episode truncates (ticks 125, 126) | stopped by the 600 s timeout in host evidence assembly | three contacts | MISMATCH on the render (no native contact); stock unmeasured |
+| 6c | crossbow reload, six arrows at 30 tps | stopped by the 600 s timeout inside an XLA compile | pass (289 s) | - | UNMEASURED on the render (compile time, not a value) |
+| 8 | shield bash resource cost and regeneration phase | pass | pass | - | MATCH |
+| 9 | dodge boundary; lateral dodge mechanics | pass; pass | pass; pass | impulse and timing match | MATCH |
+| 9 | lateral dodge blocks an overlapping hit | StopIteration: the control hit never lands | same | - | UNMEASURED |
+| - | dynamic learner rows, 14 cases (2 seeds x 7 iron sword, shortbow and shield programs), raw observation at tick 0 | 107 or 109 of 8,272 values differ, maximum error 1.0 | identical, case by case | all equal | MISMATCH on both engines: it predates the overlay (the stock attribution (h) did not run) |
+| - | queue drain keeps every learner head satisfiable | pass | pass | - | MATCH |
+| - | nonzero group actor executes ability, guard and dodge | native body yaw does not settle at the guard pose (desired 0, actual -180) | same | - | MISMATCH on both |
+| - | group combat is actor independent | actor one deals no damage | same | - | MISMATCH on both |
+| 11 | crafting catalog capture, seeds 570057 and 1194077737 | native 2,047 recipes (semantic hash cca78db6..., equal on both seeds), 22 bench ids, 19 without a bench, campfire 3; table capacity 2,047, fits | capacity 1,947, does not fit | catalogue and timings match | PARTIAL: the capacity is fixed; the packer still rejects the catalog on both (988 excluded-material inputs) |
+| 4 | reset timing probe, survive task, seeds 0-2, six steps each (a native measurement, run once under the stock host) | - | 4 engine ticks on every step (world tick 22 at reset, 26 after step 1; 30 tps) | documented offset | as in table (a) |
+| 5b, 5d | knockback; guard attack-cancel | no test in the suite exercises them | - | - | UNMEASURED |
+
+Not measured by the suite (harness, not mechanics): the scalar crossbow variant (2) and signature lifecycle (4) tests
+look up the head `world_move_none_plus_compass`, which `ARSENAL_POLICY_ACTION_HEAD_NAMES` has at no revision (30c6136,
+HEAD, working tree): ValueError on both engines. The crossbow reload interrupt test gets "World thread is not
+accepting tasks" from the bridge on both. The static placement tests (2) pin the 0.5.7 `Assets.zip`.
+
+**Reading.** 51 of the 54 tests end identically on both engines: same outcome and same failing values (the reload
+interrupt error differs only in its world id). The three that differ do so by time: the six-arrow reload compile did
+not finish in 600 s on the render (stock 289 s; inferred, not checked: stock hits JAX's persistent compile cache and the
+render's new programs do not), and the two combo captures finished only on the render. No overlay entry this suite
+reaches changed a verdict: 5c stops short of bronze in this render, 11's packer rejects the catalog whatever the
+capacity, and the 1c step clock leaves the kunai's JAX offsets unchanged. Open on 0.7.2 by this suite: 5f dispatch
+timing (one to two ticks late); 6a and 6c native projectiles that register less than the simulator predicts (no
+shortbow damage in 10 runs, 1.0 vs 6.0 in the projectile contact, no crossbow combo contact in 2 runs; cause not
+isolated); the learner-row observation and the two group compares, on both engines; 11's packer; 5b and 5d, which
+have no live test.
