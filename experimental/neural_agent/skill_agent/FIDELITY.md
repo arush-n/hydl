@@ -306,3 +306,31 @@ Write `pass` only when the row's pass bar is met on the receipt the entry names.
 - receipt: `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md` section (l)
 - result: test_live_lateral_dodge_blocks_overlapping_native_hit, which measured nothing in the 2026-10-17 entry (its control hit never landed because actor one faced away under the head-only lever), now passes with the body lever: the native lateral dodge's invulnerability rejects an overlapping hit (native-only evidence; the test has no engine side). The group combat and group ability, guard and dodge tests pass too
 - verdict: pass: the earlier passing differentials (impulse and timing) stand; the overlap is now measured natively
+
+## 2026-10-18 — Movement: fail
+- command: `adk/tools/native_motion_differential.py` through `run_tool.py` (port, render and lease redirects) on the gen-7 render of e8a1fc7 and on stock: jump in place, jump held, jump held with forward, single jump then forward and the ledge walk, seeds 570057 and 913771; plus offline replays of the eleven saved live captures of 2026-10-17
+- server: Hytale 0.7.2 (HytaleServer.jar revision d769dc3d, SHA-256 23f71f03...0aff); bridge jar sha256 32EF5EDDC9E75FB4C1837C9155450F75155F60E7A5A92CB593110CFC3CE260A1
+- receipt: `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md` section (o); `motion_*` and `f1c_render_replay.txt` in this session's scratchpad `fid/receipts/` (outside the repository)
+- result: F1c is the server's fall-speed integration (previous tick's duration, PhysicsMath's cubic drag, T = 140.488 m/s from the ModelAsset default mass 68 and drag 0.5); the gen-7 construct npc_jump_arc and the re-jump patches (commit e8a1fc7) pass jump in place, jump held and jump held with forward live on both seeds (<= 1.5e-5 m), where stock fails (1.7 cm to 0.35 m); single jump then forward still fails on both (0.96-1.03 m) because native walks again only on the third tick after landing
+- verdict: fail: the walk resume after landing remains (needs engine state); the jump arc passes on the render
+
+## 2026-10-18 — Dodge: pass
+- command: `tests/fidelity/combat/learner_row/test_dynamic_learner_row_world_inputs.py` (per-tick light capture) on the gen-7 render of 4661d5c and on stock, both seeds; the dodge timing probe (`dodge_timing_probe.py`)
+- server: Hytale 0.7.2 (HytaleServer.jar revision d769dc3d, SHA-256 23f71f03...0aff); bridge jar sha256 B56FD38E172AF83804B13B5F33E197C0475190073DBF0E21023B033ECBB89067 (32EF5EDD... for the probe)
+- receipt: `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md` section (o); `batch19_dodge_*`, `batch20_learner_*` and `dodge_timing_probe.json` in this session's scratchpad `fid/receipts/`
+- result: native accepts a dodge one drain after the request: effects (invulnerability, cooldown) on tick 2, force on tick 3, stamina on tick 4, where the engine launched and spent a tick early; the gen-7 patches (ff51431, 4661d5c) give the engine that timeline and the dodge_left learner rows match every value and mask on every tick on the render, while stock fails from tick 2
+- verdict: pass: the dodge lifecycle matches the live server on the render
+
+## 2026-10-18 — Ranged: fail
+- command: `tests/fidelity/combat/ability_lifecycle/test_native_crossbow_reload.py` and `tests/fidelity/combat/projectiles/crossbow/` (12 tests) on the gen-7 render of 9ad7c5f with the native_binding_types construct and on stock, both seeds
+- server: Hytale 0.7.2 (HytaleServer.jar revision d769dc3d, SHA-256 23f71f03...0aff); bridge jar sha256 32EF5EDDC9E75FB4C1837C9155450F75155F60E7A5A92CB593110CFC3CE260A1
+- receipt: `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md` section (o); `batch12_crossbow_gen7xb` and `batch13_crossbow_gen5` in this session's scratchpad `fid/receipts/`
+- result: the render binds the crossbow reload as Ability4 (commit 69422d7) and the slot-4 reload runs without failing (stock's Ability3 reload fails); 3 of 12 pass on both engines (the Primary reload and two big-arrow contacts); the interrupt case truncates because the bridge never offers Primary during the reload, and the combo (shots accepted, no hit) and signature (no event) cases fail identically on both engines
+- verdict: fail: the remaining crossbow failures are bridge-side or harness-side (the other session's phase 4f), not the engine's
+
+## 2026-10-18 — Crafting: fail
+- command: an offline count on the live 0.7.2 catalog (the 2,047-recipe manifest compiled against the 0.7.2 Assets.zip; every offered recipe stocked with its inputs and executed through `execute_region_fieldcraft`), stock and through a render of the bench_crafting construct; `tests/sim/test_bench_crafting.py`
+- server: Hytale 0.7.2 (HytaleServer.jar revision d769dc3d, SHA-256 23f71f03...0aff); catalog captured live on bridge jar 686BC4BC... (FIDELITY (i))
+- receipt: `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md` section (o); `crafting_commit_count_stage0.json` and `crafting_render_count_stage0.txt` in this session's scratchpad `fid/receipts/`
+- result: stage 0 (commit 6aaf21d): stock commits 2 of the 197 offered recipes, the render all 197, and above 16 legal recipes the render publishes the first 16 in table order instead of none; gen 5 keeps both limits by ruling
+- verdict: fail: 197 of 2,047 recipes are committable; materials, memories, tiers, timed recipes and bench types 1-3 are the next stages, and no native bench-craft differential exists yet

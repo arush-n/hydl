@@ -770,3 +770,134 @@ Gates: Java full `gradlew test` 111 suites, 387 tests, 0 failures (agent); `Nati
 Python decoder and evidence tests 89 passed and 1 failed for want of a live listener (coordinator); the agent's 402-test
 offline run showed no failure that the unchanged code did not also show; `tests/test_server_versions.py` 7 passed.
 Not read directly: the policy agent's own HeadRotation (no telemetry for actor zero; the same code path is inferred).
+
+## (o) Gen-7 constructs after the hold: the crossbow binding, the jump arc, dodge timing and bench crafting (2026-10-18)
+
+Owner rulings this section works under: row 11, "try to get as much as possible"; row 5f, "as close to fidelity as
+possible as long as it is relatively simple"; the crossbow reload under Ability4 and the F1c jump arc as gen-7
+constructs. Commits (sim/gen7, sim/common/profile.py, tests/sim; no engine module, so no swap-plan regeneration):
+69422d7 (6c), e8a1fc7 (1c), ff51431 and 4661d5c (5f), 6aaf21d (11). Each passed tests/sim and the gen-5 identity gate
+before its commit. The tests/sim count went 102 -> 105 -> 109 -> 114, with no failures at any step. Bridges were
+private, on ports 5570-5572 with game ports 25570/25571/25573: jar 32EF5EDD for the crossbow, motion and dodge probes,
+and B56FD38E (after 6d914c8) for the learner rows. Receipts are outside the repository:
+`/private/tmp/claude-501/-Users-arush-hydl/08774414-bd8c-46e1-9f45-7a7528846bf4/scratchpad/fid/receipts/`.
+
+**Row 6c, the crossbow reload binding (construct `native_binding_types`, 69422d7).** I compared every arsenal
+profile's native bindings whose root id appears in the 0.7.2 item's `Interactions` map. Exactly two differ in type:
+the iron and ancient steel crossbow reloads, `Root_Common_StatAmmoReload_Entry`, which move from Ability3 to Ability4
+(compact slot 2, authored slot 4). The other 90 agree. The construct hooks `hytale_0_5_7_native_profile_bindings`,
+which feeds every consumer: the single-actor reset options and the `root_bound` check in `evidence.py`, the group
+channel, the actor-major projection and the arsenal spec manifest. On the render, the bridge receives
+`["Primary", "Ability1", "Ability4"]` for both crossbows. The engine keeps the reload's ordinal 4: no ability's
+interrupt mask references Ability3 or Ability4, so no dynamics change. The gen-7 arsenal contract sha moves through
+the spec's binding manifest, as it did for 5d.
+
+Live (32EF5EDD, both seeds), the 12 crossbow tests, render against stock. Outcomes are identical on both engines
+except for the interrupt case:
+
+| Test | Result |
+|---|---|
+| Primary reload (six arrows) | pass on both engines |
+| big-arrow contacts (2) | pass on both engines |
+| interrupt during the slot-4 reload | stock: fails at `row["failed"]` (the Ability3 reload fails, as in (m)); render: the reload runs under Ability4 and never fails, then the episode truncates because Primary is not offered during the reload (the other session's open bridge-legality case, now phase 4f) |
+| combo (4) | fail on both engines: the reload and three shots are accepted (ticks 97, 107, 117) but no hit lands |
+| signature lifecycle (4) | fail on both engines: no signature event, as in (l) |
+
+The combo and signature failures do not depend on the engine. They go to phase 4f with re-runs on B56FD38E. Inferred,
+not confirmed: the aim check read the body yaw before 6d914c8.
+
+**Row 1c, F1c: the server's jump arc (construct `npc_jump_arc`, e8a1fc7).** The native NPC walk controller carries a
+jump as a fixed applied velocity plus an external vertical speed `e`. After each move,
+`MotionControllerWalk.computeNewFallSpeed` updates `e` with `PhysicsMath.getAcceleration`:
+`e += -32 (1 - |e / T|^3) dt`. So the speed used on tick k comes from the previous tick's duration, and a cubic drag
+acts on the speed gained since takeoff. `T = PhysicsMath.getTerminalVelocity(68, 0.001225, 0.36, 0.5) = 140.488
+m/s`: the learner's `Kweebec_Sapling` model authors no `PhysicsValues`, so it takes the `ModelAsset` default (mass
+68, drag 0.5), with its 0.6 x 0.6 hitbox. In double precision this formula reproduces four live jump-in-place
+captures (2026-10-17, `~/.claude/jobs/31947bd7/tmp/fidelity072/live/motion/`) to 1e-13 in speed and position.
+Previous-tick gravity alone leaves 5e-5 m and 6.8e-4 m/s, which is the drag term.
+
+The jump-held captures needed a second rule. The live NPC lands on tick L and, with jump held, jumps again on L + 1;
+the engine's landing-recovery deferral (`runtime/step.py`) made it wait until L + 2. The gen-7 patches
+`npc_rejump_import` and `npc_rejump_after_landing` lift the deferral for `npc_walk` only.
+
+Replays of the eleven saved live captures through a render (`receipts/f1c_render_replay.txt`), then live
+`native_motion_differential` runs (32EF5EDD, seeds 570057 and 913771, `receipts/motion_*`). The bars are 5e-4 m and
+1e-3 m/s per step:
+
+| Case | Stock | Gen-7 render |
+|---|---|---|
+| jump in place (x5 saved; live x2) | fail: 3.8-8.4 mm saved, 1.7 cm live | pass: <= 1.4e-5 m, <= 3.0e-4 m/s |
+| jump held in place (saved; live x2) | fail, 0.18-0.20 m | pass, <= 1.4e-5 m |
+| jump held with forward, three hops (saved; live x2) | fail, 0.30-0.35 m | pass, <= 1.5e-5 m, <= 4.7e-4 m/s |
+| ledge forward 30 and forward 30 (saved x2; live x2) | pass | pass |
+| forward 35 (saved) | fail on step 35 only (the engine's geometry window is exhausted, fixture extent) | unchanged |
+| single jump then forward (saved x2; live x2) | fail, 0.70-1.03 m | fail, 0.70-0.98 m: the arc matches, the error is after landing |
+
+Remaining rule, consistent across the captures: with forward held after a landing, the native NPC starts walking on
+the third tick after touchdown, while the engine starts on the first. Inferred from the decompile, not confirmed: the
+force-pushed state (external or applied velocity non-empty) lingers after touchdown and blocks steering. Modelling it
+needs a new engine state field, so it stays a row. On the constant gen-7 clock the construct's duration term is zero.
+Its drag term remains: about 0.07 mm over a jump in place and 2 cm over a one-second fall.
+
+**Row 5f, dodge timing (gen-7 patches `dodge_starts_one_drain_later` ff51431 and `dodge_effects_on_acceptance`
+4661d5c).** Probe (`dodge_timing_probe.json`, 32EF5EDD, seeds 570057 and 913771): a left dodge requested on tick 1 is
+accepted on tick 2, its force appears on tick 3 and its stamina is spent on tick 4. The native force sequence (5.743,
+5.075, 4.484, 3.767, 2.971, ...) is the engine's one tick later. The kunai probe of (l) showed the same start one
+drain after the request.
+
+The learner-row dodge_left cases showed the effects. On stock, the invulnerability and the closed dodge mask already
+start on tick 2, while the motion is a tick early. With only the first patch, the motion matched and the effects ran
+a tick late. So natively the effects start on acceptance (tick 2), and the force (tick 3) and the stamina cost and
+regeneration delay (tick 4) follow. The two patches give the engine that timeline: `DODGE_LAUNCH_TICK` 2 -> 3,
+`DODGE_COST_TICK` 3 -> 4, and the invulnerability and cooldown on `DODGE_LAUNCH_TICK - 1`.
+
+Live, learner-row world-input harness (B56FD38E, both seeds), dodge_left: stock fails from tick 2; the render
+matches every value and mask on every tick (`receipts/batch19_dodge_*`). One harness fix was needed first. The
+harness's light field had been captured once at reset, so cells the agent later moved next to stayed invalid; three
+light features differed from tick 6, and widening that snapshot to 15^3 cells did not help. It now captures native
+light around the agent on every tick (the world is paused between steps, so the query does not move the trace).
+
+Not changed: the same one-drain start for other abilities (kunai). The melee hit-tick residuals of (l) (battleaxe
+-1, daggers +1, mace 0, sword +2) are not one uniform shift, and the per-ability scheduler timings were calibrated per
+weapon against 0.5.x live evidence, so that needs a per-family 0.7.2 re-measurement.
+
+**Row 11, stage 0: bench crafting (construct `bench_crafting`, 6aaf21d).** This is not a 0.7.2 change; it is the
+ruling's first step. Two engine limits held the Region crafting action back:
+- every craft committed under the Fieldcraft context, so a recipe offered because an ordinary bench is in reach was
+  refused at `_recipe_precondition`;
+- more than 16 legal recipes failed the actor row closed.
+
+Gen 7 commits under a bench the recipe names when the Fieldcraft context satisfies none of its requirements, so every
+gen-5 commit is unchanged. It also keeps the first 16 legal recipes in table order: available, `source_count` the full
+count, `ACTOR_RECIPE_DIAGNOSTIC_CAPACITY` meaning truncated, and `capacity_exceeded` False because the policy staging
+drops such rows. Gen 5 keeps both limits, by ruling (`sim/BASELINES.md` section 6).
+
+Measured on the live 0.7.2 catalog (the 2,047-recipe manifest of (l), compiled against the 0.7.2 Assets.zip; each
+offered recipe stocked with exactly its inputs and executed through `execute_region_fieldcraft`;
+`receipts/crafting_commit_count_stage0.json`, `crafting_render_count_stage0.txt`):
+- stock commits 2 of the 197 offered recipes (the crude bed and torch, which list Fieldcraft);
+- through a render of the construct, 197 of 197 commit;
+- with all 197 legal at once, the rendered producer publishes the first 16 in table order, available, with
+  `source_count` 197 and the truncated bit set.
+
+Later stages, from the roadmap of (l):
+- materials (resource-type inputs with output exclusions plus an item resource-type table): 263;
+- memories: 278;
+- bench tiers: 359;
+- timed recipes: 575;
+- bench types 1-3: 1,934, whose native oracle is the other session's item 55.
+
+**Learner rows on the final render (4661d5c, B56FD38E, per-tick light harness, all 14 cases).** `test_dynamic_learner_row_world_inputs.py`, seeds 570057 and 1553616197 (`receipts/batch20_learner_*`). The render
+passes 6 of the 14 cases and stock passes 4:
+
+| Program | Stock gen 5 (first mismatch) | Gen-7 render (first mismatch) | Reading |
+|---|---|---|---|
+| neutral | pass | pass | aligned world inputs |
+| look | pass | pass | head yaw on the wire (n) |
+| dodge_left | tick 2: the whole dodge motion | pass | 5f dodge timing (this section) |
+| iron sword slot zero | tick 6: the guard_off_on mask | tick 7: target, combat and resource values (11) | 5d fixed on the render; 5f melee hit timing remains |
+| iron shield guard held / release | tick 2: ability legality and mask | tick 2: the same | the shield guard is outside the 5d constructs |
+| shortbow draw min / max | tick 0: ammo and one inventory cell | tick 0: the same | reset ammo (JAX starts at the loadout stack) |
+
+Each failing case also carries the inventory group, but the test tolerates that group alone (the permitted
+NPC-container signature), so it is not what fails these cases.
