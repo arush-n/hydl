@@ -82,8 +82,9 @@ of a pretrained backbone fine-tuned on our decision data, every output read in p
 classification with a calibrated probability. Input: the LLM's goals as written, facts and notes, and
 the catalogue as `id: description` lines, each goal and each entry under a marker token. Per goal, from
 the marker states: skill over the K entries (`softmax_j q_k^T W e_j`, no weight depends on K; an unseen
-skill is matched by its description, which is also how an intent the library cannot serve gets "the best
-possible choice"), condition kind over the nine predicates, has-number. Numbers come from an exact
+skill is matched by its description; note that for an intent the library cannot serve, "the best
+possible choice" is built today as the nearest catalogue id with descriptions as suggestions only, SYSTEM_ONE
+9.16, because description matching measured as noise), condition kind over the nine predicates, has-number. Numbers come from an exact
 reader, never from the network. Backbone: ModernBERT-base, top 4 of 22 layers trainable; fallbacks a
 22M encoder (speed) and a LoRA-tuned Qwen3-0.6B decoder (accuracy, the owner's KEV idea).
 

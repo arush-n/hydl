@@ -47,7 +47,8 @@ for the gen-7 simulator), and the gen-7 simulator itself (phase 3 of 6 running).
 | Host seam honouring the skills' commitments | default since `0cf8c05` |
 | Per-tick observer `on_tick` for the combiner; `--host-budget-ms` on the driver | built `ffe11c5`, `8707eec` |
 | Joint check of executor and combiner at 512 ticks | measured 2026-10-18: identical at a 200 ms host budget (0 non-timing differences, 0 misses both, 24,680 running statuses through the per-tick hook); at the default 20 ms the joint run diverged through 3 latency misses, not logic; the rejected-request path is still unexercised (0 rejections in 8,088 grants; the lower layer is writing a forced-target-loss test) |
-| Learned heads beside the exact path (replace, params, confidence; P1d relabelling), calibration (G5), absent-family evaluation (#32) | designed / deferred until real skills |
+| An intent the library cannot serve (#32): the nearest catalogue id serves with a question, descriptions only suggest, the harness leaves an unresolvable goal out of the version instead of refusing it (`jev/system_one/nearest_skill.py`, `SYSTEM_ONE.md` 9.16) | built 2026-10-18; gate: 4 of 7 absent families served from the expected group on all phrasings, 3 asked about; description matching measured as noise |
+| Learned heads beside the exact path (replace, params, confidence; P1d relabelling), calibration (G5) | designed / deferred until real skills |
 
 ## 4. Level 1, the skills (`skill_agent/`, `skill_library/`)
 
@@ -101,6 +102,11 @@ Still uncommitted, by design:
   HytaleRL/examples/*, worlds/region.py, root .gitignore; dated 2026-10-13 to 17). Asked which are theirs; no answer
   yet. Not touched.
 - **In-flight files of live agents**: `sim/gen7/*` (phase 4), `skill_agent/*` (the lower layer), `lm_reader.py` (P6).
+
+Follow-ups for whoever owns `tests/fidelity/combat` (from the peer session's section (i) run, 2026-10-18): six
+crossbow tests look up the head `world_move_none_plus_compass`, which `ARSENAL_POLICY_ACTION_HEAD_NAMES` has at
+no revision, so they raise before measuring; two static placement tests pin the 0.5.7 `Assets.zip`; the
+reload-interrupt test gets "World thread is not accepting tasks" from the bridge. Harness problems, not mechanics.
 
 Open for the owner: pushing (nothing is pushed); the reviewer's one flagged question in the v6 contract
 (`PublicServerEvidenceSource.java` self row now uses head yaw and pitch, unexplained); whether to re-extract

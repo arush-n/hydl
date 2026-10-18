@@ -101,7 +101,8 @@ class InformationRequest:
 
     Attributes:
         tick: The session tick of the request.
-        source: Who asks: ``"typed_rule"`` or ``"program"``.
+        source: Who asks: ``"typed_rule"``, ``"program"`` or ``"executive"`` (the harness, for a goal whose skill
+            id is not in the catalogue; SYSTEM_ONE 9.16).
         executive_version: The E_t version concerned.
         slot: The goal slot concerned, or None.
         lane: The lane concerned, or None when it concerns every lane.

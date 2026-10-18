@@ -26,10 +26,12 @@ latency source is Python's time.perf_counter
 
 from __future__ import annotations
 
+import dataclasses
+
 import math
 import threading
 import time
-from typing import Any
+from typing import Any, Callable
 
 from experimental.neural_agent.contracts import ExecutiveState
 from experimental.neural_agent.executive.baselines import (
@@ -79,8 +81,11 @@ class ExecutiveHarness:
         trigger: ExecutiveTrigger,
         clock: VirtualClock,
         shared_state: SharedState | None = None,
+        resolver: Callable[[str, str], Any] | None = None,
     ) -> None:
         self._backend = backend
+        self._resolver = resolver
+        self.information_requests: list[dict[str, Any]] = []  # questions to the LLM; the session's scribe collects them
         self._store = store
         self._channel = channel
         self._ledger = ledger
@@ -94,6 +99,41 @@ class ExecutiveHarness:
         self._stop_event = threading.Event()
         self._last_call_tick: int | None = None
         self._last_error: str | None = None
+
+    def _serve_unknown_skills(self, state: ExecutiveState, tick: int) -> ExecutiveState:
+        """Serve each goal whose skill id is not in the catalogue with the nearest catalogue id, or leave it out of
+        this version, and record a question to the LLM either way (SYSTEM_ONE 9.16).
+
+        Without a resolver the state is returned as it came and the store refuses an unknown id as before. When
+        the backend keeps the LLM's words (``last_section`` matching ``state``), the kept goals keep their words.
+        """
+
+        if self._resolver is None:
+            return state
+        catalogue = frozenset(self._store.skill_ids)
+        section = getattr(self._backend, "last_section", None)
+        worded = isinstance(section, ExecutiveSection) and section.to_executive_state() == state
+        goals, entries = [], []
+        for slot, goal in enumerate(state.goals):
+            words = section.goals[slot].intent if worded else ""
+            if goal.skill_id not in catalogue:
+                resolution = self._resolver(goal.skill_id, words)
+                self.information_requests.append({
+                    "version": state.version, "slot": slot, "when": words, "requested": resolution.requested,
+                    "skill_id": resolution.skill_id, "source": resolution.source, "confidence": resolution.confidence,
+                    "candidates": list(resolution.candidates), "reason": resolution.reason,
+                })
+                if resolution.skill_id is None:
+                    continue
+                goal = dataclasses.replace(goal, skill_id=resolution.skill_id)
+            goals.append(goal)
+            if worded:
+                entries.append(dataclasses.replace(section.goals[slot], skill_id=goal.skill_id))
+        if tuple(goals) == state.goals:
+            return state
+        if worded:
+            self._backend.last_section = dataclasses.replace(section, goals=tuple(entries))
+        return dataclasses.replace(state, goals=tuple(goals))
 
     def _section_for(self, state: ExecutiveState) -> ExecutiveSection:
         """The executive section to write for ``state``: the backend's parsed section when it has one for
@@ -216,6 +256,7 @@ class ExecutiveHarness:
                 self._last_error = repr(error)
                 raise
             latency_ms = _elapsed_ms(started)
+            state = self._serve_unknown_skills(state, tick)
             try:
                 self._store.propose(state)
             except (TypeError, ValueError) as error:

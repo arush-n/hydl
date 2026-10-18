@@ -29,10 +29,11 @@ large enough to be accurate.
 | `catalogue_matching.py` | 572 | P3: intent to skill by description over the owner's 139-row catalogue (skill rows through `../../skill_agent/catalogue.py` since B5). | 0.42 FAIL: the typed `skill_id` is the selector |
 | `lm_reader.py` | 1322 | P6: instruction-tuned decoders (Qwen3 0.6B to 14B) with schema-constrained output, once per version; the Ollama GPU-runner check; the two-pass variant. | kind 0.92 / 0.90 / 0.97 / 1.00 / 1.00 from 0.6B to 14B (bar 0.95); number PASS everywhere; skill by description FAIL at every size (0.36 to 0.88); two-pass lowers kind; LoRA plan recorded |
 | `pattern_reader.py` | 230 | The pattern reader of SYSTEM_ONE 9.14: the skill from the catalogue's ids and aliases (anchored id first), the clause through `condition_rules`; gate P7 (`python -m ... pattern_reader --seed 0`). | 1.000 at no breakage, 0.9925 with every perturbation, PASS |
+| `nearest_skill.py` | 193 | SYSTEM_ONE 9.16: the nearest catalogue id for a skill id the LLM wrote that the library cannot serve (exact, alias, then id words with stem-tolerant weighted overlap); descriptions only suggest, in the question to the LLM; `real_catalogue_tables()` reads the private catalogue at run time. | gate: 4 of 7 absent families served from the expected group on all 15 phrasings each, 3 near no id and asked about; descriptions were noise (loot_chest for "take cover") |
 | `condition_rules.py` | 377 | The deterministic fallback reader: feature, comparator and negation cues to `(kind, argument, confidence)`; below CLEAR is an information request. CLI: `python -m experimental.neural_agent.jev.system_one.condition_rules --seed 0`. | 1.000 kind and argument on held-out wordings, seeds 0 to 2, PASS (cue tables know the generator's vocabulary) |
 
 Gates: `test_na_system_one.py`, `test_na_interpret.py`, `test_na_finetune_pilot.py`,
-`test_na_catalogue_matching.py`, `test_na_lm_reader.py`, `test_na_condition_rules.py`.
+`test_na_catalogue_matching.py`, `test_na_lm_reader.py`, `test_na_condition_rules.py`, `test_na_nearest_skill.py`.
 
 Measured online (G4, `../../docs/MIDDLE_LAYER.md`): the learned instance passed the composition rate on
 seeds 0, 1, 2 once it read the contracts' commitments; its latency misses under machine load are the open

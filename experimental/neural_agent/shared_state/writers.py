@@ -30,10 +30,11 @@ from experimental.neural_agent.shared_state import (
 def information_request_record(item: Any, tick: int) -> InformationRequest:
     """Return the :class:`InformationRequest` for one entry of a host decider's ``information_requests``.
 
-    Accepted forms: an InformationRequest (returned as is); the typed decider's dict with ``version``,
-    ``slot``, ``when``, ``kind``, ``argument`` and ``confidence`` (``jev/typed_rule.py``); the executor's
-    ``LaneInformationRequest`` with ``tick``, ``lane``, ``executive_version``, ``program_step``, ``verb`` and
-    ``reason`` (``jev/programs.py``).
+    Accepted forms: an InformationRequest (returned as is); the harness's dict with ``requested``, ``version``,
+    ``slot``, ``confidence`` and ``reason`` for a goal whose skill id is not in the catalogue
+    (``executive/harness.py``, SYSTEM_ONE 9.16); the typed decider's dict with ``version``, ``slot``, ``when``,
+    ``kind``, ``argument`` and ``confidence`` (``jev/typed_rule.py``); the executor's ``LaneInformationRequest``
+    with ``tick``, ``lane``, ``executive_version``, ``program_step``, ``verb`` and ``reason`` (``jev/programs.py``).
 
     Raises:
         TypeError: For any other form.
@@ -41,6 +42,12 @@ def information_request_record(item: Any, tick: int) -> InformationRequest:
 
     if isinstance(item, InformationRequest):
         return item
+    if isinstance(item, Mapping) and "requested" in item:
+        return InformationRequest(
+            tick=tick, source="executive", executive_version=int(item["version"]), slot=item.get("slot"), lane=None,
+            text=str(item.get("requested", "")), kind=None, argument=None, confidence=item.get("confidence"),
+            reason=str(item.get("reason", "")),
+        )
     if isinstance(item, Mapping):
         kind = item.get("kind")
         reason = (

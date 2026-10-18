@@ -523,7 +523,8 @@ and *decide fast*.
 calibrated decisions in one pass per tick. The interpretation stage is the "reasoning within" the owner
 asked for, made explicit and inspectable, and it is the part that benefits from learning on real LLM
 wording later. It is also what the owner's rulings assume: the LLM is told the predicate vocabulary
-(§8.12 item 3), and an intent that matches nothing is read as the nearest skill (item 4).
+(§8.12 item 3), and an intent that matches nothing is read as the nearest skill (item 4; built as the nearest
+id, with descriptions as suggestions only, 9.16).
 
 **Gate for the interpret stage (replaces G3-NL's end-to-end form).** On held-out wordings and held-out
 families from the generator: predicate-kind accuracy >= 0.95, argument exact-match >= 0.98 where the
@@ -991,6 +992,40 @@ long term goals". Built as typed fields of the executive contract, so the decide
   harness binds it onto the backend and the user turn carries the briefing (8.10): the LLM reads its own view,
   not a bare E_t. Plan step 7 of MIDDLE_LAYER.md is complete; what remains on the LLM side is the first live run,
   which stays behind the rule that the lower level finishes first.
+
+### 9.16 An intent the library cannot serve: the nearest id serves, descriptions only suggest (2026-10-18)
+
+Owner ruling (8.12 item 4): "then we have to choose the best possible choice", no refusal. Until today the
+executive store refused a whole version whose goal named a skill id outside the catalogue, and the LLM had to
+correct it on its next version; every other goal of that version was lost with it. Built
+(`jev/system_one/nearest_skill.py`, `executive/harness.py`, gate `test_na_nearest_skill.py`):
+- **Resolution order.** Exact id, then alias (both CLEAR, no question), then the nearest id by its words
+  (`pursue_target` to `pursuit`, `guard_position` to `guard`, `search_target` to `search_for`, `follow_ally` to
+  `follow`; confidence the weighted share of the request's words with a like word in the row, at most WEAK, so
+  the LLM is always asked), else none. A word is like another when equal or one is the other's stem
+  (pursue/pursuit, waypoint/waypoints); a word's weight is its smoothed inverse row frequency over the catalogue.
+- **Descriptions suggest, never serve.** On the seven generator families with no real skill, the nearest row
+  by id-plus-description words over the 119 learned and command rows was noise on short phrasings: "take
+  cover" went to `loot_chest` on the word "take", "make rounds of the camp" to `craft` on "make", "fall back
+  behind a rock" to `kite` on "back". That is the finding of 9.12 and P6 again (skills by description fail), so
+  the up-to-three nearest rows by description go into the question as suggestions and nothing acts on them.
+- **The harness serves what it can and asks about the rest.** Before proposing, each goal whose id is not in
+  the catalogue is replaced by its nearest id, or left out of this version when no id is near; the other goals
+  take effect. Each case is one question (`information_requests`: version, slot, the goal's words, the requested
+  id, the serving id or none, source, confidence, candidates, reason), which the session hands to the scribe
+  like the deciders' questions (source `executive` in the decision section), so the LLM reads in its briefing
+  which skill now serves its goal and why, or that the goal was left out, and confirms or names a catalogue
+  skill. The kept goals keep the LLM's words on the notepad. A version whose every goal is near nothing arrives
+  with no goals and the lanes fall to idle, as the catalogue's `idle` row says.
+- **Opt-in.** The harness takes `resolver=nearest_skill.resolver_for(store.skill_ids, aliases, descriptions)`;
+  without it the store refuses an unknown id as before, which the executive tests still pin.
+- **Gate.** Over the seven absent families and their 15 phrasings each: `guard_position`, `search_target`,
+  `flank` (an exact row) and `follow_ally` are served from the expected catalogue group on every phrasing;
+  `reach_point`, `patrol` and `retreat_to_cover` are near no id on every phrasing and are asked about. The id
+  decides; the words only shape the suggestions, by construction.
+
+Still open from 8.12 item 4: a learned matching head with a confidence output is deferred with the other
+learned heads until real skills exist; the exact resolver above is the path in force.
 
 ## References
 

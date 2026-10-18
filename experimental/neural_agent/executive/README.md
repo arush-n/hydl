@@ -11,7 +11,7 @@ Standing rule: **no live LLM call until the lower level is finished**; the tests
 | `reports.py` | 136 | Upward report channel: goal outcomes and interrupt events from Levels 1 and 2 (`GoalReport`, `EventRecord`). |
 | `scheduler.py` | 377 | Virtual clock, call ledger and call triggers: when the executive is consulted. |
 | `baselines.py` | 200 | The executive backend protocol, the usage record, two deterministic baselines. |
-| `harness.py` | 259 | `ExecutiveHarness`: call the backend on a trigger, time it, log it, store the result, write the scratchpad's executive section. |
+| `harness.py` | 311 | `ExecutiveHarness`: call the backend on a trigger, time it, log it, serve a goal whose skill id is not in the catalogue with the nearest id or leave it out of the version and ask the LLM (`resolver=`, SYSTEM_ONE 9.16), store the result, write the scratchpad's executive section. |
 | `anthropic_backend.py` | 339 | The Claude adapter behind the seam: `build_system_prompt` (role, catalogue, the condition vocabulary and units, the JSON Schema), `wire_schema` (the structured-output subset). Tested through an injected client only. |
 | `smoke_anthropic.py` | 56 | One real call when `ANTHROPIC_API_KEY` is set. Never run by the tests. |
 | `export.py` | 61 | E_t history as JSON lines. |
