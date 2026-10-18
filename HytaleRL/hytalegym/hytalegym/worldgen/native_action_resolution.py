@@ -16,10 +16,13 @@ import json
 import numpy as np
 
 from hytalegym.jax.crafting.contract import (
+    BENCH_TYPE_CRAFTING,
+    BENCH_TYPE_STRUCTURAL_CRAFTING,
     IDENTITY_HASH_WORDS,
     identity_sha256_words,
 )
 from hytalegym.jax.crafting.packing import PackedRecipeTable
+from hytalegym.server_versions import server_profile
 from hytalegym.worldgen.block_actions import (
     block_asset_key,
     block_semantic_key,
@@ -113,6 +116,18 @@ class RegionNativeBlockIdentityCatalog:
         )
 
 
+def lossless_bench_types() -> tuple[int, ...]:
+    """Bench types a native craft request carries losslessly on the configured server line.
+
+    0.5: ordinary Crafting benches only. 0.7 adds the structural bench (Builders): the bridge moves the input into
+    the window's one slot and the server's ordered queue crafts it (FIDELITY-0.7.2.md (s)).
+    """
+
+    if server_profile().release_line >= (0, 7):
+        return (BENCH_TYPE_CRAFTING, BENCH_TYPE_STRUCTURAL_CRAFTING)
+    return (BENCH_TYPE_CRAFTING,)
+
+
 @dataclass(frozen=True, slots=True)
 class NativeCraftingExecutionContext:
     """Exact current fieldcraft or ordinary-Crafting-bench evidence."""
@@ -146,6 +161,26 @@ class NativeCraftingExecutionContext:
             _positive_int(tier, "bench tier"),
         )
 
+    @classmethod
+    def structural_bench(
+        cls,
+        *,
+        position: tuple[int, int, int],
+        block_id: str,
+        bench_id: str,
+        tier: int,
+    ) -> NativeCraftingExecutionContext:
+        """A structural (Builders) bench; accepted only on a server line that carries it."""
+
+        return cls(
+            "bench",
+            _target(position, "bench position"),
+            _native_id(block_id, "bench block_id"),
+            _native_id(bench_id, "bench_id", maximum=128),
+            BENCH_TYPE_STRUCTURAL_CRAFTING,
+            _positive_int(tier, "bench tier"),
+        )
+
     def __post_init__(self) -> None:
         if self.crafting_context == "fieldcraft":
             if (
@@ -166,8 +201,10 @@ class NativeCraftingExecutionContext:
             "expected_bench_id",
             maximum=128,
         )
-        if self.expected_bench_type != 0:
-            raise ValueError("only ordinary Crafting benches are lossless")
+        if self.expected_bench_type not in lossless_bench_types():
+            raise ValueError(
+                "only ordinary Crafting benches (and, on 0.7, the structural bench) are lossless"
+            )
         _positive_int(self.expected_bench_tier, "expected_bench_tier")
 
 
