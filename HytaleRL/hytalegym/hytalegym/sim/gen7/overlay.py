@@ -84,6 +84,11 @@ _BENCH_CRAFTING = (
     "(l): 2 of 197 offered recipes commit before the construct); a native bench-craft differential is open "
     "(no live bench-craft test on 0.7.2 yet)"
 )
+_STRUCTURAL = (
+    "the 0.7.2 catalog count through a render (903 of the 910 structural recipes admitted, all committing); the live "
+    "crafting oracle's structural scenarios (FIDELITY-0.7.2.md (s): Cloth_Block_Wool_Black_Half and _Stairs finish, "
+    "a missing input is refused)"
+)
 _CRAFTING_MATERIALS = (
     "tests/sim/test_crafting_materials.py (admission, resolution, legality from a resource type, the output "
     "exclusion, the Region commit); on the live 0.7.2 catalog 263 recipes are offered and all 263 commit, the 66 "
@@ -208,6 +213,27 @@ PATCHES = (
           "interaction cooldown (hold-duration probe: after holds of 2, 4 and 6 ticks the choice reopens on tick 11), "
           "which needs a mechanics state field; and the shield bash, a Primary fork of Guard_Wield in the 0.7.2 asset, "
           "is never advertised natively during a held guard (a bridge legality item, #61)"),
+    Patch("structural_bench_import", "combat/arsenal/world_actions/crafting.py",
+          "    BENCH_TYPE_CRAFTING,\n    INPUT_MODE_NORMAL,\n",
+          "    BENCH_TYPE_CRAFTING,\n    BENCH_TYPE_STRUCTURAL_CRAFTING,\n    INPUT_MODE_NORMAL,\n",
+          "11", "with structural_bench_types", "the structural bench type constant the two patches below read"),
+    Patch("structural_bench_types", "combat/arsenal/world_actions/crafting.py",
+          "_BENCH_TYPE_NAMES = {\n    \"Crafting\": BENCH_TYPE_CRAFTING,\n}\n",
+          "_BENCH_TYPE_NAMES = {\n    \"Crafting\": BENCH_TYPE_CRAFTING,\n"
+          "    # Gen 7 (row 11): the Builders bench (Bench.Type StructuralCrafting) is a Region bench too; the live 0.7.2\n"
+          "    # crafting oracle (FIDELITY-0.7.2.md (s)) crafts its recipes from the player's inventory.\n"
+          "    \"StructuralCrafting\": BENCH_TYPE_STRUCTURAL_CRAFTING,\n}\n",
+          "11", _STRUCTURAL,
+          "Builders benches become Region bench rows (bench contexts of type 3, tier 0)"),
+    Patch("structural_bench_admission", "combat/arsenal/world_actions/crafting.py",
+          "            requirement.bench_type == BENCH_TYPE_CRAFTING\n",
+          "            requirement.bench_type in (BENCH_TYPE_CRAFTING, BENCH_TYPE_STRUCTURAL_CRAFTING)\n",
+          "11", _STRUCTURAL,
+          "a recipe whose bench requirement is the structural bench is admitted like an ordinary bench's; the commit "
+          "runs under its type-3 requirement (bench_crafting) and consumes from the player's inventory in normal "
+          "mode, because the bridge moves the input into the window's slot for the server's ordered queue. Not "
+          "modelled: the output lands one tick after the request natively (the bridge's queued path, the oracle's "
+          "observation; a native player's window timing not yet measured)"),
     Patch("crafting_table_capacity", "crafting/contract.py",
           "# Installed 0.5.7 has 403 explicit plus 1,544 item-generated recipes.\n"
           "RECIPE_TABLE_CAPACITY = 1947\n",
