@@ -207,8 +207,14 @@ PATCHES = (
           "5f",
           "the dodge timing probe on the render (first force on tick 3, stamina spent on tick 4, the force sequence "
           "equal to native) and the learner-row dodge_left cases (test_dynamic_learner_row_world_inputs.py)",
-          "the engine starts the invulnerability, cooldown and regeneration delay on the launch and cost ticks, so "
-          "they move with them; the dodge still becomes pending on the request tick"),
+          "the force (applied velocity) moves to tick 3 and the stamina cost and regeneration delay to tick 4; the "
+          "invulnerability and cooldown stay on the acceptance tick (dodge_effects_on_acceptance)"),
+    Patch("dodge_effects_on_acceptance", "combat/mechanics/runtime/motion.py",
+          "        dodge_invulnerability_remaining_seconds=jnp.where(\n            dodge_launch,\n            rules.dodge_invulnerability_seconds + dt,\n            state.dodge_invulnerability_remaining_seconds,\n        ),\n        dodge_cooldown_remaining_seconds=jnp.where(\n            dodge_launch,\n            rules.dodge_cooldown_seconds + dt,\n            state.dodge_cooldown_remaining_seconds,\n        ),\n",
+          "        # Gen 7 (row 5f): on the live 0.7.2 bridge the invulnerability and the cooldown start on the tick the\n        # dodge is accepted, one tick before its force (DODGE_LAUNCH_TICK).\n        dodge_invulnerability_remaining_seconds=jnp.where(\n            dodge_pending & alive & (next_dodge_tick == rules.dodge_launch_tick - 1),\n            rules.dodge_invulnerability_seconds + dt,\n            state.dodge_invulnerability_remaining_seconds,\n        ),\n        dodge_cooldown_remaining_seconds=jnp.where(\n            dodge_pending & alive & (next_dodge_tick == rules.dodge_launch_tick - 1),\n            rules.dodge_cooldown_seconds + dt,\n            state.dodge_cooldown_remaining_seconds,\n        ),\n",
+          "5f",
+          "the learner-row dodge_left cases on the live bridge: after dodge_starts_one_drain_later alone the invulnerability fraction and the dodge action mask ran one tick late (native: invulnerability 1.0 and the dodge closed on tick 2, the acceptance tick)",
+          "the stock engine started both on its launch tick 2, which was right; the timing patch had moved them with the force"),
 )
 
 _MECHANICS = "hytalegym.sim.gen7.mechanics"
