@@ -667,7 +667,7 @@ SWAP_PLAN: tuple[SwapEntry, ...] = (
     SwapEntry("mana_maximum default", "jax/combat/mechanics/factory.py", "mana_maximum: float", "mechanics_factory_resources", "function_default"),
     SwapEntry("mana regen 1.0 / 0.2 s", "jax/combat/mechanics/factory.py", "regen_interval.at[..., RESOURCE_MANA]", "mechanics_factory_resources", "inline_literal"),
     SwapEntry("magic charges regen 1.0 / 2.0 s", "jax/combat/mechanics/factory.py", "regen_interval.at[..., RESOURCE_MAGIC_CHARGES]", "mechanics_factory_resources", "inline_literal"),
-    SwapEntry("installed_default_forward_multiplier", "jax/world/entities/locomotion.py", "installed_default_forward_multiplier", "walk_steering_sprint_multiplier", "inline_literal"),
+    SwapEntry("installed_default_forward_multiplier", "jax/world/entities/locomotion.py", "1.273", "walk_steering_sprint_multiplier", "inline_literal"),
     SwapEntry("regeneration block", "rulesets/hytale_0_5_7/kweebec_razorleaf_vs_trork_brawler_v9.json", '"regeneration"', "health_regeneration", "json_table"),
     SwapEntry("agent/target explicit asset fields", "rulesets/hytale_0_5_7/kweebec_razorleaf_vs_trork_brawler_v9.json", '"max_health"', "npc_matchup", "json_table"),
     SwapEntry("weapon_items (143 rows)", "jax/combat/arsenal/assets/hytale_0_5_7_item_programs_v1.json", '"weapon_items"', "compiled_weapon_durability", "json_table"),

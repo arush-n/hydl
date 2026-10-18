@@ -26,12 +26,19 @@ def test_gen5_profile_is_todays_behaviour() -> None:
     assert GEN5.constructs == Constructs()
 
 
-#: Constructs implemented and differential-gated so far (phase 3, 2026-10-18): line of sight.
-IMPLEMENTED_SWITCHES = {"line_of_sight"}
+#: Constructs implemented and differential-gated so far: line of sight (phase 3, 2026-10-18) and the NPC
+#: walk jump velocity (phase 3b, 2026-10-18).
+IMPLEMENTED_SWITCHES = {"line_of_sight", "npc_walk_jump_velocity", "dagger_swing_damage"}
+
+
+#: Switches a gen-7 decision leaves at the gen-5 default: the module stays a stub and is never reached
+#: (slope_limits, decided 2026-10-18 from the 0.7.2 jar scan).
+DECIDED_UNCHANGED = {"slope_limits"}
 
 
 def test_every_changed_switch_has_an_owning_module_and_refuses_until_implemented() -> None:
-    assert set(CHANGED) == set(mechanics.CONSTRUCT_MODULES)
+    assert not set(CHANGED) & DECIDED_UNCHANGED
+    assert set(CHANGED) | DECIDED_UNCHANGED == set(mechanics.CONSTRUCT_MODULES)
     for switch in CHANGED:
         module = mechanics.construct_module(switch)
         owned = getattr(module, "SWITCHES", (getattr(module, "SWITCH", None),))
@@ -46,7 +53,7 @@ def test_every_changed_switch_has_an_owning_module_and_refuses_until_implemented
 
 @pytest.mark.parametrize(
     "module_name",
-    sorted(set(mechanics.CONSTRUCT_MODULES.values()) - {"line_of_sight"}),
+    sorted(set(mechanics.CONSTRUCT_MODULES.values()) - {"line_of_sight", "npc_jump", "dagger_damage"}),
 )
 def test_stub_entry_points_raise(module_name: str) -> None:
     module = importlib.import_module(f"hytalegym.sim.gen7.mechanics.{module_name}")

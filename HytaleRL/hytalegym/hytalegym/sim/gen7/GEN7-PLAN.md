@@ -119,6 +119,34 @@ gen-7-specific artifact paths, never over the gen-5 ones). Two defects for the c
 sprint record names the dict key, not the value (the overlay re-targets it); `sim/gen5/data` is a 0.5.10
 extraction while `gen5/profile.py` certifies 0.5.7 (relabel, or re-extract from a 0.5.7 archive if one exists).
 
+**Phase 3b and 4 status (2026-10-18; receipts `~/.claude/jobs/31947bd7/tmp/phase4/`, ledger `FIDELITY-0.7.2.md`
+section h).** Renderer: anchors relocate onto `hytalegym.envs` (never the `hytalegym` package, which the repo-root
+shim shadows under `python -m pytest` from HytaleRL/), with a test that both import routes find the artifact root;
+this was the cause of the 25 "actor-evidence contract mismatch" aborts the lower layer measured (the contract was
+right). Through the shim the gen-7 render now hashes D47E87B2 like the stock engine; the 23 aborting native compares
+run again: 8 pass, 15 are measurements (14 learner-row observation mismatches of width 8272, 107 to 109 entries, max
+abs error 1.0 in the world, resource and guard groups; one full-row float32 residual 7.45e-9 against an exact-zero
+assertion), whose stock-engine attribution is the lower layer's baseline run. Constructs: `dagger_swing_damage`
+(hook on the scalar variant profile; the 0.7.2 item rows for the swings): 15 of 15 materials equal the table and
+match native first-contact damage live on two seeds (gen-5 control: bronze 5 vs 3, mithril 12 vs 8). `npc_jump`
+(hook 1c, npc_walk only): first step exact at 5.0990195 m/s (sqrt(2 x 10 x 1.3), the server's measured value;
+the 1.3 is inferred, the server shows JumpHeight 0.5 and MaxClimbHeight 1.3), but the arc still misses the 5e-4 bar
+(0.025 m jump in place, 0.98 m jump then run): the residual fits native applying gravity with the previous tick's
+duration on airborne steps 1 to 8 (F1c), an integrator change that would move every generation: owner decision,
+row 1c stays MISMATCH. Production perception line of sight: a patch (the box test sits inside the ray walk, no hook
+point), 3 of 3 captured frames match native on both renders. `slope_limits` False, recorded (no 0.7.2 reader).
+Content: the swap plan's sprint record names the value (`redirects.py` writes `symbol_kind`; redirects.json
+regenerated, one record changed; six text-named records still to check before activation); `gen5/profile.py`
+relabelled to the 0.5.10 extraction it holds (no 0.5.7 archive exists on this machine). Not built: partial-box LOS
+and slope fixtures (no discriminating geometry without a rotation API or an eye offset), walk_descent hook (premise
+confirmed by javap, no differential), the profile-keyed surrogate LOS compare. **Phase 4 proper did not start**: hit
+interrupt / stun / flinch need a bridge fixture with an eligible role and the attack state machine; knockback Set
+vs Add needs a displacement harness; mana and runes need a mana readout the bridge does not publish; projectile
+tiers cannot be measured while the shortbow registers no native hit (6a); the dodge head changes the learner
+contract. Those bridge-side pieces are phase 4b. Gates: tests/sim 89 passed with the identity file ignored; the
+identity gate 4 passed against 8707eec (36 min); against HEAD it failed to import until 6c0c33f (motion.py), and
+re-runs against that HEAD.
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the

@@ -64,3 +64,10 @@ def test_redirect_list_carries_every_step_duration_site() -> None:
     assert ("ruleset_json", "engine.loaded_delta_seconds") in keys
     assert ("ruleset_json", "engine.nominal_delta_seconds") in keys
     assert any(s["kind"] == "delta_field" and s["symbol"] == "_motion_delta" for s in step["sites"])
+
+
+def test_sprint_swap_record_names_the_value_not_the_key():
+    """2026-10-18: the record for locomotion.py:177 names the literal 1.273, not the dict key."""
+    document = json.loads((support.SIM / "common" / "content" / "redirects.json").read_text(encoding="utf-8"))
+    (record,) = [r for r in document["redirects"] if r["adapter"] == "walk_steering_sprint_multiplier"]
+    assert (record["symbol"], record["symbol_kind"], record["head_line"]) == ("1.273", "numeric_literal", 177)

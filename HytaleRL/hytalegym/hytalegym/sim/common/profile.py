@@ -56,11 +56,20 @@ class Constructs:
     # "role_set_velocity" (0.7.2 Role.processSetVelocityInstruction, ~23x for
     # set-type NPC knockback; never reaches the bridge-driven agent).
     npc_velocity_model: str = "zero_then_add"
+    # NPC learner (npc_walk motion model) first-step jump velocity: "player_force" (HEAD: the player's
+    # PLAYER_JUMP_FORCE 11.8) or "native_npc" (sqrt(2 * gravity floor * jump height parameter) = 5.099,
+    # the 0.7.2 NPC first-step vertical speed). Owner: sim/gen7/mechanics/npc_jump.py (phase 3b, row 1c).
+    npc_walk_jump_velocity: str = "player_force"
+    # Swing_Left and Swing_Right damage of every scalar dagger variant: "shared_rows" (the 0.5.7 tuples of the
+    # shared weapon_variants module, HEAD) or "gen7_table" (the 0.7.2 item rows). Owner: sim/gen7/mechanics/
+    # dagger_damage.py (phase 4, item 5c).
+    dagger_swing_damage: str = "shared_rows"
     # Walk controller while descending: "free_fall" (0.5.x) or
     # "minimum_descent_rate" (0.7.2 code change, unmeasured). P2.
     walk_descent: str = "free_fall"
     # Player slope and wall limits (MovementConfig MaxSlopeAngleDegrees /
-    # MaxWallAngleDegrees, keys new in 0.7.2: 30 and 15). Owner: slope_limits.py (P2).
+    # MaxWallAngleDegrees, keys new in 0.7.2: 30 and 15). No 0.7.2 class reads them (jar scan, 2026-10-18),
+    # so gen 7 sets False (decision, phase 3b); slope_limits.py stays a stub.
     slope_limits: bool = False
     # 0.7.2 drops a block's health entry on any block write. Owner: block_health.py.
     block_health_reset_on_write: bool = False

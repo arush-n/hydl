@@ -6,7 +6,9 @@ tree), and per file, in order:
 
 1. relocates it: ``hytalegym.jax`` references become the rendered package,
    ``Path(__file__).resolve().parents[N]`` that climb out of the package are
-   re-anchored on ``hytalegym.__file__`` so they still name the same directory,
+   re-anchored on ``hytalegym.envs.__file__`` (an inner-package module, which the
+   repo-root shim never shadows; anchoring on ``hytalegym.__file__`` resolved one
+   level too high under the shim) so they still name the same directory,
    and tracked data files next to rendered packages are copied;
 2. applies the overlay's active redirects (content-table values written as
    literals), active hooks and patches, each of which must apply exactly once;
@@ -103,8 +105,10 @@ def relocate(text: str, rel_path: str, package: str) -> tuple[str, list[str]]:
         level = int(match.group(1))
         if level < depth:
             return match.group(0)
-        changes.append(f"relocate:anchor parents[{level}] -> hytalegym.__file__ parents[{level - depth}]")
-        return f'Path(__import__("hytalegym").__file__).resolve().parents[{level - depth}]'
+        # hytalegym/envs/__init__.py is one directory below hytalegym/__init__.py: one level more.
+        levels = level - depth + 1
+        changes.append(f"relocate:anchor parents[{level}] -> hytalegym.envs.__file__ parents[{levels}]")
+        return f'Path(__import__("hytalegym.envs", fromlist=["envs"]).__file__).resolve().parents[{levels}]'
 
     text = _FILE_ANCHOR.sub(anchor, text)
     text, count = relocate_refs(text, package)

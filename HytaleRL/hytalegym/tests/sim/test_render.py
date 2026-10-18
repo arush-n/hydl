@@ -92,7 +92,7 @@ def test_gen5_render_is_relocation_only(gen5, source):
         assert len(restored) == len(original)
         if entry["path"] == TOKENS:
             assert len(differing) == 1 and "parents[5]" in original[differing[0]]
-            assert 'Path(__import__("hytalegym").__file__).resolve().parents[2]' in restored[differing[0]]
+            assert 'Path(__import__("hytalegym.envs", fromlist=["envs"]).__file__).resolve().parents[3]' in restored[differing[0]]
         else:
             assert differing == [], entry["path"]
 
@@ -120,7 +120,7 @@ def test_relocation_rules():
     assert "import hytalegym.jax_cache_bootstrap" in text
     assert f"from {package}.combat import types" in text
     assert f"'{package}.combat.observation.v3'" in text
-    assert 'Path(__import__("hytalegym").__file__).resolve().parents[2]' in text
+    assert 'Path(__import__("hytalegym.envs", fromlist=["envs"]).__file__).resolve().parents[3]' in text
     assert "LOCAL = Path(__file__).resolve().parents[1]" in text
     assert changes[0] == "relocate:refs 2"
     with pytest.raises(R.RenderError, match="not relocatable"):

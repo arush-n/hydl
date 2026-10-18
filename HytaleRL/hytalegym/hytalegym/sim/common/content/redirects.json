@@ -1,5 +1,5 @@
 {
- "head": "4f2ecbd37695b6f1afd9792f2c7e5a04e96d8df3",
+ "head": "83fe6eb32d1fc1416e5f0f366e31c1a2dcc50917",
  "redirect_count": 90,
  "redirects": [
   {
@@ -13,6 +13,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
    "status": "uncommitted",
    "symbol": "PLAYER_JUMP_FORCE",
+   "symbol_kind": null,
    "target": "PLAYER_JUMP_FORCE",
    "worktree_line": 79
   },
@@ -27,6 +28,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
    "status": "uncommitted",
    "symbol": "PLAYER_VARIABLE_JUMP_FALL_FORCE",
+   "symbol_kind": null,
    "target": "PLAYER_VARIABLE_JUMP_FALL_FORCE",
    "worktree_line": 83
   },
@@ -41,6 +43,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
    "status": "uncommitted",
    "symbol": "PLAYER_BASE_SPEED",
+   "symbol_kind": null,
    "target": "PLAYER_BASE_SPEED",
    "worktree_line": 89
   },
@@ -55,6 +58,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
    "status": "uncommitted",
    "symbol": "PLAYER_GAIT_SPEED_MULTIPLIERS",
+   "symbol_kind": null,
    "target": "PLAYER_GAIT_SPEED_MULTIPLIERS",
    "worktree_line": 100
   },
@@ -69,6 +73,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
    "status": "uncommitted",
    "symbol": "PLAYER_GAIT_FORWARD_SPEED_MULTIPLIERS",
+   "symbol_kind": null,
    "target": "PLAYER_GAIT_FORWARD_SPEED_MULTIPLIERS",
    "worktree_line": 113
   },
@@ -83,6 +88,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
    "status": "uncommitted",
    "symbol": "PLAYER_GAIT_BACKWARD_SPEED_MULTIPLIERS",
+   "symbol_kind": null,
    "target": "PLAYER_GAIT_BACKWARD_SPEED_MULTIPLIERS",
    "worktree_line": 114
   },
@@ -97,6 +103,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
    "status": "uncommitted",
    "symbol": "PLAYER_GAIT_STRAFE_SPEED_MULTIPLIERS",
+   "symbol_kind": null,
    "target": "PLAYER_GAIT_STRAFE_SPEED_MULTIPLIERS",
    "worktree_line": 115
   },
@@ -111,6 +118,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
    "status": "uncommitted",
    "symbol": "PLAYER_AIR_DRAG_MIN",
+   "symbol_kind": null,
    "target": "PLAYER_AIR_DRAG_MIN",
    "worktree_line": 150
   },
@@ -125,6 +133,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
    "status": "uncommitted",
    "symbol": "PLAYER_AIR_DRAG_MAX",
+   "symbol_kind": null,
    "target": "PLAYER_AIR_DRAG_MAX",
    "worktree_line": 151
   },
@@ -139,6 +148,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
    "status": "uncommitted",
    "symbol": "PLAYER_AIR_DRAG_MIN_SPEED",
+   "symbol_kind": null,
    "target": "PLAYER_AIR_DRAG_MIN_SPEED",
    "worktree_line": 152
   },
@@ -153,6 +163,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
    "status": "uncommitted",
    "symbol": "PLAYER_AIR_DRAG_MAX_SPEED",
+   "symbol_kind": null,
    "target": "PLAYER_AIR_DRAG_MAX_SPEED",
    "worktree_line": 153
   },
@@ -167,6 +178,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
    "status": "uncommitted",
    "symbol": "PLAYER_AIR_CONTROL_MIN_SPEED",
+   "symbol_kind": null,
    "target": "PLAYER_AIR_CONTROL_MIN_SPEED",
    "worktree_line": 157
   },
@@ -181,6 +193,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
    "status": "uncommitted",
    "symbol": "PLAYER_AIR_CONTROL_MAX_SPEED",
+   "symbol_kind": null,
    "target": "PLAYER_AIR_CONTROL_MAX_SPEED",
    "worktree_line": 158
   },
@@ -195,6 +208,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
    "status": "uncommitted",
    "symbol": "PLAYER_AIR_CONTROL_MIN_MULTIPLIER",
+   "symbol_kind": null,
    "target": "PLAYER_AIR_CONTROL_MIN_MULTIPLIER",
    "worktree_line": 159
   },
@@ -209,6 +223,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
    "status": "uncommitted",
    "symbol": "PLAYER_AIR_CONTROL_MAX_MULTIPLIER",
+   "symbol_kind": null,
    "target": "PLAYER_AIR_CONTROL_MAX_MULTIPLIER",
    "worktree_line": 160
   },
@@ -224,6 +239,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
    "status": "uncommitted",
    "symbol": "PLAYER_STAMINA_MAXIMUM",
+   "symbol_kind": null,
    "target": "PLAYER_STAMINA_MAXIMUM",
    "worktree_line": 194
   },
@@ -239,6 +255,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
    "status": "uncommitted",
    "symbol": "PLAYER_STAMINA_MINIMUM",
+   "symbol_kind": null,
    "target": "PLAYER_STAMINA_MINIMUM",
    "worktree_line": 195
   },
@@ -254,6 +271,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
    "status": "uncommitted",
    "symbol": "PLAYER_SPRINT_STAMINA_DRAIN_PER_SECOND",
+   "symbol_kind": null,
    "target": "PLAYER_SPRINT_STAMINA_DRAIN_PER_SECOND",
    "worktree_line": 196
   },
@@ -269,6 +287,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
    "status": "uncommitted",
    "symbol": "PLAYER_STAMINA_REGEN_PER_SECOND",
+   "symbol_kind": null,
    "target": "PLAYER_STAMINA_REGEN_PER_SECOND",
    "worktree_line": 197
   },
@@ -284,6 +303,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
    "status": "uncommitted",
    "symbol": "PLAYER_STAMINA_REGEN_DELAY_RECOVERY_PER_SECOND",
+   "symbol_kind": null,
    "target": "PLAYER_STAMINA_REGEN_DELAY_RECOVERY_PER_SECOND",
    "worktree_line": 198
   },
@@ -299,6 +319,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
    "status": "uncommitted",
    "symbol": "PLAYER_SPRINT_STAMINA_REGEN_DELAY_SECONDS",
+   "symbol_kind": null,
    "target": "PLAYER_SPRINT_STAMINA_REGEN_DELAY_SECONDS",
    "worktree_line": 199
   },
@@ -314,6 +335,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/types.py",
    "status": "uncommitted",
    "symbol": "PLAYER_BROKEN_STAMINA_REGEN_DELAY_SECONDS",
+   "symbol_kind": null,
    "target": "PLAYER_BROKEN_STAMINA_REGEN_DELAY_SECONDS",
    "worktree_line": 200
   },
@@ -329,6 +351,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "STAMINA_MINIMUM",
+   "symbol_kind": null,
    "target": "STAMINA_MINIMUM",
    "worktree_line": 123
   },
@@ -344,6 +367,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "STAMINA_MAXIMUM",
+   "symbol_kind": null,
    "target": "STAMINA_MAXIMUM",
    "worktree_line": 124
   },
@@ -359,6 +383,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "STAMINA_REGEN_AMOUNT",
+   "symbol_kind": null,
    "target": "STAMINA_REGEN_AMOUNT",
    "worktree_line": 125
   },
@@ -374,6 +399,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "STAMINA_REGEN_INTERVAL_SECONDS",
+   "symbol_kind": null,
    "target": "STAMINA_REGEN_INTERVAL_SECONDS",
    "worktree_line": 126
   },
@@ -389,6 +415,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "STAMINA_REGEN_DELAY_AMOUNT",
+   "symbol_kind": null,
    "target": "STAMINA_REGEN_DELAY_AMOUNT",
    "worktree_line": 127
   },
@@ -404,6 +431,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "STAMINA_REGEN_DELAY_INTERVAL_SECONDS",
+   "symbol_kind": null,
    "target": "STAMINA_REGEN_DELAY_INTERVAL_SECONDS",
    "worktree_line": 128
   },
@@ -419,6 +447,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "STAMINA_BROKEN_REGEN_DELAY_SECONDS",
+   "symbol_kind": null,
    "target": "STAMINA_BROKEN_REGEN_DELAY_SECONDS",
    "worktree_line": 129
   },
@@ -434,6 +463,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "OXYGEN_MINIMUM",
+   "symbol_kind": null,
    "target": "OXYGEN_MINIMUM",
    "worktree_line": 135
   },
@@ -449,6 +479,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "OXYGEN_MAXIMUM",
+   "symbol_kind": null,
    "target": "OXYGEN_MAXIMUM",
    "worktree_line": 136
   },
@@ -464,6 +495,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "OXYGEN_BREATHABLE_REGEN_AMOUNT",
+   "symbol_kind": null,
    "target": "OXYGEN_BREATHABLE_REGEN_AMOUNT",
    "worktree_line": 137
   },
@@ -479,6 +511,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "OXYGEN_SUFFOCATING_REGEN_AMOUNT",
+   "symbol_kind": null,
    "target": "OXYGEN_SUFFOCATING_REGEN_AMOUNT",
    "worktree_line": 138
   },
@@ -494,6 +527,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "OXYGEN_REGEN_INTERVAL_SECONDS",
+   "symbol_kind": null,
    "target": "OXYGEN_REGEN_INTERVAL_SECONDS",
    "worktree_line": 139
   },
@@ -507,6 +541,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "CONTROL_IMMUNITY_MAXIMUM",
+   "symbol_kind": null,
    "target": "CONTROL_IMMUNITY_MAXIMUM",
    "worktree_line": 191
   },
@@ -520,6 +555,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "CONTROL_IMMUNITY_REGEN_AMOUNT",
+   "symbol_kind": null,
    "target": "CONTROL_IMMUNITY_REGEN_AMOUNT",
    "worktree_line": 193
   },
@@ -533,6 +569,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "CONTROL_IMMUNITY_REGEN_INTERVAL_SECONDS",
+   "symbol_kind": null,
    "target": "CONTROL_IMMUNITY_REGEN_INTERVAL_SECONDS",
    "worktree_line": 194
   },
@@ -548,6 +585,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "DODGE_AUTHORED_ACTION_MASK",
+   "symbol_kind": null,
    "target": "DODGE_AUTHORED_ACTION_MASK",
    "worktree_line": 81
   },
@@ -563,6 +601,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "DODGE_STAMINA_ADMISSION_COST",
+   "symbol_kind": null,
    "target": "DODGE_STAMINA_ADMISSION_COST",
    "worktree_line": 164
   },
@@ -578,6 +617,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "DODGE_STAMINA_SPEND_COST",
+   "symbol_kind": null,
    "target": "DODGE_STAMINA_SPEND_COST",
    "worktree_line": 165
   },
@@ -593,6 +633,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "DODGE_FORCE",
+   "symbol_kind": null,
    "target": "DODGE_FORCE",
    "worktree_line": 171
   },
@@ -608,6 +649,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "DODGE_INVULNERABILITY_SECONDS",
+   "symbol_kind": null,
    "target": "DODGE_INVULNERABILITY_SECONDS",
    "worktree_line": 172
   },
@@ -623,6 +665,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "DODGE_REGEN_DELAY_SECONDS",
+   "symbol_kind": null,
    "target": "DODGE_REGEN_DELAY_SECONDS",
    "worktree_line": 178
   },
@@ -638,6 +681,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "DODGE_AIR_RESISTANCE",
+   "symbol_kind": null,
    "target": "DODGE_AIR_RESISTANCE",
    "worktree_line": 179
   },
@@ -653,6 +697,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "DODGE_AIR_RESISTANCE_MAX",
+   "symbol_kind": null,
    "target": "DODGE_AIR_RESISTANCE_MAX",
    "worktree_line": 180
   },
@@ -668,6 +713,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "DODGE_GROUND_RESISTANCE",
+   "symbol_kind": null,
    "target": "DODGE_GROUND_RESISTANCE",
    "worktree_line": 181
   },
@@ -683,6 +729,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "DODGE_GROUND_RESISTANCE_MAX",
+   "symbol_kind": null,
    "target": "DODGE_GROUND_RESISTANCE_MAX",
    "worktree_line": 182
   },
@@ -698,6 +745,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/schema/contract.py",
    "status": "clean",
    "symbol": "DODGE_RESISTANCE_THRESHOLD",
+   "symbol_kind": null,
    "target": "DODGE_RESISTANCE_THRESHOLD",
    "worktree_line": 183
   },
@@ -712,6 +760,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/factory.py",
    "status": "clean",
    "symbol": "mana_maximum: float",
+   "symbol_kind": null,
    "target": "mana_maximum default",
    "worktree_line": 86
   },
@@ -726,6 +775,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/factory.py",
    "status": "clean",
    "symbol": "regen_interval.at[..., RESOURCE_MANA]",
+   "symbol_kind": "text",
    "target": "mana regen 1.0 / 0.2 s",
    "worktree_line": 134
   },
@@ -740,6 +790,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/mechanics/factory.py",
    "status": "clean",
    "symbol": "regen_interval.at[..., RESOURCE_MAGIC_CHARGES]",
+   "symbol_kind": "text",
    "target": "magic charges regen 1.0 / 2.0 s",
    "worktree_line": 136
   },
@@ -752,7 +803,8 @@
    "kind": "inline_literal",
    "module": "HytaleRL/hytalegym/hytalegym/jax/world/entities/locomotion.py",
    "status": "clean",
-   "symbol": "installed_default_forward_multiplier",
+   "symbol": "1.273",
+   "symbol_kind": "numeric_literal",
    "target": "installed_default_forward_multiplier",
    "worktree_line": 177
   },
@@ -766,6 +818,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/rulesets/hytale_0_5_7/kweebec_razorleaf_vs_trork_brawler_v9.json",
    "status": "clean",
    "symbol": "\"regeneration\"",
+   "symbol_kind": null,
    "target": "regeneration block",
    "worktree_line": 234
   },
@@ -781,6 +834,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/rulesets/hytale_0_5_7/kweebec_razorleaf_vs_trork_brawler_v9.json",
    "status": "clean",
    "symbol": "\"max_health\"",
+   "symbol_kind": null,
    "target": "agent/target explicit asset fields",
    "worktree_line": 26
   },
@@ -794,6 +848,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/assets/hytale_0_5_7_item_programs_v1.json",
    "status": "clean",
    "symbol": "\"weapon_items\"",
+   "symbol_kind": null,
    "target": "weapon_items (143 rows)",
    "worktree_line": 15
   },
@@ -807,6 +862,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/combat/assets/weapon_variants/hytale_0_5_7.py",
    "status": "clean",
    "symbol": "_ROWS = (",
+   "symbol_kind": null,
    "target": "SCALAR_VARIANTS _ROWS",
    "worktree_line": 27
   },
@@ -820,6 +876,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/profiles/hytale_0_5_7.py",
    "status": "clean",
    "symbol": "def _iron_sword(",
+   "symbol_kind": null,
    "target": "_iron_sword defaults",
    "worktree_line": 2055
   },
@@ -833,6 +890,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/profiles/hytale_0_5_7.py",
    "status": "clean",
    "symbol": "def _iron_mace(",
+   "symbol_kind": null,
    "target": "_iron_mace defaults",
    "worktree_line": 2210
   },
@@ -846,6 +904,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/profiles/hytale_0_5_7.py",
    "status": "clean",
    "symbol": "def _iron_battleaxe(",
+   "symbol_kind": null,
    "target": "_iron_battleaxe defaults",
    "worktree_line": 2339
   },
@@ -859,6 +918,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/profiles/hytale_0_5_7.py",
    "status": "clean",
    "symbol": "def _iron_daggers(",
+   "symbol_kind": null,
    "target": "_iron_daggers defaults",
    "worktree_line": 2518
   },
@@ -872,6 +932,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/profiles/hytale_0_5_7.py",
    "status": "clean",
    "symbol": "def _iron_shortbow(",
+   "symbol_kind": null,
    "target": "_iron_shortbow defaults",
    "worktree_line": 2614
   },
@@ -885,6 +946,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/profiles/hytale_0_5_7.py",
    "status": "clean",
    "symbol": "def _iron_crossbow(",
+   "symbol_kind": null,
    "target": "_iron_crossbow defaults",
    "worktree_line": 2787
   },
@@ -898,6 +960,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/profiles/hytale_0_5_7.py",
    "status": "clean",
    "symbol": "push = (0.0, 1.0, -1.0, 6.0)",
+   "symbol_kind": "text",
    "target": "sword melee force tuples",
    "worktree_line": 2064
   },
@@ -911,6 +974,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/profiles/hytale_0_5_7.py",
    "status": "clean",
    "symbol": "_SWORD_SWING_LEFT_SELECTOR = ",
+   "symbol_kind": null,
    "target": "_SWORD_SWING_LEFT_SELECTOR",
    "worktree_line": 1981
   },
@@ -924,6 +988,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/profiles/hytale_0_5_7.py",
    "status": "clean",
    "symbol": "_SWORD_SWING_RIGHT_SELECTOR = ",
+   "symbol_kind": null,
    "target": "_SWORD_SWING_RIGHT_SELECTOR",
    "worktree_line": 1984
   },
@@ -937,6 +1002,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/profiles/hytale_0_5_7.py",
    "status": "clean",
    "symbol": "_SWORD_SWING_DOWN_SELECTOR = ",
+   "symbol_kind": null,
    "target": "_SWORD_SWING_DOWN_SELECTOR",
    "worktree_line": 1987
   },
@@ -950,6 +1016,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/profiles/hytale_0_5_7.py",
    "status": "clean",
    "symbol": "_SWORD_VORTEX_SPIN_SELECTOR = ",
+   "symbol_kind": null,
    "target": "_SWORD_VORTEX_SPIN_SELECTOR",
    "worktree_line": 1993
   },
@@ -963,6 +1030,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/profiles/hytale_0_5_7.py",
    "status": "clean",
    "symbol": "_SWORD_THRUST_SELECTOR = ",
+   "symbol_kind": null,
    "target": "_SWORD_THRUST_SELECTOR",
    "worktree_line": 1999
   },
@@ -976,6 +1044,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/profiles/hytale_0_5_7.py",
    "status": "clean",
    "symbol": "_SWORD_VORTEX_STAB_SELECTOR = ",
+   "symbol_kind": null,
    "target": "_SWORD_VORTEX_STAB_SELECTOR",
    "worktree_line": 2011
   },
@@ -992,6 +1061,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/profiles/hytale_0_5_7.py",
    "status": "clean",
    "symbol": "_NESTED_OUTER_GATE_SECONDS = ",
+   "symbol_kind": null,
    "target": "_NESTED_OUTER_GATE_SECONDS",
    "worktree_line": 2039
   },
@@ -1008,6 +1078,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/profiles/hytale_0_5_7.py",
    "status": "clean",
    "symbol": "_SWORD_THRUST_HOLD_SECONDS = ",
+   "symbol_kind": null,
    "target": "_SWORD_THRUST_HOLD_SECONDS",
    "worktree_line": 2040
   },
@@ -1024,6 +1095,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/profiles/hytale_0_5_7.py",
    "status": "clean",
    "symbol": "_DOWNSTRIKE_HOLD_SECONDS = ",
+   "symbol_kind": null,
    "target": "_DOWNSTRIKE_HOLD_SECONDS",
    "worktree_line": 2044
   },
@@ -1040,6 +1112,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/profiles/hytale_0_5_7.py",
    "status": "clean",
    "symbol": "_MACE_CHARGED_HOLD_SECONDS = ",
+   "symbol_kind": null,
    "target": "_MACE_CHARGED_HOLD_SECONDS",
    "worktree_line": 2207
   },
@@ -1056,6 +1129,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/profiles/hytale_0_5_7.py",
    "status": "clean",
    "symbol": "charge_thresholds = (0.1, 0.3, 0.6, 0.9, 1.2)",
+   "symbol_kind": "text",
    "target": "shortbow draw ladder",
    "worktree_line": 2623
   },
@@ -1070,6 +1144,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/profiles/hytale_0_5_7.py",
    "status": "clean",
    "symbol": "\"adamantite_spear\": partial(",
+   "symbol_kind": "text",
    "target": "standard spear partials",
    "worktree_line": 4920
   },
@@ -1086,6 +1161,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/profiles/hytale_0_5_7.py",
    "status": "clean",
    "symbol": "def _potions(",
+   "symbol_kind": "text",
    "target": "_potions values",
    "worktree_line": 3297
   },
@@ -1100,6 +1176,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/effects/schema/contract.py",
    "status": "clean",
    "symbol": "OUTLANDER_ARROW_MODEL_HALF_EXTENT",
+   "symbol_kind": null,
    "target": "OUTLANDER_ARROW_MODEL_HALF_EXTENT",
    "worktree_line": 39
   },
@@ -1114,6 +1191,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/effects/schema/contract.py",
    "status": "clean",
    "symbol": "OUTLANDER_ARROW_MUZZLE_VELOCITY",
+   "symbol_kind": null,
    "target": "OUTLANDER_ARROW_MUZZLE_VELOCITY",
    "worktree_line": 40
   },
@@ -1128,6 +1206,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/effects/schema/contract.py",
    "status": "clean",
    "symbol": "OUTLANDER_ARROW_TERMINAL_VELOCITY",
+   "symbol_kind": null,
    "target": "OUTLANDER_ARROW_TERMINAL_VELOCITY",
    "worktree_line": 41
   },
@@ -1142,6 +1221,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/effects/schema/contract.py",
    "status": "clean",
    "symbol": "OUTLANDER_ARROW_GRAVITY",
+   "symbol_kind": null,
    "target": "OUTLANDER_ARROW_GRAVITY",
    "worktree_line": 42
   },
@@ -1156,6 +1236,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/effects/schema/contract.py",
    "status": "clean",
    "symbol": "OUTLANDER_ARROW_DAMAGE",
+   "symbol_kind": null,
    "target": "OUTLANDER_ARROW_DAMAGE",
    "worktree_line": 43
   },
@@ -1170,6 +1251,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/effects/schema/contract.py",
    "status": "clean",
    "symbol": "OUTLANDER_ARROW_DEAD_TIME_SECONDS",
+   "symbol_kind": null,
    "target": "OUTLANDER_ARROW_DEAD_TIME_SECONDS",
    "worktree_line": 44
   },
@@ -1184,6 +1266,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/effects/schema/contract.py",
    "status": "clean",
    "symbol": "OUTLANDER_ARROW_AUTHORED_LIFETIME_SECONDS",
+   "symbol_kind": null,
    "target": "OUTLANDER_ARROW_AUTHORED_LIFETIME_SECONDS",
    "worktree_line": 45
   },
@@ -1198,6 +1281,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/effects/schema/contract.py",
    "status": "clean",
    "symbol": "OUTLANDER_ARROW_DEPTH_OFFSET",
+   "symbol_kind": null,
    "target": "OUTLANDER_ARROW_DEPTH_OFFSET",
    "worktree_line": 47
   },
@@ -1212,6 +1296,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/combat/effects/schema/contract.py",
    "status": "clean",
    "symbol": "OUTLANDER_ARROW_VERTICAL_OFFSET",
+   "symbol_kind": null,
    "target": "OUTLANDER_ARROW_VERTICAL_OFFSET",
    "worktree_line": 48
   },
@@ -1225,6 +1310,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/crafting/contract.py",
    "status": "clean",
    "symbol": "RECIPE_TABLE_CAPACITY = ",
+   "symbol_kind": null,
    "target": "RECIPE_TABLE_CAPACITY",
    "worktree_line": 15
   },
@@ -1238,6 +1324,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/crafting/contract.py",
    "status": "clean",
    "symbol": "MAX_INGREDIENTS = ",
+   "symbol_kind": null,
    "target": "MAX_INGREDIENTS",
    "worktree_line": 17
   },
@@ -1251,6 +1338,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/crafting/contract.py",
    "status": "clean",
    "symbol": "MAX_OUTPUTS = ",
+   "symbol_kind": null,
    "target": "MAX_OUTPUTS",
    "worktree_line": 19
   },
@@ -1264,6 +1352,7 @@
    "module": "HytaleRL/hytalegym/hytalegym/jax/crafting/contract.py",
    "status": "clean",
    "symbol": "MAX_BENCH_REQUIREMENTS = ",
+   "symbol_kind": null,
    "target": "MAX_BENCH_REQUIREMENTS",
    "worktree_line": 21
   },
@@ -1277,6 +1366,7 @@
    "module": "HytaleRL/hytalegym/tests/fidelity/fixtures/world/native_crafting_catalog_recording.json",
    "status": "absent_in_head",
    "symbol": "\"recipes\"",
+   "symbol_kind": null,
    "target": "native crafting catalog (1947 recipes)",
    "worktree_line": 14
   }

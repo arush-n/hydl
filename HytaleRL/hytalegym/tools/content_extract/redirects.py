@@ -44,6 +44,21 @@ def _line(text: str | None, symbol: str, kind: str) -> int | None:
     return None
 
 
+def _symbol_kind(kind: str, symbol: str) -> str | None:
+    """An inline literal names its value token (``1.273``) or code text; a dictionary key is neither.
+
+    Records whose symbol is text cannot be checked by value; they stay todo until a value check is added
+    (sim/common/SKILL.md, 2026-10-18).
+    """
+    if kind != "inline_literal":
+        return None
+    try:
+        float(symbol)
+    except ValueError:
+        return "text"
+    return "numeric_literal"
+
+
 def _repo_path(module_path: str) -> str:
     return str(Path(PACKAGE_PREFIX + module_path).as_posix()).replace(
         "hytalegym/hytalegym/../tests/", "hytalegym/tests/"
@@ -80,6 +95,7 @@ def build(repo: str | Path) -> dict:
                 "module": path,
                 "symbol": entry.symbol,
                 "kind": entry.kind,
+                "symbol_kind": _symbol_kind(entry.kind, entry.symbol),
                 "head_line": _line(head_cache[path], entry.symbol, entry.kind),
                 "worktree_line": _line(working, entry.symbol, entry.kind),
                 "status": state,

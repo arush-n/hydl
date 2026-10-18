@@ -56,19 +56,7 @@ CONTENT_ROWS, UNREACHABLE_RECORDS = swap_plan_redirects(_SWAP_PLAN, status="todo
 #: render the same numbers today and make the table the source for later versions.
 LOCOMOTION_ADAPTERS = ("player_locomotion", "walk_steering_sprint_multiplier")
 
-def _sprint_value_row(row: Redirect) -> Redirect:
-    """The swap plan's record for walk_steering_sprint_multiplier names the dict KEY text
-    "installed_default_forward_multiplier" on locomotion.py:177; the value is the literal 1.273 on
-    that line. Re-target the value (found 2026-10-18 when the render rewrote the key). The swap
-    plan generator should record the value token for inline literals (content agent)."""
-    if row.line != 177 or row.expression != "installed_default_forward_multiplier":
-        raise ValueError(f"unexpected sprint record: {row.line} {row.expression!r}")
-    return replace(row, expression="1.273")
-
-CONTENT_LOCOMOTION = tuple(
-    replace(_sprint_value_row(r) if r.row == "walk_steering_sprint_multiplier" else r, status="active")
-    for r in CONTENT_ROWS if r.row in LOCOMOTION_ADAPTERS
-)
+CONTENT_LOCOMOTION = tuple(replace(r, status="active") for r in CONTENT_ROWS if r.row in LOCOMOTION_ADAPTERS)
 CONTENT_TODO = tuple(r for r in CONTENT_ROWS if r.row not in LOCOMOTION_ADAPTERS)
 
 _SWORD_KNOCKBACK = (
@@ -121,8 +109,8 @@ PATCHES = (
           "seeded dagger melee contact on 0.7.2 with damage exact (tests/fidelity/combat; native 5.0 vs "
           "JAX 3.0 on bronze daggers in the fidelity run)",
           "Iron template only (Weapon_Daggers_Iron Swing_Left/Right 4 -> 6). Mithril (8 -> 12) and the "
-          "other materials are rows of hytalegym/combat/assets/weapon_variants/hytale_0_5_7.py, a shared "
-          "module outside the rendered package: content redirect, not patchable here"),
+          "other materials are rows of hytalegym/combat/assets/weapon_variants/hytale_0_5_7.py (a shared "
+          "module outside the rendered package): their swings come from the hook dagger_swing_damage (5c, phase 4)"),
     _guard_root("sword", 20),
     _guard_root("mace", 8),
     _guard_root("battleaxe", 9),
@@ -147,7 +135,38 @@ PATCHES = (
           "PLAYER_MAX_WALL_ANGLE_DEGREES = 15.0\n",
           "1d", "a new stairs/slope bridge fixture and the motion differential (<= 5e-4 m per step)",
           "new parameters only: the 0.7.2 server reads neither key (2026-10-18 scan of 38,436 classes: "
-          "MovementConfig and MovementSettings only); slope_limits stays a stub pending the owner's decision"),
+          "MovementConfig and MovementSettings only); decided 2026-10-18: slope_limits False in the gen-7 profile, "
+          "matching gen 5 on this field (phase 3b)"),
+    Patch("perception_detail_hitbox_los", "world/perception/los.py",
+          "            opaque = (\n"
+          "                (selected.flags & jnp.int32(FLAG_OPAQUE)) != 0\n"
+          "            ) | selected.role_opaque\n"
+          "            terminal_here = _reached(cell, terminal)\n",
+          "            opaque = (\n"
+          "                (selected.flags & jnp.int32(FLAG_OPAQUE)) != 0\n"
+          "            ) | selected.role_opaque\n"
+          "            # 0.7.2 detail hitboxes (FIDELITY 2b): an opaque cell that carries detail boxes occludes\n"
+          "            # only where the ray meets one of them; a cell without boxes keeps the gen-5 rule.\n"
+          "            relative_cell = (cell - start_block).astype(jnp.float32)\n"
+          "            detail_boxes = selected.collision_boxes + jnp.concatenate(\n"
+          "                (relative_cell, relative_cell),\n"
+          "                axis=1,\n"
+          "            )[:, None, :]\n"
+          "            detail_hit = _segment_intersects_closed_boxes(\n"
+          "                start_fraction[:, None, :],\n"
+          "                relative_end[:, None, :],\n"
+          "                detail_boxes,\n"
+          "            )\n"
+          "            opaque = opaque & (\n"
+          "                ~jnp.any(selected.collision_box_mask, axis=1)\n"
+          "                | jnp.any(detail_hit & selected.collision_box_mask, axis=1)\n"
+          "            )\n"
+          "            terminal_here = _reached(cell, terminal)\n",
+          "2b",
+          "perception LOS probe on the live 0.7.2 bridge (full-cube fixtures: los_wall, diagonal graze, diagonal block) "
+          "against native target_los; partial-box rays unmeasured (no fixture)",
+          "the production perception opacity walk (jax/world/perception/los.py, visit) under the detail rule; the "
+          "gen-5 walk is unchanged; cells without detail boxes keep the gen-5 opacity rule"),
     Patch("crafting_table_capacity", "crafting/contract.py",
           "# Installed 0.5.7 has 403 explicit plus 1,544 item-generated recipes.\n"
           "RECIPE_TABLE_CAPACITY = 1947\n",
@@ -182,6 +201,18 @@ HOOKS = (
          "full-cube rays (native_geometry_compare probes: los_wall, diagonal graze and block) must still "
          "agree; a partial-box ray that the bridge can place is NOT available (no slab fixture aims through "
          "the empty half of Rock_Stone_Half; status open)"),
+    Hook("npc_walk_jump_velocity", "combat/types.py", "default_combat_params",
+         f"{_MECHANICS}.npc_jump:construct", "npc_walk_jump_velocity", "active", "1c",
+         "native_motion_differential --jump-steps 1 on the gen-7 render against the live 0.7.2 bridge "
+         "(max position error <= 5e-4 m per step): first step exact; the bar is NOT met (residual is F1c, "
+         "previous-tick gravity), row 1c stays MISMATCH",
+         "npc_walk only: the player model keeps PLAYER_JUMP_FORCE 11.8; gen 5 keeps player_force"),
+    Hook("dagger_swing_damage", PROFILE_JAX, "_scalar_variant_profile",
+         f"{_MECHANICS}.dagger_damage:construct", "dagger_swing_damage", "active", "5c",
+         "scalar dagger variants (15 materials) against the 0.7.2 item rows: JAX swing tuple equals the table, "
+         "and a seeded bronze-dagger contact on the live bridge (native 5.0; tests/fidelity)",
+         "Swing_Left and Swing_Right per material; the other direct values and the angled values are unchanged; "
+         "Void_Crystal is in the 0.7.2 table but has no simulator variant row (not modelled)"),
     Hook("dodge_action_head", "combat/observation/v3/policy/layout.py", "split_locomotion_choice",
          f"{_MECHANICS}.dodge:construct", "dodge_action_head", "stub", "9",
          "test_native_policy_dodge_boundary_matches_advertised_capability and "

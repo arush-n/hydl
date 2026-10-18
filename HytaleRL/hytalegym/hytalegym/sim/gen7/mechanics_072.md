@@ -22,12 +22,14 @@ by `tests/sim/test_constructs.py`).
 | Hookshot (`hookshot.py`) | `hookshot`: False -> True | Tool_Hookshot fires, attaches and pulls; Rune_ChainHook casts a chain hook | `weapons/item:Tool_Hookshot` and its graph; `weapons/projectile_config:Projectile_Config_Hookshot`, `Projectile_Config_ChainHook`; `weapons/interaction:Ability_ChainHook_Cast`, `_Hit` | fire, attach, pull distance and timing (catalogue: chain hook to 1.5) | P3, on demand |
 | Dodge action head (`dodge.py`) | `dodge_action_head`: (left, right, forward, back) -> (left, right) | Nothing new: the seven dodge assets are identical in 0.5.10 and 0.7.2 and the engine already executes left/right only (`DODGE_AUTHORED_ACTION_MASK`); only the policy head shrinks | `weapons/interaction:Dodge#document` (only Left/Right branch to a chain), `Dodge_Left`/`Dodge_Right` (cost 2, force 13 Set, regen delay Set -0.7), `weapons/effect:Dodge_Invulnerability#duration` 0.25 | existing dodge boundary tests on 0.7.2 (F9 MATCH) | P3 |
 | Line of sight (`line_of_sight.py`) | `line_of_sight`: non_transparent_blocks -> detail_hitbox | A non-transparent block occludes only where the ray hits one of its detail hitboxes (0.7.2 `PositionCache`); full cubes agree (F2a) | `blocks/block:*#opacity,hitbox_type`; `blocks/hitbox:*#boxes`; cell rotation from the Region capture | occlusion fixture with slabs, stairs, fences: every ray agrees (F2b); then the catch rule and the `hidden` opening | P2 |
-| Slope and wall limits (`slope_limits.py`) | `slope_limits`: False -> True | `MaxSlopeAngleDegrees` 30, `MaxWallAngleDegrees` 15 (new keys) | `movement/config:Default#fields.MaxSlopeAngleDegrees,fields.MaxWallAngleDegrees` | slope fixture, <= 5e-4 m per step (F1d) | P2 |
+| Slope and wall limits (`slope_limits.py`) | `slope_limits`: False -> False (decided 2026-10-18) | `MaxSlopeAngleDegrees` 30, `MaxWallAngleDegrees` 15 (new keys) with no 0.7.2 reader (jar scan: `MovementConfig` and `MovementSettings` only) | `movement/config:Default#fields.MaxSlopeAngleDegrees,fields.MaxWallAngleDegrees` (rendered as data) | none while no reader exists; a slope fixture (<= 5e-4 m per step, F1d) only if a reader is found | P2 |
 | Walk descent (`walk_descent.py`) | `walk_descent`: free_fall -> minimum_descent_rate | 0.7.2 walk controller forces a minimum descent rate when descending (code) | none (engine code) | stairs/ledge/slope fixture extending `adk/tools/native_motion_differential.py`, <= 5e-4 m per step (F1e) | P2 |
 | Climbing (`climbing.py`) | `climbing`: False -> True | Climb on `IsClimbable` blocks (present in 0.5.10 too; the gen-5 engine never models it) | `blocks/block:*#climbable` (57 resolved types; 44 files author the key); `movement/config:Default#fields.ClimbSpeed,ClimbSpeedLateral,ClimbUpSprintSpeed,ClimbDownSprintSpeed` | ladder fixture: up, down, lateral speeds (F10a) | after P2 |
 | Gliding (`gliding.py`) | `gliding`: False -> True | Glider item (0.7.2 `Glider_Scrap`) | `weapons/item:Glider_Scrap`; `stats/stat:GlidingActive`; `stats/stat:Stamina` Gliding drain rule | glide speed, fall rate, stamina (catalogue 10, <= 2/s, 1/s) (F10d) | on demand |
 | Riding (`riding.py`) | `riding`: False -> True | Mounts (`MovementConfig/Mount.json` new in 0.7.2) | `movement/config:Mount#fields`; mount roles in `npc_roles` | rider speed, sprint, jump (catalogue 8, 13.2, 14) (F10e) | on demand |
 | NPC set-velocity (`npc_velocity.py`) | `npc_velocity_model`: zero_then_add -> role_set_velocity | `Role.processSetVelocityInstruction` applies one set velocity (~23x for set-type NPC knockback); never reaches the bridge-driven agent | none (engine code) | NPC-on-NPC knockback displacement | P3 |
+| Dagger swing damage (`dagger_damage.py`) | `dagger_swing_damage`: shared_rows -> gen7_table | Swing_Left and Swing_Right of every dagger material rise (Iron 4 -> 6, Bronze 3 -> 5, Mithril 8 -> 12, Thorium 5 -> 8, ...); the table's other direct values and the angled values are unchanged; Void_Crystal has no simulator row | `weapons/item:Weapon_Daggers_*#damage` (`Swing_Left_Damage`, `Swing_Right_Damage`, base_first) | the table check per variant and the seeded bronze-dagger contact, native 5.0 (F5c) | P3 (phase 4) |
+| NPC walk jump velocity (`npc_jump.py`) | `npc_walk_jump_velocity`: player_force -> native_npc | HEAD gives the NPC learner (`npc_walk`) the player's `PLAYER_JUMP_FORCE` 11.8 (apex 2.18 m); the 0.7.2 NPC walk controller's first jump step is 5.099 m/s = sqrt(2 x 10.0 x 1.3), the NPC motion parameters being identical to 0.5.10 (TRAINING item 6); measured 5.09901951359 on the bridge | `rulesets/hytale_0_5_7` `agent.jump_velocity_gravity_floor` 10.0 and `agent.jump_height_parameter` 1.3 (player model unchanged) | native first-step vertical speed and `native_motion_differential --jump-steps 1`, <= 5e-4 m per step (F1c) | P2 (phase 3b) |
 | Block health reset (`block_health.py`) | `block_health_reset_on_write`: False -> True | health entry dropped once health leaves (0, 1) and on any block write | none (engine rule) | mutable-block native compare re-baselined on 0.7.2 | P5 |
 
 `doors` and `swimming` keep their gen-5 models in gen 7 (`world_v0_5`, `fluidfx_v0_5`) until a 0.7.2
@@ -68,20 +70,22 @@ fidelity patch in the gen-7 overlay. Every value below is in the gen-7 tables an
   boxes. The full-cube rays agree with native on the live bridge under both rules
   (`FIDELITY-0.7.2.md` section (g), row 2a). The partial-box differential has no runnable fixture, so
   row 2b is unmeasured.
-- **Slope and wall limits (`slope_limits`): stub, owner decision.** The 0.7.2 server jar reads neither
+- **Slope and wall limits (`slope_limits`): decided 2026-10-18, switch False (phase 3b).** The 0.7.2 server jar reads neither
   `MaxSlopeAngleDegrees` nor `MaxWallAngleDegrees` (scan of 38,436 class files; the names appear only in
   `MovementConfig` and the client struct `MovementSettings`). The engine's contact normals are
-  axis-aligned, so no angle threshold can change a contact. Options for the owner: (a) set the switch to
-  False with this evidence (the gen-7 server then matches the gen-5 server on this field); (b) keep the
-  switch and accept a documented no-op; (c) measure the player body, which needs a player-client oracle
-  that the bridge does not provide.
+  axis-aligned, so no angle threshold can change a contact. Decision (owner ruling carried into phase 3b,
+  recorded 2026-10-18): option (a), the switch set False, so the gen-7 server matches the gen-5 server on
+  this field. Not taken: a documented no-op switch, and a player-body measurement (no player-client oracle
+  on the bridge).
 - **Walk descent (`minimum_descent_rate`): not hooked, premise unverified.** TRAINING-0.7.2.md item 8 states
   it from code reading; a static check of the walk controller's fall-speed method found the 0.5 min/max
   form only. The whole walk update was not checked.
 - **Step-up and climbing: no engine branch.** `jax/combat/runtime/agent.py` has no climb move. The 0.7.2
   NPC walk controller has `computeClimbMove` and `computeClimbSpeed` (javap). A 0.5 m slab is not climbed
   on either side (`half_block` probe: y 65.0 and z -0.5 after 60 steps). Stairs are unmeasured.
-- **Jump impulse (row 1c): an engine decision for every generation.** The committed NPC learner jumps with
+- **Jump impulse (row 1c): decided in phase 3b; gen 7 uses the native NPC value** behind `npc_walk_jump_velocity`
+  (`npc_jump.py`; gen 5 keeps `player_force`). The differential result is in FIDELITY-0.7.2.md (g). Earlier text:
+  The committed NPC learner jumps with
   `PLAYER_JUMP_FORCE` 11.8, where native NPCs jump with 5.099. The uncommitted working tree already uses 5.099.
   Measured on HEAD: 2.38 m error (gen 5), 2.42 m (gen 7). Not changed here.
 

@@ -48,7 +48,7 @@ redirects to `SimProfile.step_duration`; every other site reads one of those and
 2. **Relocation** (automatic, recorded per file): dotted `hytalegym.jax` references become the
    rendered package (imports, `import_module` strings; `hytalegym.jax_cache_bootstrap` is left
    alone); `Path(__file__).resolve().parents[N]` that climb out of the package are re-anchored on
-   `hytalegym.__file__` so they name the same directory (gen 5 has one: `world/tokens/__init__.py`,
+   `hytalegym.envs.__file__` (the shim `HytaleRL/hytalegym/__init__.py` shadows `hytalegym.__file__`) so they name the same directory (gen 5 has one: `world/tokens/__init__.py`,
    `parents[5]` -> the HytaleRL dir); `Path(__file__).with_name(...)` / `.parent` stay local and the
    tracked data next to rendered packages is copied (gen 5: `arsenal/assets/*.json`). Any other
    `__file__` use or `from hytalegym import jax` refuses the render.

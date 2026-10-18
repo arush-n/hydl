@@ -37,8 +37,12 @@ PROFILE = SimProfile(
         gliding=True,
         riding=True,
         npc_velocity_model="role_set_velocity",
+        npc_walk_jump_velocity="native_npc",
+        dagger_swing_damage="gen7_table",
         walk_descent="minimum_descent_rate",
-        slope_limits=True,
+        # 0.7.2 MaxSlopeAngleDegrees / MaxWallAngleDegrees have no server reader (jar scan, 2026-10-18):
+        # gen 7 matches gen 5 on this field; the two parameters stay as rendered data (decision, phase 3b).
+        slope_limits=False,
         block_health_reset_on_write=True,
     ),
     # Owner ruling 2026-10-17: the agent operates at 30 Hz; one step duration.

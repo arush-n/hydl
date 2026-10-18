@@ -24,6 +24,8 @@ CONSTRUCT_MODULES = {
     "gliding": "gliding",
     "riding": "riding",
     "npc_velocity_model": "npc_velocity",
+    "npc_walk_jump_velocity": "npc_jump",
+    "dagger_swing_damage": "dagger_damage",
     "walk_descent": "walk_descent",
     "slope_limits": "slope_limits",
     "block_health_reset_on_write": "block_health",
