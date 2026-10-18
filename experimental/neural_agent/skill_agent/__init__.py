@@ -26,4 +26,5 @@ nothing. Import the submodules:
   once per tick (``encode_contexts``) and the trained verb as a body (``VerbBody``).
 * ``sim_adapter``: the combiner's choices onto the heads a simulator implements; drops counted.
 * ``teachers``: scripted walk_to and look_at teachers over the full simulator state (the simple track).
+* ``simple_tasks``: the flat npc_walk environment with explicit spawns, walk_to and look_at goals, and run_episode.
 """

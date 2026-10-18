@@ -609,6 +609,26 @@ This is T1 and T3 of the certificate on a small sample, not the full certificate
 - Done is per tick. A head swinging through the target can be "done" for one tick (1 of 64 lanes), so a data pipeline
   needs done for k consecutive ticks.
 
+### 2.12 Flat tasks with the NPC body (`simple_tasks.py`, 2026-10-18)
+
+**What it is:**
+- `make_flat_npc_environment` builds the arsenal environment on a flat world with `npc_walk`, the body the bridge
+  drives, and explicit spawns through reset's entity form.
+- `WalkToTasks` and `LookAtTasks` sample goals with their horizons and success rules.
+- `run_episode` rolls any policy that returns the 12 factors.
+
+**Measured.** Run-forward moves at exactly 5.0 blocks/s along the body's forward vector after the ramp (the speed is
+min(5, 10 k / 30) on tick k, so it reaches 5.0 at tick 15). [test: test_sa_simple_tasks.py, 10 tests]
+
+**Two settings the defaults would get wrong:**
+- The default motion-timing band gives 0.045 s ticks on two of three profiles (gen 5's loaded tick), so the
+  environment pins profile 0, the 1/30 s tick of the 30 Hz ruling.
+- Explicit spawns compose the carry from `reset_arsenal_batch`'s entity form. At the default spawn the composed carry
+  equals the environment's own reset on all 342 leaves; other spawns are checked through the behaviour tests.
+
+**Simulator note** (passed to the simulator lane): reset sets the head to yaw 0, not to the spawn's body heading,
+despite its comment (`runtime/reset.py`:158-161). The head catches up in about 2 ticks.
+
 ## 3. For the agent building the gen-7 simulator
 
 **What you receive.** Each tick you get one choice per head per agent, in this order. A head no request
