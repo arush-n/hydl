@@ -39,6 +39,11 @@ CONSTRUCT_MODULES = {
     "crafting_bench_tier": "bench_tiers",
     "crafting_memories": "crafting_memories",
     "crafting_time": "timed_crafting",
+    "processing_benches": "processing_benches",
+    "diagram_crafting": "diagram_crafting",
+    "guard_reentry_cooldown": "guard_cooldown",
+    "ability_start_split": "ability_start_split",
+    "shortbow_reset_ammo": "shortbow_reset_ammo",
 }
 
 

@@ -302,6 +302,26 @@ release line in `worldgen/source_pin_baselines.py` and `source_pin_baselines_072
 control). Each audit's finding names the simulator work it implies (the table in (ad)); the terrain recapture stays gated on all
 eleven. Next: re-derive the claims per audit or run a live differential, the inventory row first (the likeliest false alarm).
 
+**Crafting oracle stage 5 on gen 7 (2026-10-18; FIDELITY-0.7.2.md section (ae)).** Processing benches (row 11p, construct
+`processing_benches`: a request moves the inputs and a fuel stack into per-lane bench leaves and activates; progress and fuel
+advance one recipe second per 30 ticks; the output and the inputs leave on completion; a charcoal on the second fuel item) and the
+Armory click-craft (row 11q, construct `diagram_crafting`: queued on the request tick, committed two ticks later) replay all six
+stage-5 receipts in order, fuel and seconds; the native tick counts come 2 to 15 ticks earlier under the loaded server's long
+ticks (jitter, not modelled). The render admits 1,945 recipes (1,895 commit alone; 1,754 at a fresh bench); 437 of the 447
+processing-only rows start and 433 finish in the count. Open: the live Region-step run of the executor paths (timed, processing,
+diagram), the furnace's extra start tick, tiers 2 and up, fuel exhaustion and collection (inferred), the 17 timed Armory rows.
+
+**Timing constructs, items 2 to 4 (2026-10-18; FIDELITY-0.7.2.md section (af)).** Measured with the learner-row harness on a
+private bridge (24 guard runs, kunai and iron-sword captures, the kunai charge bank, the shortbow reset rows): the guard's entry
+reopens 10 or 11 ticks after the claim on the loaded server, the kunai and iron sword claim on tick 1 and start on tick 2
+(finishing on 11 and 14), the kunai charge returns 27 to 29 ticks after its claim, the shortbow's ammo is 0 on the reset row and
+on tick 1 and 1 from tick 2. Built as three constructs behind switches with gen 5 unchanged: `guard_reentry_cooldown`
+(0.35 s from the claim at 1/30 s, reopen on R+11), `ability_start_split` (the chain starts one drain after the claim; charges
+spent and recovered on the claim, nominal 1.0 s), `shortbow_reset_ammo` (the reset row's ammo 0). Every capture ran on a
+machine at load 50 to 60 with native ticks 5 to 9 percent long, so native timers finished in fewer ticks than the exact clock
+predicts; recorded as load jitter, with the idle-machine re-measurement (#78) as the decisive check. The tick-0 head and
+body yaw are both 0 for the scenarios' spawn yaw (#75: no construct).
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the
@@ -352,7 +372,7 @@ stub. The migration, in order, each step gated:
 4. **World on 0.7.2.** Region recapture (500/500 sections), path tables, biome table, suites and
    catch-time horizons rebuilt; audit worlds re-selected and kept unseen; reset timing measured.
 5. **Verification.** Every row of the mechanic checklist (`experimental/neural_agent/skill_agent/
-   BUILD.md` section 4) reaches MATCH only through its differential receipt; the eleven source-pin
+   docs/BUILD.md` section 4) reaches MATCH only through its differential receipt; the eleven source-pin
    audits get 0.7.2 baselines (P5); `FIDELITY-0.7.2.md` is the ledger.
 6. **Cutover (P6).** The stamp changes with the ruleset bytes and the content sha; every checkpoint
    retrains on gen 7; one skill checkpoint transfers natively (`execution_valid`); the default version

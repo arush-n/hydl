@@ -29,7 +29,7 @@ Rules:
 3. **Fidelity is measured.** A mechanic is calibrated for a generation only after its native
    differential against a live server of that version passes its bar (gen 7:
    `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md`; the checklist in
-   `experimental/neural_agent/skill_agent/BUILD.md` section 4).
+   `experimental/neural_agent/skill_agent/docs/BUILD.md` section 4).
 4. **Older generations stay reproducible.** The engine with the gen-5 profile must reproduce today's
    gen-5 rollouts byte for byte before the reference code is retired; recorded evidence stays valid.
 5. **Policies retrain on a new generation** (owner decision 2026-10-17); no re-stamped carry-over.

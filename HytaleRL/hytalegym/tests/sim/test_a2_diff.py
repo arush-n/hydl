@@ -2,7 +2,7 @@
 
 Sources of the expected values: TRAINING-0.7.2.md (gameplay changes 1-10),
 FIDELITY-0.7.2.md (rows 1d, 3b, 5a-5d, 6a-6c, 7a, 8a, 8d, 9, 11) and
-skill_agent/BUILD.md section 4. The diff tool is exercised on the real data.
+skill_agent/docs/BUILD.md section 4. The diff tool is exercised on the real data.
 """
 
 from __future__ import annotations

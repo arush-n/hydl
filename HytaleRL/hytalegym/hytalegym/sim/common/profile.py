@@ -116,6 +116,24 @@ class Constructs:
     # time_seconds > 0 starts a job: inputs leave on the next tick, the output at completion, cancelled out of reach).
     # Owner: sim/gen7/mechanics/timed_crafting.py (row 11j, stage 3).
     crafting_time: str = "instant"
+    # Processing benches (Bench.Type Processing, bench type 1): "absent" (HEAD: no processing recipe is admitted) or
+    # "ticking_bench" (a request moves the recipe's inputs and fuel into the bench, which burns fuel and progresses on each
+    # world tick). Owner: sim/gen7/mechanics/processing_benches.py (row 11p, stage 5).
+    processing_benches: str = "absent"
+    # Diagram crafting (Bench.Type DiagramCrafting, bench type 2): "absent" (HEAD: a zero-time craft commits on its request
+    # tick) or "click_craft" (a zero-time craft at an in-reach Armory commits two ticks after its request). Owner:
+    # sim/gen7/mechanics/diagram_crafting.py (row 11q, stage 5).
+    diagram_crafting: str = "absent"
+    # Guard re-entry cooldown after a claim: "none" (HEAD: no cooldown) or "claim_0_35s" (gen 7: a new claim waits 0.35 s
+    # from the previous claim). Owner: sim/gen7/mechanics/guard_cooldown.py (row 5d, timing lane).
+    guard_reentry_cooldown: str = "none"
+    # Ability chain start: "claim_tick" (HEAD: the chain starts on the claim tick) or "next_drain" (gen 7: one drain after
+    # the claim; charges and their recovery stay on the claim). Owner: sim/gen7/mechanics/ability_start_split.py (row 5f,
+    # timing lane).
+    ability_start_split: str = "claim_tick"
+    # Shortbow reset ammo: "loadout_one" (HEAD: RESOURCE_AMMO starts at 1) or "native_zero" (gen 7: starts at 0). Owner:
+    # sim/gen7/mechanics/shortbow_reset_ammo.py (row 5f, timing lane).
+    shortbow_reset_ammo: str = "loadout_one"
 
 
 @dataclass(frozen=True)

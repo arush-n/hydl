@@ -123,11 +123,23 @@ def _check_slots(combat: Any, inventory: Any) -> None:
         )
 
 
+def processing_recipe(jnp: Any, table: Any, index: Any) -> Any:
+    """Lanes whose recipe requires a processing bench (requirement bench type 1). processing_benches.py owns those recipes.
+
+    The 0.7.2 catalog has no recipe that mixes a processing requirement with another bench type (manifest, 2026-10-18), so one
+    type-1 requirement classifies the recipe.
+    """
+
+    safe = jnp.clip(index, 0, table.requirement_mask.shape[0] - 1)
+    rows = jnp.take(table.requirement_mask & (table.requirement_bench_type == 1), safe, axis=0)
+    return (index >= 0) & jnp.any(rows, axis=-1)
+
+
 def timed_recipe(jnp: Any, table: Any, index: Any) -> Any:
-    """Lanes whose requested recipe has a positive time (``index`` -1 is not a recipe)."""
+    """Lanes whose requested recipe has a positive time and is not a processing recipe (``index`` -1 is not a recipe)."""
 
     safe = jnp.clip(index, 0, table.time_seconds.shape[0] - 1)
-    return (index >= 0) & (jnp.take(table.time_seconds, safe) > 0.0)
+    return (index >= 0) & (jnp.take(table.time_seconds, safe) > 0.0) & ~processing_recipe(jnp, table, index)
 
 
 def admission(original: Any, profile: Any) -> Any:

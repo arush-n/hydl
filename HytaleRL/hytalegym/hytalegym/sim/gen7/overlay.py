@@ -228,6 +228,20 @@ _TIMED_CRAFTING = (
     "the fieldcraft refusal; the queue depth of one; the gen-5 original"
 )
 
+_PROCESSING = (
+    "tests/sim/test_processing_benches.py: the Campfire and Furnace receipts (FIDELITY-0.7.2.md section (v), seeds 570057 and 31337) "
+    "replayed on the gen-7 render: the request takes the inputs and the fuel stack from the inventory; the first progress tick is "
+    "R+2; the bench's output and the inputs leave the bench on the completion tick (the simulator's 1/30 s tick: 2.0 s on R+61, "
+    "10 s on R+301, against native R+58/R+59 and R+289/R+286, the native world step being about 5 % longer); the second fuel "
+    "consumption yields the charcoal; the fuel is burned at the progress rate; gen 5 keeps every original"
+)
+_DIAGRAM = (
+    "tests/sim/test_diagram_crafting.py: the Armory receipts (FIDELITY-0.7.2.md section (v), seeds 570057 and 31337) replayed on the "
+    "gen-7 render: the Weapon_Axe_Stone_Trork request is queued on its tick, its inputs leave and the axe enters the inventory on "
+    "R+2; the queue is one deep; a timed diagram recipe stays with timed_crafting; gen 5 keeps every original"
+)
+
+
 PATCHES = (
     Patch("sword_swing_left_knockback", PROFILE_JAX,
           "    push = (0.0, 1.0, -1.0, 6.0)\n",
@@ -420,6 +434,30 @@ PATCHES = (
           "        agent_landing_hold_ticks=zeros_i,\n",
           "1c", _LANDING_WALK,
           "the countdown starts at zero at reset (no hold before the first landing)"),
+    # Row 5d, guard re-entry cooldown (construct guard_reentry_cooldown): the countdown the construct reads and writes.
+    Patch("guard_reentry_seconds_field", "combat/mechanics/schema/types.py",
+          "    guard_operation_tick: Array\n",
+          "    guard_operation_tick: Array\n"
+          "    # Gen 7 (row 5d, guard re-entry cooldown): seconds before a new guard claim is admitted (float32 countdown).\n"
+          "    guard_reentry_seconds: Array\n",
+          "5d", "section (af) guard reopen receipts (24 runs) and tests/sim/test_timing_constructs.py",
+          "the mechanics state field that guard_cooldown reads and writes (gen 5 does not apply this patch, so it has no field)"),
+    Patch("guard_reentry_seconds_init", "combat/mechanics/factory.py",
+          "        guard_active=jnp.zeros(entity_shape, dtype=jnp.bool_),\n",
+          "        guard_active=jnp.zeros(entity_shape, dtype=jnp.bool_),\n"
+          "        guard_reentry_seconds=jnp.zeros(entity_shape, dtype=jnp.float32),\n",
+          "5d", "section (af) guard reopen receipts (24 runs) and tests/sim/test_timing_constructs.py",
+          "the countdown starts at zero at reset, so the first guard claim is never held"),
+    Patch("guard_reentry_closes_new_claim", "combat/observation/v3/encoding/encoder.py",
+          "                & guard_rules.can_start[:, AGENT_ENTITY]\n"
+          "            )\n",
+          "                & guard_rules.can_start[:, AGENT_ENTITY]\n"
+          "                # Gen 7 (row 5d): a new guard claim is off the policy mask while the re-entry countdown runs; an\n"
+          "                # active or held guard is unaffected.\n"
+          "                & (state.mechanics.guard_reentry_seconds[:, AGENT_ENTITY] <= 0)\n"
+          "            )\n",
+          "5d", "section (af) guard reopen receipts (24 runs) and tests/sim/test_timing_constructs.py",
+          "the guard-on choice reopens on the tick the countdown reaches zero (gen 5 keeps the countdown at zero, so the term is always true)"),
     # Row 11b, bench tiers (construct crafting_bench_tier): a tier requirement up to 8 is admitted, not only tier 0.
     Patch("bench_tier_admission", "combat/arsenal/world_actions/crafting.py",
           "            and requirement.required_tier_level == 0\n",
@@ -528,6 +566,121 @@ PATCHES = (
           "11j", _TIMED_CRAFTING,
           "a timed craft is accepted when it starts or queues (refused with a running job and a queued one, and when no bench "
           "candidate makes the recipe legal); the zero-time acceptance is unchanged"),
+    # Rows 11p and 11q (stage 5): the leaves, the bench types and the executor request path. Each patch's anchor is a HEAD text
+    # that the earlier patches keep (the validator checks every anchor against HEAD); admission is a hook, not a patch.
+    Patch("craft_pre_inventory", "combat/arsenal/world_actions/executor.py",
+          "            craft = execute_region_fieldcraft(\n",
+          "            # Gen 7 (rows 11p, 11q): the inventory before the craft, which a processing or diagram request works from.\n"
+          "            craft_inventory_before = next_state.inventory\n"
+          "            craft = execute_region_fieldcraft(\n",
+          "11p", _PROCESSING, "the inventory a processing or diagram request starts from (the zero-time commit is undone for those lanes)"),
+    Patch("processing_fields", "combat/types.py",
+          "    agent_locomotion_stamina_regen_delay: Array\n",
+          "    agent_locomotion_stamina_regen_delay: Array\n"
+          "    # Gen 7 (row 11p, processing benches): the controlled actor's bench, per lane (processing_benches.py).\n"
+          "    proc_bench_cell: Array\n"
+          "    proc_recipe: Array\n"
+          "    proc_active: Array\n"
+          "    proc_has_fuel: Array\n"
+          "    proc_wait_ticks: Array\n"
+          "    proc_progress_seconds: Array\n"
+          "    proc_fuel_seconds: Array\n"
+          "    proc_fuel_item: Array\n"
+          "    proc_fuel_quantity: Array\n"
+          "    proc_fuel_quality: Array\n"
+          "    proc_extra_countdown: Array\n"
+          "    proc_input_item: Array\n"
+          "    proc_input_quantity: Array\n"
+          "    proc_output_item: Array\n"
+          "    proc_output_quantity: Array\n",
+          "11p", _PROCESSING, "the bench leaves the processing_benches construct reads and writes (gen 5 applies no patch)"),
+    Patch("processing_init", "combat/runtime/reset.py",
+          "        agent_locomotion_stamina_regen_delay=zeros_f,\n",
+          "        agent_locomotion_stamina_regen_delay=zeros_f,\n"
+          "        proc_bench_cell=jnp.zeros((batch_size, 3), dtype=i32),\n"
+          "        proc_recipe=jnp.full((batch_size,), -1, dtype=i32),\n"
+          "        proc_active=zeros_b,\n"
+          "        proc_has_fuel=zeros_b,\n"
+          "        proc_wait_ticks=jnp.zeros((batch_size,), dtype=i32),\n"
+          "        proc_progress_seconds=zeros_f,\n"
+          "        proc_fuel_seconds=zeros_f,\n"
+          "        proc_fuel_item=jnp.full((batch_size,), -1, dtype=i32),\n"
+          "        proc_fuel_quantity=jnp.zeros((batch_size,), dtype=i32),\n"
+          "        proc_fuel_quality=zeros_f,\n"
+          "        # the bench's by-product countdown starts at PER_FUEL_ITEMS (ExtraOutput.PerFuelItemsConsumed 2)\n"
+          "        proc_extra_countdown=jnp.full((batch_size,), 2, dtype=i32),\n"
+          "        proc_input_item=jnp.full((batch_size, 28), -1, dtype=i32),\n"
+          "        proc_input_quantity=jnp.zeros((batch_size, 28), dtype=i32),\n"
+          "        proc_output_item=jnp.full((batch_size, 4), -1, dtype=i32),\n"
+          "        proc_output_quantity=jnp.zeros((batch_size, 4), dtype=i32),\n",
+          "11p", _PROCESSING, "every bench leaf starts idle (no recipe, no fuel, no stacks) at reset"),
+    Patch("diagram_fields", "combat/types.py",
+          "    agent_locomotion_stamina_regen_delay: Array\n",
+          "    agent_locomotion_stamina_regen_delay: Array\n"
+          "    # Gen 7 (row 11q, diagram crafting): the queued Armory craft, per lane (diagram_crafting.py).\n"
+          "    diagram_recipe: Array\n"
+          "    diagram_ticks: Array\n",
+          "11q", _DIAGRAM, "the queued diagram craft the diagram_crafting construct reads and writes"),
+    Patch("diagram_init", "combat/runtime/reset.py",
+          "        agent_locomotion_stamina_regen_delay=zeros_f,\n",
+          "        agent_locomotion_stamina_regen_delay=zeros_f,\n"
+          "        diagram_recipe=jnp.full((batch_size,), -1, dtype=i32),\n"
+          "        diagram_ticks=jnp.zeros((batch_size,), dtype=i32),\n",
+          "11q", _DIAGRAM, "no diagram craft is queued at reset"),
+    Patch("processing_bench_import", "combat/arsenal/world_actions/crafting.py",
+          "\n    INPUT_MODE_NORMAL,\n",
+          "\n    BENCH_TYPE_PROCESSING,\n    BENCH_TYPE_DIAGRAM_CRAFTING,\n    INPUT_MODE_NORMAL,\n",
+          "11p", _PROCESSING, "the bench type constants the two patches below read (crafting/contract.py)"),
+    Patch("processing_bench_types", "combat/arsenal/world_actions/crafting.py",
+          "_BENCH_TYPE_NAMES = {\n    \"Crafting\": BENCH_TYPE_CRAFTING,\n",
+          "_BENCH_TYPE_NAMES = {\n    \"Crafting\": BENCH_TYPE_CRAFTING,\n"
+          "    # Gen 7 (row 11p): the Processing benches (Campfire, Furnace, Salvagebench, Tannery) are Region bench rows (type 1).\n"
+          "    \"Processing\": BENCH_TYPE_PROCESSING,\n",
+          "11p", _PROCESSING, "Processing benches become Region bench rows (bench contexts of type 1, tier 0)"),
+    Patch("diagram_bench_types", "combat/arsenal/world_actions/crafting.py",
+          "_BENCH_TYPE_NAMES = {\n    \"Crafting\": BENCH_TYPE_CRAFTING,\n",
+          "_BENCH_TYPE_NAMES = {\n    \"Crafting\": BENCH_TYPE_CRAFTING,\n"
+          "    # Gen 7 (row 11q): the Armory (Bench.Type DiagramCrafting) is a Region bench row (type 2).\n"
+          "    \"DiagramCrafting\": BENCH_TYPE_DIAGRAM_CRAFTING,\n",
+          "11q", _DIAGRAM, "the Armory becomes a Region bench row (bench contexts of type 2, tier 0)"),
+    Patch("processing_executor_import", "combat/arsenal/world_actions/executor.py",
+          "import numpy as np\n",
+          "import numpy as np\n\nfrom hytalegym.sim.gen7.mechanics.processing_benches import start as processing_benches_start\n",
+          "11p", _PROCESSING, "the processing request function the craft verb calls"),
+    Patch("diagram_executor_import", "combat/arsenal/world_actions/executor.py",
+          "import numpy as np\n",
+          "import numpy as np\n\nfrom hytalegym.sim.gen7.mechanics.diagram_crafting import start as diagram_crafting_start\n",
+          "11q", _DIAGRAM, "the diagram request function the craft verb calls"),
+    Patch("processing_executor_start", "combat/arsenal/world_actions/executor.py",
+          "            accepted = accepted.at[:, ACTION_SURFACE_VERB_CRAFT].set(\n"
+          "                craft_accepted\n"
+          "            )\n",
+          "            # Gen 7 (rows 11p, 11q): a processing request starts its bench, and a diagram craft is queued; both work from\n"
+          "            # craft_inventory_before and replace the zero-time commit on their lanes (processing_benches.start).\n"
+          "            craft_accepted, next_state = processing_benches_start(\n"
+          "                execute_region_fieldcraft,\n"
+          "                next_state,\n"
+          "                craft,\n"
+          "                craft_inventory_before,\n"
+          "                recipe_candidates,\n"
+          "                next_world,\n"
+          "                crafting_assets,\n"
+          "                inventory_layout,\n"
+          "            )\n"
+          "            craft_accepted, next_state = diagram_crafting_start(\n"
+          "                execute_region_fieldcraft,\n"
+          "                next_state,\n"
+          "                craft._replace(accepted=craft_accepted),\n"
+          "                craft_inventory_before,\n"
+          "                recipe_candidates,\n"
+          "                next_world,\n"
+          "                crafting_assets,\n"
+          "                inventory_layout,\n"
+          "            )\n"
+          "            accepted = accepted.at[:, ACTION_SURFACE_VERB_CRAFT].set(\n"
+          "                craft_accepted\n"
+          "            )\n",
+          "11p", _PROCESSING, "a processing request is accepted when its bench starts (in reach, idle, fuel loaded); a refused request keeps its inventory"),
 )
 
 _MECHANICS = "hytalegym.sim.gen7.mechanics"
@@ -665,6 +818,36 @@ HOOKS = (
          f"{_MECHANICS}.timed_crafting:executor", "crafting_time", "active", "11j", _TIMED_CRAFTING,
          "each executor step first advances the running jobs (first progress tick: inputs out; completion: output; queued start; "
          "reach cancel with refund), then runs the verbs as before"),
+    Hook("processing_admission", "combat/arsenal/world_actions/crafting.py", "_lossless_region_crafting",
+         f"{_MECHANICS}.processing_benches:admission", "processing_benches", "active", "11p", _PROCESSING,
+         "a processing requirement (bench type 1) passes the zero-time gate as an ordinary bench requirement; the timed hook keeps the time"),
+    Hook("diagram_admission", "combat/arsenal/world_actions/crafting.py", "_lossless_region_crafting",
+         f"{_MECHANICS}.diagram_crafting:admission", "diagram_crafting", "active", "11q", _DIAGRAM,
+         "a diagram requirement (bench type 2) passes the zero-time gate as an ordinary bench requirement (the 19 Armory rows also name a type-0 bench)"),
+    Hook("processing_executor", "combat/arsenal/world_actions/executor.py", "make_region_block_action_surface_executor",
+         f"{_MECHANICS}.processing_benches:executor", "processing_benches", "active", "11p", _PROCESSING,
+         "each executor step first advances the processing benches (the start wait, fuel burn, progress, by-products, completion)"),
+    Hook("diagram_executor", "combat/arsenal/world_actions/executor.py", "make_region_block_action_surface_executor",
+         f"{_MECHANICS}.diagram_crafting:executor", "diagram_crafting", "active", "11q", _DIAGRAM,
+         "each executor step first runs the queued diagram commit (two ticks after the request)"),
+    Hook("guard_reentry_cooldown", "combat/mechanics/runtime/motion.py", "apply_defense_commands",
+         f"{_MECHANICS}.guard_cooldown:construct", "guard_reentry_cooldown", "active", "5d",
+         "section (af) guard reopen receipts: 24 runs, reopen on claim + 10 (17) or + 11 (7) on the loaded server; the "
+         "gen-7 clock counts 0.35 s from the claim at 1/30 s, reopening on claim + 11",
+         "a new guard claim is refused while the countdown runs (0.35 s from the claim, one nominal tick per step); an "
+         "active or held guard is unaffected; gen 5 returns the original"),
+    Hook("ability_start_split", "combat/arsenal/programs/ability.py", "start_abilities",
+         f"{_MECHANICS}.ability_start_split:construct", "ability_start_split", "active", "5f",
+         "section (af) kunai, iron sword and shortbow receipts: claim on tick 1, chain start on tick 2; kunai finish 11, iron "
+         "sword finish 14; the recharge is unchanged at the nominal 1.0 s from the claim",
+         "each accepted ability chain starts one drain after its claim (scheduler offset -1 on the admitted rows); charges "
+         "are spent and recharged on the claim; gen 5 returns the original"),
+    Hook("shortbow_reset_ammo", "combat/arsenal/profiles/hytale_0_5_7.py", "hytale_0_5_7_loadouts",
+         f"{_MECHANICS}.shortbow_reset_ammo:construct", "shortbow_reset_ammo", "active", "5f",
+         "section (af) shortbow receipts (seeds 570057, 913771): native ammo 0 on ticks 0 and 1, 1 from tick 2; differential "
+         "mismatch on the reset row only",
+         "the shortbow's initial RESOURCE_AMMO is 0 (the gen-5 phase already gives 0 on tick 1 and 1 from tick 2); gen 5 "
+         "returns the original"),
 )
 
 OVERLAY = Overlay(

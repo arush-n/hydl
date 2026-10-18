@@ -54,6 +54,13 @@ PROFILE = SimProfile(
         crafting_bench_tier="placed_bench",
         crafting_memories="recorded_count",
         crafting_time="timed_job",
+        processing_benches="ticking_bench",
+        diagram_crafting="click_craft",
+        # Timing (section (ad), live 0.7.2 receipts): the guard's 0.35 s claim cooldown, the one-drain chain start, and
+        # the shortbow's empty reset.
+        guard_reentry_cooldown="claim_0_35s",
+        ability_start_split="next_drain",
+        shortbow_reset_ammo="native_zero",
     ),
     # Owner ruling 2026-10-17: the agent operates at 30 Hz; one step duration.
     step_duration=StepDuration(nominal_seconds=1.0 / 30.0, loaded_seconds=1.0 / 30.0, timing_profile_count=1),

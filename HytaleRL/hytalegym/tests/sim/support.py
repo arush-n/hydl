@@ -37,3 +37,24 @@ def archive_sha256(path: str) -> str:
     from content_extract.archive import file_sha256
 
     return file_sha256(path)
+
+
+def mount_fresh(out_dir):
+    """Mount a render under its manifest name, first dropping an earlier mount of that name made by another module.
+
+    ``hytalegym.sim.common.render.mount`` refuses a second render under a name that is already imported (the gen-7 package is
+    mounted by several modules in one pytest process), so a module that renders its own copy drops the earlier one first.
+    """
+
+    from hytalegym.sim.common import render as render_module
+
+    name = render_module.read_manifest(Path(out_dir).resolve())["package"]
+    unmount(name)
+    return render_module.mount(out_dir)
+
+
+def unmount(package: str) -> None:
+    """Forget a mounted render: its package and every submodule, so the next mount under that name starts clean."""
+
+    for key in [key for key in sys.modules if key == package or key.startswith(package + ".")]:
+        del sys.modules[key]
