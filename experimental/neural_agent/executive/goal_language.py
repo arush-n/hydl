@@ -63,6 +63,7 @@ from typing import Mapping, Sequence
 import numpy as np
 
 from experimental.neural_agent.contracts import (
+    Condition,
     BELIEF_FEATURE_COUNT,
     MAX_GOALS,
     SKILL_IDLE,
@@ -583,7 +584,8 @@ def sample_state(
 
     Goals name distinct skills, from families that resolve in ``catalogue`` (and are in ``intent_families``
     when given); ``intent`` and ``when`` come from ``wordings``; at most one slot carries a given non-always
-    condition kind; ``constraints`` carries the kind with probability ``hint_rate`` (never for always);
+    condition kind; with probability ``hint_rate`` (never for always) the goal carries its typed fields,
+    ``constraints`` the kind and ``condition`` the kind with its argument (SYSTEM_ONE 9.12);
     ``note`` is one of NOTES with probability ``note_rate``. Distributions: module docstring.
 
     Raises:
@@ -639,6 +641,7 @@ def sample_state(
                 constraints=(kind,) if hinted else (),
                 horizon_seconds=float(rng.integers(2, 31)),
                 deadline_tick=deadline,
+                condition=Condition(kind, argument) if hinted else None,
                 intent=intent,
                 when=when,
                 note=note,

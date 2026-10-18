@@ -49,6 +49,8 @@ from typing import Any, Mapping, Sequence
 import anthropic
 
 from experimental.neural_agent.contracts import (
+    CONDITION_ARGUMENT_UNITS,
+    CONDITION_KINDS,
     EXECUTIVE_STATE_JSON_SCHEMA,
     ExecutiveState,
     GoalReport,
@@ -83,6 +85,8 @@ def build_system_prompt(skill_ids: Sequence[str]) -> str:
 
     catalog = validate_catalog(skill_ids)
     skills_json = json.dumps(list(catalog), ensure_ascii=True)
+    kinds_json = json.dumps(list(CONDITION_KINDS), ensure_ascii=True)
+    units_json = json.dumps(dict(CONDITION_ARGUMENT_UNITS), ensure_ascii=True, sort_keys=True)
     schema_json = json.dumps(
         EXECUTIVE_STATE_JSON_SCHEMA, sort_keys=True, separators=(",", ":"), allow_nan=False
     )
@@ -93,6 +97,11 @@ def build_system_prompt(skill_ids: Sequence[str]) -> str:
         "budget and the facts you judge relevant. A fast decision model reads E_t on every decision, "
         "so E_t must be complete and self-contained.\n"
         f"Legal skill ids in catalog order: {skills_json}. A goal's skill_id must be one of them.\n"
+        "A goal's condition says when the goal applies: null when it always applies, otherwise an "
+        f"object with kind one of {kinds_json} and argument its number. The kinds that take a number, "
+        f"with the unit of that number, are {units_json} (fraction: 0 to 1 of full health; ticks: decision "
+        "ticks); every other kind takes argument null. The decision model evaluates the typed condition "
+        "exactly on its belief, so write it whenever a goal is conditional.\n"
         "Each user turn gives tick, required_version, the current E_t, and the reports that arrived "
         "since your last call. A report is a goal outcome (COMPLETED, INTERRUPTED, FAILED or TIMEOUT) "
         "or an interrupt event.\n"

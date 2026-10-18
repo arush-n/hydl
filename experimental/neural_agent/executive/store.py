@@ -52,6 +52,7 @@ _CONSTRAINT_KEYWORDS = frozenset(
         "minItems",
         "maxItems",
         "minLength",
+        "enum",
         "minimum",
         "maximum",
         "exclusiveMinimum",
@@ -116,7 +117,8 @@ def validate_against_schema(value: Any, schema: Mapping[str, Any], path: str = "
     The check is manual because ``jsonschema`` is not installed in the repository
     venv. It enforces ``type`` (one name or a list), ``properties``, ``required``,
     ``additionalProperties`` (True or False), ``items``, ``minItems``, ``maxItems``,
-    ``minLength``, ``minimum``, ``maximum`` and ``exclusiveMinimum``. Annotation
+    ``minLength``, ``minimum``, ``maximum``, ``exclusiveMinimum`` and ``enum`` (the
+    value must be one of the listed values). Annotation
     keywords (``$schema``, ``title``, ``description``) are ignored. Any other keyword
     raises, so a new constraint cannot pass silently.
 
@@ -144,6 +146,8 @@ def validate_against_schema(value: Any, schema: Mapping[str, Any], path: str = "
         names = [allowed] if isinstance(allowed, str) else list(allowed)
         if not any(_has_json_type(value, name) for name in names):
             raise ValueError(f"{path} must be {' or '.join(names)}, got {_json_kind(value)}")
+    if "enum" in schema and value not in schema["enum"]:
+        raise ValueError(f"{path} must be one of {list(schema['enum'])}, got {value!r}")
 
     if _is_number(value):
         if not math.isfinite(value):

@@ -99,6 +99,7 @@ from experimental.neural_agent.contracts import (
     PARAM_WIDTH,
     SKILL_IDLE,
     ComputeBudget,
+    Condition,
     ExecutiveArrays,
     ExecutiveState,
     GoalReport,
@@ -452,7 +453,7 @@ class GoalEntry:
     """One goal as the LLM writes it: GoalSpec's typed fields plus its own words.
 
     Attributes:
-        skill_id, priority, params, constraints, horizon_seconds, deadline_tick: As in
+        skill_id, priority, params, constraints, horizon_seconds, deadline_tick, condition: As in
             :class:`GoalSpec`, and validated by it. ``constraints`` labels (for example
             ``"on_damage"``) stay typed hints beside the words.
         intent: What the LLM wants from this goal, free text. May be empty.
@@ -466,6 +467,7 @@ class GoalEntry:
     constraints: tuple[str, ...] = ()
     horizon_seconds: float = 10.0
     deadline_tick: int | None = None
+    condition: Condition | None = None
     intent: str = ""
     when: str = ""
     note: str = ""

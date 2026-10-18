@@ -137,7 +137,7 @@ explicit, typed and inspectable, and it is where real LLM wording will be learne
 | G1 pipeline agreement with the scripted rule, recorded rows | >= 0.95 | MEASURED 1.000 |
 | G2b trunk calls per decision; decision latency | 0; << 20 ms | MEASURED 0; 0.29 ms |
 | G3 typed goal reading, unseen states and catalogue sizes | >= 0.90 | MEASURED 0.96 / 0.95 at 4096 |
-| I1 reading: condition kind; number; skill id | kind: typed in the schema (fine-tuned encoders FAILED the 0.95 bar at 0.75-0.82, polarity, SYSTEM_ONE §9.12; deterministic fallback reader reported at >= 0.95); number MEASURED 1.000; skill id typed by schema (description matching FAILED, §9.11) | DECIDED: typed fields are the contract, words are context |
+| I1 reading: condition kind; number; skill id | kind: typed in the schema, BUILT 2026-10-17 late as `condition` (fine-tuned encoders FAILED the 0.95 bar at 0.75-0.82, polarity, SYSTEM_ONE §9.12; deterministic fallback reader MEASURED 1.000 kind and kind+argument on held-out wordings, seeds 0-2, no polarity confusion, weak readings flagged); number MEASURED 1.000; skill id typed by schema (description matching FAILED, §9.11) | BUILT: typed fields are the contract (schema, prompt, generator), words are context; the fallback reader passes its bar |
 | I2 end to end agreement with M13 via interpret + exact evaluation | >= 0.90 on three splits | DESIGNED (replaces the failed G3-NL) |
 | I3 a new executive version read; backbone calls per decision | <= 150 ms; 0 | DESIGNED |
 | I4 calibration of skill and kind probabilities | ECE <= 0.05 | DESIGNED |
@@ -157,7 +157,7 @@ explicit, typed and inspectable, and it is where real LLM wording will be learne
 | 4 | Fine-tune ModernBERT-base on the Mac GPU; iterate | 3 | minutes per run; a day of iteration | I1, B1-B3 |
 | 5 | Calibration and latency: temperature scaling, ECE, int8, the probe | 4 | half a day | I3, I4 |
 | 6 | Integration: the instance interprets once per version, executes programs, emits requests; decision section shows plan and stream; js1 arm through the composition driver | 2, 5 | ~1 day | I2, B4, G1 unchanged |
-| 7 | Offline LLM-side pieces: predicate vocabulary and typed target in the prompt and schema; the backend writes the executive section; objectives list; per-squad views | 6 | ~1 day | prompt bytes stable; no live call |
+| 7 | Offline LLM-side pieces: predicate vocabulary and typed target in the prompt and schema; the backend writes the executive section; objectives list; per-squad views | 6 | vocabulary and typed target DONE (2026-10-17 late); the rest ~half a day | prompt bytes stable; no live call |
 | 8 | Fallbacks if 4 misses: more states, more layers, then the decoder path | 4 | as needed | I1 |
 | later | Stage C on outcomes; live LLM run; the real skill library replaces the stubs; group scratchpad | the lower level | - | G4, G5 |
 

@@ -865,6 +865,22 @@ wordings for the best size at or below 1.7B; latency per goal and per four-goal 
 and on CPU. The typed-fields contract above stands regardless: a decoder reader that passes becomes the
 reader for goals that arrive with words, replacing the deterministic fallback where it is better.
 
+**Built (2026-10-17, late).** The typed field: `GoalSpec.condition` and `GoalEntry.condition`, a
+`contracts.Condition(kind, argument)` with `CONDITION_KINDS` (the nine kinds, always first) and
+`CONDITION_ARGUMENT_UNITS` (the five numeric kinds with their units). The executive JSON schema requires the
+key on every goal, null meaning always, `kind` an enum, so the LLM's structured reply can only name a known
+kind; the system prompt states the vocabulary and the units (`executive/anthropic_backend.build_system_prompt`);
+the generator writes the typed condition beside the words with `hint_rate` (`goal_language.sample_state`), so
+evaluation states exist in both forms. The fallback reader is `jev/system_one/condition_rules.py`:
+`read_condition(when)` returns `(kind, argument, confidence, evidence)` from feature, comparator and negation
+cue tables, with the exact number reader for the argument; confidence CLEAR, WEAK, DEFAULT or INVALID, and
+anything below CLEAR is the information request. Gate (ledger; the same wording split as P2, P3 and P6;
+seeds 0-2): kind and kind-plus-argument agreement 1.000 on every split's held-out wordings (1,397 texts each)
+and training wordings (3,491), no polarity confusion; 22-44 readings per split are correct but WEAK (a bare
+number next to a comparator, "while it's over 3 out"). Caveat, stated in the module: the cue tables were
+written knowing the generator's vocabulary, so this is agreement with the generator's meanings, not
+generalisation to unseen phrasing; the typed path is the contract, and P6 measures the decoder reader.
+
 ### 9.13 How the LLM communicates, restated (owner, 2026-10-17, late)
 
 Owner: "all we need to do is decode the intent properly, this can take time but the intention here is

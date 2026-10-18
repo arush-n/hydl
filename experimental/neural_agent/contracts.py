@@ -105,8 +105,10 @@ _GOAL_KEYS = frozenset(
         "constraints",
         "horizon_seconds",
         "deadline_tick",
+        "condition",
     }
 )
+_CONDITION_KEYS = frozenset({"kind", "argument"})
 _BUDGET_KEYS = frozenset(
     {"jev_latency_ms", "search_expansions", "executive_calls_per_minute"}
 )
@@ -231,6 +233,64 @@ class SharedBeliefState(NamedTuple):
     latent: jax.Array
 
 
+CONDITION_KINDS: tuple[str, ...] = (
+    "always",
+    "on_damage",
+    "target_visible",
+    "target_not_visible",
+    "target_lost_for",
+    "distance_below",
+    "distance_above",
+    "self_health_below",
+    "target_health_below",
+)
+"""The nine condition kinds a goal may carry (SYSTEM_ONE sections 8.11 and 9.12), ``always`` first.
+Which belief feature a kind reads and how it is evaluated live in ``executive/goal_language.py``
+(``Predicate``); this module only names the vocabulary the executive writes."""
+CONDITION_ARGUMENT_UNITS: dict[str, str] = {
+    "target_lost_for": "ticks",
+    "distance_below": "blocks",
+    "distance_above": "blocks",
+    "self_health_below": "fraction",
+    "target_health_below": "fraction",
+}
+"""The kinds that take a numeric argument, with the unit of the number (fraction: 0 to 1 of full health)."""
+
+
+@dataclass(frozen=True)
+class Condition:
+    """A goal's typed condition: when the goal applies (host-side record, SYSTEM_ONE 9.12).
+
+    Attributes:
+        kind: One of ``CONDITION_KINDS``.
+        argument: A finite number for the kinds in ``CONDITION_ARGUMENT_UNITS``, in that unit;
+            None for every other kind.
+
+    Raises:
+        TypeError: If ``kind`` is not a string or ``argument`` is not a real number.
+        ValueError: If ``kind`` is unknown, a numeric kind lacks its argument, or another kind has one.
+    """
+
+    kind: str
+    argument: float | None = None
+
+    def __post_init__(self) -> None:
+        """Validate the kind and that exactly the numeric kinds carry a finite argument."""
+
+        _text(self.kind, "Condition.kind")
+        if self.kind not in CONDITION_KINDS:
+            raise ValueError(f"unknown condition kind {self.kind!r}; expected one of {CONDITION_KINDS}")
+        numeric = self.kind in CONDITION_ARGUMENT_UNITS
+        if numeric != (self.argument is not None):
+            raise ValueError(
+                f"condition {self.kind!r} {'needs an' if numeric else 'takes no'} argument"
+            )
+        if self.argument is not None:
+            object.__setattr__(
+                self, "argument", _finite_number(self.argument, "Condition.argument")
+            )
+
+
 @dataclass(frozen=True)
 class GoalSpec:
     """One goal the executive asks the JEV to pursue (host-side record).
@@ -243,6 +303,8 @@ class GoalSpec:
         horizon_seconds: Planning horizon in seconds, finite and positive.
         deadline_tick: Simulation tick by which the goal should finish, a
             non-negative int, or None for no deadline.
+        condition: The typed condition under which the goal applies, a
+            :class:`Condition`, or None when it always applies (SYSTEM_ONE 9.12).
 
     Raises:
         TypeError: If a field has the wrong Python type.
@@ -255,6 +317,7 @@ class GoalSpec:
     constraints: tuple[str, ...] = ()
     horizon_seconds: float = 10.0
     deadline_tick: int | None = None
+    condition: Condition | None = None
 
     def __post_init__(self) -> None:
         """Validate the fields and normalize them to their documented types."""
@@ -282,6 +345,10 @@ class GoalSpec:
                 self,
                 "deadline_tick",
                 _non_negative_int(self.deadline_tick, "GoalSpec.deadline_tick"),
+            )
+        if self.condition is not None and not isinstance(self.condition, Condition):
+            raise TypeError(
+                f"GoalSpec.condition must be a Condition or None, got {type(self.condition).__name__}"
             )
 
 
@@ -467,6 +534,7 @@ def _executive_mapping(state: ExecutiveState) -> dict[str, Any]:
                 "constraints": list(goal.constraints),
                 "horizon_seconds": goal.horizon_seconds,
                 "deadline_tick": goal.deadline_tick,
+                "condition": _condition_mapping(goal.condition),
             }
             for goal in state.goals
         ],
@@ -507,6 +575,24 @@ def _exact_keys(mapping: Mapping[str, Any], expected: frozenset[str], name: str)
         raise ValueError(f"{name} has unexpected keys {unexpected}")
 
 
+def _condition_mapping(condition: Condition | None) -> dict[str, Any] | None:
+    """Return the JSON-shaped mapping of a typed condition, or None for no condition."""
+
+    if condition is None:
+        return None
+    return {"kind": condition.kind, "argument": condition.argument}
+
+
+def _condition_from_mapping(item: Any) -> Condition | None:
+    """Build the typed condition from its JSON object (null means none), with exact key checking."""
+
+    if item is None:
+        return None
+    entry = _json_object(item, "goal.condition")
+    _exact_keys(entry, _CONDITION_KEYS, "goal.condition")
+    return Condition(kind=entry["kind"], argument=entry["argument"])
+
+
 def _goal_from_mapping(item: Any) -> GoalSpec:
     """Build one GoalSpec from its JSON object, with exact key checking."""
 
@@ -519,6 +605,7 @@ def _goal_from_mapping(item: Any) -> GoalSpec:
         constraints=_json_array(entry["constraints"], "goal.constraints"),
         horizon_seconds=entry["horizon_seconds"],
         deadline_tick=entry["deadline_tick"],
+        condition=_condition_from_mapping(entry["condition"]),
     )
 
 
@@ -545,6 +632,7 @@ EXECUTIVE_STATE_JSON_SCHEMA: dict[str, Any] = {
                     "constraints",
                     "horizon_seconds",
                     "deadline_tick",
+                    "condition",
                 ],
                 "properties": {
                     "skill_id": {"type": "string", "minLength": 1},
@@ -562,6 +650,20 @@ EXECUTIVE_STATE_JSON_SCHEMA: dict[str, Any] = {
                     "deadline_tick": {
                         "type": ["integer", "null"],
                         "minimum": 0,
+                    },
+                    "condition": {
+                        "type": ["object", "null"],
+                        "description": (
+                            "When this goal applies: null means always; otherwise kind names the"
+                            " condition and argument is its number (for *_below, *_above and"
+                            " *_lost_for kinds; null for the others)."
+                        ),
+                        "additionalProperties": False,
+                        "required": ["kind", "argument"],
+                        "properties": {
+                            "kind": {"type": "string", "enum": list(CONDITION_KINDS)},
+                            "argument": {"type": ["number", "null"]},
+                        },
                     },
                 },
             },
@@ -1414,6 +1516,9 @@ __all__ = [
     "GoalPayload",
     "GoalReport",
     "GoalSpec",
+    "Condition",
+    "CONDITION_KINDS",
+    "CONDITION_ARGUMENT_UNITS",
     "JevBudget",
     "JevInstance",
     "JevMode",
