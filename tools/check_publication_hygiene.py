@@ -108,7 +108,6 @@ MUST_BE_IGNORED = (
     # trees with no published consumer.
     "telemetry/2026-08-17_18-16-38_f662bfa2.jsonl.gz",
     "mods/Hytale_HytaleGenerator/biome_editor.json",
-    "experimental/cnn_training/pipeline.py",
     "experimental/hierarchical_planner/DESIGN.md",
     "adk/docs/surface-survey-v1.json",
     "adk/docs/surface-survey-geometry-v1.json",
