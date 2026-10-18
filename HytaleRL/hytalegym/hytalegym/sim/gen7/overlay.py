@@ -78,6 +78,12 @@ _JUMP_ARC = (
     "live 0.7.2 bridge, <= 5e-4 m and 1e-3 m/s per step; tests/sim/test_npc_jump_arc.py replays a live jump in "
     "place"
 )
+_BENCH_CRAFTING = (
+    "tests/sim/test_bench_crafting.py (a bench-only recipe commits, the Fieldcraft commit is unchanged, the first "
+    "16 of 20 legal recipes are published); the Region crafting count on the 0.7.2 catalog (FIDELITY-0.7.2.md "
+    "(l): 2 of 197 offered recipes commit before the construct); a native bench-craft differential is open "
+    "(no live bench-craft test on 0.7.2 yet)"
+)
 _GUARD_NOTE = (
     "0.7.2 removes Rules.Interrupting [Primary] from this family's guard root "
     "(ASSET-DIFF-0.7.2.md:237-243, 266-322); the cancel now comes from the attack roots' InterruptedBy "
@@ -270,6 +276,17 @@ HOOKS = (
          "root under one other type (the two crossbow reloads, compact slot 2, and no other binding); the engine "
          "keeps the reload's ordinal INTERACTION_TYPE_ABILITY3, which no ability mask references; Primary is "
          "still not advertised during the native reload (bridge legality, FIDELITY-0.7.2.md (m), open)"),
+    Hook("bench_crafting_commit", "crafting/inventory_adapter.py", "craft_into_combat_inventory",
+         f"{_MECHANICS}.bench_crafting:bench_commit", "bench_crafting", "active", "11", _BENCH_CRAFTING,
+         "a lane whose context satisfies none of its recipe's bench requirements commits under the first one; a "
+         "recipe the Fieldcraft context satisfies keeps it (every gen-5 commit unchanged); the executor's only "
+         "caller is world_actions/crafting.execute_region_fieldcraft"),
+    Hook("bench_crafting_first_candidates", "world/interactions/crafting.py",
+         "produce_actor_recipe_candidates_from_legal_mask",
+         f"{_MECHANICS}.bench_crafting:first_candidates", "bench_crafting", "active", "11", _BENCH_CRAFTING,
+         "more than 16 legal recipes: the first 16 in table order (canonical recipe-id order), row available, "
+         "source_count the full count, diagnostics ACTOR_RECIPE_DIAGNOSTIC_CAPACITY (truncated), "
+         "capacity_exceeded False; shapes, radix and contract stamps unchanged"),
     Hook("dodge_action_head", "combat/observation/v3/policy/layout.py", "split_locomotion_choice",
          f"{_MECHANICS}.dodge:construct", "dodge_action_head", "stub", "9",
          "test_native_policy_dodge_boundary_matches_advertised_capability and "

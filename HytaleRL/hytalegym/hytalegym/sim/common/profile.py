@@ -78,6 +78,11 @@ class Constructs:
     # Interactions map, which moves the crossbow reload from Ability3 to Ability4). Owner: sim/gen7/mechanics/
     # native_bindings.py (row 6c).
     native_binding_types: str = "profile_sets"
+    # Region crafting at an ordinary bench: "fieldcraft_context" (HEAD: every candidate commits under the Fieldcraft
+    # context, so a bench-only recipe is offered and then refused, and more than 16 legal recipes fail the actor
+    # row closed) or "recipe_bench" (commit under a bench the recipe names; keep the first 16 legal recipes in
+    # table order). Owner: sim/gen7/mechanics/bench_crafting.py (row 11, stage 0).
+    bench_crafting: str = "fieldcraft_context"
     # Walk controller while descending: "free_fall" (0.5.x) or
     # "minimum_descent_rate" (0.7.2 code change, unmeasured). P2.
     walk_descent: str = "free_fall"

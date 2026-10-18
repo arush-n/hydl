@@ -173,3 +173,9 @@ bars (5e-4 per step for motion) is acceptable, so callers may use the planned co
 comparing like with like (same compile mode on both sides), and a change of mode re-baselines the fingerprints. Opt-in `OPTIMIZED` gen-5
 overlay (damage-resistance walk): bit-exact on the identity rollouts and on 10,240 random inputs; thunk events
 6,718 -> 4,200 per step at batch 64; un-profiled step 3.46 -> 2.40 ms; +6 % throughput under load.
+
+## 6. Gen-5 gaps kept by ruling (gen 7 carries the construct)
+
+| Gap | Gen 5 (kept) | Gen 7 | Ruling and receipt |
+|---|---|---|---|
+| Region crafting at an ordinary bench | every Region craft commits under the Fieldcraft context, so a recipe offered because an ordinary bench is in reach is refused at the commit (2 of 154 offered recipes commit on the 0.5.7 catalog, 2 of 197 on the 0.7.2 catalog), and more than 16 legal recipes fail the actor row closed | `bench_crafting` = `recipe_bench` (`sim/gen7/mechanics/bench_crafting.py`): commit under a bench the recipe names, keep the first 16 legal recipes in table order | review session, 2026-10-18: gen 5 keeps its defect; FIDELITY-0.7.2.md (l), row 11 |

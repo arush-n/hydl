@@ -29,6 +29,7 @@ CONSTRUCT_MODULES = {
     "dagger_swing_damage": "dagger_damage",
     "guard_cancel_window": "guard_window",
     "native_binding_types": "native_bindings",
+    "bench_crafting": "bench_crafting",
     "walk_descent": "walk_descent",
     "slope_limits": "slope_limits",
     "block_health_reset_on_write": "block_health",
