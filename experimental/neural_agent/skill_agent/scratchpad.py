@@ -16,18 +16,38 @@ One tick::
 Agents come from ``contexts``, not from the section, so an agent whose last request left the section
 is still stepped and its holder is aborted as withdrawn. The skills section keeps its newest
 ``status_limit`` statuses (``shared_state.SkillsSection``).
+
+Wiring without touching the session (B3). ``CombiningDecider`` wraps the middle layer's host decider
+(``jev/programs.py`` ``ProgramExecutor``): the session binds ``scratchpad``, ``host_cadence_ticks``,
+``tick_seconds``, ``host_respects_commitment`` and ``current_tick`` on it as on the executor (they are
+forwarded), and each ``decide`` returns the executor's goal unchanged and then runs the combiner on S_t at
+the session's clock tick, after the executor has written its requests. Each lane gets one context: the
+belief's single target is a known entity (``TARGET_ENTITY``, the executor's convention) when
+``ticks_since_target_seen`` is known and below saturation, the executor's own rule. The combiner runs on
+decision ticks only, so the stream shows grants, rejections, deferrals and withdrawals, not ``running``
+between decisions; a per-tick run needs a session hook (the middle layer's file).
 """
 
 from __future__ import annotations
 
 import dataclasses
-from typing import Mapping
+from collections import Counter
+from typing import Any, Mapping
 
+import numpy as np
+
+from experimental.neural_agent.contracts import TICKS_SATURATION, feature_index
 from experimental.neural_agent.shared_state import SharedState
 from experimental.neural_agent.skill_agent.combiner import AgentContext, CombinedStep, Combiner
 
 SKILLS_WRITER: str = "skills"
 """The skills section's one writer (``shared_state.SECTION_WRITERS``)."""
+TARGET_ENTITY: int = 0
+"""The belief's single target, named by its index among the belief's targets (``jev/programs.py``, agreed
+between the two sessions, 2026-10-17)."""
+ANY_WORLD: tuple[tuple[float, ...], tuple[float, ...]] = ((-1.0e9,) * 3, (1.0e9,) * 3)
+"""The default world box: the composition task's requests name entities, not points."""
+_SEEN: int = feature_index("ticks_since_target_seen")
 
 
 def combine_from_scratchpad(state: SharedState, combiner: Combiner, tick: int,
@@ -56,4 +76,75 @@ def combine_from_scratchpad(state: SharedState, combiner: Combiner, tick: int,
     return steps
 
 
-__all__ = ["SKILLS_WRITER", "combine_from_scratchpad"]
+def target_seen(belief: Any) -> np.ndarray:
+    """Per lane: the belief's ``ticks_since_target_seen`` is known and below saturation (the executor's rule).
+
+    The belief publishes the counter as ``counter / TICKS_SATURATION``; the rule reads it back in ticks.
+    """
+
+    features = np.asarray(belief.features, dtype=np.float32)
+    known = np.asarray(belief.feature_known, dtype=bool)
+    return known[:, _SEEN] & (features[:, _SEEN] * np.float32(TICKS_SATURATION) < np.float32(TICKS_SATURATION))
+
+
+def lane_contexts(seen: Any, world_bounds: Any = ANY_WORLD) -> dict[int, AgentContext]:
+    """One context per lane: the target entity is known exactly where ``seen`` is True."""
+
+    return {lane: AgentContext(world_bounds=world_bounds,
+                               known_entities=frozenset({TARGET_ENTITY}) if flag else frozenset())
+            for lane, flag in enumerate(np.asarray(seen, dtype=bool))}
+
+
+class CombiningDecider:
+    """A host decider whose every decision is followed by the combiner on S_t (the module docstring).
+
+    Args:
+        inner: The host decider (``decide(transition, hierarchy_state, executive) -> goal``).
+        combiner: The combiner, built once per session (it carries every lane's grants).
+        world_bounds: The world box of the contexts.
+
+    ``last_steps`` holds the combiner's steps of the latest decision and ``status_counts`` counts every
+    status it wrote by kind (a rejection also as ``rejected:<code>``); every other attribute reads through
+    to ``inner``.
+    """
+
+    FORWARDED: tuple[str, ...] = ("scratchpad", "host_cadence_ticks", "tick_seconds", "host_respects_commitment",
+                                  "current_tick")
+
+    def __init__(self, inner: Any, combiner: Combiner, world_bounds: Any = ANY_WORLD) -> None:
+        object.__setattr__(self, "_inner", inner)
+        object.__setattr__(self, "_bound", {})
+        object.__setattr__(self, "combiner", combiner)
+        object.__setattr__(self, "world_bounds", world_bounds)
+        object.__setattr__(self, "last_steps", {})
+        object.__setattr__(self, "status_counts", Counter())
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(object.__getattribute__(self, "_inner"), name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name in self.FORWARDED:
+            self._bound[name] = value
+            if hasattr(self._inner, name):
+                setattr(self._inner, name, value)
+            return
+        object.__setattr__(self, name, value)
+
+    def decide(self, transition: Any, hierarchy_state: Any, executive: Any, /) -> Any:
+        goal = self._inner.decide(transition, hierarchy_state, executive)
+        state = self._bound.get("scratchpad")
+        if state is not None:
+            seen = target_seen(transition.hierarchy_step.belief_update.belief)
+            tick = int(self._bound.get("current_tick", 0))
+            steps = combine_from_scratchpad(state, self.combiner, tick, lane_contexts(seen, self.world_bounds))
+            object.__setattr__(self, "last_steps", steps)
+            for step in steps.values():
+                for status in step.statuses:
+                    self.status_counts[status.kind] += 1
+                    if status.kind == "rejected":
+                        self.status_counts[f"rejected:{status.reason.split(':', 1)[0]}"] += 1
+        return goal
+
+
+__all__ = ["ANY_WORLD", "SKILLS_WRITER", "TARGET_ENTITY", "CombiningDecider", "combine_from_scratchpad", "lane_contexts",
+           "target_seen"]

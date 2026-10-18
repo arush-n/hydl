@@ -554,6 +554,20 @@ program [ledger].
     grants: pursuit and evader take an entity, idle takes nothing.
   - Their stand-in bodies never report done, because the skills themselves run in-graph and end there.
   - [test: test_the_proof_of_concept_skills_register_as_the_executor_requests_them]
+- **Wiring, with both halves on.** `scratchpad.CombiningDecider` wraps the middle layer's program
+  executor (the `jprog` arm). The session binds its attributes as it does on the executor. Each decision
+  returns the executor's goal unchanged, then runs the combiner on S_t at the session's clock tick.
+  - Each lane's context marks the belief's single target (entity 0) known when the belief has seen it
+    within saturation, the executor's own rule.
+  - The session file is not touched, so the combiner runs on decision ticks only: grants, rejections,
+    deferrals and withdrawals reach the stream, and per-tick `running` statuses would need a session hook.
+  - [test: test_the_combining_decider_forwards_the_session_bindings_and_runs_the_combiner_after_each_decision]
+- **The joint check** (`joint_check.py`, B3's gate). It runs the composition arms flat, j0, shuffled and
+  jprog-J0 (64 ticks, batch 8, seed 0) with and without the wrapper.
+  - Every non-timing metric is identical.
+  - In the jprog run the combiner wrote 232 statuses: 120 accepted (one per lane per decision) and 112
+    withdrawn (each decision replaces the last request).
+  - There were no rejections, so the executor had nothing to correct [ledger: B3 joint].
 
 The guide in section 1 prints:
 
