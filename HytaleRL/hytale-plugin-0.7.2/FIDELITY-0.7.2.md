@@ -1145,3 +1145,34 @@ Player removed (`tests/worldgen/test_native_crafting.py`, `test_native_world_act
 follows. Alternative not taken: `setPvpEnabled(true)` would also stop the cancel but would keep the NPC a Player (player
 knockback and death rules). Claim most likely wrong (agent): that removing the target's Player is harmless everywhere; the
 target now follows NPC knockback and death rules (inferred, not measured).
+
+## (v) Crafting oracle, stage 5: processing benches and the Armory diagram (2026-10-18; jar `4A5E5D6D`; receipts `~/.claude/jobs/31947bd7/tmp/phase4l/receipts/v6_*.json`)
+
+The stall, proven live: (1) every bridge step re-pauses the world in its last tick (`afterNativeTick`, `NativeEnvironmentSession`
+about 3236), so `World.tick` skips the chunk-store tick that runs `ProcessingBenchTick`: under one-tick steps the bench's
+`lastTickGameTime` was set on 0 of 1,200 observed ticks although the game clock advanced 1,233 s; (2) the game clock is paused
+at world creation (line 3507): with the world ticking and the clock held paused, 1,198 ticks passed and 0.0 game seconds. The
+probe runs the world and the game clock unpaused for its own duration, observes once per world tick on the world thread, and
+restores both; the stepped craft probes are unchanged. No NonTicking gate was ever set. Reset option `processing_oracle_requests`
+(bench_block_id, inputs, fuel, max_ticks); `crafting_oracle_requests` gains `crafting_context` "diagram" with `category` and
+`item_category` (needs `native_world_verbs` for the window's headless Player). Reset info `native_processing_oracle_count` and
+`native_processing_oracle_records_json`; the processing record carries the clock, the gates, the inserted items, per-tick
+input, fuel and output contents, fuel burn ticks and the output tick; the diagram record carries the route, the window inputs,
+the queue before and after and the contents per tick.
+
+| Scenario (seeds 570057 / 31337) | Measured |
+|---|---|
+| Campfire, Food_Fish_Grilled_Recipe_Generated_0 (2.0 s) | finished; output 61.9 game seconds after activation (58 / 59 world ticks); one stick (4.0 s of fuel) consumed 2 ticks after activation, 56 / 57 fuel-burn ticks; the fish consumed at the output tick |
+| Furnace, Ingredient_Bar_Copper_Recipe_Generated_0 (10 s) | finished; output at 301.2 / 301.9 game seconds (289 / 286 world ticks); three sticks consumed; one Ingredient_Charcoal at the second fuel consumption (+114 / +116) |
+| Armory, Weapon_Axe_Stone_Trork_Recipe_Generated_0 through `CraftItemAction` (tier 1) | the Weapons/Axe category selected, inputs in window slots 0 to 2 accepted (capacity 4, the fourth a special slot), queued at the request tick, inputs out and the axe in the inventory two ticks later; recipe time 0.0 s; no diagram item beyond the inputs |
+| stage 3 timed craft re-run (arm_base, seed 570057) | same keys, status and reset info as section (t) |
+
+Game seconds were stable across launches while world-tick counts varied (campfire 58 to 61, furnace 286 to 296; inferred: the
+world's per-tick dt). The headless window has no PlayerRef, so its change listener does not refresh; the probe calls the
+window's own `updateInput` after each write. Java: full `gradlew test --rerun --no-build-cache` 116 suites, 418 tests, 0
+failures (414 before); the touched classes 9 + 10 + 7 + 3 + 4 + 2, 0 failures (coordinator re-run); `tests/test_server_versions.py`
+7 passed; the repository build equals the scratch build. Not done: Tannery and Salvagebench; processing refusals, multi-quantity
+inputs and fuel exhaustion; diagram negative controls (category not selected, wrong input count, the Weapon_Bench second
+requirement, which this path does not check); `SetActiveAction` itself (the same `setActive` call is made directly). Claim most
+likely wrong (agent): that the Armory route reproduces a client's craft (the probe writes the window slots directly and refreshes
+by reflection; the server's window craft logic is what is proven, not the client's transfer path).

@@ -9,7 +9,9 @@ import static com.hytalerlbridge.network.wire.MessageFields.getStringField;
 
 import com.hytalerlbridge.environment.fidelity.NativeCraftingOracleFixture;
 import com.hytalerlbridge.environment.fidelity.NativeCraftingOracleFixture.CraftRequest;
+import com.hytalerlbridge.environment.fidelity.NativeCraftingOracleFixture.ItemQuantity;
 import com.hytalerlbridge.environment.fidelity.NativeCraftingOracleFixture.ProbeEvent;
+import com.hytalerlbridge.environment.fidelity.NativeCraftingOracleFixture.ProcessingProbe;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -22,14 +24,16 @@ public final class CraftingOracleOptions {
 
     /**
      * Reads {@code crafting_bench_block_id}, {@code crafting_bench_tier} (default 1
-     * when a bench is named), {@code memories_level}, and
-     * {@code crafting_oracle_requests}: an array of maps with {@code recipe_id}
-     * (required), {@code quantity} (default 1), {@code crafting_context}
-     * ({@code bench} or {@code fieldcraft}, default {@code bench}), {@code open_window}
-     * (default false) and {@code events}: maps with {@code tick} (required, world ticks
-     * from the request) and {@code kind} ({@code reach_out}, {@code second_craft} or
-     * {@code damage}). Returns null when none is present, so resets without these keys
-     * are unchanged.
+     * when a bench is named), {@code memories_level}, {@code crafting_oracle_requests}
+     * and {@code processing_oracle_requests}. A craft request is a map with {@code recipe_id}
+     * (required), {@code quantity} (default 1), {@code crafting_context} ({@code bench},
+     * {@code fieldcraft} or {@code diagram}, default {@code bench}), {@code open_window}
+     * (default false), {@code events} (maps with {@code tick}, world ticks from the request,
+     * and {@code kind}: {@code reach_out}, {@code second_craft} or {@code damage}) and, for a
+     * diagram probe, {@code category} and {@code item_category}. A processing request is a
+     * map with {@code bench_block_id} (required), {@code inputs} and {@code fuel} (arrays of
+     * {@code item_id}, {@code quantity}) and {@code max_ticks} (default 1200). Returns null
+     * when none is present, so resets without these keys are unchanged.
      */
     public static NativeCraftingOracleFixture decode(Map<Value, Value> options) {
         String benchBlockId = getOptionalStringField(
@@ -45,11 +49,15 @@ public final class CraftingOracleOptions {
         List<CraftRequest> requests = decodeRequests(
             getField(options, "crafting_oracle_requests")
         );
+        List<ProcessingProbe> processing = decodeProcessing(
+            getField(options, "processing_oracle_requests")
+        );
         if (
             benchBlockId == null
                 && benchTier == 0L
                 && memoriesLevel == 0L
                 && requests.isEmpty()
+                && processing.isEmpty()
         ) {
             return null;
         }
@@ -57,7 +65,8 @@ public final class CraftingOracleOptions {
             benchBlockId,
             checkedInt(benchTier, "crafting_bench_tier"),
             checkedInt(memoriesLevel, "memories_level"),
-            requests
+            requests,
+            processing
         );
     }
 
@@ -84,7 +93,9 @@ public final class CraftingOracleOptions {
                 checkedInt(getLongField(probe, "quantity", 1L), "quantity"),
                 context.isEmpty() ? NativeCraftingOracleFixture.BENCH_CONTEXT : context,
                 getBooleanField(probe, "open_window", false),
-                decodeEvents(getField(probe, "events"))
+                decodeEvents(getField(probe, "events")),
+                getStringField(probe, "category"),
+                getStringField(probe, "item_category")
             ));
         }
         return requests;
@@ -109,5 +120,52 @@ public final class CraftingOracleOptions {
             ));
         }
         return events;
+    }
+
+    private static List<ProcessingProbe> decodeProcessing(Value raw) {
+        if (raw == null || raw.isNilValue()) {
+            return List.of();
+        }
+        if (!raw.isArrayValue()) {
+            throw new IllegalArgumentException("processing_oracle_requests must be an array");
+        }
+        List<ProcessingProbe> probes = new ArrayList<>();
+        for (Value entry : raw.asArrayValue().list()) {
+            if (!entry.isMapValue()) {
+                throw new IllegalArgumentException("processing_oracle_requests entries must be maps");
+            }
+            Map<Value, Value> probe = entry.asMapValue().map();
+            probes.add(new ProcessingProbe(
+                getStringField(probe, "bench_block_id"),
+                decodeItems(getField(probe, "inputs"), "processing_oracle_requests inputs"),
+                decodeItems(getField(probe, "fuel"), "processing_oracle_requests fuel"),
+                checkedInt(
+                    getLongField(probe, "max_ticks", ProcessingProbe.DEFAULT_MAX_TICKS),
+                    "max_ticks"
+                )
+            ));
+        }
+        return probes;
+    }
+
+    private static List<ItemQuantity> decodeItems(Value raw, String name) {
+        if (raw == null || raw.isNilValue()) {
+            return List.of();
+        }
+        if (!raw.isArrayValue()) {
+            throw new IllegalArgumentException(name + " must be an array");
+        }
+        List<ItemQuantity> items = new ArrayList<>();
+        for (Value entry : raw.asArrayValue().list()) {
+            if (!entry.isMapValue()) {
+                throw new IllegalArgumentException(name + " entries must be maps");
+            }
+            Map<Value, Value> item = entry.asMapValue().map();
+            items.add(new ItemQuantity(
+                getStringField(item, "item_id"),
+                checkedInt(getLongField(item, "quantity", 1L), "quantity")
+            ));
+        }
+        return items;
     }
 }

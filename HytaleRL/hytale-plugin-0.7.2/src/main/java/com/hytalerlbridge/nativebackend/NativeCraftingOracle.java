@@ -21,6 +21,7 @@ import com.hytalerlbridge.action.NativeWorldVerbRequest;
 import com.hytalerlbridge.environment.fidelity.NativeCraftingOracleFixture;
 import com.hytalerlbridge.environment.fidelity.NativeCraftingOracleFixture.CraftRequest;
 import com.hytalerlbridge.environment.fidelity.NativeCraftingOracleFixture.ProbeEvent;
+import com.hytalerlbridge.environment.fidelity.NativeCraftingOracleFixture.ProcessingProbe;
 import com.hytalerlbridge.nativebackend.NativeCraftingOracleLedger.BenchReadout;
 import com.hytalerlbridge.nativebackend.NativeCraftingOracleLedger.Slot;
 import com.hytalerlbridge.nativebackend.support.NativeWorldAccess;
@@ -106,6 +107,11 @@ final class NativeCraftingOracle {
 
     String json() {
         return ledger.toJson();
+    }
+
+    /** Appends pre-encoded JSON members to the record: a diagram probe's route and window readout. */
+    void extraFields(String members) {
+        ledger.extraFields(members);
     }
 
     boolean pending() {
@@ -230,8 +236,15 @@ final class NativeCraftingOracle {
         return new ResetReadout(level, count, bench);
     }
 
-    /** Reset output: the readout captured after the fixtures, and each probe's oracle in request order. */
-    record ResetOutcome(ResetReadout readout, List<NativeCraftingOracle> records) {}
+    /**
+     * Reset output: the readout captured after the fixtures, each craft or diagram probe's oracle in
+     * request order, and each processing probe's record (JSON) in request order.
+     */
+    record ResetOutcome(
+        ResetReadout readout,
+        List<NativeCraftingOracle> records,
+        List<String> processingRecords
+    ) {}
 
     /** Upper bound on one probe's world ticks; a timed craft with a second job needs several seconds. */
     private static final int PROBE_TICK_LIMIT = 1200;
@@ -266,6 +279,10 @@ final class NativeCraftingOracle {
         List<NativeCraftingOracle> records = new ArrayList<>();
         if (fixture != null) {
             for (CraftRequest probe : fixture.requests()) {
+                if (NativeCraftingOracleFixture.DIAGRAM_CONTEXT.equals(probe.craftingContext())) {
+                    records.add(NativeDiagramOracle.run(world, agent, probe, readout[0], onWorld, tick));
+                    continue;
+                }
                 SimpleCraftingWindow[] window = new SimpleCraftingWindow[1];
                 if (probe.openWindow()) {
                     onWorld.accept(() -> window[0] = NativeCraftingOracleEvents.openBenchWindow(
@@ -283,7 +300,13 @@ final class NativeCraftingOracle {
                 records.add(oracle);
             }
         }
-        return new ResetOutcome(readout[0], records);
+        List<String> processingRecords = new ArrayList<>();
+        if (fixture != null) {
+            for (ProcessingProbe probe : fixture.processing()) {
+                processingRecords.add(NativeProcessingOracle.run(world, agent, probe, onWorld));
+            }
+        }
+        return new ResetOutcome(readout[0], records, processingRecords);
     }
 
     /**
@@ -337,7 +360,11 @@ final class NativeCraftingOracle {
      * names the Fieldcraft context.
      */
     static NativeWorldVerbRequest probeRequest(CraftRequest probe, ResetReadout readout) {
-        boolean bench = NativeCraftingOracleFixture.BENCH_CONTEXT.equals(probe.craftingContext());
+        // A diagram probe runs in the Armory's window; its carrier request names the placed bench.
+        String context = NativeCraftingOracleFixture.DIAGRAM_CONTEXT.equals(probe.craftingContext())
+            ? NativeCraftingOracleFixture.BENCH_CONTEXT
+            : probe.craftingContext();
+        boolean bench = NativeCraftingOracleFixture.BENCH_CONTEXT.equals(context);
         BenchReadout placed = readout == null ? null : readout.bench();
         if (bench && placed == null) {
             throw new IllegalStateException("bench crafting probe needs a placed bench");
@@ -366,7 +393,7 @@ final class NativeCraftingOracle {
             "oracle-probe",
             probe.quantity(),
             "",
-            probe.craftingContext(),
+            context,
             bench ? placed.x() : 0,
             bench ? placed.y() : 0,
             bench ? placed.z() : 0,
@@ -382,6 +409,11 @@ final class NativeCraftingOracle {
     /** Reset info: the readout, the probe count, and each probe's record as one JSON array. */
     static void putResetInfo(Map<String, Object> info, ResetOutcome outcome) {
         putReadout(info, outcome == null ? null : outcome.readout());
+        List<String> processing = outcome == null ? List.of() : outcome.processingRecords();
+        info.put("native_processing_oracle_count", processing.size());
+        if (!processing.isEmpty()) {
+            info.put("native_processing_oracle_records_json", "[" + String.join(",", processing) + "]");
+        }
         List<NativeCraftingOracle> records = outcome == null ? List.of() : outcome.records();
         info.put("native_craft_oracle_count", records.size());
         if (records.isEmpty()) {
@@ -429,6 +461,11 @@ final class NativeCraftingOracle {
         Ref<EntityStore> agent,
         NativeCraftingOracleFixture fixture
     ) {
+        return placeBench(world, agent, fixture.benchBlockId());
+    }
+
+    /** Places the named bench block two blocks west of the settled actor and returns where it went. */
+    static BenchPlacement placeBench(World world, Ref<EntityStore> agent, String benchBlockId) {
         TransformComponent transform = world.getEntityStore().getStore()
             .getComponent(agent, TransformComponent.getComponentType());
         if (transform == null) {
@@ -440,16 +477,16 @@ final class NativeCraftingOracle {
         int x = (int) Math.floor(position.x) - 2;
         int y = (int) Math.floor(position.y);
         int z = (int) Math.floor(position.z);
-        NativeWorldAccess.setBlock(world, x, y, z, fixture.benchBlockId());
+        NativeWorldAccess.setBlock(world, x, y, z, benchBlockId);
         BlockType placed = NativeWorldAccess.getBlockType(world, x, y, z);
         if (
             placed == null
                 || placed.getBench() == null
-                || !fixture.benchBlockId().equals(placed.getId())
+                || !benchBlockId.equals(placed.getId())
         ) {
             throw new IllegalStateException(
                 "crafting bench fixture did not place a bench: "
-                    + fixture.benchBlockId()
+                    + benchBlockId
             );
         }
         return new BenchPlacement(x, y, z, placed.getId());
@@ -532,7 +569,7 @@ final class NativeCraftingOracle {
             : containerSlots("player_inventory", inventory);
     }
 
-    private static List<Slot> containerSlots(String name, ItemContainer container) {
+    static List<Slot> containerSlots(String name, ItemContainer container) {
         List<Slot> slots = new ArrayList<>();
         int capacity = Short.toUnsignedInt(container.getCapacity());
         for (int index = 0; index < capacity; index++) {

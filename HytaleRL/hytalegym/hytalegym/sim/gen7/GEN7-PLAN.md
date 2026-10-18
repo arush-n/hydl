@@ -256,6 +256,12 @@ player damage. The target is an NPC again; the combo hits land (61 to 51 to 41 t
 the ancient-steel combo (no hits) and Big Arrow (82 applied against 105), and the combo test's third-contact expectation (27 is
 the gen-5 value; 0.7.2 authors 13).
 
+**Crafting oracle, stage 5 (2026-10-18; FIDELITY-0.7.2.md section (v); jar `4A5E5D6D`).** Processing benches advance on game
+time once the probe runs the world and the clock unpaused (the stepped bridge world pauses both): Campfire fish 61.9 game
+seconds, Furnace copper bar about 301 game seconds with three sticks and one charcoal; the Armory axe is a click-craft landing
+two ticks after the request. The simulator side now has every crafting stage's native shape; the open bridge items are the
+Tannery and Salvagebench, refusals and negative controls.
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the

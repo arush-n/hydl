@@ -89,6 +89,7 @@ final class NativeCraftingOracleLedger {
     private String executionScope = "";
     private long firstRemovedTick = -1L;
     private long firstAddedTick = -1L;
+    private String extraFields = "";
 
     NativeCraftingOracleLedger(
         String recipeId,
@@ -157,6 +158,11 @@ final class NativeCraftingOracleLedger {
     /** The execution scope the craft was accepted under; empty when refused. */
     void executionScope(String scope) {
         executionScope = scope == null ? "" : scope;
+    }
+
+    /** Pre-encoded JSON members, each starting with a comma, appended to the record; empty by default. */
+    void extraFields(String members) {
+        extraFields = members == null ? "" : members;
     }
 
     String status() {
@@ -323,7 +329,7 @@ final class NativeCraftingOracleLedger {
             appendField(out, "detail", event.detail());
             out.append('}');
         }
-        out.append("]}");
+        out.append(']').append(extraFields).append('}');
         return out.toString();
     }
 

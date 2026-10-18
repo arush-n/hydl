@@ -86,3 +86,19 @@ need new mechanics on the simulator side after the oracle answers. The bridge re
   Not proven live: the bench did not advance in the bridge world (its game clock is paused). The Armory is a click-craft
   (`CraftItemAction` -> `queueCraft` ORDERED), not `craft_recipe`; no separate diagram item is needed (reader's read); not
   run live. Both stay open on the bridge side.
+
+## Answers, stage 5 measured (2026-10-18; FIDELITY-0.7.2.md section (v); jar `4A5E5D6D`)
+
+- Processing: container placement plus game time, with the world and the game clock running (the bridge's stepped world
+  pauses both, which is why nothing advanced before). Campfire fish (2.0 s): output 61.9 game seconds after activation, 58 to
+  59 world ticks; one stick (4.0 s of fuel) consumed 2 ticks after activation; the input consumed at the output. Furnace copper
+  bar (10 s): output at about 301 game seconds, 286 to 289 world ticks; three sticks; one charcoal at the second fuel consumption
+  (the asset's extra output, one per two fuel items, inferred from the asset plus one observation). Model on game seconds
+  (about 1.0 to 1.07 game seconds per world tick across launches), not tick counts. Probe: `processing_oracle_requests`.
+- Diagram (Armory): a click-craft through `CraftItemAction` with ORDERED removal from the window's positional input slots; the
+  Weapons/Axe category must be selected first (a window setting, not an item; the default is Weapons/Sword); no diagram item
+  beyond the recipe's inputs; queued at the request tick, inputs out and the axe in two ticks later; recipe time 0.0 s.
+  Probe: `crafting_oracle_requests` with `crafting_context` "diagram", `category`, `item_category`.
+- Open: Tannery and Salvagebench, processing refusals, diagram negative controls; the simulator needs a processing action
+  (insert, activate, advance by game seconds) and a diagram action (category, positional inputs, craft) rather than
+  `craft_recipe`.
