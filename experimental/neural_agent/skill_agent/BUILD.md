@@ -305,6 +305,22 @@ rules: gates recorded before claims, commit per step, never push, stage only cha
 | B6 | **Per-skill progress and termination reasons in the contract.** From the catalogue's "done" column: the typed progress signals and the stop reasons each verb reports into the status stream | every contract carries them; the stub bodies emit them; the scratchpad shows them | the context the upper layers need to know when to ask for more (owner) |
 | then | E2-E6 of section 6 on the rendered gen-7 locomotion engine (the set encoder against the flat MLP on the baseline task; one body, three verbs; typed arguments; interruption; calibrated status) | section 6 bars | needs the port's phase 2 (locomotion, LOS) |
 
+B2's observation, recorded as the owner asked (ruling 2026-10-17, "go ahead"). The cloned body reads three
+token types the body contract already carries:
+- **self** (`SelfToken`): health, meters, grounded, facing, speed;
+- **entity** (`EntityToken`): the opponent, marked, with visible and last-seen age;
+- **geometry** (`GeometryToken`): up to 64 solid, fluid, climbable or damaging cells of the trace's 9x9x9 grid,
+  nearest first.
+
+Light, route, kit, inventory and block-candidate tokens are not filled: these NPC traces have no data for them.
+The labels add one rule to arena's four, body yaw from body steering.
+
+What the control showed (`skill_agent/README.md` 2.8): geometry helps body turning on the held-out generated world
+(+0.079) and hurts the compass on the held-out flat world (-0.079), against a masked-geometry control with the same
+network. Next for this observation (not started):
+- choose obstacle and height-change cells over the floor (the nearest 64 are mostly floor);
+- record traces on more worlds before judging the token.
+
 Owner items outstanding from phase A: pushing the eight commits; reviewing that session's edits to the
 private catalogue (five reworded activity sequences, six added programs); the uncommitted pursuit fix in
 `arena/training/runs/pursuit_run.py`.

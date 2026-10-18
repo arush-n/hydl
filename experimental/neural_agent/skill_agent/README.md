@@ -420,7 +420,41 @@ other. 1,500 steps take about 6 s on CPU. Held-out agreement against the majorit
 - **Competence:** not shown. Train agreement is about 0.97 to 0.99, but held out it stays near the
   baselines. Only the compass beats its baseline every time, by 2.6 to 7.7 points. Attack, 1.1 % of the
   rows, is never learned.
-- **Why:** a self token and an opponent token cannot show terrain or the NPC's own internal state.
+- **Why (v1, v2):** a self token and an opponent token cannot show terrain or the NPC's own internal state.
+  v3 adds terrain; see below.
+
+**Terrain, meters and visibility (v3, 2026-10-17, with the owner's go-ahead).** Each row now also carries
+what the traces record about the NPC's surroundings:
+- **Terrain:** up to 64 geometry tokens, the solid, fluid, climbable or damaging cells of the 9x9x9 grid
+  around the NPC nearest to it. They come from each frame's geometry record (`hytalegym.geometry.parse_geometry`).
+  The grid's origin is the NPC's floored position, so a cell's centre is origin + offset + 0.5.
+  - The features are the agent-frame offset, solid, climbable, a fluid one-hot (the gym has no
+    fluid-id-to-name table, so the kind is left unknown), hazard and top_walkable.
+- **Meters:** stamina, mana, signature energy and oxygen on the self token, from the frame's actor evidence.
+- **Visibility:** visible and last-seen age on the opponent token, from `target_perceptible`.
+
+The labels are identical to v2. In these traces the meters never change (full, or 0 for signature energy),
+the target is perceptible on 99.6 % of rows, and every frame has more than 64 candidate cells (mean 318),
+all plain solid ground. So the terrain tokens describe the floor more than any obstacles.
+
+The control: the same network and initial parameters, with the geometry tokens present or masked out
+(`bc_smoke --mask-type geometry`). Mean held-out agreement, with geometry / masked / baseline:
+
+| held out | compass | yaw | body yaw | pitch |
+|---|---|---|---|---|
+| generated world (2 seeds) | 0.641 / 0.632 / 0.593 | 0.901 / 0.891 / 0.905 | 0.793 / 0.714 / 0.772 | 0.917 / 0.897 / 0.934 |
+| flat (3 seeds) | 0.686 / 0.765 / 0.745 | 0.897 / 0.910 / 0.885 | 0.817 / 0.838 / 0.792 | 0.983 / 0.980 / 0.983 |
+
+Reading:
+- **Terrain is information.** On the generated world it lifts body turning by 0.079, above its baseline.
+- **It also costs.** Trained on varied terrain and tested on a uniform floor, the compass drops by 0.079,
+  with a wide seed spread.
+- **The likely weakness is the token selection** (inferred): the 64 nearest cells are mostly floor. A
+  selection of obstacles and height changes, and more worlds, are the next things to try. BUILD.md 7b
+  records the choice.
+
+Known limit: the opponent's position comes from its true state even on the 0.4 % of rows where it is not
+perceptible. The legal observation mode would hide it.
 
 **Body turning (v2, 2026-10-17, with the owner's go-ahead).** Arena's projection has no rule for the
 body's own turn, though every frame steers the body and 13,593 of 21,088 request a body yaw. The dataset

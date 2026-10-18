@@ -1,6 +1,6 @@
 """B2's smoke: a tiny behaviour-cloning body on the native 0.7.2 traces, held out by world (``BUILD.md`` 7b, B2).
 
-The body is the B1 trunk (``encoder.py``) over the dataset's self and entity tokens, with one linear head per
+The body is the B1 trunk (``encoder.py``) over the dataset's self, entity and geometry tokens, with one linear head per
 supervised head of the gen-7 layout (base action, locomotion compass, yaw and pitch deltas: the heads the
 native projection labels). The loss is the cross-entropy over supervised entries only::
 
@@ -41,10 +41,12 @@ import optax
 from experimental.neural_agent.skill_agent.combiner import AgentContext, BodyStep
 from experimental.neural_agent.skill_agent.encoder import EncoderConfig, apply_encoder, init_encoder
 from experimental.neural_agent.skill_agent.library import SkillLibrary
-from experimental.neural_agent.skill_agent.surface import EntityToken, SelfToken, head_layout
+from experimental.neural_agent.skill_agent.surface import EntityToken, GeometryToken, SelfToken, head_layout
 from experimental.neural_agent.skill_agent.training.bc_dataset import DEFAULT_OUT, BCDataset, build_dataset
 
-TOKEN_TYPES: tuple[tuple[str, int], ...] = (("entity", len(EntityToken.FEATURES)), ("self", len(SelfToken.FEATURES)))
+TOKEN_TYPES: tuple[tuple[str, int], ...] = (
+    ("entity", len(EntityToken.FEATURES)), ("self", len(SelfToken.FEATURES)), ("geometry", len(GeometryToken.FEATURES)),
+)
 """The token sets the dataset carries, in the trunk's order."""
 BOX = ((-1.0e6, -64.0, -1.0e6), (1.0e6, 512.0, 1.0e6))
 
@@ -104,13 +106,27 @@ class ClonedBody:
 
 
 def run_smoke(dataset: BCDataset, *, steps: int = 1500, batch_size: int = 256, seed: int = 0,
-              held_out_world: str = "hytale_generator", checks: int = 32) -> dict[str, Any]:
+              held_out_world: str = "hytale_generator", checks: int = 32, mask_types: Sequence[str] = ()) -> dict[str, Any]:
     """Train on one world, report on the other, then run the body path check. Returns the report."""
 
     train, test = dataset.split(held_out_world=held_out_world)
     heads = _heads(dataset, train)
     columns = tuple(dataset.head_names.index(name) for name in heads)
     config = EncoderConfig(token_types=TOKEN_TYPES, width=64, heads=4, layers=2, output=128)
+    unknown = sorted(set(mask_types) - {name for name, _ in TOKEN_TYPES})
+    if unknown:
+        raise ValueError(f"mask_types names token types {unknown} the trunk does not read")
+
+    def batch_of(rows: Any) -> dict[str, Any]:
+        """The dataset's token batch with every type in ``mask_types`` masked out: the control that removes a
+        type's information while the network and its initial parameters stay exactly the same."""
+
+        batch = dataset.token_batch(rows)
+        for name in mask_types:
+            features, mask = batch[name]
+            batch[name] = (features, np.zeros_like(mask))
+        return batch
+
     params = init_body(jax.random.PRNGKey(seed), config, heads)
     optimizer = optax.adam(1e-3)
     state = optimizer.init(params)
@@ -128,7 +144,7 @@ def run_smoke(dataset: BCDataset, *, steps: int = 1500, batch_size: int = 256, s
     losses = []
     for _ in range(steps):
         rows = rng.choice(train, size=batch_size)
-        params, state, loss = update(params, state, dataset.token_batch(rows), jnp.asarray(rows))
+        params, state, loss = update(params, state, batch_of(rows), jnp.asarray(rows))
         losses.append(float(loss))
     train_seconds = time.perf_counter() - started
 
@@ -136,7 +152,7 @@ def run_smoke(dataset: BCDataset, *, steps: int = 1500, batch_size: int = 256, s
         out = []
         for start in range(0, rows.size, 4096):
             chunk = rows[start:start + 4096]
-            logits = logits_of(params, dataset.token_batch(chunk), config, heads)
+            logits = logits_of(params, batch_of(chunk), config, heads)
             out.append(np.stack([np.asarray(jnp.argmax(logits[name], axis=-1)) for name in heads], axis=1))
         return np.concatenate(out, axis=0)
 
@@ -172,13 +188,14 @@ def run_smoke(dataset: BCDataset, *, steps: int = 1500, batch_size: int = 256, s
     for agent, row in enumerate(picks):
         request = library.request("cloned_fight", agent=agent, request_id=0, tick=0, entity=7)
         context = AgentContext(world_bounds=BOX, known_entities=frozenset({7}),
-                               observation_tokens=dataset.token_batch(np.asarray([row])))
+                               observation_tokens=batch_of(np.asarray([row])))
         step = combiner.step(0, agent, [request], context)
         direct = predict(np.asarray([row]))[0]
         mismatches += int(any(step.factors[names.index(name)] != int(direct[k]) for k, name in enumerate(heads)))
     return {
         "schema": "skill_agent_bc_smoke_v1",
-        "held_out_world": held_out_world,
+        "held_out_world": held_out_world, "token_types": [name for name, _ in TOKEN_TYPES],
+        "masked_types": list(mask_types),
         "train_rows": int(train.size), "test_rows": int(test.size),
         "heads": report_heads,
         "steps": steps, "batch": batch_size, "seed": seed,
@@ -197,11 +214,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--held-out-world", default="hytale_generator")
     parser.add_argument("--dataset", type=Path, default=DEFAULT_OUT,
                         help="a saved dataset (bc_dataset's CLI writes it); built from the traces when absent")
+    parser.add_argument("--mask-type", action="append", default=[], dest="mask_types",
+                        help="mask a token type out (the control: same network, that information removed)")
     parser.add_argument("--out", type=Path)
     args = parser.parse_args(argv)
     dataset = BCDataset.load_npz(args.dataset) if args.dataset.is_file() else build_dataset()
     report = run_smoke(dataset, steps=args.steps, batch_size=args.batch, seed=args.seed,
-                       held_out_world=args.held_out_world)
+                       held_out_world=args.held_out_world, mask_types=args.mask_types)
     text = json.dumps(report, indent=1, default=str)
     if args.out:
         args.out.write_text(text + "\n")
