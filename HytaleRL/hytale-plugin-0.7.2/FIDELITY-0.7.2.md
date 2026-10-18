@@ -972,6 +972,12 @@ fork as before and lets a running tracked ability be replaced only by a non-guar
 Java: full `gradlew test --rerun --no-build-cache` 112 suites, 389 tests, 0 failures (baseline 111 / 387); the touched
 classes `InteractionAdmissionDryRunTest` 2, `NativeInteractionCapabilityViewTest` 2, `SourceFileSizeRatchetTest` 2
 (coordinator re-run); `tests/test_server_versions.py` 7 passed; `NativeEnvironmentSession.java` 9,642 of 9,700 lines.
-Not measured live: the guard and dodge legality through the shared capture; the guard-fork gate has no live test.
+Guard and dodge legality through the shared capture, re-measured by the fidelity session on `A4487CF3` (bridge 5572, render of
+`4661d5c` and stock): no 5d or 5f row moved (guard cancel: render 2 of 2 pass, stock 2 of 2 fail, as on `8720BC76`; learner rows
+dodge_left, neutral and look: render 6 of 6 pass, stock fails dodge_left on both seeds, as on `B56FD38E`). The signature lifecycle,
+with the harness steering the body as well as the head, now runs natively end to end (aim aligned at tick 10, activation accepted
+and finished at 11 with energy 5 to 0 and charges 0 to 101, the Big Arrow shot accepted at 13 and finished at 20) and fails only
+at the contact deadline with `target_health` still 105.0: the same cancelled projectile damage as the combo rows, now the one
+open item for both. The guard-fork gate still has no live test.
 Claim most likely wrong (agent): that the execution value 4 is a Python resolution artefact rather than what the engine
 runs; the engine's child selection was not read.
