@@ -107,7 +107,11 @@ bridge 5556), the timing items 2 to 4 measured with the learner-row harness plus
 (#74, bridge 5558: the duel harness pitch, the expectations 13 and 82; the ancient-steel scalar construct as a spec), and
 stage 5 on the simulator (processing benches and the Armory click-craft as constructs replaying the six `v6_*` receipts; no
 bridge). Concurrent construct lanes share four overlay files under the lock protocol of `sim/PORTING.md` (`80d3bbd`:
-`.overlay.lock`, noclobber, wait and retry; one lane committed at a time). Queued: the simulator half of #71, the terrain recapture itself, the stub mechanics (#69), a live Region-step run of the
+`.overlay.lock`, noclobber, wait and retry; one lane committed at a time). A fifth lane (#77, engine, no bridge) closes two
+legal-observation gaps the lower-layer session reported: the certified pair path ignores `view_sector_full_angle_radians`
+(perceptible at any bearing) and the v3 row blanking has no sensor-range term (an opponent beyond range 16 still publishes
+defense and stamina rows); both land opt-in with the identity fingerprints unchanged (d8477b63 / b02ee274) and the swap plan
+regenerated after the commit; the FOV16/FOV32 definition and the angle were asked of the peer. Queued: the simulator half of #71, the terrain recapture itself, the stub mechanics (#69), a live Region-step run of the
 timed executor path.
 Committed earlier: the
 crafting oracle stage 3 (`274aaec`, timed bench crafts with probe events; pin `5FE609E2`), phase 4j (`a534e83`: the Trork
