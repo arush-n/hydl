@@ -1051,8 +1051,9 @@ later. Java: full `gradlew test --rerun --no-build-cache` 116 suites, 409 tests,
 touched classes re-run here, 0 failures; `tests/test_server_versions.py` 7 passed. Not done: option A; stages 3 and 5;
 identity-mismatch refusals (probes use the placed bench's own readout as the expected identity); tier-set side effects
 (`setBlockInteractionState`, `notifyTierUpgraded`) not replicated; the memories count persists across resets within one
-launch (each scenario ran in its own launch). Python side (the simulator session): `native_action_resolution.py` rejects
-`expected_bench_type != 0` and needs type 3 once the structural queue is modelled; `native_world_actions.py` should read the
+launch (each scenario ran in its own launch). Python side (the simulator session): `native_action_resolution.py` rejected
+`expected_bench_type != 0`; type 3 is accepted on the 0.7 line since `325f938` (0.5.7 still refuses), and the gen-7 structural
+crafting construct (`025ee62`) takes the offered catalog from 263 to 1,168 recipes, all committing (903 of the 910 structural rows); `native_world_actions.py` should read the
 oracle keys; a reset-option helper for the harness; JAX `bench_tier_level` from `native_crafting_bench_tier` and the memories
 level pinned to `native_memories_level`; the structural queue as ORDERED input with one-tick landing. Claim most likely wrong
 (agent): that unbound probe outcomes equal a candidate-bound production craft's; the probe bypasses two gates and uses the
