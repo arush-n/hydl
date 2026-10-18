@@ -277,7 +277,10 @@ def run_session(
     gets the seam's regime, all once before the run; ``current_tick`` gets the
     clock tick of step 1 before each decide.
     With them a decider writes its requests into S_t in the session's tick
-    space (``docs/SYSTEM_ONE.md`` §9.10).
+    space (``docs/SYSTEM_ONE.md`` §9.10). A decider with a callable ``on_tick``
+    is called on every tick, after the scratchpad sections of that tick are
+    written, as ``on_tick(clock_tick, transition, hierarchy_state)``; the lower
+    layer's combiner wrapper uses it to run between decisions (2026-10-17 late).
     """
 
     if executive is not None and executive_writer is None:
@@ -298,6 +301,7 @@ def run_session(
         if hasattr(host_decider, "host_respects_commitment"):
             host_decider.host_respects_commitment = config.host_respects_commitment
     binds_tick = host_decider is not None and hasattr(host_decider, "current_tick")
+    observes_ticks = host_decider is not None and callable(getattr(host_decider, "on_tick", None))
 
     batch = int(jnp.asarray(initial_state.carry.previous_action).shape[0])
     goal_structure = jax.tree.structure(initial_state.carry.goal)
@@ -449,6 +453,12 @@ def run_session(
                 questions = tuple(pending[information_consumed:])
                 information_consumed = len(pending)
             scribe.record_tick(clock_tick, transition, new_state, information_requests=questions)
+
+        # 6. a host decider's per-tick observer, after the sections of this tick are written: the lower
+        #    layer's combiner runs here when its wrapper defines ``on_tick`` (skill_agent/scratchpad.py), so
+        #    the status stream carries running statuses between decisions, not only at them
+        if observes_ticks:
+            host_decider.on_tick(clock_tick, transition, new_state)
 
         return new_state if changed else None
 
