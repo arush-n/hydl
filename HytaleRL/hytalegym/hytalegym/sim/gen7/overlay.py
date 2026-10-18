@@ -190,8 +190,11 @@ HOOKS = (
          "31 attacks parent DamageEntityParent_Hit_Interrupt in 0.7.2; Trork_Brawler, Trork_Unarmed and "
          "Kweebec_Razorleaf carry no eligibility (static reading)"),
     Hook("mana_pool", "combat/mechanics/factory.py", "default_mechanics_rules",
-         f"{_MECHANICS}.mana:construct", "mana_pool", "stub", "7a",
-         "mana resource differential: 100/100, +1 per 0.3 s, rates within 5 %"),
+         f"{_MECHANICS}.mana_pool:construct", "mana_pool", "active", "7a",
+         "native_duel refill from 0 (live 0.7.2 bridge, native_agent_mana): +1 per 8.95 world ticks = 0.2982 s, "
+         "against the 0.3 s bar within 5 %; JAX: tick_resources from 0 at 1/30 s (rendered engine)",
+         "maximum 100 and initial 100 from stats/stat:Mana; the regeneration interval 0.3 s replaces the gen-5 "
+         "0.2 s literal (factory.py line 134); rune casts spend this pool only once rune_casting is built"),
     Hook("rune_casting", PROFILE_JAX, "hytale_0_5_7_loadouts",
          f"{_MECHANICS}.mana:construct", "rune_casting", "stub", "7b",
          "one differential per rune: cost, cooldown, cast time, flight, effect",

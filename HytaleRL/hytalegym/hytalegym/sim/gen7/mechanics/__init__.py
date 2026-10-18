@@ -15,7 +15,7 @@ from typing import Any
 #: Constructs field -> module under this package that owns it.
 CONSTRUCT_MODULES = {
     "hit_interrupt": "hit_interrupt",
-    "mana_pool": "mana",
+    "mana_pool": "mana_pool",
     "rune_casting": "mana",
     "hookshot": "hookshot",
     "dodge_action_head": "dodge",

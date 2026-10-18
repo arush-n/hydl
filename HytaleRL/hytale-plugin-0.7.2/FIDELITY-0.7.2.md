@@ -545,3 +545,37 @@ timing (one to two ticks late); 6a and 6c native projectiles that register less 
 shortbow damage in 10 runs, 1.0 vs 6.0 in the projectile contact, no crossbow combo contact in 2 runs; cause not
 isolated); the learner-row observation and the two group compares, on both engines; 11's packer; 5b and 5d, which
 have no live test.
+
+## (j) Phase 4b: bridge pieces and the first gen-7 construct (2026-10-18; receipts `~/.claude/jobs/31947bd7/tmp/phase4b/`)
+
+Bridge jar: the rebuilt jar is `HytaleRLBridge072-0.1.0.jar` SHA-256 `8B09661F...AC740B`, now the pin in
+`hytalegym/server_versions/v0_7.py` (the phase-4 pin `686BC4BC...0012` is retired). The rebuild is reproducible: the
+unchanged tracked source (scratch copy, `receipts/repro_build_unchanged.log`) rebuilds to `686BC4BC...0012`. Three
+intermediate builds were live-tested and superseded (`F4C4C6A6...6D99`, `7BF897A3...0F15F`, `24B9DA01...64DB03`);
+the final build adds the `native_agent_mana`, `native_agent_state_name`, `combat_target_state_name` and
+`{agent,combat_target}_status` info keys and the `hit_interrupt_duel` fixture (below).
+
+| Row | What ran | Measured | Bar | Status |
+|---|---|---|---|---|
+| 7a refill | `native_duel` reset with Mana overridden to 0 (`native_fidelity_resource_overrides`), 180 native-AI steps, one tick each, live bridge (`receipts/mana_mana2.json`) | 20 increments of +1 over 19 gaps; mean 8.9474 world ticks = **0.2982 s** per point (3.353 per s) | 0.3 s within 5 % | MATCH (native) |
+| 7a refill, JAX | rendered gen-7 engine: `tick_resources` from 0 at 1/30 s per tick, 300 ticks (`receipts/mana_jax_gen7.json`) | mean gap 9.0 ticks = 0.3000 s; maximum 100; amount 1 | 0.3 s within 5 % | MATCH (JAX side, same bar as native) |
+| 7a gen-5 control | the unrendered source through the same function (`receipts/mana_jax_gen5.json`) | maximum 0, no regeneration | gen 5 unchanged | control |
+| 7a maximum and initial | reset info with no override (`receipts/duel_duel1.json`, `duel_duel2.json`) | `native_agent_mana` 100.0, `native_agent_mana_maximum` 100.0 | 100 / 100 | MATCH (native readout) |
+| 7b runes | none built | - | cost, cooldown, cast time, flight, effect | ABSENT (not started) |
+| 5a interrupt, stun, flinch | `hit_interrupt_duel` (new fixture): `Goblin_Scrapper` agent, `Skeleton_Fighter` target, native AI, 300 steps (`receipts/duel_duel3.json`) | the reset passes the mutual-hostility check (both HOSTILE; Goblin -> Skeleton is native, Skeleton -> Goblin by the server attitude override). The skeleton carries `Hit_Interrupt_Eligible` from engagement (1.0 s, refreshed). Two club hits (ticks 72 and 83, health 70 -> 58 -> 46) add only `Red_Flash` (0.2 s) and `Combat.Message` for about four ticks (72 to 75); **no** `Hit_Interrupt_Flinch`, `Stunned` or `Recovery_Pending` effect appears | flinch 0.5 s, stun 0.7 s, attack cancelled | NOT MET (native shows no interrupt chain for these NPC club hits; cause not isolated; JAX side absent) |
+| 5a JAX | no JAX profile for Skeleton_Fighter or Goblin_Scrapper (`jax/combat/arsenal/profiles/native_npcs.py` covers Feran, Kweebec, Trork) | - | - | ABSENT on the JAX side; the construct is not built (a no-op on every profile the simulator models) |
+| 5b knockback (Set vs Add) | no harness built this phase | - | per-hit displacement | UNMEASURED (the native actor evidence exposes `pending_knockback_velocity` only under learner-v3) |
+| 6a shortbow, tier 0 | `_native_shortbow_projectile_contact_trace` (kill_trork default fixture, open; `los_wall` walled), seeds 20260729 and 7 (`receipts/shortbow_shortbow1.json`); JAX gen-5 table from `_jax_shortbow_projectile_contact_traces` (`receipts/shortbow_jax_gen5.json`) | open: native **hit at tick 7, damage 1.0** on both seeds; JAX **hit at tick 6, damage 6.0**. walled: no hit on either side. The fixture registers a native hit, so the ledger's earlier 'no native hit' cases (outer roots, seeded variants) are not reproduced here and stay open | range error <= 2 % per tier | MISMATCH: damage is content (0.7.2 table 1 against gen-5 6); the one-tick hit delay fits the launch 12 against 15 (inference, untested). Next: activate the shortbow rows on the gen-7 render and re-run this helper |
+| 6b-6c, 7b, 9-10 | not run | - | - | unchanged |
+
+Static finding for the next session: among the 66 pairs probed (`receipts/pairs_*.json`: Kweebec, Trork, Feran,
+Goblin, Skeleton, scarak, predator, vermin, golem and void roles), only Kweebec <-> Trork is mutual by default.
+Skeleton_Fighter's attitude group is `Empty` and its NPC default is Ignore; among the probed roles the only
+HOSTILE edge to a skeleton is Goblin_Scrapper -> Skeleton_Fighter. `OverrideAttitude` memory exists only on roles whose tree contains
+that action (Template_Intelligent, Template_Skeleton, the Trork and Kweebec templates named in `Assets.zip`), so the
+fixture overrides the target side only and relies on the Goblin edge. The override is the server's own API (the
+`ActionOverrideAttitude` path); the hostility check still reads `WorldSupport.getAttitude` on both sides.
+
+Open after this phase: 5a's flinch (a flagged sword or dagger attack, not an NPC club, is the next thing to test),
+5b (a moving target hit by a known force, to separate Set from Add), 6a (launch and hit ticks per tier on the live
+bridge), 7b (no rune exists in the simulator), and the JAX side of 5a (a Skeleton or Goblin profile).

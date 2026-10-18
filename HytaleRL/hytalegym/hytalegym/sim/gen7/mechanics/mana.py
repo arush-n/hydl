@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-SWITCHES = ("mana_pool", "rune_casting")
+SWITCHES = ("rune_casting",)
 IMPLEMENTED = False
 
 

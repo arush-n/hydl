@@ -148,6 +148,31 @@ identity gate 4 passed against 8707eec (36 min); against HEAD it failed to impor
 passed against that HEAD as well (4 passed, 24 min, the coordinator's run): gen 5 renders bit-identical from the
 repaired HEAD.
 
+
+**Phase 4b status (2026-10-18; receipts `~/.claude/jobs/31947bd7/tmp/phase4b/`, ledger `FIDELITY-0.7.2.md` section j).**
+Bridge: jar `8B09661F...AC740B` is pinned (reproducible from committed source); readouts for mana and NPC state names; the
+`hit_interrupt_duel` fixture (mutual HOSTILE by a server attitude override on the target side). Gen 7: the mana pool
+construct (`mechanics/mana_pool.py`, hook 7a active) matches native refill within 5 % (native 0.2982 s, JAX 0.3000 s,
+bar 0.3 s); maximum and initial 100 read on the bridge. **Not met:** the melee interrupt (row 5a): two native goblin
+club hits add no flinch, stun or recovery effect, so the construct is not built; the skeleton has no JAX profile
+either. **Not built:** the knockback harness (5b; Set versus Add undecided), the runes (7b), the shortbow tiers (6a, no
+run this phase; the tier-0 launch of 12 against 15 is a candidate cause, untested). The whole phase is in the
+receipts; no fidelity is claimed beyond row 7a.
+
+**Bridge defects on 0.7.2, measured by the fidelity session (2026-10-18; its receipts `fid/receipts/` in its scratchpad),
+next for the bridge owner (phase 4c), none of them test bugs.** (1) A policy-bound group actor never turns: with jar
+`8B09661F`, seed 570057, actor one's `combat_target_yaw_degrees` stays 0.00 through the face-each-other reset command
+and six +30 degree `camera_delta_yaw` steps (37 steps), so it faces away; this one fault explains the dodge-overlap
+control hit never landing, the group combat measuring 0 damage, and the guard pose staying at -180. The yaw code is the
+same in both plugins, so 0.7.2 likely no longer drives an NPC body from that path (inference). Regression test, local to
+that session: `tests/fidelity/combat/group/test_native_group_actor_turn.py`. (2) The crossbow reload interrupt stops the
+world: `Interaction.tickInternal` (Interaction.java:534) throws "contextHeldItemContainer is null", the agent is removed,
+the removal throws "Entity is already not in a world!" on the world thread, and the bridge reports "World thread is not
+accepting tasks"; the fix is in how the bridge builds the held-item context for its headless player, or in the server.
+Also open for 5f: the kunai +1 per throw may be measurement (native sets accepted one drain late,
+NativeEnvironmentSession.java:5789-5797, and the test re-requests on finish); the sword +2 matches a player-backed
+selector in JAX; probes P1 and P2 of that session decide before any 5f patch.
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the
