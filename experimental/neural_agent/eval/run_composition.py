@@ -724,7 +724,7 @@ def run_arm(
     context_fn: HierarchicalContextFn = jax_hierarchical_context,
     actor_input_fn: HierarchicalActorInputFn = actor_policy_input,
     catches_known: bool = True,
-    host_respects_commitment: bool = False,  # accepted for a uniform call; the compiled runner has no host seam
+    host_respects_commitment: bool = True,  # accepted for a uniform call; the compiled runner has no host seam
 ) -> ArmRun:
     """Compose one arm, run it ``episodes`` times through the compiled collector, and return its row.
 
@@ -810,7 +810,7 @@ def run_arm_eager(
     seed: int,
     task: Any,
     catches_known: bool = True,
-    host_respects_commitment: bool = False,
+    host_respects_commitment: bool = True,  # the session's default since 2026-10-17; False restores the earlier seam
 ) -> ArmRun:
     """Compose one arm and run it through ``session.run_session``, the eager loop.
 
@@ -1217,8 +1217,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--host-respects-commitment",
-        action="store_true",
-        help="eager runner: apply a host decider's goal per lane only where the skill's commitment allows a switch (mirrors the core)",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="eager runner: apply a host decider's goal per lane only where the skill's commitment allows a switch (mirrors the core; default on since 2026-10-17; --no-host-respects-commitment restores the earlier seam)",
     )
     parser.add_argument(
         "--js1-heads",

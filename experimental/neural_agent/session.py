@@ -123,9 +123,11 @@ class SessionConfig:
     # switch (the goal is invalid, its minimum commitment elapsed, it timed out, or an emergency
     # event fired) and only where it differs from the goal in force; unchanged lanes keep their
     # goal age. This mirrors ``HierarchicalAgentCore`` (switch_allowed) so host instances obey the
-    # skill's contract (owner ruling 2026-10-17: commitment belongs to the skill). Default False
-    # keeps the 2026-10-17 behaviour until the attribution runs are done.
-    host_respects_commitment: bool = False
+    # skill's contract (owner ruling 2026-10-17: commitment belongs to the skill). Default True since
+    # 2026-10-17 late: the learned instance passed G4 on three seeds under it and the program executor
+    # reproduces the rule under it once its clock reads the age's increase (ledger). False restores the
+    # earlier seam, which applied every host goal and zeroed every lane's goal age.
+    host_respects_commitment: bool = True
 
     def __post_init__(self) -> None:
         if isinstance(self.steps, bool) or not isinstance(self.steps, int) or self.steps < 1:
