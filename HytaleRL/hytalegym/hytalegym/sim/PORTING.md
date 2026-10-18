@@ -76,8 +76,10 @@ Each step ends with its gate, a command with a pass bar.
   they fail on the asset lookup before reaching any bridge code.
 - Several construct builders at once share four files: `sim/gen7/overlay.py`, `sim/common/profile.py`,
   `sim/gen7/mechanics/__init__.py` and `tests/sim/test_constructs.py`. Lock protocol (2026-10-18): before editing any of them,
-  create `sim/gen7/.overlay.lock` containing your lane name (fail if it exists: `set -o noclobber`); edit, run the two modules
-  you touched, remove the lock. If the lock exists, wait 60 s and retry, up to 30 min; never delete another lane's lock. The
+  create `sim/gen7/.overlay.lock` containing your lane name (fail if it exists: `set -o noclobber`); edit, run
+  `tests/sim/test_constructs.py` (it renders gen 7 and imports every construct) plus your own test module, and remove the lock
+  only when both pass: a hook that raises at render time breaks every lane's tests, not just yours (2026-10-18: a hook read
+  `jnp` from a wrapped module's globals that had none, and 61 unrelated tests errored until it was fixed). If the lock exists, wait 60 s and retry, up to 30 min; never delete another lane's lock. The
   construct module, its tests and its fixture are per lane (`sim/gen7/mechanics/<name>.py`, `tests/sim/test_<name>.py`) and
   need no lock. The coordinator commits one lane at a time, staging that lane's files only.
 - The gen-7 tools name gen 7: `sim_port.regen_swap_plan` checks `hytalegym.sim.gen7.overlay`, and `fidelity_index.py`
