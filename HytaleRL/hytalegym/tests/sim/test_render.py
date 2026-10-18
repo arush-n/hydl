@@ -230,6 +230,64 @@ def test_gen7_overlay_applies_its_patches_and_step_clock(gen7):
         "nominal_seconds": 1.0 / 30.0, "loaded_seconds": 1.0 / 30.0, "timing_profile_count": 1}
 
 
+def test_gen7_content_values_render_the_072_table_values(gen7):
+    from hytalegym.sim.common.content import adapters, load
+    from hytalegym.sim.gen7.overlay import CONTENT_VALUES
+    from hytalegym.sim.gen7.profile import PROFILE as GEN7_PROFILE
+
+    out, manifest = gen7
+    applied = {item["id"]: item for item in manifest["applied"]}
+    pending = {item["id"] for item in manifest["pending"] if item["kind"] == "redirect"}
+    assert len(CONTENT_VALUES) == 13 and not {r.id for r in CONTENT_VALUES} & pending
+    assert all(applied[r.id]["kind"] == "redirect" and applied[r.id]["fidelity_row"] == r.fidelity_row
+               for r in CONTENT_VALUES)
+    assert {r.fidelity_row for r in CONTENT_VALUES} == {"5f", "6a", "6c"}
+    assert all("differential" in r.source for r in CONTENT_VALUES)
+    values = {r.id: applied[r.id]["value"] for r in CONTENT_VALUES}
+    assert values["sword_selectors:_SWORD_SWING_LEFT_SELECTOR"] == 0.048
+    assert values["sword_selectors:_SWORD_SWING_RIGHT_SELECTOR"] == 0.048
+    assert values["sword_selectors:_SWORD_SWING_DOWN_SELECTOR"] == 0.056
+    assert values["sword_selectors:_SWORD_VORTEX_SPIN_SELECTOR"] == 0.13
+    assert values["sword_selectors:_SWORD_THRUST_SELECTOR"] == 0.267
+    assert values["sword_selectors:_SWORD_VORTEX_STAB_SELECTOR"] == 0.267
+    assert values["melee_hold_constants:_NESTED_OUTER_GATE_SECONDS"] == 0.174
+    assert values["melee_hold_constants:_SWORD_THRUST_HOLD_SECONDS"] == 0.739
+    assert values["melee_hold_constants:_DOWNSTRIKE_HOLD_SECONDS"] == 0.746
+    assert values["melee_hold_constants:_MACE_CHARGED_HOLD_SECONDS"] == 1.841
+    assert values["iron_template_damage:_iron_shortbow defaults"] == [1.0, 2.0, 4.0, 7.0, 19.0, 14.0]
+    assert values["shortbow_tiers:shortbow draw ladder launch speeds"] == [12.0, 22.0, 35.0, 50.0, 85.0]
+    assert values["iron_template_damage:_iron_crossbow defaults"] == 13.0
+    # The rendered values are the 0.7.2 table values (the redirects read the table, not these numbers).
+    tables = load(GEN7_PROFILE)
+    assert adapters.melee_hold_constants(tables)["_DOWNSTRIKE_HOLD_SECONDS"] == 0.746
+    assert adapters.shortbow_tiers(tables)["damage"][:4] == (1.0, 2.0, 4.0, 7.0)
+    assert adapters.shortbow_tiers(tables)["speeds"] == (12.0, 22.0, 35.0, 50.0, 85.0)
+    assert tables.effective_row("weapons", "item:Weapon_Crossbow_Iron")["damage"]["Combo_Projectile_Damage"]["base_first"] == 13.0
+    profile = (out / "combat/arsenal/profiles/hytale_0_5_7.py").read_text()
+    for literal in (
+        "    0.048, 0.1, 2.75, 0.5, 0.5, 90.0, 1.0, -60.0, 0.0, 30.0\n",
+        "    0.048, 0.1, 2.75, 0.5, 0.5, 90.0, -1.0, -60.0, 0.0, 30.0\n",
+        "    0.056, 0.1, 2.75, 0.4, 0.4, 90.0, 1.0, -60.0, 0.0, 90.0\n",
+        "    0.13, 0.1, 3.0, 1.0, 0.5, 360.0, -1.0, -90.0, 0.0, 0.0\n",
+        "_NESTED_OUTER_GATE_SECONDS = 0.174\n",
+        "_SWORD_THRUST_HOLD_SECONDS = 0.739\n",
+        "_DOWNSTRIKE_HOLD_SECONDS = 0.746\n",
+        "_MACE_CHARGED_HOLD_SECONDS = 1.841\n",
+        "    damage: tuple[float, ...] = (1.0, 2.0, 4.0, 7.0, 19.0, 14.0),\n",
+        "            (12.0, 22.0, 35.0, 50.0, 85.0),\n",
+        "    damage: tuple[float, ...] = (10, 13, 78),\n",
+    ):
+        assert profile.count(literal) == 1, literal
+    assert profile.count("    runtime_seconds=0.267,\n") == 2
+    for gen5_literal in ("0.05, 0.1, 2.75, 0.5, 0.5, 90.0, 1.0", "0.067, 0.1", "    0.15, 0.1, 3.0, 1.0, 0.5, 360.0, -1.0, -90.0, 0.0, 0.0\n", "runtime_seconds=0.3,",
+                         "_SWORD_THRUST_HOLD_SECONDS = 0.85\n", "_MACE_CHARGED_HOLD_SECONDS = 2.2\n",
+                         "(6, 9, 12, 16, 19, 14)", "(15, 30, 50, 70, 85),", "(10, 27, 78)"):
+        assert gen5_literal not in profile, gen5_literal
+    # Not applied (see the overlay's comment): the sword thrust hold speed stays 0.8 and the potion row stays pending.
+    assert "hold_speed_multiplier=0.8," in profile
+    assert "potions:_potions values" in pending
+
+
 def test_step_clock_rows_are_the_swap_plan_source_sites():
     from hytalegym.sim.gen7.overlay import STEP_CLOCK, STEP_CLOCK_SITES
 

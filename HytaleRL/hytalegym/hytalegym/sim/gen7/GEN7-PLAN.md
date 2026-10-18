@@ -236,7 +236,8 @@ of 10 live runs pass, 2 of 10 on stock), daggers (15 of 15 live), guard rules an
 the crossbow reload on `Ability4`, mana refill (0.298 s per point live against 0.300 s), line of sight on full blocks
 (partial blocks unmeasured), sword knockback (values from the 0.7.2 files, never measured live), crafting at 1,168 of 2,047
 recipes. Content values still on the gen-5 numbers: of 69 compared side by side, 50 are equal in both versions, 5 are
-covered by existing patches, and 14 differ and are to apply: sword timing (6 attack-window times and 4 hold times, for
+covered by existing patches, and 14 differ (13 applied as Redirects on 2026-10-18, FIDELITY-0.7.2.md section (w); the
+potion values wait on the reader): sword timing (6 attack-window times and 4 hold times, for
 example 0.85 to 0.739 s), shortbow damage 6/9/12/16 to 1/2/4/7 and launch speed 15/30/50/70 to 12/22/35/50, the iron
 crossbow combo damage 27 to 13, and potions. Broken: the potion reader crashes on 0.7.2 (the stamina potion no longer applies
 its 15 s cooldown effect, the simulator still does); weapon durability (57 maximum and 82 loss-per-hit changes across 143

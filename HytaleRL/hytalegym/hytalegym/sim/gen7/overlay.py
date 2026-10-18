@@ -26,9 +26,11 @@ Not patched, and why: the dodge head size (a remap across the action surface,
 not a constant: hook ``dodge_action_head``); shield bash ``StaminaRegenDelay``
 Set -1.5 -> Min -1 (the engine models only Set; needs a construct); Mithril and
 other dagger materials (rows of ``hytalegym/combat/assets/weapon_variants``, a
-shared module outside the rendered package); the sword thrust's 0.7.2 timing
-(0.65 -> 0.565 s branch, 0.05 -> 0.043 s, speed 0.8 -> 0.75: hit timing, row 5f,
-unexplained live offsets first); durability (a JSON table: content redirect).
+shared module outside the rendered package); the sword thrust's HorizontalSpeedMultiplier
+0.8 -> 0.75 and its chained RunTime 0.043 (``Next/0.565/Interactions/2``: no swap-plan site;
+leads under row 5f, not among the 14 values); the potion values (``adapters.potions`` raises
+on 0.7.2); durability (a JSON table: content redirect). The sword, shortbow and crossbow values
+are the ``CONTENT_VALUES`` rows below.
 """
 
 from __future__ import annotations
@@ -57,7 +59,86 @@ CONTENT_ROWS, UNREACHABLE_RECORDS = swap_plan_redirects(_SWAP_PLAN, status="todo
 LOCOMOTION_ADAPTERS = ("player_locomotion", "walk_steering_sprint_multiplier")
 
 CONTENT_LOCOMOTION = tuple(replace(r, status="active") for r in CONTENT_ROWS if r.row in LOCOMOTION_ADAPTERS)
-CONTENT_TODO = tuple(r for r in CONTENT_ROWS if r.row not in LOCOMOTION_ADAPTERS)
+#: 0.7.2 content values that the gen-5 engine literals still carry (handoff 2026-10-18). Twelve rows
+#: replace the swap-plan todo rows of the same id (the same engine site, now valued by the 0.7.2 table),
+#: so the value follows the table. The shortbow launch speeds have no swap-plan record (the shortbow
+#: record is the charge ladder), so their row is an adapter redirect on the same literal. The renderer
+#: checks the HEAD expression once at its site. Checked on both tables by every content adapter
+#: (receipts: ~/.claude/jobs/31947bd7/tmp/sim_values/). Not applied here: the potion values
+#: (adapters.potions raises on 0.7.2: the stamina cooldown effect is gone; the potion reader is another
+#: task), the weapon durability (a JSON table: a hook, not a redirect), and the sword thrust chained
+#: RunTime 0.043 and HorizontalSpeedMultiplier 0.8 -> 0.75 (leads under row 5f, not among the 14).
+_SWORD_TIMING = (
+    "0.7.2 selector RunTime of the six sword attack rows (weapons/interaction:<attack>_Selector#document.RunTime; "
+    "file-sourced). differential: row 5f, the iron sword left swing hit tick (native 9 in FIDELITY-0.7.2.md "
+    "section (l) and in the live run of 2026-10-18; JAX 7 before and after this value on the gen-7 render, "
+    "seeds 570057 and 1215520385): the value reaches the engine and does not move the tick, so row 5f stays open"
+)
+_HOLD_TIMING = (
+    "0.7.2 charge_thresholds of the sword, thrust, battleaxe downstrike and mace rows (file-sourced; the adapter's "
+    "sum rule, which reproduces the gen-5 literals). differential: row 5f (the sword thrust and mace hold gates); "
+    "not measured on this render"
+)
+_SHORTBOW = (
+    "0.7.2 Iron shortbow damage (weapons/item:Weapon_Shortbow_Iron, Primary_Shoot_Damage_Strength_0..3) and launch "
+    "force of Projectile_Config_Arrow_Shortbow_Strength_0..4 (file-sourced). differential: row 6a, tier-0 open "
+    "contact, seeds 20260729 and 7: native damage 1.0 at hit tick 7 on the live bridge, jar 4A5E5D6D (2026-10-18, "
+    "sim_values run2 bridge_after4.json); JAX on this render 6.0 at tick 6 before and 1.0 at tick 7 after; the "
+    "other tiers' range error (2 % bar) not measured"
+)
+_CROSSBOW = (
+    "0.7.2 Iron crossbow combo damage (weapons/item:Weapon_Crossbow_Iron damage.Combo_Projectile_Damage; "
+    "file-sourced). differential: row 6c, the native combo's applied damage 10, 10, 13 (health 61, 51, 41, 28 at "
+    "ticks 100, 111, 122; FIDELITY-0.7.2.md section (u), jar CAFAD9B7); the JAX combo on this render not run"
+)
+
+
+def _sword_runtime(constant: str, interaction: str, expression: str, template: str = "{value}") -> Redirect:
+    return Redirect(
+        f"sword_selectors:{constant}", PROFILE_JAX, constant, "weapons", f"interaction:{interaction}",
+        "document.RunTime", cast="float", status="active", fidelity_row="5f", source=_SWORD_TIMING,
+        expression=expression, template=template,
+    )
+
+
+def _hold(constant: str) -> Redirect:
+    return Redirect(
+        f"melee_hold_constants:{constant}", PROFILE_JAX, constant, "adapter", "melee_hold_constants", constant,
+        cast="float", status="active", fidelity_row="5f", source=_HOLD_TIMING,
+    )
+
+
+CONTENT_VALUES = (
+    _sword_runtime("_SWORD_SWING_LEFT_SELECTOR", "Weapon_Sword_Primary_Swing_Left_Selector", "0.05"),
+    _sword_runtime("_SWORD_SWING_RIGHT_SELECTOR", "Weapon_Sword_Primary_Swing_Right_Selector", "0.05"),
+    _sword_runtime("_SWORD_SWING_DOWN_SELECTOR", "Weapon_Sword_Primary_Swing_Down_Selector", "0.067"),
+    _sword_runtime("_SWORD_VORTEX_SPIN_SELECTOR", "Weapon_Sword_Signature_Vortexstrike_Spin_Selector", "0.15"),
+    _sword_runtime("_SWORD_THRUST_SELECTOR", "Weapon_Sword_Primary_Thrust_Selector", "runtime_seconds=0.3",
+                   "runtime_seconds={value}"),
+    _sword_runtime("_SWORD_VORTEX_STAB_SELECTOR", "Weapon_Sword_Signature_Vortexstrike_Stab_Selector",
+                   "runtime_seconds=0.3", "runtime_seconds={value}"),
+    _hold("_NESTED_OUTER_GATE_SECONDS"),
+    _hold("_SWORD_THRUST_HOLD_SECONDS"),
+    _hold("_DOWNSTRIKE_HOLD_SECONDS"),
+    _hold("_MACE_CHARGED_HOLD_SECONDS"),
+    Redirect(
+        "iron_template_damage:_iron_shortbow defaults", PROFILE_JAX, "_iron_shortbow", "adapter", "shortbow_tiers",
+        "damage", cast="tuple_float", status="active", fidelity_row="6a", source=_SHORTBOW,
+        expression="(6, 9, 12, 16, 19, 14)",
+    ),
+    Redirect(
+        "shortbow_tiers:shortbow draw ladder launch speeds", PROFILE_JAX, "_iron_shortbow", "adapter",
+        "shortbow_tiers", "speeds", cast="tuple_float", status="active", fidelity_row="6a", source=_SHORTBOW,
+        expression="(15, 30, 50, 70, 85)",
+    ),
+    Redirect(
+        "iron_template_damage:_iron_crossbow defaults", PROFILE_JAX, "_iron_crossbow", "weapons",
+        "item:Weapon_Crossbow_Iron", "damage.Combo_Projectile_Damage.base_first", cast="int", status="active",
+        fidelity_row="6c", source=_CROSSBOW, expression="(10, 27, 78)", template="(10, {value}, 78)",
+    ),
+)
+_VALUE_IDS = frozenset(row.id for row in CONTENT_VALUES)
+CONTENT_TODO = tuple(r for r in CONTENT_ROWS if r.row not in LOCOMOTION_ADAPTERS and r.id not in _VALUE_IDS)
 
 _SWORD_KNOCKBACK = (
     "knockback displacement differential on 0.7.2 (TRAINING-0.7.2.md: Trork 0.19 m vs 0.44 m on "
@@ -375,7 +456,7 @@ OVERLAY = Overlay(
     generation="gen7",
     profile="hytalegym.sim.gen7.profile:PROFILE",
     modules=("combat/",),
-    redirects=STEP_CLOCK + CONTENT_LOCOMOTION + CONTENT_TODO,
+    redirects=STEP_CLOCK + CONTENT_LOCOMOTION + CONTENT_VALUES + CONTENT_TODO,
     hooks=HOOKS,
     patches=PATCHES,
     audit=(

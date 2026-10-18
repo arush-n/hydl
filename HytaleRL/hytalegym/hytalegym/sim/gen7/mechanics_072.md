@@ -94,3 +94,36 @@ fidelity patch in the gen-7 overlay. Every value below is in the gen-7 tables an
   `PLAYER_JUMP_FORCE` 11.8, where native NPCs jump with 5.099. The uncommitted working tree already uses 5.099.
   Measured on HEAD: 2.38 m error (gen 5), 2.42 m (gen 7). Not changed here.
 
+## Content values applied on the gen-7 render (2026-10-18; 13 of the handoff's 14)
+
+The rows are the `CONTENT_VALUES` redirects of `overlay.py`: each replaces the gen-5 literal at render time and the value
+comes from the 0.7.2 table (`tests/sim/test_render.py::test_gen7_content_values_render_the_072_table_values`). Live status is
+from the run receipts `~/.claude/jobs/31947bd7/tmp/sim_values/run2/` (JAX-only and bridge runs, 2026-10-18).
+
+| Engine symbol (HEAD) | gen 5 | 0.7.2 | 0.7.2 table row (field) | render | fidelity row | status |
+|---|---|---|---|---|---|---|
+| `_SWORD_SWING_LEFT_SELECTOR` (tuple field 0) | 0.05 | 0.048 | `weapons/interaction:Weapon_Sword_Primary_Swing_Left_Selector#document.RunTime` | Redirect (swap-plan row) | 5f | iron sword hit tick: JAX 7 before and after, native 9; open |
+| `_SWORD_SWING_RIGHT_SELECTOR` (field 0) | 0.05 | 0.048 | `Weapon_Sword_Primary_Swing_Right_Selector#document.RunTime` | Redirect | 5f | file-sourced; not measured |
+| `_SWORD_SWING_DOWN_SELECTOR` (field 0) | 0.067 | 0.056 | `Weapon_Sword_Primary_Swing_Down_Selector#document.RunTime` | Redirect | 5f | file-sourced; not measured |
+| `_SWORD_VORTEX_SPIN_SELECTOR` (field 0) | 0.15 | 0.13 | `Weapon_Sword_Signature_Vortexstrike_Spin_Selector#document.RunTime` | Redirect | 5f | file-sourced; not measured |
+| `_SWORD_THRUST_SELECTOR` (`runtime_seconds`) | 0.3 | 0.267 | `Weapon_Sword_Primary_Thrust_Selector#document.RunTime` | Redirect | 5f | file-sourced; not measured |
+| `_SWORD_VORTEX_STAB_SELECTOR` (`runtime_seconds`) | 0.3 | 0.267 | `Weapon_Sword_Signature_Vortexstrike_Stab_Selector#document.RunTime` | Redirect | 5f | file-sourced; not measured |
+| `_NESTED_OUTER_GATE_SECONDS` | 0.2 | 0.174 | `Weapon_Sword_Primary#charge_thresholds[1]` (adapter `melee_hold_constants`) | Redirect | 5f | not measured |
+| `_SWORD_THRUST_HOLD_SECONDS` | 0.85 | 0.739 | 0.174 + `Weapon_Sword_Primary_Thrust#charge_thresholds[1]` (0.565), sum rule | Redirect | 5f | not measured |
+| `_DOWNSTRIKE_HOLD_SECONDS` | 0.85 (0.2 + 0.65) | 0.746 | 0.174 + `Weapon_Battleaxe_Primary_Downstrike#charge_thresholds[1]` (0.572) | Redirect | 5f | not measured |
+| `_MACE_CHARGED_HOLD_SECONDS` | 2.2 | 1.841 | 0.174 + `Weapon_Mace_Primary_Swing_Left_Charged#charge_thresholds[1]` (1.667) | Redirect | 5f (nearest row) | not measured |
+| `_iron_shortbow` damage default | (6, 9, 12, 16, 19, 14) | (1, 2, 4, 7, 19, 14) | `weapons/item:Weapon_Shortbow_Iron#damage.Primary_Shoot_Damage_Strength_0..3` (4 and volley unchanged), via adapter `shortbow_tiers.damage` | Redirect (swap-plan row `iron_template_damage:_iron_shortbow defaults`) | 6a | tier 0, open: JAX 6.0 at tick 6 before, 1.0 at tick 7 after; native 1.0 at tick 7: MATCH; other tiers not measured |
+| `_iron_shortbow` launch speeds | (15, 30, 50, 70, 85) | (12, 22, 35, 50, 85) | `projectiles/config:Projectile_Config_Arrow_Shortbow_Strength_0..4#launch_force`, via adapter `shortbow_tiers.speeds` | Redirect (overlay-only: no swap-plan record) | 6a | not measured per tier |
+| `_iron_crossbow` damage default, combo entry | (10, 27, 78) | (10, 13, 78) | `weapons/item:Weapon_Crossbow_Iron#damage.Combo_Projectile_Damage.base_first` | Redirect (swap-plan row `iron_template_damage:_iron_crossbow defaults`) | 6c | native applied 10, 10, 13 (FIDELITY section (u), jar CAFAD9B7); JAX combo not run |
+| `_potions` values (stamina cooldown) | 15 s | adapter raises `StopIteration`: `Potion_Stamina` applies only `Potion_Stamina_Instant_Small` | `consumables/item:Potion_Stamina#effects_applied` | not applied (separate task) | - | - |
+
+- Row 5f: the sword values reach the engine, but the iron sword left-swing hit tick stays 7 on the gen-7 render (seeds 570057
+  and 1215520385) against native 9 on 0.7.2, so the sword rows do not close 5f.
+- Shortbow native runs: the live bridge, 2026-10-18, twice: jar `42CA7123` (run3, the working-tree pin at that time,
+  receipt `bridge_after3.json`) and jar `4A5E5D6D` (run4, the HEAD pin of commit 7374b76, receipt `bridge_after4.json`).
+  Same values in both: tier-0 open native damage 1.0 at tick 7 (seeds 20260729 and 7); the wall case: damage 0, no hit
+  natively; on the render damage 0 with `world_hit_tick` 3 (JAX) against null (native), unchanged by these rows.
+  Iron sword left swing native 10 at tick 9 on both jars (seeds 570057 and 1215520385).
+- Not applied, leads under 5f: the sword thrust's chained RunTime 0.043 (`Next/0.565/Interactions/2`) and its
+  HorizontalSpeedMultiplier 0.8 -> 0.75; neither has a swap-plan site.
+- The combo expectation in `tests/fidelity` (`[10, 10, 27]`) follows the 13 value (section (u)); that file is outside this lane.
