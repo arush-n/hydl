@@ -509,7 +509,7 @@ outside the repository: `/private/tmp/claude-501/-Users-arush-hydl/08774414-bd8c
 | Row | Differential (what ran) | Gen-7 render | Stock gen 5 | Bar | Status |
 |---|---|---|---|---|---|
 | 5c | seeded scalar contact, bronze daggers | native 5.0, JAX 3.0 | same | damage exact | MISMATCH on this render: its 5c entry stops short of bronze ((h): 15 of 15 after b8318ec) |
-| 5c, 5e | seeded scalar contacts: cobalt battleaxe, scrap NPC mace, thorium sword | pass | pass | damage and hit tick exact | MATCH |
+| 5c, 5e | seeded scalar contacts: cobalt battleaxe, scrap NPC mace, thorium sword | pass | pass | damage exact, hit tick within +/-2 ticks (the test's SNAPSHOT_TOLERANCE_TICKS; corrected 2026-10-18, exact residuals in (l)) | MATCH within the bar |
 | 5f | iron sword program | native hit tick 9, expected 7 | same | exact | MISMATCH |
 | 5f | kunai charge bank, root-relative accepted offsets | native 0, 11, 22, 33, 62, 91 (89 in the first gen-7 pass); JAX 0, 10, 20, 30, 60, 90 | same | exact | MISMATCH, about one tick per throw; the 30 Hz clock leaves the JAX offsets unchanged |
 | 6a | shortbow outer roots, five seeds | native 0.0; JAX 6, 9, 12, 16, 19 | same | damage exact | MISMATCH: no native damage |
@@ -608,3 +608,104 @@ Java gates on the fixed tree: `NativeHeadlessWorldVerbContextTest` 2 and `Source
 (agent and coordinator runs); full `gradlew test` 111 suites, 384 tests, 0 failures (agent run, no pre-change
 baseline); `tests/test_server_versions.py` 7 passed. The plugin's `src/test` tree is untracked (`HytaleRL/.gitignore`
 `**/test/`), so the new unit test exists on disk only.
+
+## (l) Test repairs, new differentials and the 5d, 5f and 11 measurements (2026-10-18)
+
+Bridge: 0.7.2 jar 8B09661F...740B, then 8720BC76...9527 after 4066417 (marked per row), on private ports 5570-5572
+(5556 and 25572 left to the other session); the tests' hard-coded 5556 is moved by the test-process plugins of (i).
+Engines: stock gen 5 (working tree) and gen-7 renders from clean HEAD worktrees (3cb4416, overlay af12871c; 37fdef4,
+overlay 49922432). The fidelity tests are local (``HytaleRL/.gitignore`` ignores ``hytalegym/tests/**``), so the new
+and repaired files below are on disk only; originals edited in place are backed up in the session scratchpad.
+Receipts, outside the repository: `/private/tmp/claude-501/-Users-arush-hydl/08774414-bd8c-46e1-9f45-7a7528846bf4/scratchpad/fid/receipts/`.
+
+**Learner rows were mostly harness.** ``learner_row/test_dynamic_learner_row.py`` builds its JAX side with no world-
+or light-token provider, so the JAX row carries empty world-geometry (52 values) and light (48) groups while native
+fills them from the bridge's exact geometry: 100 of the 107 or 109 tick-0 mismatches of all 14 cases in (i). The new
+``test_dynamic_learner_row_world_inputs.py`` runs the original test unchanged with the JAX inputs built the way Region
+training builds them (world tokens from the bridge's reset geometry frame through ``geometry_arsenal_world_tokens``
+with ``NATIVE_EXACT_GEOMETRY`` provenance; light from the native perception channels captured once on the 729-cell
+reset grid, through ``native_actor_block_light_tokens``). Offline, on a captured reset frame, the JAX world tokens
+equal the native ones in all 44 x 131 values, provenance included. Live (8B09661F, both engines, both seeds):
+
+| Program | Result (first mismatch) | Reading |
+|---|---|---|
+| neutral | PASS: every value and mask on every tick | the learner observation matches native when the world inputs are aligned |
+| look | tick 1, 13 values | camera transport lag (5f family) |
+| iron sword slot zero | gen 5: tick 6, 8 values incl. the guard_off_on mask; gen 7: tick 7, 11 values, mask agrees | 5d mask on the render; 5f hit timing |
+| iron shield guard held / release | tick 2, 8 values incl. the guard mask | the shield guard is outside the 5d patches |
+| dodge left | tick 2, 48 to 56 values | one-tick dodge shift (5f family) |
+| shortbow draw min / max | tick 0, 9 values | reset: ammo (JAX starts at the loadout stack, native 0 of 1) and one inventory cell beyond the permitted 7-cell NPC-container signature |
+
+**Static placement on 0.7.2.** ``deployables/flame_staff/test_native_static_placement_072.py`` keeps the original
+capture and every assertion and resolves the fire trap from the 0.7.2 archive (both asset files sit at the same paths;
+case ``FireTrap`` / ``Deployable_Fire_Trap``, 150 live ticks): PASS on both seeds, on stock and the render (8B09661F).
+
+**Crossbow tests.** Six tests (scalar variant 2, signature lifecycle 4) and ``projectiles/harness/targeting.py`` looked
+up ``world_move_none_plus_compass``, which no revision defines; the fused ``locomotion_gait_compass`` head encodes
+walking in compass direction d as choice d (0 idle), so the head name alone was repaired (4 sites). They now run, and
+fail on a native episode that truncates with no crossbow event (``assert not report["truncated"]``; signature
+``events=[]``) on both engines. Inferred, not confirmed: the reload binding of (k) (the bridge requests Ability3, the
+0.7.2 crossbow reloads on Ability4), a wire-contract decision for the owner. On 8720BC76 one signature test, re-run, still truncates with no event. The
+owner has since ruled that slot 4 drives the 0.7.2 reload under Ability4 (bridge side in progress; the gen-7 content
+binding follows).
+
+**Group actor tests.** All three aim actor one with ``camera_delta_yaw`` only; the bridge and the trained runtime steer
+two levers (head and body), so actor one's body keeps its spawn heading (yaw 0.00 for 37 steps under the head lever,
+probe ``group_yaw_probe_*.json``). This was first misread here as a bridge fault and corrected by (k): by design, and
+identical on the 0.5 bridge. ``group/test_native_group_actor_turn.py`` now pins the body lever, and
+``group/test_native_group_two_lever.py`` runs the three originals with every camera delta also sent on the body
+lever, the coupling they were written against. On 8720BC76 the body-lever turn test passes on both seeds and all three
+two-lever editions pass (dodge overlap, group combat actor independence, nonzero actor ability, guard and dodge); the
+owner has ruled that the body lever in the tests is the decision (no bridge change).
+
+**Row 5d, measured, and the construct.** ``defense/test_native_guard_attack_cancel.py`` (new) and the window probe
+(``guard_window_all_probe.jsonl``): attack requested on tick 1, Guard held from onset k, live (8B09661F; the sword's
+windows identical on two seeds). Guard cancels the attack (its slot clears on tick k, Guard rises on k + 2) for:
+
+| Attack | Active ticks | Cancelled at onsets | 0.7.2 root (``InterruptedBy: [Secondary]``) |
+|---|---|---|---|
+| Sword Swing_Left, Swing_Right | 1-13 | 2-5 | Simple, RunTime 0.111 s |
+| Sword Swing_Down | 1-21 | 2-12 | Simple, 0.361 s |
+| Mace Swing_Left, Swing_Right, Swing_Up_Left | 1-33 | 2-18 | Simple, 0.536 s |
+| Battleaxe Swing_Down_Left, Swing_Down_Right | 1-29 | 2-12 | Simple, 0.348 s |
+| Battleaxe Swing_Down | 1-32 | 2-13 | Simple, 0.4 s |
+| Daggers Swing_Left, Swing_Right, Stab_Left, Stab_Right | 1-8 | 2-3 | Simple, 0.066 s |
+| Sword Thrust | 1-14 | 3-6 | Charging, no RunTime (its own row) |
+
+For all 13 Simple roots the window is exactly the root's RunTime: onset k cancels when (k - 2) ticks < RunTime. Later
+onsets do not cancel, and a Guard held through the attack's end never rises. So 0.7.2 moved the cancel from the guard
+root (``Interrupting: [Primary]``, removed) to each attack root's ``InterruptedBy: [Secondary]``, active while that root
+runs. Stock JAX cancelled at every onset and the patched render at none; neither cancelled the thrust (the inert
+``sword_thrust_interrupted_by_secondary`` patch). The construct ``guard_cancel_window`` (``sim/gen7/mechanics/
+guard_window.py``, commit 490b1d4; gen 5 ``guard_root`` -> gen 7 ``attack_root``) keeps the four guard-root patches,
+removes the thrust patch, and hooks the profile's ``_ability`` (each such attack gets the Secondary bit and its root
+RunTime from the weapons rows ``interaction:<id>``) and ``active_operation_interrupted_by`` (for those attacks the
+boundary ends the window). On its render (37fdef4 + overlay 5f69df1f) the engine cancels the left swing at onsets 3-5
+and the thrust request at 4-6, and both tests pass live (8720BC76: onset 4 cancels, onset 8 does not, on native and
+on the engine). Residuals, kept as rows: native admits an attack one tick before the engine's legality view, so onset
+2 (3 for the thrust) is not cancelled by the engine, which is half of the daggers' window; a Guard held through an
+uncancelled attack rises in the engine when the attack ends; and the engine resolves a one-tick thrust request
+through the primary hold table to the left swing, so its "thrust" carries the swing's window. Gates: tests/sim 102
+passed; render identity 4 passed (338 s).
+
+**Row 5f, two probes.** P1, one kunai throw (``kunai_one_throw_probe.json``, both seeds identical): native holds the
+slot from the request tick through tick 10 (accepted and started flags one tick later, finished with the slot cleared
+on 11); JAX holds it on ticks 1-9 (finished 10). So native occupies the slot one tick longer per throw, which compounds
+through the charge-bank test's re-request into 11 against 10; a constant +1 prelude fixes the first offsets but not the
+recharge ones (63 and 93 against native 62 and 91). P2, exact native minus JAX hit ticks of the seeded contacts
+(``contact_residual_probe_*.jsonl``, identical on stock and the render): cobalt battleaxe -1 (16 vs 17), bronze daggers
++1 (18 vs 17), scrap NPC mace 0 (22), thorium sword +2 (9 vs 7). No uniform rule fits, and the 0.5.10 -> 0.7.2 asset
+timings move the other way (swing run times about 5-10 % shorter: sword 0.117 -> 0.111 s, daggers 0.069 -> 0.066 s, mace
+0.6 -> 0.536 s, battleaxe unchanged). 5f needs a chain-timing model; nothing is patched.
+
+**Row 5c on the render, live.** P2 on the render: bronze daggers 5.0 native and 5.0 JAX (stock 5.0 vs 3.0), so the
+b8318ec dagger construct holds on the live server; its hit ticks are unchanged.
+
+**Row 11, scope.** Of the 2,047 captured 0.7.2 recipes, 203 reach the simulator today (the Region fieldcraft filter,
+``combat/arsenal/world_actions/crafting.py``: no knowledge, memories 1, zero time, a tier-0 Crafting bench, concrete
+materials). Blocked by materials only: 80; by benches only (type or tier): 262; by time only: 82; material and bench:
+739; time and bench: 504; the rest by combinations. All 988 resource-type inputs follow the server's
+``applyOutputExclusions`` (they exclude their recipe's outputs; 984 exactly, the four ``Food_Fish_Raw_*`` also a
+source item), so a construct for them is straightforward, but the arsenal crafting inventory publishes no resource
+types (``ABSENT_ID`` for every slot), so it needs an item-to-resource-type table as well, and it adds at most 80
+recipes. The bulk is benches and timed crafting; which scope the skill library needs is an owner decision.

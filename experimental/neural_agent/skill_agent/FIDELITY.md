@@ -285,3 +285,24 @@ Write `pass` only when the row's pass bar is met on the receipt the entry names.
 - receipt: `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md` section (i), row 4; `reset_timing.json` in this session's scratchpad `fid/receipts/` (outside the repository)
 - result: 4 engine ticks on every step for the three seeds; world tick 22 at reset, 26 after the first step; native tick rate 30
 - verdict: pending: the offset repeats the 2026-10-17 entry and is documented; it is not yet applied in the session clock
+
+## 2026-10-18 — Melee: fail
+- command: live differentials on 0.7.2 from private bridges (ports 5570-5572): `tests/fidelity/combat/defense/test_native_guard_attack_cancel.py`, the guard window probe (`guard_window_all_probe.py`) and the contact residual probe (`contact_residual_probe.py`), on stock gen 5 and gen-7 renders of 37fdef4 (with and without the guard_cancel_window construct)
+- server: Hytale 0.7.2 (HytaleServer.jar revision d769dc3d, SHA-256 23f71f03...0aff); bridge jar sha256 8720BC76A883E5FF83B8062A98CEC71A26BBFFB0A59A7438A795EFEDD6909527 (8B09661F... for the probes)
+- receipt: `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md` section (l); receipts in this session's scratchpad `fid/receipts/` (outside the repository)
+- result: 5d: Guard cancels a sword, mace, battleaxe or daggers Primary attack exactly while its 0.7.2 root RunTime runs (13 of 13 attacks); the construct guard_cancel_window (commit 490b1d4) reproduces it on the render and both live tests pass (onset 4 cancels, 8 does not), residual: the engine misses the first window tick (onset 2). 5c: bronze daggers 5.0 native and 5.0 on the render (b8318ec). 5f: native minus engine hit ticks per weapon (battleaxe -1, daggers +1, mace 0, sword +2) and the kunai's one-tick longer slot occupancy, on both engines; not patched
+- verdict: fail: 5f dispatch timing still differs; 5d passes on the render
+
+## 2026-10-18 — Ranged: fail
+- command: the six crossbow tests (`tests/fidelity/combat/projectiles/crossbow/`, head name repaired) and the 0.7.2 static placement edition (`deployables/flame_staff/test_native_static_placement_072.py`), stock gen 5 and the gen-7 render
+- server: Hytale 0.7.2 (HytaleServer.jar revision d769dc3d, SHA-256 23f71f03...0aff); bridge jar sha256 8B09661F77F6F758A89037FC21D10EBF58ADB5E869B974B56AF375A4A0AC740B (8720BC76... for one re-run)
+- receipt: `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md` section (l)
+- result: the crossbow tests now run and truncate with no native crossbow event on both engines (the reload binding: the bridge requested Ability3, the 0.7.2 crossbow reloads on Ability4; owner ruling: Ability4, bridge side in progress); the fire-trap placement certificate passes on both seeds and both engines
+- verdict: fail: the crossbow stays unmeasured until the reload binding lands
+
+## 2026-10-18 — Dodge: pass
+- command: `tests/fidelity/combat/group/test_native_group_two_lever.py` (the three group-actor tests with every camera delta also sent on the body lever), stock gen 5
+- server: Hytale 0.7.2 (HytaleServer.jar revision d769dc3d, SHA-256 23f71f03...0aff); bridge jar sha256 8720BC76A883E5FF83B8062A98CEC71A26BBFFB0A59A7438A795EFEDD6909527
+- receipt: `HytaleRL/hytale-plugin-0.7.2/FIDELITY-0.7.2.md` section (l)
+- result: test_live_lateral_dodge_blocks_overlapping_native_hit, which measured nothing in the 2026-10-17 entry (its control hit never landed because actor one faced away under the head-only lever), now passes with the body lever: the native lateral dodge's invulnerability rejects an overlapping hit (native-only evidence; the test has no engine side). The group combat and group ability, guard and dodge tests pass too
+- verdict: pass: the earlier passing differentials (impulse and timing) stand; the overlap is now measured natively
