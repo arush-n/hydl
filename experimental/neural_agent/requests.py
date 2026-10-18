@@ -398,6 +398,9 @@ class RequestStatus:
         progress: The verb's progress signals by name, as finite numbers, or None. Given as a
             mapping (or pairs) and stored as ``(name, value)`` pairs sorted by name, so the record
             stays immutable. ``dict(status.progress)`` gives the mapping.
+        signal: For ``done`` only: the termination label that fired, one of the verb's contract's
+            termination labels (the catalogue's success label such as ``"arrived"``, or ``"stuck"``,
+            ``"timeout"``, ``"precondition_failed"``, ``"interrupted"``). Empty otherwise.
         heads: The action heads the request drove on this tick. Only ``accepted`` and ``running``
             drive heads.
 
@@ -415,6 +418,7 @@ class RequestStatus:
     outcome: SkillOutcome | None = None
     progress: tuple[tuple[str, float], ...] | None = None
     heads: tuple[str, ...] = ()
+    signal: str = ""
 
     def __post_init__(self) -> None:
         """Check the fields against the kind."""
@@ -429,6 +433,10 @@ class RequestStatus:
             raise ValueError(f"RequestStatus.reason is required for rejected and aborted only (kind {self.kind!r})")
         if (self.conflict_with is not None) != (self.kind == "deferred"):
             raise ValueError(f"RequestStatus.conflict_with is required for deferred only (kind {self.kind!r})")
+        if not isinstance(self.signal, str):
+            raise TypeError(f"RequestStatus.signal must be a string, got {type(self.signal).__name__}")
+        if self.signal and self.kind != "done":
+            raise ValueError(f"RequestStatus.signal is allowed for done only (kind {self.kind!r})")
         if self.conflict_with is not None:
             object.__setattr__(
                 self, "conflict_with", _non_negative_int(self.conflict_with, "RequestStatus.conflict_with")

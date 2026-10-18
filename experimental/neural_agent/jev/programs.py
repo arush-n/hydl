@@ -76,13 +76,63 @@ path today (``session._outcome_for_switch`` never reports it).
 
 P_J0 is one step, pursuit until "done", with the interrupt evader while ``on_damage`` at the evader's
 priority. On the composition executive it chooses what J0 chooses (tests/.../test_na_programs.py, 200 rows).
+
+Requests (SYSTEM_ONE.md section 9.10). With a scratchpad S_t bound (``shared_state=``, or the one that
+``session.run_session`` binds as ``scratchpad``), every decision also speaks the request stream to the lower
+layer and reads its statuses back. The goal returned by items 1 to 7 stays the source of truth: until a
+combiner writes statuses, items 8 and 9 change nothing in items 1 to 7. Ticks are the session's clock ticks
+(``current_tick``, which ``run_session`` sets before each decide; the 1-based call count when it is unset);
+``host_cadence_ticks`` and ``tick_seconds`` are the session config's (``run_session`` binds them too).
+
+8. Correspondence, per lane, right after its clocks advance (item 1). The lane's live requests (the ones the
+   previous decision issued) and their statuses in ``S_t.skills.statuses`` go to
+   ``jev/correspondence.correspond``, with ``hold_ticks = max(1, ceil(hold_seconds_k / tick_seconds))`` when
+   the request served step k (an interrupt's request holds 0 s) and the step's rejections acted on so far.
+   An abort with the code ``expired`` is left out: the request lapsed at the end of its one-cadence life, it
+   did not fail. Each action changes the lane's state::
+
+       Advance             the request's verb is the goal in force: that goal ends COMPLETED (item 3), so a
+                           "done" exit fires exactly as for a completion that the core reports
+       ResampleStep        a rejection adds to the step's rejections; when the request served step k, the
+                           step's clock restarts (elapsed_b <- 0). Item 9 re-issues the step's verb: a
+                           hand-written step names one verb, so keep_verb False cannot change it
+       RaiseUrgency        the lane's urgency boost u_b grows by ``by``
+       Drop                the request is withdrawn
+       InformationRequest  ``information_requests`` gains (tick, lane, the request's E_t version, step,
+                           verb, reason), and the request is withdrawn
+
+   A lane whose request was withdrawn issues none until its request key (item 9) changes, so one step asks
+   the LLM once. A fresh lane (item 2) drops its live requests unread.
+9. Requests, after every lane decided. Each lane's live request is replaced by one new request for the goal
+   in force; a request lives one host cadence, so every decision re-issues it::
+
+       request_id    n_b, then n_b <- n_b + 1 (monotonic per agent, never reset)
+       agent         b
+       issued_tick   t;   expires_tick = t + host_cadence_ticks
+       verb          the goal's skill id
+       args.entity   TARGET_ENTITY (0) when ``requests.ARGUMENT_SCHEMAS[verb]`` needs an entity, else absent
+       args.scalars  the goal's params named by the verb's contract ``param_names``
+       mode          "interrupt" while an interrupt's goal is in force, else "parallel"
+       priority      the interrupt's priority; else E_t's priority of the goal's slot; else 0 (no slot)
+       urgency       min(1, clip(priority, 0, 1) + u_b);   confidence 1
+       goal_slot, executive_version   the goal's payload;   program_step   k_b (len(steps) once finished)
+
+   The request key (verb, interrupt or not, k_b, the payload's version, E_t's version) scopes a step: when it
+   changes, the step's rejections, u_b and the withdrawal reset. Each request is checked with
+   ``requests.validate`` against its verb's contract (``contracts=``; without them the check reports
+   verb_unknown) and the entities the belief knows: {TARGET_ENTITY} when ``ticks_since_target_seen`` is
+   known and below TICKS_SATURATION (the belief starts it saturated), else none. The world box and the
+   action mask are the combiner's to check, so the executor passes the widest finite box and every scope.
+   A request that fails is still sent, so the combiner rejects it and item 8 reacts; ``invalid_requests``
+   counts it. The lanes' requests and every other agent's live requests are written as one ``requests``
+   section by its writer "jev": one document version per decision.
 """
 
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any, NamedTuple, Sequence
 
 import jax.numpy as jnp
 import numpy as np
@@ -90,10 +140,12 @@ import numpy as np
 from adk.architecture.hierarchy import ManagedGoal
 from experimental.neural_agent.contracts import (
     BELIEF_FEATURE_COUNT,
+    INT32_MAX,
     PARAM_WIDTH,
     SKILL_IDLE,
     TICKS_SATURATION,
     ExecutiveArrays,
+    SkillContract,
     SkillControlTable,
     SkillOutcome,
     _require_control_table,
@@ -102,6 +154,26 @@ from experimental.neural_agent.contracts import (
     make_goal,
 )
 from experimental.neural_agent.executive.goal_language import ALWAYS, Predicate
+from experimental.neural_agent.jev.correspondence import (
+    Advance,
+    Drop,
+    InformationRequest,
+    RaiseUrgency,
+    ResampleStep,
+    correspond,
+)
+from experimental.neural_agent.requests import (
+    ARGUMENT_SCHEMAS,
+    MODE_INTERRUPT,
+    MODE_PARALLEL,
+    SCOPES,
+    ActionRequest,
+    RequestArgs,
+    RequestStatus,
+    rejection_code,
+    validate,
+)
+from experimental.neural_agent.shared_state import SECTION_WRITERS, RequestsSection, SharedState
 from experimental.neural_agent.tasks.composition import (
     EVADER_CONSTRAINT,
     EVADER_PRIORITY,
@@ -119,8 +191,16 @@ TICK_COLUMNS: tuple[int, ...] = (
     feature_index("ticks_since_damage"),
     feature_index("ticks_since_target_seen"),
 )
+#: The entity handle of the belief's single target, written as ``args.entity`` (module docstring, item 9).
+#: The belief (``belief/core.py``) follows one target per lane and publishes no handle, so a request names
+#: the target by its index among the belief's targets: 0. The lower layer registers the same convention
+#: (agreed between the two sessions, 2026-10-17).
+TARGET_ENTITY: int = 0
 
 _PROGRAM, _INTERRUPT = 0, 1
+_SEEN: int = feature_index("ticks_since_target_seen")
+#: The widest finite world box: the executor's own check of a request cannot know the world (item 9).
+_ANY_WORLD: tuple[tuple[float, ...], tuple[float, ...]] = ((-float(INT32_MAX),) * 3, (float(INT32_MAX),) * 3)
 
 
 def _params(values: Any, owner: str) -> tuple[float, ...]:
@@ -217,6 +297,20 @@ P_SEQ = Program(
 PROGRAMS: dict[str, Program] = {"J0": P_J0, "SEQ": P_SEQ}
 
 
+class LaneInformationRequest(NamedTuple):
+    """One information request to the LLM: a lane's step was rejected REPEATED_REJECTIONS times (item 8).
+
+    ``reason`` is the correspondence rule's; the version, step and verb are those of the rejected request.
+    """
+
+    tick: int
+    lane: int
+    executive_version: int
+    program_step: int
+    verb: str
+    reason: str
+
+
 class ProgramExecutor:
     """A ``session.HostDecider`` that runs one program per lane (module docstring, items 1 to 7).
 
@@ -225,16 +319,29 @@ class ProgramExecutor:
         control_table: The catalogue's ``SkillControlTable`` (the skills' contracts).
         programs_per_lane: One :class:`Program` per lane; B is its length.
         no_reissue_seconds: Keyword only. The feedback rule's window w in seconds; 0 turns it off.
+        shared_state: Keyword only. The scratchpad S_t that items 8 and 9 read and write, or None (the
+            default) until ``session.run_session`` binds its own as ``scratchpad``.
+        contracts: Keyword only. The catalogue's ``SkillContract`` values in catalogue order
+            (``SkillRegistry.contracts``), for the check of item 9, or None.
 
     Attributes:
         lane_calls: Lane decisions made, B per call. ``lane_failures`` is always 0 and ``first_failure``
             always None: there is no backend to fail. ``eval/run_composition.py`` reads all three.
+        scratchpad, current_tick, host_cadence_ticks, tick_seconds: What ``session.run_session`` binds:
+            its scratchpad, its clock tick before each decide, and its config's cadence and tick length. The
+            defaults 11 ticks and 0.045 s are SessionConfig's.
+        information_requests: The :class:`LaneInformationRequest` records of item 8, oldest first.
+        requests_issued: int[B], the requests written per lane. ``invalid_requests`` counts the ones that
+            failed the check of item 9 and ``first_invalid_request`` keeps the first reason.
+            ``correspondence`` counts the actions of item 8 by kind.
 
     Raises:
         ValueError: If the catalogue is empty, repeats an id or does not start with idle, a program is
-            missing, or ``no_reissue_seconds`` is negative or not finite.
+            missing, ``no_reissue_seconds`` is negative or not finite, or ``contracts`` are not the
+            catalogue's in its order.
         KeyError: If a step or interrupt names a skill outside the catalogue.
-        TypeError: If a program is not a Program, or the table is not a SkillControlTable.
+        TypeError: If a program is not a Program, the table is not a SkillControlTable, ``shared_state``
+            is not a SharedState, or a contract is not a SkillContract.
     """
 
     name: str = "J-PROG"
@@ -246,6 +353,8 @@ class ProgramExecutor:
         programs_per_lane: Sequence[Program],
         *,
         no_reissue_seconds: float = 0.0,
+        shared_state: SharedState | None = None,
+        contracts: Sequence[SkillContract] | None = None,
     ) -> None:
         ids = tuple(skill_ids)
         if not ids or ids[0] != SKILL_IDLE or len(set(ids)) != len(ids):
@@ -259,6 +368,14 @@ class ProgramExecutor:
         window = float(no_reissue_seconds)
         if not math.isfinite(window) or window < 0.0:
             raise ValueError(f"no_reissue_seconds must be finite and >= 0, got {no_reissue_seconds!r}")
+        if shared_state is not None and not isinstance(shared_state, SharedState):
+            raise TypeError(f"shared_state must be a SharedState, got {type(shared_state).__name__}")
+        if contracts is not None:
+            contracts = tuple(contracts)
+            if not all(isinstance(contract, SkillContract) for contract in contracts):
+                raise TypeError("contracts must hold SkillContract values")
+            if tuple(contract.skill_id for contract in contracts) != ids:
+                raise ValueError(f"contracts must be the catalogue's, in its order {ids}")
         index = {skill_id: position for position, skill_id in enumerate(ids)}
 
         def lookup(skill_id: str) -> int:
@@ -297,6 +414,30 @@ class ProgramExecutor:
         self.lane_calls = 0
         self.lane_failures = 0
         self.first_failure: str | None = None
+        self._interrupt_priority = np.zeros(lanes, dtype=np.float64)
+        # The request stream (module docstring, items 8 and 9); session.run_session binds the first four.
+        self.scratchpad: SharedState | None = shared_state
+        self.current_tick: int | None = None
+        self.host_cadence_ticks: int = 11
+        self.tick_seconds: float = 0.045
+        # Bound by run_session: whether the host seam keeps unchanged lanes' goal ages (the clock regime).
+        self.host_respects_commitment: bool = False
+        self._skill_ids = ids
+        self._contracts: tuple[SkillContract, ...] | None = contracts
+        self._next_request = np.zeros(lanes, dtype=np.int64)
+        # Per lane: request id -> the live request; its program_step maps a status back to its step.
+        self._live: list[dict[int, ActionRequest]] = [{} for _ in range(lanes)]
+        self._request_key: list[tuple[Any, ...] | None] = [None] * lanes
+        self._step_rejections = np.zeros(lanes, dtype=np.int64)
+        self._urgency_boost = np.zeros(lanes, dtype=np.float64)
+        self._withdrawn = np.zeros(lanes, dtype=np.bool_)
+        self.requests_issued = np.zeros(lanes, dtype=np.int64)
+        self.invalid_requests = 0
+        self.first_invalid_request: str | None = None
+        self.correspondence = dict.fromkeys(
+            ("advance", "resample_step", "raise_urgency", "drop", "information_request"), 0
+        )
+        self.information_requests: list[LaneInformationRequest] = []
 
     # ------------------------------------------------------------------ lane state, for tests and reports
 
@@ -319,9 +460,9 @@ class ProgramExecutor:
         return self._elapsed.copy()
 
     def counters(self) -> dict[str, Any]:
-        """Return the per-lane counters as JSON-ready lists."""
+        """Return the per-lane counters as JSON-ready lists, and the request stream's when a scratchpad is bound."""
 
-        return {
+        counters: dict[str, Any] = {
             "decisions": self.decisions,
             "step_completions": self.step_completions.tolist(),
             "steps_skipped": self.steps_skipped.tolist(),
@@ -332,6 +473,14 @@ class ProgramExecutor:
             "blocked_decisions": self.blocked_decisions.tolist(),
             "restarts": self.restarts.tolist(),
         }
+        if self.scratchpad is not None:
+            counters.update(
+                requests_issued=self.requests_issued.tolist(),
+                requests_invalid=self.invalid_requests,
+                correspondence=dict(self.correspondence),
+                information_requests=len(self.information_requests),
+            )
+        return counters
 
     # ------------------------------------------------------------------ the host decision
 
@@ -339,7 +488,8 @@ class ProgramExecutor:
         """Advance every lane's program and return the batched goal for all B lanes.
 
         ``executive`` is not read: E_t is read from ``hierarchy_state.carry.manager_state``, where the
-        session's executive writer puts every new version.
+        session's executive writer puts every new version. With a scratchpad bound, the lanes also
+        correspond with the request stream (module docstring, items 8 and 9).
 
         Raises:
             TypeError: If ``carry.manager_state`` is not an ExecutiveArrays.
@@ -361,7 +511,10 @@ class ProgramExecutor:
         completed = np.asarray(hierarchy_state.goal_termination_requested, dtype=np.bool_)
         manager_age = np.asarray(hierarchy_state.manager_age_seconds, dtype=np.float32)
         carry = hierarchy_state.carry
-        dt = np.asarray(carry.goal_age, dtype=np.float32)
+        # Seconds since this executor's previous decision, per lane. With the old host seam the session
+        # zeroes goal_age on every write, so goal_age is that interval; with host_respects_commitment an
+        # unchanged lane keeps its age, so the interval is the age's increase since the last decision.
+        dt = self._elapsed_since_last(np.asarray(carry.goal_age, dtype=np.float32))
         payload = carry.goal.payload
         skill = np.array(payload.skill_index, dtype=np.int32)
         params = np.array(payload.params, dtype=np.float32)
@@ -373,11 +526,19 @@ class ProgramExecutor:
         executive_version = np.asarray(arrays.version, dtype=np.int32)
         slots = self._executive_slots(arrays)
         fresh = ~self._started | done | ~valid | (version != self._issued_version)
+        bound = self.scratchpad is not None
+        tick = self.decisions + 1 if self.current_tick is None else int(self.current_tick)
+        history: dict[int, list[RequestStatus]] = {}  # each agent's statuses, newest last
+        if bound:
+            for status in self.scratchpad.skills.statuses:
+                history.setdefault(status.agent, []).append(status)
 
         for lane in range(lanes):
             program = self._programs[lane]
             steps = program.steps
             ended = self._advance_clocks(lane, bool(fresh[lane]), dt[lane], int(skill[lane]), bool(completed[lane]))
+            if bound:
+                ended = self._correspond(lane, bool(fresh[lane]), int(skill[lane]), ended, tick, history.get(lane, ()))
             ticked = manager_age[lane] < dt[lane]  # the core's manager was due on this lane since the last decision
             if not (fresh[lane] or ended is not None or ticked):
                 continue
@@ -393,7 +554,7 @@ class ProgramExecutor:
                 ):
                     self._advance(lane, len(steps))
 
-            desired, desired_params, source = self._desired(lane, features[lane], known[lane])
+            desired, desired_params, source, priority = self._desired(lane, features[lane], known[lane])
             current_skill = int(skill[lane])
             if fresh[lane] or ended is not None or desired != current_skill:
                 allowed = (
@@ -410,12 +571,14 @@ class ProgramExecutor:
                 version[lane] = executive_version[lane]
                 slot[lane] = slots[desired][lane]
                 self._age[lane] = 0.0
-            self._set_source(lane, source)
+            self._set_source(lane, source, priority)
 
         self._started[:] = True
         self._issued_version[:] = version
         self.decisions += 1
         self.lane_calls += lanes
+        if bound:
+            self._issue_requests(tick, skill, params, version, slot, executive_version, arrays, features, known)
         minimum, maximum, mask = control_for(self._control, jnp.asarray(skill))
         return make_goal(
             jnp.asarray(skill),
@@ -428,6 +591,26 @@ class ProgramExecutor:
         )
 
     # ------------------------------------------------------------------ helpers, one lane at a time
+
+    def _elapsed_since_last(self, goal_age: np.ndarray) -> np.ndarray:
+        """Return per lane the seconds elapsed since the previous decision, from the carry's goal age.
+
+        Without ``host_respects_commitment`` (the session binds the flag) every host write zeroes the age, so
+        the age is the interval. With it, an unchanged lane keeps its age: a lane whose age is below the age
+        seen last time was reset by a goal write and its age is the interval, otherwise the interval is the
+        increase. The first call (or a lane-count change) starts from zero.
+        """
+
+        last = getattr(self, "_last_goal_age", None)
+        if last is None or last.shape != goal_age.shape:
+            last = np.zeros_like(goal_age)
+        self._last_goal_age = goal_age.copy()
+        if not getattr(self, "host_respects_commitment", False):
+            # The old seam zeroes every lane's goal age on each host write, so the age IS the interval
+            # (and two equal consecutive ages mean two equal intervals, not zero time).
+            return goal_age.astype(np.float32)
+        reset = goal_age < last
+        return np.where(reset, goal_age, goal_age - last).astype(np.float32)
 
     def _advance_clocks(
         self, lane: int, fresh: bool, dt: float, current_skill: int, completed: bool
@@ -483,8 +666,13 @@ class ProgramExecutor:
         if k + 1 == step_count:
             self.programs_finished[lane] += 1
 
-    def _desired(self, lane: int, features: np.ndarray, known: np.ndarray) -> tuple[int, tuple[float, ...], int]:
-        """Return (skill index, params, source) of the goal the lane wants now (module docstring, item 5)."""
+    def _desired(
+        self, lane: int, features: np.ndarray, known: np.ndarray
+    ) -> tuple[int, tuple[float, ...], int, float]:
+        """Return (skill index, params, source, priority) of the goal the lane wants now (module docstring, item 5).
+
+        ``priority`` is the chosen interrupt's, or 0.0 for the program (its requests take E_t's, item 9).
+        """
 
         program = self._programs[lane]
         chosen, best = -1, -math.inf
@@ -495,24 +683,172 @@ class ProgramExecutor:
             if interrupt.predicate.evaluate(features, known):
                 chosen, best = position, interrupt.priority
         if chosen >= 0:
-            return self._interrupt_skill[lane][chosen], program.interrupts[chosen].params, _INTERRUPT
+            return self._interrupt_skill[lane][chosen], program.interrupts[chosen].params, _INTERRUPT, best
         k = int(self._step[lane])
         if k >= len(program.steps):
-            return 0, (), _PROGRAM
+            return 0, (), _PROGRAM, 0.0
         skill = self._step_skill[lane][k]
         if skill != 0 and self._blocked[lane, skill] > 0.0:
             self.blocked_decisions[lane] += 1
-            return 0, (), _PROGRAM
-        return skill, program.steps[k].params, _PROGRAM
+            return 0, (), _PROGRAM, 0.0
+        return skill, program.steps[k].params, _PROGRAM, 0.0
 
-    def _set_source(self, lane: int, source: int) -> None:
-        """Record where the lane's goal now comes from, counting pre-emptions and resumptions."""
+    def _set_source(self, lane: int, source: int, priority: float) -> None:
+        """Record where the lane's goal now comes from and the interrupt's priority, counting pre-emptions
+        and resumptions."""
 
         if source == _INTERRUPT and self._source[lane] == _PROGRAM:
             self.interrupts[lane] += 1
         elif source == _PROGRAM and self._source[lane] == _INTERRUPT:
             self.resumes[lane] += 1
         self._source[lane] = source
+        self._interrupt_priority[lane] = priority
+
+    # ------------------------------------------------------------------ the request stream (items 8 and 9)
+
+    def _correspond(
+        self,
+        lane: int,
+        fresh: bool,
+        current_skill: int,
+        ended: SkillOutcome | None,
+        tick: int,
+        statuses: Sequence[RequestStatus],
+    ) -> SkillOutcome | None:
+        """Apply the correspondence rules to the lane's live requests (module docstring, item 8).
+
+        Return how the goal in force ended: ``ended`` as item 3 found it, or COMPLETED on an Advance.
+        """
+
+        live = self._live[lane]
+        if fresh:
+            live.clear()
+            self._request_key[lane] = None
+            return ended
+        if not live:
+            return ended
+        requests = tuple(live.values())
+        steps = self._programs[lane].steps
+        k = int(self._step[lane])
+        on_step = (
+            self._source[lane] == _PROGRAM
+            and k < len(steps)
+            and all(request.mode == MODE_PARALLEL and request.program_step == k for request in requests)
+        )
+        statuses = [
+            status
+            for status in statuses
+            if not (status.kind == "aborted" and rejection_code(status.reason) == "expired")
+        ]
+        actions = correspond(
+            requests,
+            statuses,
+            tick=tick,
+            hold_ticks=max(1, math.ceil((steps[k].hold_seconds if on_step else 0.0) / self.tick_seconds)),
+            step_rejections=int(self._step_rejections[lane]),
+        )
+        for action in actions:
+            self.correspondence[action.kind] += 1
+            if isinstance(action, Advance):
+                if ended is None and all(request.verb == self._skill_ids[current_skill] for request in requests):
+                    ended = SkillOutcome.COMPLETED
+            elif isinstance(action, ResampleStep):
+                latest = {status.request_id: status.kind for status in statuses if status.tick <= tick}
+                self._step_rejections[lane] += sum(latest.get(request_id) == "rejected" for request_id in live)
+                if on_step:
+                    self._elapsed[lane] = 0.0
+            elif isinstance(action, RaiseUrgency):
+                self._urgency_boost[lane] += action.by
+            elif isinstance(action, Drop):
+                live.pop(action.request_id, None)
+                self._withdrawn[lane] = True
+            elif isinstance(action, InformationRequest):
+                request = requests[0]
+                self.information_requests.append(
+                    LaneInformationRequest(
+                        tick, lane, request.executive_version, request.program_step, request.verb, action.reason
+                    )
+                )
+                live.clear()
+                self._withdrawn[lane] = True
+        return ended
+
+    def _issue_requests(
+        self,
+        tick: int,
+        skill: np.ndarray,
+        params: np.ndarray,
+        version: np.ndarray,
+        slot: np.ndarray,
+        executive_version: np.ndarray,
+        arrays: ExecutiveArrays,
+        features: np.ndarray,
+        known: np.ndarray,
+    ) -> None:
+        """Replace each lane's live request with one for its goal in force, and write S_t's requests (item 9)."""
+
+        priorities = np.asarray(arrays.priority, dtype=np.float64)
+        for lane in range(self._lanes):
+            index, goal_slot, k = int(skill[lane]), int(slot[lane]), int(self._step[lane])
+            verb = self._skill_ids[index]
+            interrupt = bool(self._source[lane] == _INTERRUPT)
+            key = (verb, interrupt, k, int(version[lane]), int(executive_version[lane]))
+            if key != self._request_key[lane]:
+                self._request_key[lane] = key
+                self._step_rejections[lane] = 0
+                self._urgency_boost[lane] = 0.0
+                self._withdrawn[lane] = False
+            live = self._live[lane]
+            live.clear()
+            if self._withdrawn[lane]:
+                continue
+            if interrupt:
+                priority = float(self._interrupt_priority[lane])
+            else:
+                priority = float(priorities[lane, goal_slot]) if goal_slot >= 0 else 0.0
+            contract = None if self._contracts is None else self._contracts[index]
+            schema = ARGUMENT_SCHEMAS.get(verb)
+            named = 0 if contract is None else len(contract.param_names)
+            request = ActionRequest(
+                request_id=int(self._next_request[lane]),
+                agent=lane,
+                issued_tick=tick,
+                expires_tick=tick + int(self.host_cadence_ticks),
+                verb=verb,
+                args=RequestArgs(
+                    entity=TARGET_ENTITY if schema is not None and schema.entity else None,
+                    scalars=tuple(float(value) for value in params[lane, :named]),
+                ),
+                mode=MODE_INTERRUPT if interrupt else MODE_PARALLEL,
+                urgency=min(1.0, min(max(priority, 0.0), 1.0) + float(self._urgency_boost[lane])),
+                confidence=1.0,
+                priority=priority,
+                goal_slot=goal_slot,
+                executive_version=int(version[lane]),
+                program_step=k,
+            )
+            self._next_request[lane] += 1
+            self.requests_issued[lane] += 1
+            seen = bool(known[lane, _SEEN]) and float(features[lane, _SEEN]) < TICKS_SATURATION
+            reason = validate(
+                request,
+                contract,
+                tick=tick,
+                world_bounds=_ANY_WORLD,
+                known_entities=(TARGET_ENTITY,) if seen else (),
+                legal_scopes=SCOPES,
+                done_ids=(),
+            )
+            if reason is not None:
+                self.invalid_requests += 1
+                if self.first_invalid_request is None:
+                    self.first_invalid_request = reason
+            live[request.request_id] = request
+        state = self.scratchpad
+        others = tuple(request for request in state.requests.live if not 0 <= request.agent < self._lanes)
+        mine = tuple(request for live in self._live for request in live.values())
+        section = RequestsSection(live=others + mine, limit=state.requests.limit)
+        state.write("requests", section, writer=SECTION_WRITERS["requests"], tick=tick)
 
     def _executive_slots(self, arrays: ExecutiveArrays) -> dict[int, np.ndarray]:
         """Return, per used skill index, int32[B]: the highest-priority valid slot naming it, or -1."""
@@ -533,6 +869,7 @@ __all__ = [
     "EXIT_DONE",
     "EXIT_TIMER",
     "Interrupt",
+    "LaneInformationRequest",
     "MAX_PROGRAM_STEPS",
     "PROGRAMS",
     "P_J0",
@@ -540,5 +877,6 @@ __all__ = [
     "Program",
     "ProgramExecutor",
     "ProgramStep",
+    "TARGET_ENTITY",
     "TICK_COLUMNS",
 ]

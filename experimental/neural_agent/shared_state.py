@@ -377,6 +377,7 @@ _STATUS_SCHEMA = _object_schema(
             "items": _object_schema({"name": {"type": "string", "minLength": 1}, "value": {"type": "number"}}),
         },
         "heads": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "signal": {"type": "string"},
     }
 )
 _SKILLS_SECTION_SCHEMA = _object_schema(
@@ -838,6 +839,7 @@ def _status_to_dict(status: RequestStatus) -> dict[str, Any]:
         "outcome": None if status.outcome is None else status.outcome.name,
         "progress": None if status.progress is None else [{"name": n, "value": v} for n, v in status.progress],
         "heads": list(status.heads),
+        "signal": status.signal,
     }
 
 
@@ -855,6 +857,7 @@ def _status_from_dict(item: Mapping[str, Any]) -> RequestStatus:
         outcome=None if item["outcome"] is None else _outcome_named(item["outcome"]),
         progress=None if progress is None else tuple((pair["name"], pair["value"]) for pair in progress),
         heads=tuple(item["heads"]),
+        signal=item.get("signal", ""),
     )
 
 

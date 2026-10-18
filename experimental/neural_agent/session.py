@@ -91,6 +91,10 @@ class HostDecider(Protocol):
     first proposal). It returns a batched :class:`ManagedGoal` with the same
     PyTree structure as ``initial_state.carry.goal``, or ``None`` to keep the
     current goal. Exceptions are caught and counted as misses.
+
+    The session binds four optional attributes when the decider has them:
+    ``scratchpad``, ``host_cadence_ticks``, ``tick_seconds`` and
+    ``current_tick`` (see :func:`run_session`).
     """
 
     def decide(
@@ -263,6 +267,15 @@ def run_session(
     given, a :class:`SessionScribe` writes the belief, events, skills and
     decision sections at the host cadence, and each goal report into the
     skills section (``docs/SYSTEM_ONE.md`` §8.10).
+
+    A host decider may expose optional attributes that the session binds
+    when the decider has them (``jev/programs.py`` ``ProgramExecutor`` does):
+    ``scratchpad`` gets ``shared_state`` (when given), ``host_cadence_ticks``
+    and ``tick_seconds`` get ``config``'s values, and ``host_respects_commitment``
+    gets the seam's regime, all once before the run; ``current_tick`` gets the
+    clock tick of step 1 before each decide.
+    With them a decider writes its requests into S_t in the session's tick
+    space (``docs/SYSTEM_ONE.md`` §9.10).
     """
 
     if executive is not None and executive_writer is None:
@@ -273,6 +286,16 @@ def run_session(
     if not ids:
         raise ValueError("skill_ids must not be empty")
     scribe = None if shared_state is None else SessionScribe(shared_state, ids)
+    if host_decider is not None:
+        if shared_state is not None and hasattr(host_decider, "scratchpad"):
+            host_decider.scratchpad = shared_state
+        if hasattr(host_decider, "host_cadence_ticks"):
+            host_decider.host_cadence_ticks = config.host_cadence_ticks
+        if hasattr(host_decider, "tick_seconds"):
+            host_decider.tick_seconds = config.tick_seconds
+        if hasattr(host_decider, "host_respects_commitment"):
+            host_decider.host_respects_commitment = config.host_respects_commitment
+    binds_tick = host_decider is not None and hasattr(host_decider, "current_tick")
 
     batch = int(jnp.asarray(initial_state.carry.previous_action).shape[0])
     goal_structure = jax.tree.structure(initial_state.carry.goal)
@@ -362,6 +385,8 @@ def run_session(
                 due = bool(np.asarray(step.goal_runtime.active_events).any())
             if due:
                 host_decisions += 1
+                if binds_tick:
+                    host_decider.current_tick = clock_tick
                 started = time.perf_counter()
                 try:
                     goal = host_decider.decide(transition, new_state, latest_executive)

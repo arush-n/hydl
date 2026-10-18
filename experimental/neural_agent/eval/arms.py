@@ -37,7 +37,11 @@ The arms follow the composition brief and
   program on every lane: ``NA_PROGRAM=J0`` (the default) or ``SEQ``, with the
   feedback rule's window ``NA_NO_REISSUE`` seconds (default 0, off). It uses the
   registry's control table. The report labels it ``jprog-<program>``, plus
-  ``-noreissue<w>s`` when the rule is on.
+  ``-noreissue<w>s`` when the rule is on. In the eager runner's timed session,
+  ``session.run_session`` binds its scratchpad to the executor, which then also
+  writes one ``ActionRequest`` per lane per decision into the ``requests``
+  section, checked against the registry's contracts, and reads the statuses
+  back (SYSTEM_ONE.md section 9.10). The goal path still decides.
 
 The JEV arms (``j0``, ``shuffled``, ``j1``, ``j_lm``) build their instance and
 runner with the registry's control table (:func:`_control_table`), so each goal
@@ -840,8 +844,10 @@ def program_settings() -> tuple[str, float]:
 def _program_host_decider(ctx: ArmContext, steps: int) -> Any:
     """Return the ``jprog`` host decider: ``ProgramExecutor`` with one program on every lane.
 
-    The program and window come from :func:`program_settings`; the control table is the registry's
-    (:func:`_control_table`). For a session longer than one step (the timed session, not the one-step
+    The program and window come from :func:`program_settings`; the control table and the contracts are the
+    registry's (:func:`_control_table`; ``registry.contracts``, None without a registry). The session binds
+    its scratchpad to the executor, which then writes its requests there (``jev/programs.py``, items 8 and
+    9). For a session longer than one step (the timed session, not the one-step
     warm-up), the executor's per-lane counters are written to stderr as one JSON line when the process
     exits, because the composition report has no field for them.
     """
@@ -854,6 +860,7 @@ def _program_host_decider(ctx: ArmContext, steps: int) -> Any:
         _control_table(ctx),
         (PROGRAMS[name],) * ctx.batch,
         no_reissue_seconds=window,
+        contracts=getattr(ctx.registry, "contracts", None),
     )
     if steps > 1:
         atexit.register(_write_program_counters, arm_label("jprog", ctx), steps, executor)
