@@ -66,6 +66,15 @@ So:
     `hytalegym.sim.common.render.redirect_imports`;
   - every result records the render's commit and overlay hash;
   - the gen-7 lane is the peer session's (GEN7-PLAN 2b): this plan consumes the render and never edits it.
+- **Compute (owner, 2026-10-18: "you can use gpu if it is available use the cpu as well").** This machine is an
+  Apple M5 Max: 18 CPU cores, a 40-core GPU (Metal 4) and 128 GB of unified memory.
+  - JAX 0.11.2 sees the CPU only. The experimental `jax-metal` plugin is not installed, and is not to be installed in
+    the shared environment without asking.
+  - PyTorch 2.14 reaches the GPU through MPS: a 4096 x 4096 float32 matmul measured 14.9 TFLOP/s on the GPU against
+    1.7 on the CPU, under load.
+  - The simulator stays JAX on the CPU. The model is either JAX on the CPU, trained in-graph with the simulator, or
+    PyTorch on the GPU, fed by the JAX simulator through the shared memory. E11 (C1) measures both on the same task
+    and decides (BUILD 3.5's ruling).
 - **Body model:** `npc_walk`, the NPC the bridge drives (owner ruling 2026-10-18). Walking is one of its movement
   states. Player-only movement (sprint transitions, slide, landing roll) cannot be verified on this body, so those
   verbs wait.
