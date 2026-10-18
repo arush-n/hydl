@@ -72,10 +72,14 @@ for the gen-7 simulator), and the gen-7 simulator itself (phase 3 of 6 running).
 | 5 to 6 Crafting and source-pin baselines, stamp and cutover | designed (`GEN7-PLAN.md` section 4) |
 | Open for the owner | the planned compile and the general compile are not bit-identical (6 of 315 arrays, max 2.4e-7): moving callers to planned is a methodology decision; one opt-in bit-exact speed-up exists (`OPTIMIZED`), four hot spots proposed |
 
-## 6. Running right now
+## 6. Running right now (2026-10-18, night)
 
-P6 (8B, 14B, restate variant); gen-7 phase 3 agent; the lower-layer session's on_tick commit and
-forced-target-loss test.
+The phase 4c bridge agent (the two 0.7.2 bridge defects the fidelity session measured: the NPC yaw path for
+policy-bound group actors, the held-item NPE on the reload interrupt; Java only, scratch builds, ports 5556/25572;
+`GEN7-PLAN.md` 2b). The peer session (hydl-1f) owns the fidelity tests under `tests/fidelity` and, since `2b88082`,
+the overlay rows 5f and 11 and the learner-row harness repair, each as its own construct with a native differential,
+both sim gates before any overlay commit. P6 is concluded; the phase 3, 4 and 4b port agents have reported and their
+work is committed.
 
 ## 7. Decisions taken and still open (2026-10-18, evening)
 
@@ -120,6 +124,9 @@ exact typed path and the questions channel; `ffe11c5` `on_tick`; `8707eec` `--ho
 `83fe6eb` the scratchpad package; `b7d71c2` the briefing view and goal readings; `20c2c0d` the patterned language
 (P7); `b58a317` cleanup; `6bdcd20`, `cb3d08c`, `64c8044`, `35a5a2d`, `c0d5f9b`, `cdf258c` the old uncommitted work
 in groups. Lower layer: `e62f654`, `3439c67`, `0f17bc8`, `39b450e`, `9b6c571`, `cbd4e00`, `5286797`.
+Night: `1f0af14` identity gate against the repaired HEAD; `ebc2e41` P6; `3cb4416` the peer's fidelity section (i);
+`1159f8f` the phase 4b bridge half (readouts, `hit_interrupt_duel`, jar pin `8B09661F`); `235565b` the nearest-skill
+resolver (#32, SYSTEM_ONE 9.16); `2b88082` the gen-7 mana pool construct with fidelity section (j) and phase 4c recorded.
 
 ## 9. Layout
 
