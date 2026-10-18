@@ -19,7 +19,7 @@ of width D (``network.py`` formula 1) and H_c the critic width:
 no weights with it. Initialization: ``init_j1`` for the actor; for the critic,
 He normal for W1 and W2 (std sqrt(2 / fan_in)), std sqrt(1 / H_c) for
 w_value, and zero biases. These are the hidden and value-head rules of
-``train_j1_ppo.init_mlp_policy``, with its default width H_c = 64. Source: this
+the first build's stand-in MLP in ``train_j1_ppo`` (removed 2026-10-18), width H_c = 64. Source: this
 module's choice, copied from that stand-in. The loss reads only the skill
 logits, so J1's replace and params heads get a zero gradient and keep their
 initial values.
@@ -43,7 +43,7 @@ from experimental.neural_agent.jev.network import (
     j1_inputs,
 )
 
-#: Width H_c of both critic hidden layers: ``init_mlp_policy``'s default.
+#: Width H_c of both critic hidden layers: 64, the former stand-in's default.
 CRITIC_HIDDEN: int = 64
 
 

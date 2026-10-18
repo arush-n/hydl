@@ -217,8 +217,6 @@ CITATION_LINES: tuple[str, ...] = (
     "advance_lower_bound (repository path).",
     "experimental/neural_agent/tasks/composition.py: CompositionTask.classify, the verdicts and the executive "
     "(repository path).",
-    "experimental/neural_agent/tasks/events.py: DAMAGE_RECEIVED is not produced by the flat arena; "
-    "inject_damage_event is an ablation (ADR-001 D5) (repository path).",
     "experimental/neural_agent/probes/out/events.json, written by probes/probe_events.py: on combat/baseline a "
     "neutral actor received DAMAGE_RECEIVED on 17 of 1,024 lane-steps (batch 8, 128 steps), with 0 terminated and "
     "8 truncated episodes (local probe output).",
@@ -983,8 +981,8 @@ def _caveats(runs: Sequence[ArmRun], *, arena: str, runner: str) -> list[str]:
     if arena == "flat_pursuit":
         lines += [
             "- Terminated is read as a catch. This is an inference, not a test: the flat arena closes combat, "
-            "so no actor can die there (`tasks/flat_arena.py` step_detailed and `tasks/events.py`).",
-            "- The flat arena produces no DAMAGE_RECEIVED event (`tasks/events.py`). This run injects none, "
+            "so no actor can die there (`tasks/flat_arena.py` step_detailed).",
+            "- The flat arena produces no DAMAGE_RECEIVED event. This run injects none, "
             "because the injection is an ablation (ADR-001 D5). So the interrupt columns are empty here, and "
             "an episode cannot be composed without an injected damage event.",
         ]

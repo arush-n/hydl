@@ -28,17 +28,13 @@ Public names:
   vendored from ``agents/dawn`` (local only, unpublished).
 * :func:`decision_advantages`: that GAE with ``gamma ** elapsed_ticks``.
 * :func:`train_j1_ppo`: the training loop.
-* :class:`SyntheticGoalEnv`: a pure-JAX toy semi-MDP for smoke runs and tests.
-* :class:`MlpPolicyParams`, :func:`init_mlp_policy`, :func:`apply_mlp_policy`:
-  a local stand-in for the J1 network (see the TODO above them).
 
-The CLI trains the stand-in on :class:`SyntheticGoalEnv` by default, on CPU in
-seconds. ``--env sim`` trains J1 with a separate critic
-(``jev/j1_actor_critic.py``) on ``jev/sim_goal_env.py`` over the
-``combat_open_flat`` arena, and writes the J1Params to ``--out``::
+The CLI trains J1 with a separate critic (``jev/j1_actor_critic.py``) on
+``jev/sim_goal_env.py`` over the ``combat_open_flat`` arena and writes the
+J1Params to ``--out`` (the synthetic toy environment and the MLP stand-in of the
+first build were removed on 2026-10-18)::
 
-    python -m experimental.neural_agent.jev.train_j1_ppo --updates 60
-    python -m experimental.neural_agent.jev.train_j1_ppo --env sim --batch 8 \
+    python -m experimental.neural_agent.jev.train_j1_ppo --batch 8 \
         --decisions-per-update 6 --updates 3 --ticks 64 --out /tmp/j1_sim.npz
 """
 
@@ -60,7 +56,6 @@ from experimental.neural_agent.contracts import (
     BELIEF_LATENT_WIDTH,
     MAX_GOALS,
     PARAM_WIDTH,
-    ComputeBudget,
     ExecutiveArrays,
     GoalPayload,
     SharedBeliefState,
@@ -632,186 +627,6 @@ def train_j1_ppo(
     return params, metrics
 
 
-class SyntheticState(NamedTuple):
-    """State of :class:`SyntheticGoalEnv` for B lanes.
-
-    Shapes:
-        correct_skill: int32[B], the hidden skill that pays +1.
-        priority: float32[B, MAX_GOALS], executive priorities; slot g names skill g.
-        latent: float32[B, BELIEF_LATENT_WIDTH], distractor noise in the belief.
-        current_skill: int32[B], the skill in force; 0 before the first decision.
-        decisions: int32[B], decisions taken in this episode.
-    """
-
-    correct_skill: jax.Array
-    priority: jax.Array
-    latent: jax.Array
-    current_skill: jax.Array
-    decisions: jax.Array
-
-
-class SyntheticGoalEnv:
-    """Toy semi-MDP in which J1 must read E_t to pick the paying skill. Pure JAX.
-
-    At reset each lane draws a hidden correct skill c uniformly from [0, 3).
-    The executive names skill g in goal slot g for g < 3 (slot 3 is empty),
-    with priority U(0.6, 1.0) for c and U(0.0, 0.4) for the others, so c is
-    the highest-priority goal and is recoverable only from E_t. The belief
-    carries noise only: every feature is unknown and the latent is N(0, 1),
-    redrawn each decision. Every skill is legal, and skill 0 has no idle role.
-
-    A decision lasts d ~ U{1, ..., max_ticks} ticks and pays +1 if the chosen
-    skill is c, else -0.2, on its last tick, so ``step`` returns
-    ``gamma ** (d - 1)`` times that. An episode is ``episode_decisions``
-    decisions with the same c. With these constants a uniform policy earns
-    about 0.19 per decision and the optimal policy about 0.97.
-
-    Attributes:
-        num_skills: 3.
-        gamma: Per-tick discount, ``GAMMA``.
-        max_ticks: Longest decision in ticks, 8.
-        episode_decisions: Decisions per episode, 4.
-    """
-
-    num_skills: int = 3
-    gamma: float = GAMMA
-    max_ticks: int = 8
-    episode_decisions: int = 4
-    correct_payoff: float = 1.0
-    wrong_payoff: float = -0.2
-
-    def reset(self, keys: jax.Array) -> tuple[SyntheticState, dict[str, Any]]:
-        """Start one episode per lane; see :meth:`GoalDecisionEnv.reset`.
-
-        Args:
-            keys: B PRNG keys, one per lane.
-
-        Returns:
-            ``(state, obs)`` with the observation dict of :class:`GoalDecisionEnv`.
-        """
-
-        state = jax.vmap(self._reset_lane)(keys)
-        return state, self._observe(state)
-
-    def step(
-        self, state: SyntheticState, skill_index: jax.Array, keys: jax.Array
-    ) -> tuple[SyntheticState, dict[str, Any], jax.Array, jax.Array, jax.Array]:
-        """Run one decision of d ticks; see :meth:`GoalDecisionEnv.step`.
-
-        Args:
-            state: SyntheticState for B lanes.
-            skill_index: int32[B], the chosen skill in [0, 3).
-            keys: B PRNG keys, one per lane.
-
-        Returns:
-            ``(state, obs, reward float32[B], elapsed_ticks int32[B], done bool[B])``.
-        """
-
-        skill = jnp.asarray(skill_index, dtype=jnp.int32)
-        elapsed, latent = jax.vmap(self._draw_decision)(keys)
-        payoff = jnp.where(
-            skill == state.correct_skill,
-            jnp.float32(self.correct_payoff),
-            jnp.float32(self.wrong_payoff),
-        )
-        reward = jnp.float32(self.gamma) ** (elapsed - 1).astype(jnp.float32) * payoff
-        decisions = state.decisions + 1
-        next_state = state._replace(
-            latent=latent, current_skill=skill, decisions=decisions
-        )
-        done = decisions >= self.episode_decisions
-        return next_state, self._observe(next_state), reward, elapsed, done
-
-    def _reset_lane(self, key: jax.Array) -> SyntheticState:
-        """Draw one lane's hidden skill, priorities and latent (unbatched)."""
-
-        correct_key, priority_key, latent_key = jax.random.split(key, 3)
-        correct = jax.random.randint(correct_key, (), 0, self.num_skills, dtype=jnp.int32)
-        noise = jax.random.uniform(priority_key, (self.num_skills,), dtype=jnp.float32)
-        ranked = jnp.where(
-            jnp.arange(self.num_skills) == correct, 0.6 + 0.4 * noise, 0.4 * noise
-        )
-        priority = jnp.zeros((MAX_GOALS,), jnp.float32).at[: self.num_skills].set(ranked)
-        return SyntheticState(
-            correct_skill=correct,
-            priority=priority,
-            latent=jax.random.normal(latent_key, (BELIEF_LATENT_WIDTH,), jnp.float32),
-            current_skill=jnp.zeros((), jnp.int32),
-            decisions=jnp.zeros((), jnp.int32),
-        )
-
-    def _draw_decision(self, key: jax.Array) -> tuple[jax.Array, jax.Array]:
-        """Draw one lane's decision length int32[] and new latent float32[L]."""
-
-        tick_key, latent_key = jax.random.split(key)
-        ticks = jax.random.randint(
-            tick_key, (), 1, self.max_ticks + 1, dtype=jnp.int32
-        )
-        latent = jax.random.normal(latent_key, (BELIEF_LATENT_WIDTH,), jnp.float32)
-        return ticks, latent
-
-    def _observe(self, state: SyntheticState) -> dict[str, Any]:
-        """Build the observation dict for B lanes from ``state``."""
-
-        lanes = state.correct_skill.shape[0]
-        slots = jnp.arange(MAX_GOALS, dtype=jnp.int32)
-        occupied = slots < self.num_skills
-        budget = ComputeBudget()
-        version = jnp.ones((lanes,), jnp.int32)
-        executive = ExecutiveArrays(
-            skill_index=jnp.broadcast_to(
-                jnp.where(occupied, slots, -1), (lanes, MAX_GOALS)
-            ),
-            priority=state.priority,
-            params=jnp.zeros((lanes, MAX_GOALS, PARAM_WIDTH), jnp.float32),
-            goal_valid=jnp.broadcast_to(occupied, (lanes, MAX_GOALS)),
-            budget=jnp.broadcast_to(
-                jnp.asarray(
-                    [
-                        budget.jev_latency_ms,
-                        budget.search_expansions,
-                        budget.executive_calls_per_minute,
-                    ],
-                    jnp.float32,
-                ),
-                (lanes, _BUDGET_WIDTH),
-            ),
-            version=version,
-        )
-        # Before the first decision the goal in force is the idle goal of
-        # contracts.idle_goal: skill 0, executive version 0, no slot.
-        started = state.decisions > 0
-        current_goal = GoalPayload(
-            skill_index=state.current_skill,
-            params=jnp.zeros((lanes, PARAM_WIDTH), jnp.float32),
-            executive_version=jnp.where(started, version, 0),
-            goal_slot=jnp.where(started, state.current_skill, -1),
-        )
-        belief = SharedBeliefState(
-            features=jnp.zeros((lanes, BELIEF_FEATURE_COUNT), jnp.float32),
-            feature_known=jnp.zeros((lanes, BELIEF_FEATURE_COUNT), jnp.bool_),
-            latent=state.latent,
-        )
-        return {
-            "belief": belief,
-            "executive": executive,
-            "current_goal": current_goal,
-            "mask": jnp.ones((lanes, self.num_skills), jnp.bool_),
-        }
-
-
-# TODO(J1 network): switch to init_j1, apply_j1 and J1Params from
-# experimental.neural_agent.jev.network. network.py did not exist when this
-# trainer was started (2026-10-16), so a minimal stand-in lives here. Its input
-# mirrors j1_inputs in network.py as read on 2026-10-16. apply_j1 as read then
-# returns (skill_logits, replace_logit, params_head) and has no value head, so
-# the switch also needs a critic: train_j1_ppo needs
-# apply_fn(params, obs) -> (logits, value).
-# 2026-10-17: jev/j1_actor_critic.py now provides that apply_fn, and --env sim
-# uses it. The synthetic path keeps this stand-in so that its tests stay as
-# they are.
-
-
 def policy_input_width(num_skills: int) -> int:
     """Return D, the width of :func:`policy_input`: 2F + L + G(K + P + 2) + 4 + K.
 
@@ -870,94 +685,11 @@ def policy_input(obs: dict[str, Any]) -> jax.Array:
     )
 
 
-class MlpPolicyParams(NamedTuple):
-    """Local stand-in for the J1 network: two ReLU layers, skill and value heads.
-
-    Shapes, with D = ``policy_input_width(K)``, H hidden units and K skills:
-        w1: float32[D, H]. b1: float32[H].
-        w2: float32[H, H]. b2: float32[H].
-        w_skill: float32[H, K]. b_skill: float32[K].
-        w_value: float32[H]. b_value: float32[] (a scalar).
-    """
-
-    w1: jax.Array
-    b1: jax.Array
-    w2: jax.Array
-    b2: jax.Array
-    w_skill: jax.Array
-    b_skill: jax.Array
-    w_value: jax.Array
-    b_value: jax.Array
-
-
-def init_mlp_policy(key: jax.Array, num_skills: int, hidden: int = 64) -> MlpPolicyParams:
-    """Initialize :class:`MlpPolicyParams`.
-
-    The hidden layers use He-normal weights. The skill head is scaled by 0.01
-    so that the first policy is close to uniform. Biases start at zero.
-
-    Args:
-        key: A JAX PRNG key.
-        num_skills: Catalog size K, a positive int.
-        hidden: H, the width of both hidden layers, a positive int.
-
-    Returns:
-        MlpPolicyParams with the shapes listed on the class.
-    """
-
-    skills = _positive_int(num_skills, "num_skills")
-    width_h = _positive_int(hidden, "hidden")
-    width = policy_input_width(skills)
-    key_w1, key_w2, key_skill, key_value = jax.random.split(key, 4)
-    f32 = jnp.float32
-    return MlpPolicyParams(
-        w1=jax.random.normal(key_w1, (width, width_h), f32) * math.sqrt(2.0 / width),
-        b1=jnp.zeros((width_h,), f32),
-        w2=jax.random.normal(key_w2, (width_h, width_h), f32) * math.sqrt(2.0 / width_h),
-        b2=jnp.zeros((width_h,), f32),
-        w_skill=jax.random.normal(key_skill, (width_h, skills), f32) * 0.01,
-        b_skill=jnp.zeros((skills,), f32),
-        w_value=jax.random.normal(key_value, (width_h,), f32) * math.sqrt(1.0 / width_h),
-        b_value=jnp.zeros((), f32),
-    )
-
-
-def apply_mlp_policy(
-    params: MlpPolicyParams, obs: dict[str, Any]
-) -> tuple[jax.Array, jax.Array]:
-    """Return unmasked ``(logits float32[N, K], value float32[N])`` for N lanes.
-
-    Args:
-        params: MlpPolicyParams.
-        obs: The observation dict of :class:`GoalDecisionEnv`.
-
-    Returns:
-        Skill logits and value estimates. :func:`collect_decisions` and the
-        PPO loss apply ``obs["mask"]`` to the logits.
-    """
-
-    hidden_one = jax.nn.relu(policy_input(obs) @ params.w1 + params.b1)
-    hidden_two = jax.nn.relu(hidden_one @ params.w2 + params.b2)
-    logits = hidden_two @ params.w_skill + params.b_skill
-    value = hidden_two @ params.w_value + params.b_value
-    return logits, value
-
-
 def main(argv: Sequence[str] | None = None) -> int:
-    """Train with semi-MDP PPO and print metrics.
+    """Train J1 with semi-MDP PPO on the arena (``jev/sim_goal_env.py``) and print metrics.
 
-    ``--env synthetic`` (the default) trains the local stand-in on
-    :class:`SyntheticGoalEnv`. ``--env sim`` trains J1 with a separate critic
-    on ``SimGoalDecisionEnv`` over ``combat_open_flat``, prints the simulated
-    lane-ticks per second (compilation included), and writes the J1Params to
-    ``--out``.
-
-    Args:
-        argv: Command-line arguments without the program name, or None for
-            ``sys.argv[1:]``.
-
-    Returns:
-        Process exit status 0.
+    The J1 actor with a separate critic (``jev/j1_actor_critic.py``) learns over
+    ``combat_open_flat``; the parameters are written to ``--out``.
     """
 
     parser = argparse.ArgumentParser(
@@ -987,55 +719,36 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("--seed", type=int, default=0, help="PRNG seed (default 0)")
     parser.add_argument(
-        "--env",
-        choices=("synthetic", "sim"),
-        default="synthetic",
-        help="synthetic toy (default), or SimGoalDecisionEnv on combat_open_flat",
-    )
-    parser.add_argument(
         "--ticks",
         type=int,
         default=256,
-        help="--env sim: arena episode limit in ticks (default 256, the composition runner's)",
+        help="arena episode limit in ticks (default 256, the composition runner's)",
     )
-    parser.add_argument(
-        "--out", default=None, help="--env sim: J1Params .npz to write (required there)"
-    )
+    parser.add_argument("--out", required=True, help="J1Params .npz to write")
     parser.add_argument(
         "--init-j1",
         default=None,
-        help="--env sim: J1Params .npz to start from (for example the behaviour-cloned parameters) instead of init_j1",
+        help="J1Params .npz to start from (for example the behaviour-cloned parameters) instead of init_j1",
     )
     args = parser.parse_args(argv)
-    if args.env == "sim" and args.out is None:
-        parser.error("--out is required with --env sim")
-    if args.env == "synthetic" and args.out is not None:
-        parser.error("--out applies to --env sim only")
     if args.out is not None and Path(args.out).suffix != ".npz":
         parser.error(f"--out must end in .npz, got {args.out}")
-    if args.init_j1 is not None and args.env != "sim":
-        parser.error("--init-j1 applies to --env sim only")
 
     init_key, train_key = jax.random.split(jax.random.key(args.seed))
-    if args.env == "sim":
-        from experimental.neural_agent.jev.j1_actor_critic import (
-            apply_j1_actor_critic,
-            init_j1_actor_critic,
-            save_j1_params,
-        )
-        from experimental.neural_agent.jev.sim_goal_env import build_sim_goal_env
+    from experimental.neural_agent.jev.j1_actor_critic import (
+        apply_j1_actor_critic,
+        init_j1_actor_critic,
+        save_j1_params,
+    )
+    from experimental.neural_agent.jev.sim_goal_env import build_sim_goal_env
 
-        env: GoalDecisionEnv = build_sim_goal_env(args.batch, args.ticks, seed=args.seed)
-        params: Any = init_j1_actor_critic(init_key, env.num_skills)
-        if args.init_j1 is not None:
-            from experimental.neural_agent.jev.j1_actor_critic import with_actor_from_file
+    env: GoalDecisionEnv = build_sim_goal_env(args.batch, args.ticks, seed=args.seed)
+    params: Any = init_j1_actor_critic(init_key, env.num_skills)
+    if args.init_j1 is not None:
+        from experimental.neural_agent.jev.j1_actor_critic import with_actor_from_file
 
-            params = with_actor_from_file(params, args.init_j1)
-        apply_fn: ApplyFn = apply_j1_actor_critic
-    else:
-        env = SyntheticGoalEnv()
-        params = init_mlp_policy(init_key, env.num_skills)
-        apply_fn = apply_mlp_policy
+        params = with_actor_from_file(params, args.init_j1)
+    apply_fn: ApplyFn = apply_j1_actor_critic
     started = time.perf_counter()
     params, metrics = train_j1_ppo(
         env,
@@ -1054,22 +767,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"entropy {row['entropy']:.3f}  approx_kl {row['approximate_kl']:.4f}  "
             f"clip_fraction {row['clip_fraction']:.3f}  value_loss {row['value_loss']:.4f}"
         )
-        if args.env == "sim":
-            line += (
-                f"  mean_elapsed_ticks {row['mean_elapsed_ticks']:.2f}  "
-                f"episodes_completed {int(row['episodes_completed'])}"
-            )
+        line += (
+            f"  mean_elapsed_ticks {row['mean_elapsed_ticks']:.2f}  "
+            f"episodes_completed {int(row['episodes_completed'])}"
+        )
         print(line)
     print(f"final mean_reward {metrics[-1]['mean_reward']:+.3f} after {len(metrics)} updates")
-    if args.env == "sim":
-        lane_ticks = sum(row["mean_elapsed_ticks"] for row in metrics) * (
-            args.decisions_per_update * args.batch
-        )
-        print(
-            f"sim: {lane_ticks:.0f} lane-ticks in {seconds:.1f} s including compilation, "
-            f"{lane_ticks / seconds:.1f} lane-ticks/s"
-        )
-        print(f"wrote J1Params to {save_j1_params(args.out, params)}")
+    lane_ticks = sum(row["mean_elapsed_ticks"] for row in metrics) * (
+        args.decisions_per_update * args.batch
+    )
+    print(
+        f"sim: {lane_ticks:.0f} lane-ticks in {seconds:.1f} s including compilation, "
+        f"{lane_ticks / seconds:.1f} lane-ticks/s"
+    )
+    print(f"wrote J1Params to {save_j1_params(args.out, params)}")
     return 0
 
 

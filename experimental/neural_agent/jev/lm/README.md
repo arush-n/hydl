@@ -11,6 +11,7 @@ its measurements are in the ledger (3.7 to 9.9 s per decision through Ollama).
 | `prompting.py` | 294 | Prompt, JSON Schema and fail-closed parsing of the reply. |
 | `protocol.py` | 140 | The backend protocol. |
 | `ollama_qwen.py` | 171 | Local Ollama backend (allowed: local open weights). |
-| `anthropic_quick.py` | 189 | Anthropic backend; no arm offers it. Cleanup candidate awaiting the owner. |
 
 Gate: `test_na_jev_lm.py` (the live Ollama check runs only with `NEURAL_AGENT_LIVE_OLLAMA=1`).
+
+Removed 2026-10-18 (owner-approved cleanup): `anthropic_quick.py`, the Anthropic backend no arm offered.

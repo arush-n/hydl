@@ -90,7 +90,6 @@ from experimental.neural_agent.jev.lm.protocol import DecisionLM
 
 # The control every lane got until 2026-10-17. No longer applied: a goal's
 # control is its skill's row of the instance's SkillControlTable.
-MINIMUM_COMMITMENT_SECONDS: float = 0.5
 MAXIMUM_DURATION_SECONDS: float = 10.0
 EMERGENCY_EVENTS: tuple[DecisionEvent, ...] = (
     DecisionEvent.DAMAGE_RECEIVED,

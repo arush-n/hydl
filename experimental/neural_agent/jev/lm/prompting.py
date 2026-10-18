@@ -49,8 +49,7 @@ DECISION_KEYS: frozenset[str] = frozenset(
     {"skill_id", "params", "continue_current", "reason"}
 )
 
-# The reply schema. Ollama constrains decoding to it. The Anthropic backend
-# sends a copy with the numeric and array limits removed (anthropic_quick.py).
+# The reply schema. Ollama constrains decoding to it.
 DECISION_JSON_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,

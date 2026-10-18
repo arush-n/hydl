@@ -22,7 +22,7 @@ names are in brackets (`../eval/arms.py`).
 |---|---:|---|
 | `network.py` | 633 | J1, a small network over B_t and the lowered E_t. [`j1`, needs `--j1-params`] |
 | `train_j1.py` | 612 | Behaviour cloning of J1 from recorded J0 decisions (`../eval/record_traces.py`). |
-| `train_j1_ppo.py`, `j1_actor_critic.py`, `sim_goal_env.py` | 1077, 188, 435 | PPO over goal decisions as a semi-Markov decision process on a real arena. |
+| `train_j1_ppo.py`, `j1_actor_critic.py`, `sim_goal_env.py` | 800, 188, 435 | PPO over goal decisions as a semi-Markov decision process on the arena (the synthetic toy environment and the MLP stand-in were removed on 2026-10-18). |
 | `eval_j1.py` | 91 | Offline evaluation of J1 parameters on a decision dataset. |
 
 ## Deprecated

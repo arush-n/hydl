@@ -9,7 +9,7 @@ Arenas (:data:`ARENA_NAMES`):
 
 * ``flat_pursuit`` delegates to :func:`tasks.flat_arena.build_flat_arena`, the
   pursuit candidate's flat two-actor arena. Combat is closed there, so no actor
-  takes damage and DAMAGE_RECEIVED never fires (``tasks/events.py``). A
+  takes damage and DAMAGE_RECEIVED never fires. A
   terminated lane is read as a catch, because no actor can die
   (``flat_arena.FlatPursuitEnvironment.step_detailed``).
 * ``combat_baseline`` is ``AgentKit().build('combat/baseline', batch=B)
