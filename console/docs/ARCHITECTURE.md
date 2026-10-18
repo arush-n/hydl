@@ -135,7 +135,8 @@ passes `(carry, actor_input, key)`. The console wraps policies in two places —
 `initial_carry` attribute to decide which convention it used. That is a
 different question: `uniform_legal` and `strike_when_ready()` both take a carry,
 return it untouched, and set no attribute. Use `_takes_carry`, which reads the
-arity. Guarded by `tests/test_policy_shapes.py` (17 cases, ~1.5 s, no scene
+arity. Guarded by a contributor suite, `tests/test_policy_shapes.py`, which is
+not published (17 cases, ~1.5 s, no scene
 build).
 
 **2. Nothing is counted before the episode is truncated.** The environment does

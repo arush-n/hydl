@@ -148,10 +148,14 @@ def decode_rows(vectors: list[list[int]]) -> list[str]:
             dodge_direction=jnp.asarray(
                 [one(base.dodge_direction)], dtype=jnp.int32),
             jump_held=jnp.asarray([jump], dtype=jnp.bool_),
+            gait=jnp.asarray([one(base.gait)], dtype=jnp.int32),
             world_move_direction=jnp.asarray(
                 [one(base.world_move_direction)], dtype=jnp.int32),
             yaw_delta_degrees=jnp.asarray([yaw], dtype=jnp.float32),
+            body_yaw_delta_degrees=jnp.asarray(
+                [one(base.body_yaw_delta_degrees, float)], dtype=jnp.float32),
             pitch_delta_degrees=jnp.asarray([pitch], dtype=jnp.float32),
+            hotbar_slot=jnp.asarray([one(base.hotbar_slot)], dtype=jnp.int32),
             use_requested=jnp.asarray(
                 [one(base.use_requested, bool)], dtype=jnp.bool_),
             block_interaction_trigger=jnp.asarray(
