@@ -3,6 +3,8 @@ package com.hytalerlbridge.nativebackend;
 import com.hypixel.hytale.builtin.adventure.memories.MemoriesGameplayConfig;
 import com.hypixel.hytale.builtin.adventure.memories.MemoriesPlugin;
 import com.hypixel.hytale.builtin.crafting.component.BenchBlock;
+import com.hypixel.hytale.builtin.crafting.component.CraftingManager;
+import com.hypixel.hytale.builtin.crafting.window.SimpleCraftingWindow;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType;
@@ -18,12 +20,15 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hytalerlbridge.action.NativeWorldVerbRequest;
 import com.hytalerlbridge.environment.fidelity.NativeCraftingOracleFixture;
 import com.hytalerlbridge.environment.fidelity.NativeCraftingOracleFixture.CraftRequest;
+import com.hytalerlbridge.environment.fidelity.NativeCraftingOracleFixture.ProbeEvent;
 import com.hytalerlbridge.nativebackend.NativeCraftingOracleLedger.BenchReadout;
 import com.hytalerlbridge.nativebackend.NativeCraftingOracleLedger.Slot;
 import com.hytalerlbridge.nativebackend.support.NativeWorldAccess;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.BlockingQueue;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.joml.Vector3d;
@@ -47,6 +52,7 @@ final class NativeCraftingOracle {
     private final Ref<EntityStore> actor;
     private final Store<EntityStore> store;
     private ItemContainer benchInput;
+    private SimpleCraftingWindow benchWindow;
 
     private NativeCraftingOracle(
         NativeCraftingOracleLedger ledger,
@@ -111,11 +117,88 @@ final class NativeCraftingOracle {
         if (!"pending".equals(ledger.status())) {
             return;
         }
+        ledger.observe(tick, currentSlots(), active, progressSeconds());
+    }
+
+    /** Cancels the pending craft on this tick, recording the slots it changed. */
+    void cancel(long tick, String reason) {
+        ledger.cancel(reason, tick, currentSlots(), progressSeconds());
+    }
+
+    void event(long tick, String kind, boolean applied, String detail) {
+        ledger.event(tick, kind, applied, detail);
+    }
+
+    Ref<EntityStore> actor() {
+        return actor;
+    }
+
+    Store<EntityStore> store() {
+        return store;
+    }
+
+    /** The probe's open bench window, opened before its craft request (or null). */
+    void attachWindow(SimpleCraftingWindow window) {
+        benchWindow = window;
+    }
+
+    /** Applies the events due at this probe tick, in the order the fixture lists them. */
+    void applyEvents(CraftRequest probe, List<ProbeEvent> due, long tick) {
+        for (ProbeEvent event : due) {
+            if (!pending()) {
+                ledger.event(tick, event.kind(), false, "craft_not_pending");
+                continue;
+            }
+            NativeCraftingOracleEvents.apply(this, probe, event, benchWindow, tick);
+        }
+    }
+
+    /** Records events the probe never reached because its craft finished first. */
+    void recordUnreached(List<ProbeEvent> late, long tick) {
+        for (ProbeEvent event : late) {
+            ledger.event(tick, event.kind(), false, "craft_ended_before_event;scheduled_tick=" + event.tick());
+        }
+    }
+
+    /** Closes the probe's bench window if an event has not closed it already. */
+    void closeWindow() {
+        if (benchWindow != null) {
+            NativeCraftingOracleEvents.closeBenchWindow(actor, store, benchWindow);
+            benchWindow = null;
+        }
+    }
+
+    private List<Slot> currentSlots() {
         List<Slot> now = actorSlots(actor, store);
         if (benchInput != null) {
             now.addAll(containerSlots("bench_input", benchInput));
         }
-        ledger.observe(tick, now, active);
+        return now;
+    }
+
+    /**
+     * The native craft progress: the queued head job's timeSecondsCompleted, read by
+     * reflection (CraftingManager and CraftingJob keep it private). -1 when no job is
+     * queued, -2 when the field cannot be read. Observation only; nothing branches on it.
+     */
+    private double progressSeconds() {
+        CraftingManager manager = store.getComponent(actor, CraftingManager.getComponentType());
+        if (manager == null) {
+            return -1.0;
+        }
+        try {
+            Field queueField = CraftingManager.class.getDeclaredField("queuedCraftingJobs");
+            queueField.setAccessible(true);
+            Object head = ((BlockingQueue<?>) queueField.get(manager)).peek();
+            if (head == null) {
+                return -1.0;
+            }
+            Field seconds = head.getClass().getDeclaredField("timeSecondsCompleted");
+            seconds.setAccessible(true);
+            return seconds.getFloat(head);
+        } catch (ReflectiveOperationException | ClassCastException error) {
+            return -2.0;
+        }
     }
 
     static void putInfo(Map<String, Object> info, NativeCraftingOracle oracle) {
@@ -150,7 +233,8 @@ final class NativeCraftingOracle {
     /** Reset output: the readout captured after the fixtures, and each probe's oracle in request order. */
     record ResetOutcome(ResetReadout readout, List<NativeCraftingOracle> records) {}
 
-    private static final int PROBE_TICK_LIMIT = 96;
+    /** Upper bound on one probe's world ticks; a timed craft with a second job needs several seconds. */
+    private static final int PROBE_TICK_LIMIT = 1200;
 
     /**
      * The reset-time sequence, in order: the bench fixture (placement, one tick, tier,
@@ -182,21 +266,69 @@ final class NativeCraftingOracle {
         List<NativeCraftingOracle> records = new ArrayList<>();
         if (fixture != null) {
             for (CraftRequest probe : fixture.requests()) {
+                SimpleCraftingWindow[] window = new SimpleCraftingWindow[1];
+                if (probe.openWindow()) {
+                    onWorld.accept(() -> window[0] = NativeCraftingOracleEvents.openBenchWindow(
+                        world,
+                        agent,
+                        world.getEntityStore().getStore(),
+                        placement[0]
+                    ));
+                }
                 craft.accept(probeRequest(probe, readout[0]));
                 NativeCraftingOracle oracle = current.get();
-                for (int index = 0; index < PROBE_TICK_LIMIT && oracle.pending(); index++) {
-                    tick.run();
-                }
-                if (oracle.pending()) {
-                    throw new IllegalStateException(
-                        "crafting oracle probe did not finish in " + PROBE_TICK_LIMIT
-                            + " ticks: " + probe.recipeId()
-                    );
-                }
+                oracle.attachWindow(window[0]);
+                runProbe(world, probe, oracle, onWorld, tick);
+                onWorld.accept(oracle::closeWindow);
                 records.add(oracle);
             }
         }
         return new ResetOutcome(readout[0], records);
+    }
+
+    /**
+     * Ticks one probe until its craft is no longer pending. The events whose tick is k are
+     * dispatched to the world thread after k loop ticks; the world-thread dispatch runs them
+     * before the next world tick, so each event's recorded world tick is k + 1 past the request
+     * (measured in the reach, second-craft and damage runs). The recorded tick is authoritative.
+     */
+    private static void runProbe(
+        World world,
+        CraftRequest probe,
+        NativeCraftingOracle oracle,
+        Consumer<Runnable> onWorld,
+        Runnable tick
+    ) {
+        int elapsed = 0;
+        int checkedThrough = -1;
+        while (oracle.pending()) {
+            if (elapsed >= PROBE_TICK_LIMIT) {
+                throw new IllegalStateException(
+                    "crafting oracle probe did not finish in " + PROBE_TICK_LIMIT
+                        + " ticks: " + probe.recipeId()
+                );
+            }
+            int at = elapsed;
+            checkedThrough = at;
+            List<ProbeEvent> due = probe.events().stream()
+                .filter(event -> event.tick() == at)
+                .toList();
+            if (!due.isEmpty()) {
+                onWorld.accept(() -> oracle.applyEvents(probe, due, world.getTick()));
+            }
+            if (!oracle.pending()) {
+                break;
+            }
+            tick.run();
+            elapsed++;
+        }
+        int checked = checkedThrough;
+        List<ProbeEvent> late = probe.events().stream()
+            .filter(event -> event.tick() > checked)
+            .toList();
+        if (!late.isEmpty()) {
+            onWorld.accept(() -> oracle.recordUnreached(late, world.getTick()));
+        }
     }
 
     /**
@@ -375,7 +507,7 @@ final class NativeCraftingOracle {
         return new BenchReadout(block.getId(), benchId, type, tier, x, y, z);
     }
 
-    private static BenchBlock benchComponent(World world, int x, int y, int z) {
+    static BenchBlock benchComponent(World world, int x, int y, int z) {
         Ref<ChunkStore> reference = BlockModule.getBlockEntity(world, x, y, z);
         if (reference == null || !reference.isValid()) {
             return null;

@@ -225,6 +225,12 @@ places a bench at a tier, sets the memories level and runs craft probes at reset
 request tick, tier and memories refusals as the server rules say). The simulator side can now model bench tiers, the
 memories level and the structural queue; stages 3 (timed) and 5 (processing, diagram) are next for the bridge.
 
+**Crafting oracle, stage 3 (2026-10-18; FIDELITY-0.7.2.md section (t); jar `5FE609E2`).** Timed bench crafts are measured:
+inputs leave on the first world tick after the request, the output lands when native progress reaches `TimeSeconds` (87 ticks
+for 3.0 s), walking out of reach cancels with a refund, a second request queues behind, damage does not cancel. Stage 5 is
+open: processing benches are container placement plus game time (the bridge world's clock is paused, so the bench never
+advanced), the Armory is a click-craft; both need a different route than `craft_recipe`.
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the

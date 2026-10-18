@@ -37,8 +37,23 @@ public record NativeCraftingOracleFixture(
     public static final String BENCH_CONTEXT = "bench";
     public static final String FIELDCRAFT_CONTEXT = "fieldcraft";
 
-    /** One probe: the recipe, its quantity, and its crafting context (bench or fieldcraft). */
-    public record CraftRequest(String recipeId, int quantity, String craftingContext) {
+    /**
+     * One probe: the recipe, its quantity, and its crafting context (bench or fieldcraft).
+     * A bench probe with {@code openWindow} opens the placed bench's window in the actor's
+     * WindowManager once the craft is queued, as the native client does while it crafts;
+     * {@code reach_out} and {@code second_craft} events need that open window.
+     */
+    public record CraftRequest(
+        String recipeId,
+        int quantity,
+        String craftingContext,
+        boolean openWindow,
+        List<ProbeEvent> events
+    ) {
+
+        public CraftRequest(String recipeId, int quantity, String craftingContext) {
+            this(recipeId, quantity, craftingContext, false, List.of());
+        }
 
         public CraftRequest {
             if (recipeId == null || recipeId.isBlank()) {
@@ -58,6 +73,52 @@ public record NativeCraftingOracleFixture(
             ) {
                 throw new IllegalArgumentException(
                     "crafting_oracle_requests crafting_context must be bench or fieldcraft"
+                );
+            }
+            events = events == null ? List.of() : List.copyOf(events);
+            if (openWindow && !BENCH_CONTEXT.equals(craftingContext)) {
+                throw new IllegalArgumentException(
+                    "crafting_oracle_requests open_window needs crafting_context bench"
+                );
+            }
+            for (ProbeEvent event : events) {
+                boolean needsWindow = ProbeEvent.REACH_OUT.equals(event.kind())
+                    || ProbeEvent.SECOND_CRAFT.equals(event.kind());
+                if (needsWindow && !openWindow) {
+                    throw new IllegalArgumentException(
+                        "crafting_oracle_requests event " + event.kind() + " needs open_window"
+                    );
+                }
+            }
+        }
+    }
+
+    /**
+     * A scripted event of a probe. {@code tick} counts the probe's loop ticks from the
+     * request; the event reaches the world thread after that many ticks and runs before the
+     * next world tick, so the world tick it is recorded at is one past {@code tick}.
+     * {@code reach_out} moves the actor past the open bench window's reach,
+     * {@code second_craft} sends a second CraftRecipeAction through that window, and
+     * {@code damage} applies one native physical hit to the actor.
+     */
+    public record ProbeEvent(int tick, String kind) {
+        public static final String REACH_OUT = "reach_out";
+        public static final String SECOND_CRAFT = "second_craft";
+        public static final String DAMAGE = "damage";
+
+        public ProbeEvent {
+            if (tick < 0) {
+                throw new IllegalArgumentException(
+                    "crafting_oracle_requests event tick must be nonnegative"
+                );
+            }
+            if (
+                !REACH_OUT.equals(kind)
+                    && !SECOND_CRAFT.equals(kind)
+                    && !DAMAGE.equals(kind)
+            ) {
+                throw new IllegalArgumentException(
+                    "crafting_oracle_requests event kind must be reach_out, second_craft or damage"
                 );
             }
         }

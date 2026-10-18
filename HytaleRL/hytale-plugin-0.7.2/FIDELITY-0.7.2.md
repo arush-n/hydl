@@ -1082,3 +1082,38 @@ timing is not yet measured), while the engine commits on the request tick; that 
 
 For deployment, `worldgen/native_action_resolution.py` accepts type-3 craft requests on the 0.7 server line (0.5.7
 keeps refusing them), with `NativeCraftingExecutionContext.structural_bench()`.
+
+## (t) Crafting oracle, stage 3 (timed bench crafts) and the stage 5 findings (2026-10-18; jar `5FE609E2`; receipts `~/.claude/jobs/31947bd7/tmp/phase4k/receipts/fin_*.json`)
+
+Stage 3, delivered. Mechanism (0.7.2 bytecode, `phase4k/analysis/crafting_javap_072.txt`, and live): `SimpleCraftingWindow.handleAction`
+calls `CraftingManager.queueCraft` when `TimeSeconds > 0` (else `craftItem`); `CraftingTickingSystem` calls `CraftingManager.tick`
+every world tick, `timeSecondsCompleted += dt` until `TimeSeconds`; `removeInputFromInventory` runs at the start of each
+quantity and `giveOutput` at completion; `BenchWindow.onClose0` -> `clearBench` -> `cancelAllCrafting` refunds the in-progress
+inputs; `WindowManager.validateWindows` (called from `Player.moveTo` and the teleport system) closes a bench window beyond
+7.0 blocks. The probe request gains `open_window` (the placed bench's window opened before the craft, as the native client
+does) and `events` (`tick`, `kind` in reach_out, second_craft, damage); the record gains `cancelled` status, `cancel_reason`,
+`first_removed_tick`, `first_added_tick`, per-tick `changes`, `progress_seconds` and `events`. The headless craft path accepts
+an open window at the same bench and queues from it. `NativeCraftingOracleEvents` (new, 193 lines) carries the three events.
+
+| Scenario (Armor_Copper_Chest, 3.0 s, Bench_Armour tier 1; seeds 570057 / 31337) | Status | Measured |
+|---|---|---|
+| timed craft, window open and control without window | finished | inputs leave on the first world tick after the request; output at completion, 87 world ticks (progress +0.0333 to 0.0353 s per tick, 2.97 to 3.00 s) |
+| walk out of reach at tick 10 (teleport 9 blocks, then `validateWindows`) | cancelled, `bench_window_closed_out_of_reach` | window closes, queue 0, inputs refunded to their slots in the same tick (43 / 44), progress 0.345 s |
+| second craft request at tick 10 | finished | queued behind the first (queue 1 to 2), no cancel; with stock job 2 consumes at job 1's completion and outputs 88 ticks later (210); without stock it is dropped at its start (inferred from the removal-failure branch) |
+| taking damage at tick 10 (one physical hit, health 105 to 104) | finished | no cancel (no caller of `cancelAllCrafting` or a window close on the damage path, by reference scan) |
+| ability request | not run | no `CraftingManager` reference outside the crafting package, so no cancel path (inferred) |
+| fieldcraft, the same recipe | refused, `craft_recipe_not_available_in_fieldcraft` | `FieldCraftingWindow` -> `craftItem`, no time path; no timed fieldcraft recipe exists in the 0.7.2 catalog |
+
+Stage 5, not delivered (findings from the bytecode, V = re-verified): V `ProcessingBenchWindow` handles `SetActiveAction` and
+`TierUpgradeAction` only, and V `DiagramCraftingWindow` handles `CancelCraftingAction`, `CraftItemAction` and
+`UpdateCategoryAction`, so `craft_recipe` applies to neither; processing is container placement (input and fuel containers),
+`SetActiveAction`, and `ProcessingBenchTick` advancing on game time (V: the `WorldTimeResource` delta divided by
+`getSecondsPerTick`); the Armory craft is a click-craft (V `CraftItemAction` -> `queueCraft(ORDERED)`, then `learnRecipe`), the axe
+needing no separate diagram item (reader's read). Live, the Campfire accepted Food_Fish_Raw and two sticks and activated, but
+input progress and fuel stayed at zero over 1,544 world ticks: the bridge pauses the game clock (`NativeEnvironmentSession.java`
+3507) and unpausing alone did not move it; the resource clock moved only under manual `WorldTimeResource.tick` steps. Cause not
+established; the processing oracle and the diagram probe are not built (WIP under `phase4k/analysis/stage5_processing_wip/`).
+
+Java: full `gradlew test --rerun --no-build-cache` 116 suites, 414 tests, 0 failures (baseline 409); the seven touched classes
+35 tests, 0 failures (coordinator re-run); `tests/test_server_versions.py` 7 passed; the repository build equals the scratch
+build. Claim most likely wrong (agent): that the teleport-plus-`validateWindows` cancel reproduces a client-driven walk away.

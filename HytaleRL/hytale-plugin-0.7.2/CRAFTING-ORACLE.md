@@ -72,3 +72,17 @@ need new mechanics on the simulator side after the oracle answers. The bridge re
   `memories_level` reset option; the readout is `native_memories_level` and `native_memories_recorded_count`.
 - Oracle route: reset-time probes (`crafting_oracle_requests`), scope `oracle_unbound_*`; the production step path still
   requires candidate evidence for bench contexts until the policy capture offers them (cutover).
+
+## Answers, stages 3 and 5 (2026-10-18; FIDELITY-0.7.2.md section (t); jar `5FE609E2`)
+
+- Stage 3: a timed bench craft is a multi-tick native job. Inputs leave the inventory on the first world tick after the
+  request; the output lands when the native progress reaches `TimeSeconds` (3.0 s = 87 world ticks at 1/30 s; model it on
+  progress seconds, not a fixed tick count). Cancels: walking out of reach (7 blocks, window open) cancels with a refund to
+  the original slots; a second craft request queues behind and does not cancel; taking damage does not cancel; an ability
+  request has no cancel path (inferred, not run). Fieldcraft has no timed recipe and crafts instantly. Probe shape:
+  `crafting_oracle_requests[i]` gains `open_window` and `events` (`tick`, `kind` reach_out | second_craft | damage).
+- Stage 5: processing benches do not use `craft_recipe`: items go into the bench's input and fuel containers, the bench
+  activates (`SetActiveAction`), and the processing tick advances on game time; the route is container placement plus time.
+  Not proven live: the bench did not advance in the bridge world (its game clock is paused). The Armory is a click-craft
+  (`CraftItemAction` -> `queueCraft` ORDERED), not `craft_recipe`; no separate diagram item is needed (reader's read); not
+  run live. Both stay open on the bridge side.

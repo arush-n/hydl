@@ -14,6 +14,8 @@ import com.hypixel.hytale.protocol.BenchType;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.bench.Bench;
 import com.hypixel.hytale.server.core.asset.type.item.config.CraftingRecipe;
+import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.entity.entities.player.windows.Window;
 import com.hypixel.hytale.server.core.inventory.InventoryComponent;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.CombinedItemContainer;
@@ -58,7 +60,16 @@ final class NativeHeadlessCrafting {
                 "headless_crafting_manager_unavailable"
             );
         }
-        if (manager.hasBenchSet() || manager.getRemainingQueueSize() != 0) {
+        // A bench window already open at this bench (the crafting oracle opens one for
+        // its probes, as the native client does) holds the manager's bench; the craft
+        // queues from that window instead of setting the bench again.
+        SimpleCraftingWindow openWindow = "bench".equals(request.craftingContext())
+            ? openBenchWindowAt(reference, store, request)
+            : null;
+        if (
+            manager.getRemainingQueueSize() != 0
+                || (manager.hasBenchSet() && openWindow == null)
+        ) {
             return StartResult.rejected("headless_crafting_manager_busy");
         }
         CraftingRecipe recipe = CraftingRecipe.getAssetMap().getAsset(
@@ -144,13 +155,15 @@ final class NativeHeadlessCrafting {
                 );
             }
 
-            manager.setBench(
-                request.benchX(),
-                request.benchY(),
-                request.benchZ(),
-                bench.blockType()
-            );
-            benchBound = true;
+            if (openWindow == null) {
+                manager.setBench(
+                    request.benchX(),
+                    request.benchY(),
+                    request.benchZ(),
+                    bench.blockType()
+                );
+            }
+            benchBound = openWindow == null;
             MaterialExtraResourcesSection nearbyResources =
                 new MaterialExtraResourcesSection();
             CraftingManager.feedExtraResourcesSection(
@@ -168,14 +181,16 @@ final class NativeHeadlessCrafting {
                 actorInventory,
                 nearbyResources.getItemContainer()
             );
-            timedWindow = new SimpleCraftingWindow(
-                request.benchX(),
-                request.benchY(),
-                request.benchZ(),
-                bench.rotationIndex(),
-                bench.blockType(),
-                bench.benchBlock()
-            );
+            timedWindow = openWindow != null
+                ? openWindow
+                : new SimpleCraftingWindow(
+                    request.benchX(),
+                    request.benchY(),
+                    request.benchZ(),
+                    bench.rotationIndex(),
+                    bench.blockType(),
+                    bench.benchBlock()
+                );
         }
 
         String inventoryBefore = canonicalInventory(reference, store);
@@ -361,6 +376,29 @@ final class NativeHeadlessCrafting {
             }
         }
         return false;
+    }
+
+    /** The bench window open in the actor's WindowManager at the request's bench, or null. */
+    static SimpleCraftingWindow openBenchWindowAt(
+        Ref<EntityStore> reference,
+        Store<EntityStore> store,
+        NativeWorldVerbRequest request
+    ) {
+        Player player = store.getComponent(reference, Player.getComponentType());
+        if (player == null) {
+            return null;
+        }
+        for (Window window : player.getWindowManager().getWindows()) {
+            if (
+                window instanceof SimpleCraftingWindow bench
+                    && bench.getX() == request.benchX()
+                    && bench.getY() == request.benchY()
+                    && bench.getZ() == request.benchZ()
+            ) {
+                return bench;
+            }
+        }
+        return null;
     }
 
     private static BenchResolution resolveBench(
