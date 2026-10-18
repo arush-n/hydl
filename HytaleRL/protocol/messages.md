@@ -351,7 +351,8 @@ identity is unavailable.
 This payload is privileged diagnostics/critic evidence. It must not be copied
 into an actor observation. The deployed three-seed wire/reset-lifecycle smoke
 is frozen under
-`artifacts/native_privileged_entity_snapshot_rev33_8daef871/`; World's
+a captured privileged-entity snapshot (`artifacts/` is not published, so this
+names the shape rather than a file you will have); World's
 neutral-scene and in-episode replacement differentials remain separate.
 
 `privileged_npc_snapshot_by_uuid` returns the existing
@@ -671,9 +672,6 @@ asset eye heights.
 `fluid_fill_height` is `0` for non-fluid cells and native
 `level / Fluid.MaxFluidLevel` for fluid cells. This is distinct from the raw,
 asset-dependent `fluid_level` and is required for exact submersion tests.
-
-See `docs/fidelity/geometry-v5.md` for the Gym/JAX shapes, exhaustion behavior,
-native differential fixtures, and current simulation boundaries.
 
 Hytale uses measured wall-clock tick deltas, so `engine_simulated_seconds` is
 telemetry rather than an exact `engine_ticks_executed / 30` identity. Clients

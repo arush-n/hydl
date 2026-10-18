@@ -449,20 +449,25 @@ final class WorldVerbTelemetry {
             if (request == null || !request.present() || lifecycle == null) {
                 return unrequested();
             }
+            if (!lifecycle.accepted()) {
+                String reason = lifecycle.rejectReason() == null
+                    || lifecycle.rejectReason().isBlank()
+                    ? "actor_major_native_policy_world_verb_rejected"
+                    : lifecycle.rejectReason();
+                return rejected(request, reason, lifecycle.requestedTick());
+            }
             Execution result = new Execution(
                 request,
-                lifecycle.accepted(),
+                true,
                 lifecycle.failed(),
                 lifecycle.rejectReason(),
                 "actor_major_native_policy_world_verb",
                 false,
-                lifecycle.accepted(),
-                false,
+                true,
+                true,
                 lifecycle.requestedTick(),
-                lifecycle.blockIdBefore().isEmpty()
-                    ? "unavailable"
-                    : lifecycle.blockIdBefore(),
-                -1,
+                lifecycle.blockIdBefore(),
+                lifecycle.runtimeBlockIdBefore(),
                 lifecycle.sourceQuantityBefore(),
                 -1
             );
@@ -472,14 +477,50 @@ final class WorldVerbTelemetry {
             result.mutationApplied = lifecycle.geometryChanged();
             result.inventoryApplied = lifecycle.inventoryChanged();
             result.semanticBlockIdAfter = lifecycle.blockIdAfter();
+            result.runtimeBlockIdAfter = lifecycle.runtimeBlockIdAfter();
             result.sourceQuantityAfter = lifecycle.sourceQuantityAfter();
             result.startedWorldTick = lifecycle.startedTick();
             result.finishedWorldTick = lifecycle.finishedTick();
-            // The actor-major v4 receipt deliberately does not synthesize the
-            // v1 runtime IDs/delta hashes, so acknowledgementComplete stays
-            // false. Consumers must use the v5 actor-major receipt for exact
-            // completion evidence.
+            if (lifecycle.finished() && lifecycle.started()) {
+                if (hasExactActorMajorAcknowledgement(lifecycle)) {
+                    result.observeFinished(
+                        lifecycle.failed(),
+                        lifecycle.finishedTick(),
+                        lifecycle.blockIdAfter(),
+                        lifecycle.runtimeBlockIdAfter(),
+                        lifecycle.sourceQuantityAfter(),
+                        -1,
+                        lifecycle.geometryChanged(),
+                        lifecycle.inventoryChanged(),
+                        lifecycle.geometryDeltaSha256(),
+                        lifecycle.inventoryDeltaSha256(),
+                        ""
+                    );
+                } else {
+                    result.observeFinishedWithoutAcknowledgement(
+                        lifecycle.failed(),
+                        lifecycle.finishedTick()
+                    );
+                }
+            }
             return result;
+        }
+
+        private static boolean hasExactActorMajorAcknowledgement(
+            NativePolicyWorldVerbFacade.Lifecycle lifecycle
+        ) {
+            return lifecycle.blockIdBefore() != null
+                && !lifecycle.blockIdBefore().isBlank()
+                && lifecycle.blockIdAfter() != null
+                && !lifecycle.blockIdAfter().isBlank()
+                && lifecycle.runtimeBlockIdBefore() >= 0
+                && lifecycle.runtimeBlockIdAfter() >= 0
+                && lifecycle.sourceQuantityBefore() >= 0
+                && lifecycle.sourceQuantityAfter() >= 0
+                && lifecycle.geometryDeltaSha256() != null
+                && lifecycle.geometryDeltaSha256().matches("[0-9a-f]{64}")
+                && lifecycle.inventoryDeltaSha256() != null
+                && lifecycle.inventoryDeltaSha256().matches("[0-9a-f]{64}");
         }
 
         static Execution accepted(

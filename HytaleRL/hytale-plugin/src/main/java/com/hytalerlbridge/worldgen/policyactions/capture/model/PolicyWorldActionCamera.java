@@ -39,7 +39,7 @@ public record PolicyWorldActionCamera(
                     || !CaptureValidation.finite(direction)
                     || !Double.isFinite(maximumDistance)
                     || maximumDistance <= 0.0
-                    || Math.abs(norm - 1.0) > 1.0e-8
+                    || Math.abs(norm - 1.0) > 1.0e-5
                     || blockFace < 1
                     || blockFace > 6
             ) {

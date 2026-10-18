@@ -43,7 +43,7 @@ public record NpcObservationSnapshot(
     public static final String SCHEMA = "hytalerl_native_npc_observation_v5";
     public static final int VERSION = 5;
     public static final String CONTRACT_SHA256 =
-        "5A48A2FC675C75EFECE5E0BCFD2CA567AF04C7CAFAED63EE2C9E4DC8DA15CFA0";
+        "1C53B327234B92637A222BCAAFE270865F7531100AA85FA8CC0540316CFCCEC5";
     public static final int ATTACK_CANDIDATE_CAPACITY = 64;
     public static final int PERCEPTIBLE_NPC_CAPACITY = 256;
     public static final int PERCEPTIBLE_ENTITY_CAPACITY = 512;

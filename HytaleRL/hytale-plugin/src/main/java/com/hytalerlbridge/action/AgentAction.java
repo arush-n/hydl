@@ -32,7 +32,7 @@ public record AgentAction(
     boolean guardHeld,  // continuation-held level
     int dodgeDirection, // edge: 0=none, 1=forward, 2=back, 3=left, 4=right
     int abilitySlot,    // edge: -1=none, otherwise reset-pinned local slot
-    int worldMoveDirection, // level: 0=none, 1..8=N,NE,E,SE,S,SW,W,NW
+    int worldMoveDirection, // level: 0=none, 1..8=forward, forward-right, right...
     NativeWorldVerbRequest nativeWorldVerbRequest,
     // Body steer, degrees, independent of the camera. MotionControllerBase
     // .calculateYaw takes a body steer and a head steer and only bounds the head

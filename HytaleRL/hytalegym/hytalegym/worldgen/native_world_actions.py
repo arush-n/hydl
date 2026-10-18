@@ -27,9 +27,9 @@ NATIVE_WORLD_VERB_LIFECYCLE_SCHEMA = "hytalerl_native_world_verb_lifecycle_v1"
 NATIVE_WORLD_VERB_LIFECYCLE_VERSION = 1
 NATIVE_WORLD_VERBS = ("place_block", "break_block", "craft_recipe")
 NATIVE_WORLD_VERB_TRANSPORT_SCHEMA = (
-    "hytalerl_native_world_verb_transport_v4"
+    "hytalerl_native_world_verb_transport_v5"
 )
-NATIVE_WORLD_VERB_TRANSPORT_VERSION = 4
+NATIVE_WORLD_VERB_TRANSPORT_VERSION = 5
 NATIVE_TYPED_WORLD_VERBS = (
     "use",
     "place_block",
@@ -1205,6 +1205,42 @@ def native_world_verb_transport_contract() -> dict[str, object]:
                 "started_world_tick",
                 "finished_world_tick",
             ],
+            "acknowledgement_capture_scope": {
+                "block_geometry": (
+                    "canonical_requested_target_cell_before_and_after"
+                ),
+                "craft_geometry": "fixed_non_spatial_craft_recipe_sentinel",
+                "inventory": (
+                    "all_slots_of_combined_"
+                    "InventoryComponent.EVERYTHING_before_and_after"
+                ),
+                "inventory_hash_identity": [
+                    "request.source_container",
+                    "request.source_slot",
+                ],
+                "hash_domains": {
+                    "geometry": "hytalerl_world_verb_geometry_delta_v1",
+                    "inventory": "hytalerl_world_verb_inventory_delta_v1",
+                },
+                "excluded_state": [
+                    "other_world_cells",
+                    "world_drop_entities",
+                    "actor_state_outside_inventory",
+                    "reward",
+                    "terminal_outcome",
+                ],
+            },
+        },
+        "actor_major_native_policy_world_verb_scope": {
+            "execution_scope": "actor_major_native_policy_world_verb",
+            "verbs": list(NATIVE_TYPED_WORLD_VERBS),
+            "actor": "headless_server_actor",
+            "candidate_evidence": (
+                "candidate_generation_and_selected_semantic_hashes_required"
+            ),
+            "acknowledgement": (
+                "requested_target_cell_and_complete_actor_inventory_only"
+            ),
         },
         "protocol_enums": {
             "interaction_type": {
@@ -2139,17 +2175,21 @@ def _validate_native_world_verb_receipt(
         expected_scope = {
             "use": {
                 "headless_native_target_relative_use_chain",
+                "actor_major_native_policy_world_verb",
             },
             "place_block": {
                 "fixture_headless_player_native_place_chain",
                 "opt_in_headless_player_native_place_chain",
+                "actor_major_native_policy_world_verb",
             },
             "break_block": {
                 "fixture_headless_player_native_break_chain",
                 "opt_in_headless_player_native_break_chain",
+                "actor_major_native_policy_world_verb",
             },
             "craft_recipe": {
                 "opt_in_headless_player_native_crafting_manager",
+                "actor_major_native_policy_world_verb",
             },
         }.get(request.verb, set())
         if receipt.execution_scope not in expected_scope:
@@ -2205,14 +2245,19 @@ def _validate_native_world_verb_receipt(
     if receipt.acknowledgement_complete:
         if not receipt.accepted or not receipt.finished:
             raise ValueError(f"{prefix} acknowledged an incomplete lifecycle")
+        if not receipt.geometry_delta_sha256:
+            raise ValueError(f"{prefix} lacks a geometry-delta receipt")
+        if not receipt.inventory_delta_sha256:
+            raise ValueError(f"{prefix} lacks exact inventory evidence")
         if request.target_kind == "block" and (
             not receipt.semantic_block_id_before
             or not receipt.semantic_block_id_after
-            or not receipt.geometry_delta_sha256
+            or receipt.runtime_block_id_before < 0
+            or receipt.runtime_block_id_after < 0
+            or receipt.source_quantity_before < 0
+            or receipt.source_quantity_after < 0
         ):
-            raise ValueError(f"{prefix} lacks exact geometry evidence")
-        if not receipt.inventory_delta_sha256:
-            raise ValueError(f"{prefix} lacks exact inventory evidence")
+            raise ValueError(f"{prefix} lacks exact block acknowledgement")
     if receipt.opens_action_mask and (
         not (
             receipt.public_player_certified

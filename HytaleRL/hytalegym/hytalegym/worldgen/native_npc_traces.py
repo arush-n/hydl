@@ -247,8 +247,9 @@ NATIVE_NPC_OBSERVATION_GROUP_LAYOUT = (
 NATIVE_NPC_OBSERVATION_ALL_GROUP_BITS = (1 << 27) - 1
 NATIVE_NPC_ACTOR_EVIDENCE_SCHEMA = "hytalerl_native_learner_v3_actor_evidence_inputs_v4"
 NATIVE_NPC_ACTOR_EVIDENCE_VERSION = 4
+NATIVE_NPC_ACTOR_EVIDENCE_DEFENSE_VALUE_COUNT = 8
 NATIVE_NPC_ACTOR_EVIDENCE_CONTRACT_SHA256 = (
-    "1A7CFF4EE96218C4AA48F10E5F65BA0F92B8372C508C66F1EE28D2A811723CD5"
+    "D47E87B2D163F74C5093F94F209C14282A320D90AA3E5FC896E528250CFDA5AA"
 )
 _NATIVE_NPC_OBSERVATION_CONTRACT = {
     "schema": NATIVE_NPC_OBSERVATION_SCHEMA,
@@ -2635,9 +2636,15 @@ def _actor(
         "resource_available": _booleans(
             row["resource_available"], 7, f"{key}.resource_available"
         ),
-        "defense_values": _numbers(row["defense_values"], 7, f"{key}.defense_values"),
+        "defense_values": _numbers(
+            row["defense_values"],
+            NATIVE_NPC_ACTOR_EVIDENCE_DEFENSE_VALUE_COUNT,
+            f"{key}.defense_values",
+        ),
         "defense_available": _booleans(
-            row["defense_available"], 7, f"{key}.defense_available"
+            row["defense_available"],
+            NATIVE_NPC_ACTOR_EVIDENCE_DEFENSE_VALUE_COUNT,
+            f"{key}.defense_available",
         ),
         "statuses": _statuses(row["statuses"], key),
         "actor_world_values": _numbers(
@@ -2902,6 +2909,7 @@ __all__ = [
     "NATIVE_NPC_WORLDVIEW_SCHEMA",
     "NATIVE_NPC_WORLDVIEW_VERSION",
     "NATIVE_NPC_ACTOR_EVIDENCE_CONTRACT_SHA256",
+    "NATIVE_NPC_ACTOR_EVIDENCE_DEFENSE_VALUE_COUNT",
     "NATIVE_NPC_ACTOR_EVIDENCE_SCHEMA",
     "NATIVE_NPC_ACTOR_EVIDENCE_VERSION",
     "NATIVE_NPC_OBSERVATION_ALL_GROUP_BITS",

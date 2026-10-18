@@ -35,7 +35,7 @@ public record NativeActorEvidenceFrame(
         "hytalerl_native_learner_v3_actor_evidence_inputs_v4";
     public static final int VERSION = 4;
     public static final String CONTRACT_SHA256 =
-        "1A7CFF4EE96218C4AA48F10E5F65BA0F92B8372C508C66F1EE28D2A811723CD5";
+        "D47E87B2D163F74C5093F94F209C14282A320D90AA3E5FC896E528250CFDA5AA";
     public static final int ENTITY_COUNT = 2;
     public static final int RESOURCE_COUNT = 7;
     public static final int STATUS_CAPACITY = 8;

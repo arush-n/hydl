@@ -24,9 +24,9 @@ public record NativeRegionManifest(
     public static final int CAPTURE_SECTION_COUNT = 250;
 
     public NativeRegionManifest {
-        if (!"0.5.7".equals(serverVersion)) {
+        if (!ChunkApiContract.isSupported05Release(serverVersion)) {
             throw new IllegalArgumentException(
-                "Region capture is certified only for Hytale 0.5.7"
+                "Region capture is certified only for Hytale 0.5.x"
             );
         }
         worldName = worldName == null ? "" : worldName;

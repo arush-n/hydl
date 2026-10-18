@@ -111,8 +111,13 @@ public final class NativePolicyLifecycleFacade {
                 );
             }
 
-            boolean targetPresent = target != null && target.isValid();
-            ActorLifecycle targetLife = targetPresent
+            // A follow-player run can pass a connected PlayerRef as target.
+            // This facade's combat lifecycle reads are NPC-specific, so keep
+            // player spatial/health evidence in the policy-agent acquisition
+            // layer but publish the target lifecycle row as absent rather than
+            // dropping the whole observation.
+            boolean targetLifecyclePresent = isNpcActor(target, store);
+            ActorLifecycle targetLife = targetLifecyclePresent
                 ? actor(
                     target,
                     store,
@@ -126,7 +131,7 @@ public final class NativePolicyLifecycleFacade {
                 );
             }
 
-            TargetAttack targetAttack = targetPresent
+            TargetAttack targetAttack = targetLifecyclePresent
                 ? targetAttack(
                     targetLife.manager(),
                     targetLife.combat(),
@@ -141,7 +146,7 @@ public final class NativePolicyLifecycleFacade {
 
             float[] velocity = new float[6];
             System.arraycopy(agentLife.projectedVelocity(), 0, velocity, 0, 3);
-            if (targetPresent) {
+            if (targetLifecyclePresent) {
                 System.arraycopy(
                     targetLife.projectedVelocity(),
                     0,
@@ -152,7 +157,7 @@ public final class NativePolicyLifecycleFacade {
             }
             float[] dodge = {
                 agentLife.dodgeRemaining(),
-                targetPresent ? targetLife.dodgeRemaining() : 0.0f,
+                targetLifecyclePresent ? targetLife.dodgeRemaining() : 0.0f,
             };
             float[] cooldown = new float[2 * ABILITY_CAPACITY];
             boolean[] legal = new boolean[2 * ABILITY_CAPACITY];
@@ -170,7 +175,7 @@ public final class NativePolicyLifecycleFacade {
                 0,
                 ABILITY_CAPACITY
             );
-            if (targetPresent) {
+            if (targetLifecyclePresent) {
                 System.arraycopy(
                     targetLife.cooldownSeconds(),
                     0,
@@ -188,11 +193,11 @@ public final class NativePolicyLifecycleFacade {
             }
             int[] active = {
                 agentLife.activeSlot(),
-                targetPresent ? targetLife.activeSlot() : -1,
+                targetLifecyclePresent ? targetLife.activeSlot() : -1,
             };
             float[] elapsed = {
                 agentLife.activeElapsedSeconds(),
-                targetPresent ? targetLife.activeElapsedSeconds() : 0.0f,
+                targetLifecyclePresent ? targetLife.activeElapsedSeconds() : 0.0f,
             };
             float forceSpeed = norm(agentLife.projectedVelocity());
             boolean attackExecuting = agentLife.combat() != null
@@ -229,6 +234,17 @@ public final class NativePolicyLifecycleFacade {
         } catch (RuntimeException unavailable) {
             return NativePolicyLifecycleSnapshot.unavailable("engine_read_failed");
         }
+    }
+
+    private static boolean isNpcActor(
+        Ref<EntityStore> reference,
+        Store<EntityStore> store
+    ) {
+        return reference != null
+            && reference.isValid()
+            && store != null
+            && store.getComponent(reference, NPCEntity.getComponentType())
+                != null;
     }
 
     private static ActorLifecycle actor(
@@ -640,4 +656,3 @@ public final class NativePolicyLifecycleFacade {
         }
     }
 }
-

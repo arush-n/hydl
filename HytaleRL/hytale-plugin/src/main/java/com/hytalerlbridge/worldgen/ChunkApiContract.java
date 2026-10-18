@@ -6,7 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Runtime-derived fixed-shape contract for Hytale 0.5.7 chunk storage.
+ * Runtime-derived fixed-shape contract for Hytale 0.5.x chunk storage.
  *
  * <p>Reflection is intentional: Java must not inline {@code static final}
  * values from the compile-time server dependency. A changed runtime API fails
@@ -66,7 +66,7 @@ public final class ChunkApiContract {
                 readInt(chunkUtil, "MIN_CHUNK_COORD"),
                 readInt(chunkUtil, "MAX_CHUNK_COORD")
             );
-            contract.requireSupported057();
+            contract.requireSupported05Shape();
             contract.verifyRuntimeMethods(chunkUtil);
             return contract;
         } catch (ReflectiveOperationException exception) {
@@ -78,9 +78,9 @@ public final class ChunkApiContract {
     }
 
     public Map<String, Object> manifest(String serverVersion) {
-        if (!"0.5.7".equals(serverVersion)) {
+        if (!isSupported05Release(serverVersion)) {
             throw new IllegalArgumentException(
-                "Chunk contract is certified only for Hytale 0.5.7"
+                "Chunk contract is certified only for Hytale 0.5.x"
             );
         }
         Map<String, Object> result = new LinkedHashMap<>();
@@ -135,7 +135,7 @@ public final class ChunkApiContract {
         return heightSections;
     }
 
-    private void requireSupported057() {
+    private void requireSupported05Shape() {
         if (
             bits != 5
                 || size != 32
@@ -156,6 +156,16 @@ public final class ChunkApiContract {
                     + minChunkCoordinate + "/" + maxChunkCoordinate
             );
         }
+    }
+
+    public static boolean isSupported05Release(String serverVersion) {
+        if (serverVersion == null) {
+            return false;
+        }
+        String[] components = serverVersion.split("\\.");
+        return components.length >= 2
+            && "0".equals(components[0])
+            && "5".equals(components[1]);
     }
 
     private void verifyRuntimeMethods(Class<?> chunkUtil)

@@ -220,6 +220,9 @@ class HytaleEnv(gym.Env):
                 "camera_delta_pitch": spaces.Box(
                     -90.0, 90.0, shape=(), dtype=np.float32
                 ),
+                "body_delta_yaw": spaces.Box(
+                    -180.0, 180.0, shape=(), dtype=np.float32
+                ),
                 "hotbar_slot": spaces.Discrete(9),
                 # Targeted block placement (offset -3..3, type 0..BLOCK_TYPE_COUNT-1)
                 "place_block_x": spaces.Discrete(7),  # mapped to -3..3
@@ -515,6 +518,7 @@ class HytaleEnv(gym.Env):
                 ),
                 "camera_delta_yaw": float(action.get("camera_delta_yaw", 0.0)),
                 "camera_delta_pitch": float(action.get("camera_delta_pitch", 0.0)),
+                "body_delta_yaw": float(action.get("body_delta_yaw", 0.0)),
                 "hotbar_slot": int(action.get("hotbar_slot", 0)),
                 "place_block_x": int(action.get("place_block_x", 3)) - 3,
                 "place_block_y": int(action.get("place_block_y", 3)) - 3,

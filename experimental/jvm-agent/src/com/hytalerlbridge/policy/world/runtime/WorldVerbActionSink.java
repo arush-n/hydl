@@ -82,6 +82,26 @@ public final class WorldVerbActionSink implements PolicyActionSink {
                 || action.blockInteractionTrigger() == 2);
     }
 
+    @Override
+    public void onTerminal(
+        Ref<EntityStore> ref,
+        NPCEntity npc,
+        Store<EntityStore> store,
+        float deltaTime,
+        PolicyAgentMarker marker
+    ) {
+        PolicyWorldVerbState state = marker.worldVerb();
+        BridgeWorldVerbFacade.Execution execution = state.execution();
+        if (execution != null) {
+            facade.uninstallContext(ref, store);
+            state.finish(BridgeWorldVerbFacade.Lifecycle.rejected(
+                "policy_actor_terminal"));
+        }
+        synchronized (activeActors) {
+            activeActors.remove(marker);
+        }
+    }
+
     /** Called by the pre-interaction ECS system. */
     public void prepare(
         Ref<EntityStore> ref,

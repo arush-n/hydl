@@ -3049,14 +3049,14 @@ final class NativeEnvironmentSession
                     // is measured from its own head.
                     double bodyAngle = (worldMoveDirection - 1)
                         * (Math.PI / 4.0);
-                    double compassYaw = actorState.desiredBodyYaw();
+                    double bodyYaw = actorState.desiredBodyYaw();
                     double longitudinal = Math.cos(bodyAngle);
                     double lateral = Math.sin(bodyAngle);
-                    dx = longitudinal * -Math.sin(compassYaw)
-                        + lateral * Math.cos(compassYaw);
+                    dx = longitudinal * -Math.sin(bodyYaw)
+                        + lateral * Math.cos(bodyYaw);
                     dy = 0.0;
-                    dz = longitudinal * -Math.cos(compassYaw)
-                        - lateral * Math.sin(compassYaw);
+                    dz = longitudinal * -Math.cos(bodyYaw)
+                        - lateral * Math.sin(bodyYaw);
                 } else {
                     forward /= length;
                     strafe /= length;

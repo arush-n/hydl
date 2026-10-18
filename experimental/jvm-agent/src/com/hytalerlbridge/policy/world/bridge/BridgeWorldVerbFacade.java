@@ -104,11 +104,21 @@ public interface BridgeWorldVerbFacade {
         String blockIdAfter,
         int sourceQuantityBefore,
         int sourceQuantityAfter,
+        int runtimeBlockIdBefore,
+        int runtimeBlockIdAfter,
+        String geometryDeltaSha256,
+        String inventoryDeltaSha256,
         String rejectReason
     ) {
         public Lifecycle {
             blockIdBefore = blockIdBefore == null ? "" : blockIdBefore;
             blockIdAfter = blockIdAfter == null ? "" : blockIdAfter;
+            geometryDeltaSha256 = geometryDeltaSha256 == null
+                ? ""
+                : geometryDeltaSha256;
+            inventoryDeltaSha256 = inventoryDeltaSha256 == null
+                ? ""
+                : inventoryDeltaSha256;
             rejectReason = rejectReason == null ? "" : rejectReason;
         }
 
@@ -116,7 +126,7 @@ public interface BridgeWorldVerbFacade {
             return new Lifecycle(
                 false, false, false, false, true,
                 -1L, -1L, -1L, false, false,
-                "", "", -1, -1, reason
+                "", "", -1, -1, -1, -1, "", "", reason
             );
         }
     }

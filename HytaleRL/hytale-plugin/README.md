@@ -17,8 +17,17 @@ consumes the protocol and evidence contracts through `HytaleRL/hytalegym`.
   is the plugin entry point.
 - The `environment`, `combat`, `geometry`, `imitation`, and `worldgen` source
   packages implement the major bridge surfaces.
+- The native action frame, including the body-relative movement ring and the
+  currently unsupported gait field, is documented in
+  the local note `hytalegym/hytalegym/jax/combat/observation/v3/NATIVE-PORT.md` (developer material, not published).
 - [`gradlew`](gradlew) and [`gradlew.bat`](gradlew.bat) provide the build
   wrapper.
+
+The canonical build remains pinned to Server 0.5.7. For an isolated API
+compatibility probe against an installed server JAR, pass
+`-PhytaleServerJar=<absolute path>` to Gradle. This changes the compile
+classpath only; a valid runtime port also needs a matching manifest, asset
+archive, and bridge/policy API surface.
 
 Read [`../protocol/README.md`](../protocol/README.md) for the transport
 contract and [`../hytalegym/README.md`](../hytalegym/README.md) for the Python

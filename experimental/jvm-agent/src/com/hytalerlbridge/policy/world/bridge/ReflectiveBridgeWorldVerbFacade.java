@@ -21,13 +21,13 @@ public final class ReflectiveBridgeWorldVerbFacade
     implements BridgeWorldVerbFacade {
 
     public static final String EXPECTED_FACADE_SCHEMA =
-        "hytalerl_native_policy_world_verb_facade_v3";
-    public static final int EXPECTED_FACADE_VERSION = 3;
+        "hytalerl_native_policy_world_verb_facade_v4";
+    public static final int EXPECTED_FACADE_VERSION = 4;
     public static final String EXPECTED_REQUEST_SCHEMA =
-        "hytalerl_native_world_verb_transport_v4";
-    public static final int EXPECTED_REQUEST_VERSION = 4;
+        "hytalerl_native_world_verb_transport_v5";
+    public static final int EXPECTED_REQUEST_VERSION = 5;
     public static final String EXPECTED_REQUEST_CONTRACT_SHA256 =
-        "3869A467733B057DD2C629243F3A6F0D5E7A116624E1413B48AFDEF664A8900C";
+        "72AA484980F8C6947216C4C6C25C0DAEB7B50BF85F5C340C1F1D7FC8930DA85F";
     public static final String POLICY_EVIDENCE_REQUIRED =
         "native_policy_world_action_evidence_required";
 
@@ -292,6 +292,10 @@ public final class ReflectiveBridgeWorldVerbFacade
             (String) methods.lifecycleBlockIdAfter().invoke(raw),
             number(methods.lifecycleSourceQuantityBefore(), raw).intValue(),
             number(methods.lifecycleSourceQuantityAfter(), raw).intValue(),
+            number(methods.lifecycleRuntimeBlockIdBefore(), raw).intValue(),
+            number(methods.lifecycleRuntimeBlockIdAfter(), raw).intValue(),
+            (String) methods.lifecycleGeometryDeltaSha256().invoke(raw),
+            (String) methods.lifecycleInventoryDeltaSha256().invoke(raw),
             (String) methods.lifecycleRejectReason().invoke(raw)
         );
     }
@@ -341,6 +345,10 @@ public final class ReflectiveBridgeWorldVerbFacade
         Method lifecycleBlockIdAfter,
         Method lifecycleSourceQuantityBefore,
         Method lifecycleSourceQuantityAfter,
+        Method lifecycleRuntimeBlockIdBefore,
+        Method lifecycleRuntimeBlockIdAfter,
+        Method lifecycleGeometryDeltaSha256,
+        Method lifecycleInventoryDeltaSha256,
         Method lifecycleRejectReason
     ) {
         static Methods resolve(Class<?> facade, Class<?> request)
@@ -415,6 +423,10 @@ public final class ReflectiveBridgeWorldVerbFacade
                 lifecycle.getMethod("blockIdAfter"),
                 lifecycle.getMethod("sourceQuantityBefore"),
                 lifecycle.getMethod("sourceQuantityAfter"),
+                lifecycle.getMethod("runtimeBlockIdBefore"),
+                lifecycle.getMethod("runtimeBlockIdAfter"),
+                lifecycle.getMethod("geometryDeltaSha256"),
+                lifecycle.getMethod("inventoryDeltaSha256"),
                 lifecycle.getMethod("rejectReason")
             );
         }

@@ -48,10 +48,10 @@ public record NativeWorldVerbRequest(
 ) {
     public static final String ACTION_KEY = "native_world_verb_request";
     public static final String SCHEMA =
-        "hytalerl_native_world_verb_transport_v4";
-    public static final int VERSION = 4;
+        "hytalerl_native_world_verb_transport_v5";
+    public static final int VERSION = 5;
     public static final String CONTRACT_SHA256 =
-        "3869A467733B057DD2C629243F3A6F0D5E7A116624E1413B48AFDEF664A8900C";
+        "72AA484980F8C6947216C4C6C25C0DAEB7B50BF85F5C340C1F1D7FC8930DA85F";
     public static final String POLICY_EVIDENCE_REQUIRED =
         "native_policy_world_action_evidence_required";
 

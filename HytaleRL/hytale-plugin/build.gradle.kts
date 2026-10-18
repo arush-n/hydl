@@ -19,7 +19,12 @@ repositories {
     }
 }
 
-val hytaleServer = "com.hypixel.hytale:Server:0.5.7"
+// Keep the reproducible 0.5.7 build as the default. A newer installed server
+// can be used for an isolated API-compatibility probe without mutating the
+// canonical dependency: ./gradlew compileJava -PhytaleServerJar=<path>
+val hytaleServerOverride = providers.gradleProperty("hytaleServerJar").orNull
+val hytaleServer: Any = hytaleServerOverride?.let { path -> files(path) }
+    ?: "com.hypixel.hytale:Server:0.5.7"
 
 dependencies {
     // Hytale Server API

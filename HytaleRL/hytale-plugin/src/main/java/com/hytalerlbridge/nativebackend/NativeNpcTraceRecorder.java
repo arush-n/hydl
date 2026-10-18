@@ -181,7 +181,12 @@ final class NativeNpcTraceRecorder {
         Active trace = matching(ref, npc, store);
         if (trace == null || !trace.status.equals("recording")) return;
         World world = store.getExternalData().getWorld();
-        if (store.getComponent(ref, NewSpawnComponent.getComponentType()) != null) {
+        // Bridge-spawned NPCs may retain this marker, so skip only one sample.
+        if (
+            store.getComponent(ref, NewSpawnComponent.getComponentType()) != null
+                && !trace.newSpawnWarmupObserved
+        ) {
+            trace.newSpawnWarmupObserved = true;
             trace.pending = null;
             return;
         }
@@ -1254,6 +1259,7 @@ final class NativeNpcTraceRecorder {
         private String status = "recording";
         private long totalCaptured;
         private Pending pending;
+        private boolean newSpawnWarmupObserved;
         private long damageEventTick = Long.MIN_VALUE;
         private int damageEventCount;
         private long inventoryEventTick = Long.MIN_VALUE;

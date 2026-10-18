@@ -2,7 +2,7 @@ package com.hytalerlbridge.nativebackend;
 
 import static com.hytalerlbridge.nativebackend.support.EvidenceCapture.sameEntity;
 import static com.hytalerlbridge.nativebackend.support.InteractionSupport.interactionManager;
-import static com.hytalerlbridge.nativebackend.support.NativeKeys.canonicalWorldVerbInventoryState;
+import static com.hytalerlbridge.nativebackend.support.NativeKeys.sha256Hex;
 
 import com.hypixel.hytale.builtin.crafting.component.CraftingManager;
 import com.hypixel.hytale.component.Ref;
@@ -54,8 +54,8 @@ import org.joml.Vector3i;
 public final class NativePolicyWorldVerbFacade {
 
     public static final String SCHEMA =
-        "hytalerl_native_policy_world_verb_facade_v3";
-    public static final int VERSION = 3;
+        "hytalerl_native_policy_world_verb_facade_v4";
+    public static final int VERSION = 4;
 
     private NativePolicyWorldVerbFacade() {}
 
@@ -196,10 +196,10 @@ public final class NativePolicyWorldVerbFacade {
         if (!result.accepted()) {
             return Admission.rejected(result.rejectReason());
         }
-        ItemStack source = result.resolvedSource();
-        String inventoryBefore = result.unarmed()
-            ? "unarmed"
-            : canonicalWorldVerbInventoryState(source);
+        String inventoryBefore = NativeHeadlessCrafting.canonicalInventory(
+            actor,
+            store
+        );
         String resolvedSourceContainer = result.unarmed()
             ? "unarmed"
             : npc.getInventory() != null && npc.getInventory().usingToolsItem()
@@ -287,7 +287,7 @@ public final class NativePolicyWorldVerbFacade {
             world,
             result.chain(),
             result.before(),
-            canonicalWorldVerbInventoryState(result.source()),
+            NativeHeadlessCrafting.canonicalInventory(actor, store),
             "hotbar",
             result.placedRuntimeBlockId(),
             tick
@@ -332,7 +332,11 @@ public final class NativePolicyWorldVerbFacade {
         }
     }
 
-    /** Immutable lifecycle receipt returned on every prepare/poll call. */
+    /**
+     * Immutable lifecycle receipt returned on every prepare/poll call.
+     * Completion hashes cover the requested block cell and combined actor
+     * inventory; they do not capture other world cells or dropped entities.
+     */
     public record Lifecycle(
         boolean accepted,
         boolean pending,
@@ -348,13 +352,17 @@ public final class NativePolicyWorldVerbFacade {
         String blockIdAfter,
         int sourceQuantityBefore,
         int sourceQuantityAfter,
+        int runtimeBlockIdBefore,
+        int runtimeBlockIdAfter,
+        String geometryDeltaSha256,
+        String inventoryDeltaSha256,
         String rejectReason
     ) {
         private static Lifecycle rejected(String reason) {
             return new Lifecycle(
                 false, false, false, false, true,
                 -1L, -1L, -1L, false, false,
-                "", "", -1, -1, reason
+                "", "", -1, -1, -1, -1, "", "", reason
             );
         }
     }
@@ -372,6 +380,7 @@ public final class NativePolicyWorldVerbFacade {
         private final String resolvedSourceContainer;
         private final String blockIdBefore;
         private final int sourceQuantityBefore;
+        private final int runtimeBlockIdBefore;
         private final int placedRuntimeBlockId;
         private final long requestedTick;
         private int operationIndex = -1;
@@ -385,6 +394,9 @@ public final class NativePolicyWorldVerbFacade {
         private boolean inventoryChanged;
         private String blockIdAfter = "";
         private int sourceQuantityAfter = -1;
+        private int runtimeBlockIdAfter = -1;
+        private String geometryDeltaSha256 = "";
+        private String inventoryDeltaSha256 = "";
         private String rejectReason = "";
 
         private Execution(
@@ -398,6 +410,7 @@ public final class NativePolicyWorldVerbFacade {
             String inventoryBefore,
             String resolvedSourceContainer,
             String blockIdBefore,
+            int runtimeBlockIdBefore,
             int sourceQuantityBefore,
             int placedRuntimeBlockId,
             long requestedTick
@@ -412,6 +425,7 @@ public final class NativePolicyWorldVerbFacade {
             this.inventoryBefore = inventoryBefore;
             this.resolvedSourceContainer = resolvedSourceContainer;
             this.blockIdBefore = blockIdBefore;
+            this.runtimeBlockIdBefore = runtimeBlockIdBefore;
             this.sourceQuantityBefore = sourceQuantityBefore;
             this.placedRuntimeBlockId = placedRuntimeBlockId;
             this.requestedTick = requestedTick;
@@ -442,6 +456,7 @@ public final class NativePolicyWorldVerbFacade {
                 inventoryBefore,
                 resolvedSourceContainer,
                 before.semanticBlockId(),
+                before.runtimeBlockId(),
                 quantity,
                 placedRuntimeBlockId,
                 tick
@@ -472,6 +487,7 @@ public final class NativePolicyWorldVerbFacade {
                 inventoryBefore,
                 "player_inventory",
                 "not_applicable",
+                0,
                 quantityBefore,
                 0,
                 tick
@@ -485,6 +501,16 @@ public final class NativePolicyWorldVerbFacade {
                     inventoryAfter);
                 result.blockIdAfter = "not_applicable";
                 result.sourceQuantityAfter = quantityAfter;
+                result.runtimeBlockIdAfter = 0;
+                result.geometryDeltaSha256 = geometryDeltaSha256(
+                    result.geometryBefore,
+                    "craft_recipe"
+                );
+                result.inventoryDeltaSha256 = inventoryDeltaSha256(
+                    request,
+                    inventoryBefore,
+                    inventoryAfter
+                );
             }
             return result;
         }
@@ -585,12 +611,22 @@ public final class NativePolicyWorldVerbFacade {
                     fail("native_craft_recipe_lifecycle_unavailable");
                     return lifecycle();
                 }
-                String after = NativeHeadlessCrafting.canonicalInventory(
+                String inventoryAfter = NativeHeadlessCrafting.canonicalInventory(
                     actor, store);
                 sourceQuantityAfter = NativeHeadlessCrafting.outputQuantity(
                     actor, store, recipe);
-                inventoryChanged = !inventoryBefore.equals(after);
+                inventoryChanged = !inventoryBefore.equals(inventoryAfter);
                 blockIdAfter = "not_applicable";
+                runtimeBlockIdAfter = 0;
+                geometryDeltaSha256 = geometryDeltaSha256(
+                    geometryBefore,
+                    "craft_recipe"
+                );
+                inventoryDeltaSha256 = inventoryDeltaSha256(
+                    request,
+                    inventoryBefore,
+                    inventoryAfter
+                );
                 finish(false, tick);
                 if (crafting.hasBenchSet()) crafting.clearBench(actor, store);
                 return lifecycle();
@@ -615,40 +651,50 @@ public final class NativePolicyWorldVerbFacade {
                 fail("native_world_verb_acknowledgement_unavailable");
                 return lifecycle();
             }
-            String inventoryAfter = sourceInventory(actor, store);
+            String inventoryAfter = inventoryAfter(actor, store);
             blockIdAfter = after.semanticBlockId();
+            runtimeBlockIdAfter = after.runtimeBlockId();
             geometryChanged = !geometryBefore.equals(after.canonical());
             inventoryChanged = !inventoryBefore.equals(inventoryAfter);
+            geometryDeltaSha256 = geometryDeltaSha256(
+                geometryBefore,
+                after.canonical()
+            );
+            inventoryDeltaSha256 = inventoryDeltaSha256(
+                request,
+                inventoryBefore,
+                inventoryAfter
+            );
             finish(state == InteractionState.Failed, tick);
             return lifecycle();
         }
 
-        private String sourceInventory(
+        private String inventoryAfter(
             Ref<EntityStore> actor,
             Store<EntityStore> store
         ) {
             if (request.sourceContainer().equals("unarmed")) {
                 sourceQuantityAfter = 0;
-                return "unarmed";
+            } else {
+                NPCEntity npc = store.getComponent(
+                    actor, NPCEntity.getComponentType());
+                Inventory inventory = npc == null ? null : npc.getInventory();
+                ItemContainer source = inventory == null
+                    ? null
+                    : resolvedSourceContainer.equals("tools")
+                        ? inventory.getTools()
+                        : inventory.getHotbar();
+                ItemStack stack = source == null
+                    || request.sourceSlot() < 0
+                    || request.sourceSlot()
+                        >= Short.toUnsignedInt(source.getCapacity())
+                    ? null
+                    : source.getItemStack((short) request.sourceSlot());
+                sourceQuantityAfter = ItemStack.isEmpty(stack)
+                    ? 0
+                    : stack.getQuantity();
             }
-            NPCEntity npc = store.getComponent(
-                actor, NPCEntity.getComponentType());
-            Inventory inventory = npc == null ? null : npc.getInventory();
-            ItemContainer source = inventory == null
-                ? null
-                : resolvedSourceContainer.equals("tools")
-                    ? inventory.getTools()
-                    : inventory.getHotbar();
-            ItemStack stack = source == null
-                || request.sourceSlot() < 0
-                || request.sourceSlot()
-                    >= Short.toUnsignedInt(source.getCapacity())
-                ? null
-                : source.getItemStack((short) request.sourceSlot());
-            sourceQuantityAfter = ItemStack.isEmpty(stack)
-                ? 0
-                : stack.getQuantity();
-            return canonicalWorldVerbInventoryState(stack);
+            return NativeHeadlessCrafting.canonicalInventory(actor, store);
         }
 
         private boolean validActorWorld(
@@ -694,7 +740,34 @@ public final class NativePolicyWorldVerbFacade {
                 blockIdAfter,
                 sourceQuantityBefore,
                 sourceQuantityAfter,
+                runtimeBlockIdBefore,
+                runtimeBlockIdAfter,
+                geometryDeltaSha256,
+                inventoryDeltaSha256,
                 rejectReason
+            );
+        }
+
+        private static String geometryDeltaSha256(
+            String before,
+            String after
+        ) {
+            return sha256Hex(
+                "hytalerl_world_verb_geometry_delta_v1\n"
+                    + before + "\n" + after
+            );
+        }
+
+        private static String inventoryDeltaSha256(
+            NativeWorldVerbRequest request,
+            String before,
+            String after
+        ) {
+            return sha256Hex(
+                "hytalerl_world_verb_inventory_delta_v1\n"
+                    + request.sourceContainer() + "\n"
+                    + request.sourceSlot() + "\n"
+                    + before + "\n" + after
             );
         }
     }
