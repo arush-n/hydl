@@ -82,6 +82,19 @@ Each step ends with its gate, a command with a pass bar.
   `jnp` from a wrapped module's globals that had none, and 61 unrelated tests errored until it was fixed). If the lock exists, wait 60 s and retry, up to 30 min; never delete another lane's lock. The
   construct module, its tests and its fixture are per lane (`sim/gen7/mechanics/<name>.py`, `tests/sim/test_<name>.py`) and
   need no lock. The coordinator commits one lane at a time, staging that lane's files only.
+- Hooks chain in registration order: a later hook's `original` is the earlier hook's wrapper. Read the rendered module's
+  namespace through `inspect.unwrap(original).__globals__`, never `original.__globals__` (2026-10-18: the timed-crafting hook
+  raised `KeyError` at the first Region step once the processing hook was rendered after it). Import `jax.numpy` and the entity
+  constants in the construct module itself.
+- An executor wrapper that advances state on its own ticks must OR that condition into the returned `execution.state_commit`:
+  `environment.py` commits the executor's state only where `state_commit & action_legal & (~verb_requested | executor_legal)`,
+  so a running job whose wrapper leaves `state_commit` false is discarded on every step without a craft or block commit
+  (2026-10-18: all three crafting constructs; the replays drive `advance` directly and never saw it). Test the executor path
+  inside `environment.step_factors`, not only through the module functions (`tests/sim/test_region_executor_crafting.py`).
+- Two renders in one process: `render.mount` sets the parent package attribute after the package has run, and the package's own
+  `import a.b.c as x` reads that attribute first, so a stale attribute binds the second render to the first render's modules
+  (2026-10-18: a cross-render `world` module in the executor's line-of-sight call; four setup errors in the full suite).
+  `tests/sim/support.py` `unmount` now drops the attribute; mount and unmount renders through `support.py`.
 - The gen-7 tools name gen 7: `sim_port.regen_swap_plan` checks `hytalegym.sim.gen7.overlay`, and `fidelity_index.py`
   reads `FIDELITY-0.7.2.md`.
 

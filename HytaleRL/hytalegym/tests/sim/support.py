@@ -54,7 +54,16 @@ def mount_fresh(out_dir):
 
 
 def unmount(package: str) -> None:
-    """Forget a mounted render: its package and every submodule, so the next mount under that name starts clean."""
+    """Forget a mounted render: its package and every submodule, so the next mount under that name starts clean.
+
+    The parent package's attribute is dropped too. ``render.mount`` sets it only after the package has run, so the package's
+    own ``import a.b.c as x`` statements read the parent attribute first; a stale attribute from an earlier render would bind
+    them to that render's modules (seen as a cross-render ``world`` module in the executor's line-of-sight call).
+    """
 
     for key in [key for key in sys.modules if key == package or key.startswith(package + ".")]:
         del sys.modules[key]
+    parent_name, _, leaf = package.rpartition(".")
+    parent = sys.modules.get(parent_name)
+    if parent is not None and hasattr(parent, leaf):
+        delattr(parent, leaf)

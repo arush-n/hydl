@@ -69,6 +69,10 @@ class Constructs:
     # shared weapon_variants module, HEAD) or "gen7_table" (the 0.7.2 item rows). Owner: sim/gen7/mechanics/
     # dagger_damage.py (phase 4, item 5c).
     dagger_swing_damage: str = "shared_rows"
+    # Damage triple (standard, combo, Big Arrow) of every scalar Crossbow variant: "shared_rows" (the 0.5.7 triples
+    # of the shared weapon_variants module, HEAD) or "gen7_table" (the 0.7.2 item rows). Owner: sim/gen7/mechanics/
+    # crossbow_variant.py (fidelity section (ag)).
+    crossbow_scalar_variant: str = "shared_rows"
     # Guard raised during a melee attack: "guard_root" (the guard root's Interrupting [Primary] cancels the attack at
     # any time, 0.5.x) or "attack_root" (0.7.2: the attack root's InterruptedBy [Secondary] cancels it only while
     # the root's RunTime runs). Owner: sim/gen7/mechanics/guard_window.py (row 5d).
@@ -134,6 +138,10 @@ class Constructs:
     # Shortbow reset ammo: "loadout_one" (HEAD: RESOURCE_AMMO starts at 1) or "native_zero" (gen 7: starts at 0). Owner:
     # sim/gen7/mechanics/shortbow_reset_ammo.py (row 5f, timing lane).
     shortbow_reset_ammo: str = "loadout_one"
+    # Shield bash (Weapon_Shield_Secondary_Guard_Bash) offer: "plain_root" (gen 5: the stock fork gate, which admits the
+    # bash from the first held tick) or "held_guard_fork" (gen 7: legal and admissible only while the guard is held and
+    # active, FIDELITY section (x)). Owner: sim/gen7/mechanics/shield_bash_fork.py (row 5d).
+    shield_bash_root: str = "plain_root"
 
 
 @dataclass(frozen=True)

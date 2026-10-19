@@ -210,8 +210,12 @@ def executor(original: Any, profile: Any) -> Any:
 
         @wraps(built)
         def diagram_executor(state, surface_runtime, surface, evidence, keys, params, config):
+            # A queued Armory craft changes state on its commit tick; the environment commits the executor's state only where
+            # state_commit is set, so a queued lane sets it.
+            running = state.combat.diagram_recipe >= 0
             advanced = advance(crafting_function, state, assets, layout)
-            return built(advanced, surface_runtime, surface, evidence, keys, params, config)
+            execution = built(advanced, surface_runtime, surface, evidence, keys, params, config)
+            return execution._replace(state_commit=execution.state_commit | running)
 
         return diagram_executor
 

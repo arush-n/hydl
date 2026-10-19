@@ -656,13 +656,14 @@ PATCHES = (
           "                craft_accepted\n"
           "            )\n",
           "            # Gen 7 (rows 11p, 11q): a processing request starts its bench, and a diagram craft is queued; both work from\n"
-          "            # craft_inventory_before and replace the zero-time commit on their lanes (processing_benches.start).\n"
+          "            # craft_inventory_before and replace the zero-time commit on their lanes (processing_benches.start). Both scan the\n"
+          "            # block candidates (the executor's `candidates`, not the recipe rows): bench_of_type reads visible_position.\n"
           "            craft_accepted, next_state = processing_benches_start(\n"
           "                execute_region_fieldcraft,\n"
           "                next_state,\n"
           "                craft,\n"
           "                craft_inventory_before,\n"
-          "                recipe_candidates,\n"
+          "                candidates,\n"
           "                next_world,\n"
           "                crafting_assets,\n"
           "                inventory_layout,\n"
@@ -672,7 +673,7 @@ PATCHES = (
           "                next_state,\n"
           "                craft._replace(accepted=craft_accepted),\n"
           "                craft_inventory_before,\n"
-          "                recipe_candidates,\n"
+          "                candidates,\n"
           "                next_world,\n"
           "                crafting_assets,\n"
           "                inventory_layout,\n"
@@ -728,6 +729,15 @@ HOOKS = (
          "and a seeded bronze-dagger contact on the live bridge (native 5.0; tests/fidelity)",
          "Swing_Left and Swing_Right per material; the other direct values and the angled values are unchanged; "
          "Void_Crystal is in the 0.7.2 table but has no simulator variant row (not modelled)"),
+    Hook("crossbow_scalar_variant", PROFILE_JAX, "_scalar_variant_profile",
+         f"{_MECHANICS}.crossbow_variant:construct", "crossbow_scalar_variant", "active", "6c",
+         "Ancient Steel scalar contacts (FIDELITY-0.7.2.md section (ag)): the native 0.7.2 combo and signature rows on two "
+         "seeds apply 11, 11, 14 for the table's 10.5, 10.5, 14 and 82 for Big Arrow (tests/fidelity/combat/projectiles/"
+         "crossbow); offline tests/sim/test_crossbow_variant.py (gen-7 triple, gen-5 original, iron triple reads back "
+         "unchanged at 10, 13, 78)",
+         "The table triple (10.5, 14, 82) replaces the 0.5.7 triple (16, 42, 123) on the gen-7 render only; the applied "
+         "integers follow from the kernel's half-up rule (mechanics/runtime/kernel.py:320-322), which this hook does not "
+         "touch; durability stays with weapon_durability (row 8d); non-crossbow rows pass through"),
     Hook("guard_cancel_window_roots", PROFILE_JAX, "_ability",
          f"{_MECHANICS}.guard_window:ability_root_window", "guard_cancel_window", "active", "5d", _GUARD,
          "stamps each Sword, Mace, Battleaxe and Daggers Primary attack root that 0.7.2 declares InterruptedBy "
@@ -848,6 +858,16 @@ HOOKS = (
          "mismatch on the reset row only",
          "the shortbow's initial RESOURCE_AMMO is 0 (the gen-5 phase already gives 0 on tick 1 and 1 from tick 2); gen 5 "
          "returns the original"),
+    Hook("shield_bash_root", "combat/arsenal/programs/ability.py", "_ability_root_admission_mask",
+         f"{_MECHANICS}.shield_bash_fork:root_admission", "shield_bash_root", "active", "5d",
+         "section (x) and its addendum: the bash advertised on ticks 3 to 12 of a 12-tick hold and on no other tick "
+         "(live 0.7.2, seeds 570057 and 1553616197). Render replay tests/sim/test_shield_bash_fork.py (ticks 1 to 16): "
+         "legal on ticks 3 to 12 only; a request refused on tick 2 (held, not active) and on ticks 14 and 15 (after "
+         "release); accepted on tick 4 while held and active. A request on the release tick 13 is admitted by stock and "
+         "by this construct and is not asserted. No live learner-row run on the render (test_dynamic_learner_row_world_"
+         "inputs.py compares HEAD JAX only)",
+         "a guard fork root (the Iron Shield bash) is legal and admissible only while the guard is held and active "
+         "(guard_active); gen 5 returns the original mask, which offers it from the held level (ticks 1 and 2 included)"),
 )
 
 OVERLAY = Overlay(

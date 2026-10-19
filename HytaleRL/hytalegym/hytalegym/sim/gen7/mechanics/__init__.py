@@ -27,6 +27,7 @@ CONSTRUCT_MODULES = {
     "npc_walk_jump_velocity": "npc_jump",
     "npc_jump_arc": "npc_jump_arc",
     "dagger_swing_damage": "dagger_damage",
+    "crossbow_scalar_variant": "crossbow_variant",
     "guard_cancel_window": "guard_window",
     "native_binding_types": "native_bindings",
     "bench_crafting": "bench_crafting",
@@ -44,6 +45,7 @@ CONSTRUCT_MODULES = {
     "guard_reentry_cooldown": "guard_cooldown",
     "ability_start_split": "ability_start_split",
     "shortbow_reset_ammo": "shortbow_reset_ammo",
+    "shield_bash_root": "shield_bash_fork",
 }
 
 

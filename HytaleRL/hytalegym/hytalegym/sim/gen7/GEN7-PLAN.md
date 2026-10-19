@@ -322,6 +322,36 @@ machine at load 50 to 60 with native ticks 5 to 9 percent long, so native timers
 predicts; recorded as load jitter, with the idle-machine re-measurement (#78) as the decisive check. The tick-0 head and
 body yaw are both 0 for the scenarios' spawn yaw (#75: no construct).
 
+**Phase 4o (2026-10-18; FIDELITY-0.7.2.md section (ag)).** Section (aa)'s cause is corrected: the ancient-steel combo missed
+because the head yaw was pinned at the -45 degree edge of its window around a body that never turned (pitch about +2 degrees)
+and because the harness read the compass as a world bearing while the bridge takes it body-relative. With the body steered
+with the head, a body-relative compass and an aim gate on the target box, all eight live crossbow rows pass on the pinned jar
+(6 failed and 2 passed before). The expectations follow the 0.7.2 table (13, 82) and the applied integer, since the kernel
+already rounds a hit half up (kernel.py 320 to 322; no rounding construct). Construct `crossbow_variant`
+(`Constructs.crossbow_scalar_variant`, `shared_rows` -> `gen7_table`) gives the ancient-steel triple (10.5, 14, 82) on the
+gen-7 render; durability was already served by the durability construct. Open: native rounding beyond .5 values (none in
+the catalogue), the effect-damage path's rounding (unmeasured).
+
+**Phase 4p (2026-10-18; FIDELITY-0.7.2.md sections (ah) and (ai)).** The three crafting executors ran inside a live Region step
+for the first time (`tests/sim/test_region_executor_crafting.py`, the production environment over a synthetic Region) and five
+defects came out, three in the constructs: the timed hook read the wrong wrapper's globals (`unwrap`), the executor patch passed
+the recipe rows where the bench scan needs the block candidates, and none of the three wrappers set `state_commit`, so a running
+job's advance was discarded each step. The other two were harness facts (the Armory axe needs the archive's resource-type table;
+two renders in one process bind through a stale parent attribute, now dropped by `support.unmount`). After the fixes the Region
+step reproduces the replays (timed inputs out R+1, queue on R+11, output R+90; Campfire first progress R+2, output R+61; Armory
+queue on R, commit R+2) and one live timed craft on the pinned jar finished at R+82, inside the recorded jitter. The shield bash
+became a construct (`shield_bash_root`, Hook on `_ability_root_admission_mask`): the bash is legal and admissible only while the
+guard is held and active, so the render offers it on ticks 3 to 12 of a hold as live 0.7.2 does; the stock mask offered it from
+the held level (ticks 1 and 2 too), never as a plain root, which corrects the premise of row 5d. Open: a bash request on the
+release tick 13 (admitted by stock and construct, native unmeasured); no render-side live learner-row run exists.
+
+**Phase 4q (2026-10-18; FIDELITY-0.7.2.md section (ak)).** Head at reset, measured on live 0.7.2 (two seeds): a target spawned
+facing the agent has its head on its body heading at tick 0 and keeps it with no input, while the simulator's reset zeroes both
+heads whatever the body yaw (`combat/runtime/reset.py` 156 to 161). The native agent always spawns at yaw 0, so the defect shows
+only for a non-zero `entity_yaw`, which the arena, multi-actor and self-play resets all pass. Construct designed, not yet wired:
+`Constructs.reset_head_heading` (`none` -> `body_heading`), a Hook on `reset_arsenal_batch` that seeds both heads from
+`entity_yaw` and is a no-op when none is given, so identity rows do not move. Next: a construct lane under the overlay lock.
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the

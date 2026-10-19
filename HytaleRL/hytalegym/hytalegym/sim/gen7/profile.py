@@ -40,6 +40,7 @@ PROFILE = SimProfile(
         npc_walk_jump_velocity="native_npc",
         npc_jump_arc="physics_math",
         dagger_swing_damage="gen7_table",
+        crossbow_scalar_variant="gen7_table",
         guard_cancel_window="attack_root",
         native_binding_types="item_interactions",
         bench_crafting="recipe_bench",
@@ -61,6 +62,8 @@ PROFILE = SimProfile(
         guard_reentry_cooldown="claim_0_35s",
         ability_start_split="next_drain",
         shortbow_reset_ammo="native_zero",
+        # Shield bash offer (section (x), row 5d): the 0.7.2 fork of the held guard is legal only while the guard is active.
+        shield_bash_root="held_guard_fork",
     ),
     # Owner ruling 2026-10-17: the agent operates at 30 Hz; one step duration.
     step_duration=StepDuration(nominal_seconds=1.0 / 30.0, loaded_seconds=1.0 / 30.0, timing_profile_count=1),

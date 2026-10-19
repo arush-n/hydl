@@ -410,8 +410,11 @@ def executor(original: Any, profile: Any) -> Any:
 
         @wraps(built)
         def processing_executor(state, surface_runtime, surface, evidence, keys, params, config):
+            # A lit bench changes state on every tick; the environment commits the executor's state only where state_commit is set.
+            running = (state.combat.proc_recipe >= 0) & state.combat.proc_active
             advanced = advance(crafting_function, state, assets, params)
-            return built(advanced, surface_runtime, surface, evidence, keys, params, config)
+            execution = built(advanced, surface_runtime, surface, evidence, keys, params, config)
+            return execution._replace(state_commit=execution.state_commit | running)
 
         return processing_executor
 

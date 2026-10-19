@@ -189,13 +189,20 @@ def executor(original: Any, profile: Any) -> Any:
         if assets is None:
             return built
         layout = kwargs["inventory_layout"]
-        crafting_function = original.__globals__["execute_region_fieldcraft"]
-        agent = original.__globals__["AGENT_ENTITY"]
+        # Unwrap first: the processing and diagram hooks wrap this factory before it is rendered, so
+        # ``original`` can be their wrapper, whose globals are the processing module's (no execute_region_fieldcraft).
+        namespace = unwrap(original).__globals__
+        crafting_function = namespace["execute_region_fieldcraft"]
+        agent = namespace["AGENT_ENTITY"]
 
         @wraps(built)
         def timed_executor(state, surface_runtime, surface, evidence, keys, params, config):
+            # The environment commits the executor's state only where state_commit is set (environment.py, the commit gate),
+            # and a running job changes state on every tick: so a lane with a job sets it.
+            running = state.combat.craft_job_recipe >= 0
             advanced = advance(crafting_function, state, assets, layout, params, agent)
-            return built(advanced, surface_runtime, surface, evidence, keys, params, config)
+            execution = built(advanced, surface_runtime, surface, evidence, keys, params, config)
+            return execution._replace(state_commit=execution.state_commit | running)
 
         return timed_executor
 
