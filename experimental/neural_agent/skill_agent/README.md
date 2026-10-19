@@ -834,7 +834,10 @@ The evaluation reports held success, on target `HOLD_TICKS` = 5 ticks in a row w
 horizon, beside the first hit, and the owner chose held success for A2's bars (2026-10-18). The report (schema v2)
 records both options and the walk teacher's version.
 
-**Status: A2 ran, and it does not pass (2026-10-18, late).** 6 iterations x 128 lanes x 2,000 steps, 123,398 samples,
+**Status (2026-10-19): A2 passes with run C'**, walk_to v3's stop margin and the look direction in the head's frame
+(runs C and C', below). The runs that led there follow in order.
+
+**The first run, A2 (2026-10-18, late): it does not pass.** 6 iterations x 128 lanes x 2,000 steps, 123,398 samples,
 56 minutes at load 13 to 70, from e4a0833 with no local changes; the evidence is private
 (`agent_skills/training_runs/skill_agent_a2/a2_6x128x2000_e4a0833/`). The student made no illegal decision (0 of
 79,669). The evaluation runs seed 77001 on 256 lanes, about 85 per mode, so each rate is good to about 8 points at
@@ -906,11 +909,40 @@ hold check):
     left, in all three runs (A2 0.81, W 0.67, L 0.74), while its mirror on the right scores 0.82 to 1.00.
 - One seed per variant and about 85 lanes per mode, so a difference under about 8 points is noise.
 
-**Next, for the owner's approval:** one run with both changes (`--walk-stop-margin 0.25 --look-direction`). If the
-halves stack, both is about 1.0 x 0.86, above the 0.806 bar (inferred). The held-out look needs a change of its own.
-The body-frame direction stays fixed while the head turns, so a far-left target sits outside the trained range for
-the whole look. A direction measured from where the head points would leave that range after the first turn or two
-(inferred, untested).
+**Runs C and C' (2026-10-19).** Approved by the owner ("C now, head-frame build"), at A2's size and seeds. C has both
+changes (from d563730; 19 minutes at load 4 to 30). C' adds the direction in the head's frame (`--look-frame head`,
+from 9b9169e; 11 minutes at load 4 to 12). Held success on evaluation seed 77001, 256 lanes:
+
+| held success, seen / held out | walk only | look only | both | both, seen: walk, look | walk lanes missed (of 342) |
+|---|---|---|---|---|---|
+| C, both changes | 1.000 / 1.000 | 0.847 / 0.576 | 0.847 / 0.812 | 0.988, 0.859 | 1 |
+| C', and the head frame | 1.000 / 1.000 | 0.988 / 1.000 | 0.882 / 0.847 | 0.988, 0.894 | 2 |
+| teachers | 1.000 / 1.000 | 1.000 / 1.000 | 0.906 / 0.871 | 1.000, 0.906 | 0 |
+
+- **C' passes every bar of A2.** T5: walk 0, look 1.2 and both 2.4 points. Held out: 1.00, 1.01 and 0.96 of seen.
+  E4: pace within 5 % on 98.0 % of the 151 steady lanes, and every success inside its radius. 0 illegal of 79,669
+  decisions; composition 0.882 against walk x look 0.884. Re-scored on fresh episodes (seed 91001, 256 lanes per mode,
+  held): look only 0.984 seen and 0.977 held out (T5 1.6 points, 0.99 of seen), both 0.863 against the teachers'
+  0.875, walk 1.000 in both regions. `training/bars.py` scores a report on these bars.
+- **C passes walk while looking** (T5 5.9 points), as inferred: the halves stack (0.988 x 0.859 = 0.849, against
+  0.847). Its look fails, T5 15.3 points and held out 0.68. On the 256 fresh lanes per mode, L and C look alike and
+  both fail look-only T5 (12.1 and 14.1 points), so L's pass at 9.4 was a draw near the edge of the bar.
+- **The head's frame fixes the held-out look (confirmed by mechanism).** With the body-frame direction, a held-out
+  target stays outside the trained range for the whole look, and the two runs miss it in opposite ways: L overshoots
+  (35 of its 62 held-out misses past the target) and C stops short (61 of 82). In the head's frame the direction moves
+  toward forward as the look closes. On fresh episodes (first hit, 768 lanes per region) the held-out band goes from
+  0.79 and 0.56 (C, at 25 to 32.5 and 32.5 to 40 degrees left) to 0.98 and 0.99, and the trained band beside it
+  (15 to 25 degrees left, weak in every earlier run) from 0.86 to 0.98.
+- **What is left.** 4 of C''s 512 fresh look-only lanes miss. In 3 of them the head never pitches: the target is 21.9
+  to 23.7 degrees up and the end error equals it. That is within a degree of 23, where the teacher's pitch choice
+  switches from 1 degree a tick to 45 (the nearest of the 5 pitch bins), so it is inferred to be another decision on a
+  boundary; not checked. 4 of 1,024 fresh walks miss, and none parks at the edge: each stops for good farther out
+  (0.3, 1.3, 1.9 and 8.2 blocks outside the radius; one never starts).
+- The teachers hold the look in only 0.875 of the fresh walk-while-looking lanes, so that mode is near the teachers'
+  own ceiling; going past it is RL's job (A4). One training seed per variant (TRAINING_NEEDS 16).
+
+**Next, for the owner's approval:** C' at two more training seeds; T4 live for walk_to v3 and look_at; then the first
+versioned release of the generalist, with regression tests.
 
 **Before the run.** A 2-iteration smoke (32 lanes, 50 steps per iteration, 10,191 samples) ran end to end with 0
 illegal decisions. Its student was untrained by design: walk 0.23 and look 0.0, against the teachers' 1.0 and 1.0.

@@ -49,6 +49,7 @@ Import the submodules, which are sorted into subfolders by purpose (each subfold
 * ``training.bc_dataset`` and ``training.bc_smoke``: the behaviour-cloning dataset from those traces and its smoke
   (B2).
 * ``training.distill``: DAgger distillation of walk_to and look_at into the generalist (A2).
+* ``training.bars``: a distillation report scored on A2's bars, on held success.
 
 ``bench``: per-tick latency, the 30 Hz gate.
 

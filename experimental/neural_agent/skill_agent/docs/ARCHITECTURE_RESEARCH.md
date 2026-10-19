@@ -205,6 +205,11 @@ Status (2026-10-18, late):
   teacher (0 of 342 walk lanes missed, against 55 in A2). The look direction lifts look-only to within the 10-point
   bar (0.906 held). Walk while looking (0.74 and 0.75, against 0.81 needed) and the held-out look (0.64 of seen) still
   fail. A run with both changes is next, for the owner's approval.
+- Runs C and C' (README 2.16, 2026-10-19). With both changes, walk while looking passes (C: T5 5.9 points). With the
+  look direction measured in the head's frame as well, every bar of A2 passes (C': T5 0, 1.2 and 2.4 points; held
+  out 1.00, 1.01 and 0.96 of seen), and the bars hold on 256 fresh lanes per mode. A2 is the first proof of the
+  generalist to pass: one network serves two requests, alone or together, and together costs nothing beyond the
+  parts (both 0.882 against walk x look 0.884).
 
 ## 5. Decisions for the owner (answered 2026-10-18, late; docs/BUILD.md section 0)
 

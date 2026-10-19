@@ -9,6 +9,7 @@ checkpoints) stays under `agent_skills/training_runs/` and is never staged.
 | `bc_dataset.py` | 751 | The behaviour-cloning dataset from those traces on the gen-7 surface; the compass labelled in the commanded body frame (v4); the self token's head yaw offset (v5). |
 | `bc_smoke.py` | 235 | B2's smoke: a tiny behaviour-cloning body held out by world, and the trained body run through the combiner. |
 | `distill.py` | 1067 | DAgger distillation of the request-conditioned generalist: walk_to and look_at from the two scripted teachers, with held-out argument regions and a report of student against teacher, first hit and held 5 ticks (A2; README 2.16). Opt-in: walk_to v3's stop margin, the look request's direction, in the body's or the head's frame. |
+| `bars.py` | 115 | A distillation report scored on A2's bars on held success, the first hit beside: T5, held out and E4 per mode, composition reported, a skill filter (README 2.16). |
 
 Run:
 
@@ -24,6 +25,8 @@ PYTHONPATH=/Users/arush/hydl:/Users/arush/hydl/HytaleRL/hytalegym JAX_PLATFORMS=
     experimental.neural_agent.skill_agent.training.distill --iterations 6 --lanes 128 --steps 2000 --seed 0 \
     --eval-seed 77001 --eval-lanes 256 --out REPORT.json [--params-out PARAMS.npz] \
     [--walk-stop-margin 0.25] [--look-direction [--look-frame head]]
+PYTHONPATH=/Users/arush/hydl:/Users/arush/hydl/HytaleRL/hytalegym .venv/bin/python -m \
+    experimental.neural_agent.skill_agent.training.bars REPORT.json [--skill walk_to|look_at]
 ```
 
-Gates: `test_sa_traces.py`, `test_sa_bc_dataset.py`, `test_sa_bc_smoke.py`, `test_sa_distill.py`.
+Gates: `test_sa_traces.py`, `test_sa_bc_dataset.py`, `test_sa_bc_smoke.py`, `test_sa_distill.py`, `test_sa_bars.py`.

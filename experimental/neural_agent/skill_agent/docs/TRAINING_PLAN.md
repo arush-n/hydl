@@ -5,7 +5,7 @@ the green light"), then A2, the first student training ("ok continue"). The arch
 with per-verb adapters, toward one generalist, request-conditioned policy ("similar to a vla model"):
 `docs/ARCHITECTURE_RESEARCH.md` recommends it, trained by teacher distillation (DAgger) and KL-anchored RL, and the
 owner's answers made it the working design (docs/BUILD.md section 0). The method (section 2b), the staging, the
-gates and the dependencies stand.
+gates and the dependencies stand. 2026-10-19: A2 passes with run C' (README 2.16).
 
 Nothing in this plan runs until the owner approves it (docs/BUILD.md section 0). It answers the owner's condition for
 training: what trains, on what, for how long, what counts as success, what happens on failure, and what each step
@@ -214,6 +214,11 @@ Status (2026-10-18, late; `teaching/certificates.py`, README 2.15):
 - Runs W and L (README 2.16): with walk_to v3, walk_to's T5 gap is 0 points, and with the look direction, look_at's
   is 9.4 (a pass, at the edge of the bar). The margin is now the measured fix for a teacher that decides on the
   success boundary.
+- Runs C and C' (README 2.16, 2026-10-19): with both changes and the look direction measured in the head's frame
+  (C'), every T5 passes: walk 0, look 1.2 and both 2.4 points, and 1.6 and 1.2 on 256 fresh lanes per mode. L's
+  look-only pass did not hold on those lanes (12.1 points), so a bar decision near its edge needs more lanes. The head
+  frame is the measured fix for a request input that leaves the trained range: a held-out look's direction stays out
+  of range in the body frame and comes back into it in the head frame (held-out look 0.576 to 1.000, held).
 
 A teacher need not be perfect, because stage 3's practice can go past it. But a systematic teacher error is copied
 into the student, which is why nothing teaches before its certificate.
