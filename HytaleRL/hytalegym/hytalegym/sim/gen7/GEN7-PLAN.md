@@ -352,6 +352,15 @@ only for a non-zero `entity_yaw`, which the arena, multi-actor and self-play res
 `Constructs.reset_head_heading` (`none` -> `body_heading`), a Hook on `reset_arsenal_batch` that seeds both heads from
 `entity_yaw` and is a no-op when none is given, so identity rows do not move. Next: a construct lane under the overlay lock.
 
+**Phase 3 item 2, the Region recapture on 0.7.2 (2026-10-18; FIDELITY-0.7.2.md section (aj)).** Seed 570057 is captured on the
+pinned 0.7.2 bridge at 500 of 500 sections (`artifacts/worldgen/region_0.7.2_seed_570057.npz`, staged beside the 0.5.7 libraries, no
+swap). The exact-digest compare fails on this seed on 5 to 6 non-damaging fluid cells at one water edge while the dry seed projection
+is identical in every run, which is the class the 0.5.7 libraries handled with a per-seed projection contract; the 0.7.2 contract
+(cap 6, the observed maximum) passes the compare, and `tools/worldgen/recapture_region.py` runs capture, contract and compare in one
+command (`tools/worldgen/README.md` is the runbook). Against the 0.5.7 capture the terrain itself differs: 46 of 250 sections,
+5,927 cells, so the recapture is needed, not optional. Open for the owner: the swap (README steps 1 to 5) and the rebuild of path
+tables, suites, biome table and horizons, whose generators this lane could not reach or find.
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the
