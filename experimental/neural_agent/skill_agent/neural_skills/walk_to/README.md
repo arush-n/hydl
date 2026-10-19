@@ -1,8 +1,10 @@
 # walk_to — go to a place at a chosen pace and stop inside a radius
 
-The first neural skill. It trains inside the shared generalist (`../../model/generalist.py`) together with look_at,
-by DAgger distillation from a scripted teacher (`../../training/distill.py`, README 2.16). This folder holds what is
-specific to walk_to; the network, the trainer and the certificate harness are shared (`../README.md`).
+A neural skill with its own module and its own training strategy (owner, 2026-10-19): `train.py` trains
+walk_to's module, the request-reading head of `../../model/generalist.py` with walk_to's own weights, on the
+shared frozen trunk, by DAgger from its scripted teacher (`../../training/skill_dagger.py`). The module reads
+look_at's request when both run, since it trains beside it, and drives only walk_to's own heads. This folder
+holds everything specific to walk_to (`../README.md`).
 
 | | |
 |---|---|
@@ -14,10 +16,13 @@ specific to walk_to; the network, the trainer and the certificate harness are sh
 | Held out | targets at bearings 180 to 270 degrees, clockwise from the spawn body's forward (the rear left) |
 | World | flat, with the `npc_walk` body the game server's NPC uses (owner, 2026-10-18; `../../tasks/simple_tasks.py`) |
 
-## Status (2026-10-19): every walk_to bar passes
+## Status (2026-10-19): its own module is not trained yet; in the joint reference network every walk_to bar passes
 
-Run C' (`--walk-stop-margin 0.25 --look-direction --look-frame head`) passes all of A2's bars, walk_to's and
-look_at's. Held success (on target 5 ticks in a row) on evaluation seed 77001, 256 lanes, about 85 per mode:
+walk_to's strategy (`train.py`) is built and unit-tested, and its module waits for training to reopen (paused by the
+owner, 2026-10-19). What is measured so far comes from the joint reference network of runs A2 to C' (one head for
+walk_to and look_at together, README 2.16), which the module will be compared against. Run C'
+(`--walk-stop-margin 0.25 --look-direction --look-frame head`) passes all of A2's bars, walk_to's and look_at's. Held
+success (on target 5 ticks in a row) on evaluation seed 77001, 256 lanes, about 85 per mode:
 
 | Run (README 2.16) | Change | walk only, seen / held out | T5 gap | walk lanes missed (of 342) | pace within 5 % | radius kept |
 |---|---|---|---|---|---|---|
@@ -49,8 +54,10 @@ and promoting v3 waits on its T4 live replay (`TRAINING.md`).
 |---|---|
 | `teacher.py` | `walk_to_choices` (v2 at margin 0, v3 above), `walk_to_version`, the v3 margin |
 | `task.py` | `WalkToGoals`, `WalkToTasks` (`sample`, `success`) and the episode ranges |
+| `skill.py` | walk_to as the training blocks see it (`spec()`): its request, its sampler and held-out region, its teacher binding |
+| `train.py` | **its training strategy**: DAgger from v3, look_at beside it in half the lanes, rear-left targets held out, A2's sizes |
+| `train.sh` | runs `train.py` into `agent_skills/training_runs/skill_modules/walk_to/NAME/` |
 | `certify.sh` | the teacher certificate, T1 to T3, on the four certificate seeds (v3 by default) |
-| `train.sh` | the generalist's current stage, which trains walk_to and look_at together |
 | `evaluate.sh` | a run's walk_to bars: T5 and held out for walk only and both, and E4 |
 | `TRAINING.md` | the plan: what is done, what is next |
 
@@ -58,10 +65,12 @@ and promoting v3 waits on its T4 live replay (`TRAINING.md`).
 
 ```sh
 experimental/neural_agent/skill_agent/neural_skills/walk_to/certify.sh            # -> certificates/walk_to_v3.json
-experimental/neural_agent/skill_agent/neural_skills/walk_to/train.sh NAME         # -> skill_agent_a2/NAME/
+experimental/neural_agent/skill_agent/neural_skills/walk_to/train.sh NAME TRUNK.npz  # -> skill_modules/walk_to/NAME/
 experimental/neural_agent/skill_agent/neural_skills/walk_to/evaluate.sh NAME      # the bars of that run
 ```
 
 Every output goes to `agent_skills/training_runs/` (private, never staged); `train.sh` and `certify.sh` refuse to
 overwrite. Training needs the owner's approval of its stage (`../../docs/TRAINING_PLAN.md`). Gates:
-`test_sa_teachers.py`, `test_sa_simple_tasks.py`, `test_sa_certificates.py`, `test_sa_distill.py`, `test_sa_bars.py`.
+`test_sa_teachers.py`, `test_sa_simple_tasks.py`, `test_sa_certificates.py`, `test_sa_skill_modules.py`,
+`test_sa_distill.py`, `test_sa_bars.py`. `TRUNK.npz` is the shared trunk (`../../model/skill_module.py`,
+`save_trunk`); the first one is to be exported from the encoder of run C' (`trunk_from_run`).

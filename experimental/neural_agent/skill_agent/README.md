@@ -35,11 +35,11 @@ Import a module by its subfolder: `from experimental.neural_agent.skill_agent.ru
 |---|---|
 | [`contract/`](contract/README.md) | What a skill is and what it speaks: the gen-7 surface, the catalogue's verb contracts, the request protocol, the resolver. |
 | [`runtime/`](runtime/README.md) | Running skills: the registry, the combiner, programs, the combiner on S_t, the simulator head adapter, the parity and joint checks. |
-| [`model/`](model/README.md) | The networks: the token-set trunk, per-verb adapters, the request-conditioned generalist, the legal-observation adapter. |
-| [`neural_skills/`](neural_skills/README.md) | One folder per neural skill: its plan, its teacher and task, and the scripts that certify, train and score it (2026-10-19); the index of every catalogue skill and what it waits on. |
+| [`model/`](model/README.md) | The networks: the token-set trunk, per-verb adapters, the request-conditioned generalist, each skill's own module on the shared trunk, the legal-observation adapter. |
+| [`neural_skills/`](neural_skills/README.md) | One folder per neural skill: its plan, its teacher and task, its own training strategy (`train.py`, which trains its own module), and the scripts that certify, train and score it (2026-10-19); the index of every catalogue skill and what it waits on. |
 | [`teaching/`](teaching/README.md) | What every scripted teacher shares (the registry, the observed-state rule) and the teacher certificates. |
 | [`tasks/`](tasks/README.md) | The flat task world skills are trained and measured on, and the episode runner. |
-| [`training/`](training/README.md) | Native traces, the behaviour-cloning dataset, the trainers. |
+| [`training/`](training/README.md) | Native traces, the behaviour-cloning dataset, the training building blocks every skill's strategy uses (per-skill DAgger, the bars), and the A2 reference trainer. |
 | [`bench/`](bench/README.md) | Per-tick latency benches (the 30 Hz gate). |
 | [`docs/`](docs/README.md) | The design record: `BUILD.md` (the plan), `TRAINING_PLAN.md`, `ARCHITECTURE_RESEARCH.md`, `FIDELITY.md`, `AGENT_BRIEF.md`. |
 
@@ -826,7 +826,7 @@ walk pace (within 5 %), radius and illegal decisions. [test: test_sa_distill.py,
 - `--look-direction` fills the look request's direction group with the unit body-frame vector from the eye to the
   target (the walk request's stays empty);
 - `--look-frame head` (with `--look-direction`) measures that vector in the head's frame instead (2026-10-19): the
-  body frame turned to the head's yaw, then pitched up by the head's pitch (`training/distill.py:229`). A target the
+  body frame turned to the head's yaw, then pitched up by the head's pitch (`training/blocks.py:69`). A target the
   head faces reads (1, 0, 0), so the input shrinks toward forward as the look closes, while the body-frame vector
   stays where it started. The head angles are the absolute ones `LookAtTasks.success` judges
   (`neural_skills/look_at/task.py:88`).
@@ -869,7 +869,7 @@ every walk and look bin of the same episodes):
   horizon. Small radii miss most (0.74 below 0.83 blocks, against 0.93 and 0.95 above), and run misses least (0.95,
   against walk 0.87 and sneak 0.80). The 97 missed walks of the "both" lanes look the same. The teacher stops exactly
   at the edge (`neural_skills/walk_to/teacher.py:74`, v2's margin is 0), so a student whose stop is a few centimetres
-  off lands outside about half the time, and it acts by argmax (`training/distill.py:498`), so a parked agent repeats
+  off lands outside about half the time, and it acts by argmax (`training/distill.py:368`), so a parked agent repeats
   its choice every tick.
 - **Missed looks end near the target but outside the 3 degrees,** a median 5.2 degrees off in yaw and 3.2 in pitch,
   as often short of the target as past it: imprecision, not a bias. Near targets miss most (0.55 at 2 to 4.7 blocks,
@@ -877,9 +877,9 @@ every walk and look bin of the same episodes):
   The held-out band falls off away from the trained range: 0.67 at 25 to 32.5 degrees left, where its trained mirror
   on the right scores 0.68, and 0.44 at 32.5 to 40.
 - **Inferred, not yet tested:** both misses need a fine comparison that the request's encoding makes hard. Targets
-  arrive as body-frame positions over 16 blocks (`training/distill.py:105`), so a 2 cm stopping error is about 0.001
+  arrive as body-frame positions over 16 blocks (`training/blocks.py:42`), so a 2 cm stopping error is about 0.001
   of an input and a 3 degree gaze error at 2 blocks about 0.007, and the look request's direction group is empty
-  (`training/distill.py:99`).
+  (`training/distill.py:124`).
 
 **Runs W and L (2026-10-18, late).** One change each, at A2's size and seeds, from 149a840, approved by the owner;
 27 minutes each, side by side, at load 10 to 59. W is walk_to v3 (`--walk-stop-margin 0.25`, certified first, 2.15)
@@ -943,9 +943,10 @@ from 9b9169e; 11 minutes at load 4 to 12). Held success on evaluation seed 77001
 - The teachers hold the look in only 0.875 of the fresh walk-while-looking lanes, so that mode is near the teachers'
   own ceiling; going past it is RL's job (A4). One training seed per variant (TRAINING_NEEDS 16).
 
-**Training is paused (owner, 2026-10-19).** When it resumes, next for the owner's approval: C' at two more training
-seeds; T4 live for walk_to v3 and look_at; then the first versioned release of the generalist, with regression tests. Each skill's plan is in its folder
-(`neural_skills/<skill>/TRAINING.md`).
+**Training is paused (owner, 2026-10-19).** Per-skill training replaces this joint network as the training design
+(2.17): when training resumes, the first runs are walk_to's and look_at's own modules, each by its own strategy,
+compared with C' on these bars. Then, for the owner's approval: more training seeds, T4 live for walk_to v3 and
+look_at, and the first versioned release. Each skill's plan is in its folder (`neural_skills/<skill>/TRAINING.md`).
 
 **Before the run.** A 2-iteration smoke (32 lanes, 50 steps per iteration, 10,191 samples) ran end to end with 0
 illegal decisions. Its student was untrained by design: walk 0.23 and look 0.0, against the teachers' 1.0 and 1.0.
@@ -962,6 +963,46 @@ Then came these changes:
   (9.6 times faster; one process, interleaved, load about 15). [test: test_loss_and_gradients_do_not_change_when_the_empty_token_types_are_dropped]
 - **The report records its provenance:** the commit, uncommitted changes in this package, the command line, the load
   at the start and end, and the field-of-view settings (off here).
+
+### 2.17 One module per skill, each trained by its own strategy (`model/skill_module.py`, `training/skill_dagger.py`, `neural_skills/*/train.py`, 2026-10-19)
+
+**The ruling.** The owner, 2026-10-19: "in each skill there should be its own training strategy, the idea is that we
+can compose a bunch of these skills together to make a unique behavior, there should not be one training script."
+Chosen: an own module per skill on a shared, frozen trunk, and modules that read the other active requests.
+
+**The module.** A skill's module is the request-reading head of 2.13 with the skill's own weights. The trunk (2.7) is
+shared and frozen: it runs once per tick, and every active skill's module reads its token sets and the tick's
+requests. A module drives only its own scope's heads (2.2) and reads its own request's done logit.
+
+**Skills see each other, but only the ones they know.** A module reads the request slots of its own verb and of the
+skills it was trained beside (`known`). Any other verb's slot is made invalid before the head reads it
+(`visible_requests`), so it is zeroed and never attended. A module therefore coordinates with the skills it knows
+(walk_to's module answers differently when a look request is active), and a new skill cannot change an existing one:
+with only its own verb known, a look request changes walk_to's module's outputs by exactly 0.0.
+[test: test_a_module_reads_the_requests_of_skills_it_knows_and_never_others]
+
+**Isolation by construction.** Training a skill updates only its module: the trunk's SHA-256 is the same after
+training, and a module records the trunk it was trained on and refuses any other (`load_module`). This is 2.9's
+freezing guarantee (E13), per skill. [test: test_one_skill_trains_on_the_frozen_trunk_and_supervises_only_its_scope]
+
+**Each skill's strategy.** A skill's `train.py` passes a `Strategy`: its spec (`skill.py`: the request, the sampler, the
+held-out region, the teacher binding, its metrics), the skills beside it, its lane kinds and how they are drawn, and
+its sizes. The shared blocks (`training/skill_dagger.py`) run DAgger for that one skill. The skills beside it act by
+their own teachers on their own scopes, and the trained skill by its teacher (with probability beta) or by its module.
+The loss covers its scope's heads and its own done. walk_to's strategy: teacher v3, look_at beside it in half the
+lanes, rear-left targets held out. look_at's: teacher v2 with the head-frame direction, walk_to beside it in half the
+lanes, the left band held out. Both use A2's sizes. [test: test_sa_skill_modules.py, 12 tests]
+
+**What moved.** The A2 trainer's generic parts are now `training/blocks.py`, and walk_to's and look_at's request rows,
+samplers, held-out rules and walk_to's E4 metrics are in their `skill.py`. Each skill's request equals the A2 trainer's
+slot field for field, and the A2 reference trainer (`training/distill.py`), which now uses these, still reproduces runs
+A2, W, L, C and C' (every evaluation field, 0 mismatches).
+
+**Not yet measured: training is paused.** No module has been trained. When training reopens, the first runs are
+walk_to's and look_at's modules on trunk v1 (the encoder of run C', `trunk_from_run`), compared with the joint
+reference on the same bars, and then both modules together through the combiner. What could be lost: the joint
+network learned walk-while-look coordination inside one head. Here each module learns it beside the other skill's
+teacher, which the reference comparison will show.
 
 ## 3. For the agent building the gen-7 simulator
 

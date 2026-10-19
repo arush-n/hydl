@@ -1,33 +1,46 @@
 # skill_agent/neural_skills/ — one folder per neural skill
 
-Every neural skill has its own folder: what it does, its training plan, its teacher and task code, and the scripts
-that certify its teacher, train it and score it (owner, 2026-10-19). The skills share one network and one trainer
-(owner, 2026-10-18: one generalist, request-conditioned policy), so a skill's `train.sh` runs the generalist's current
-stage, which trains every skill in it at once. The folder is `neural_skills/`, not `skills/`, because `.gitignore:189`
-ignores every `skills/` folder.
+Every neural skill has its own folder: what it does, its training plan, its teacher and task code, its own training
+strategy, and the scripts that certify its teacher, train it and score it (owner, 2026-10-19). The folder is
+`neural_skills/`, not `skills/`, because `.gitignore:189` ignores every `skills/` folder.
+
+**How skills train and compose (owner, 2026-10-19).** Each skill trains its own module by its own strategy; there is no
+single training script. A module is the request-reading head of `../model/generalist.py` with the skill's own weights
+(`../model/skill_module.py`), on one shared, frozen trunk (the token encoder), so training one skill never changes
+another. A module drives only its own scope's heads, and it reads the other active requests, but only of the skills it
+was trained beside: a skill it has never seen is invisible to it. Skills compose at run time: the combiner gives each
+request its scope (`../runtime/combiner.py`), programs chain them (`../runtime/programs.py`), and the middle layer
+builds the behaviour. The joint network of runs A2 to C' (one head for walk_to and look_at together, README 2.16) is
+the reference result these modules are measured against.
 
 ## What a skill folder holds
 
 | File | What it is |
 |---|---|
 | `README.md` | what the skill does (request, success, done, heads), its status and results, its files, how to run it |
-| `TRAINING.md` | its plan: the teacher and certificate, the world, the student, the bars, the stages, what it waits on |
+| `TRAINING.md` | its plan: the teacher and certificate, the world, the strategy, the bars, the stages, what it waits on |
+| `skill.py` | the skill as the training blocks and the runtime see it (`spec()`): its request, its sampler and held-out region, its teacher binding, its own metrics |
+| `train.py` | **its training strategy**: its teacher's settings, the skills that run beside it, how its lanes are drawn, its sizes; it runs the shared blocks (`../training/skill_dagger.py`) on the frozen trunk and writes its module |
 | `teacher.py` | the scripted teacher; its registry entry is in `../teaching/teachers.py` (`TEACHERS`) |
-| `task.py` | the goals: the sampler, the episode ranges and the success test |
+| `task.py` | the goals: the episode ranges and the success test |
 | `certify.sh` | the teacher's certificate, T1 to T3 (`../teaching/certificates.py`) |
-| `train.sh` | the generalist's current stage (`train_generalist.sh` here, which calls `../training/run_distill.sh`) |
+| `train.sh` | runs `train.py`: `train.sh NAME TRUNK.npz [options]`, into `agent_skills/training_runs/skill_modules/<skill>/NAME/` |
 | `evaluate.sh` | a run's bars for this skill (`../training/bars.py`) |
 
-A planned skill has only `README.md` and `TRAINING.md` until the owner approves its build stage. A new skill starts
-from walk_to's layout. Training is paused (owner, 2026-10-19): the launchers stay, and no run starts until it reopens.
+A planned skill has only `README.md` and `TRAINING.md` until the owner approves its build stage. A new skill appends its
+name to `spec.py`'s `VERBS` (its verb id; append only) and starts from walk_to's layout. Training is paused (owner,
+2026-10-19): the launchers stay, and no run starts until it reopens.
 
 ## The shared parts
 
 | Where | What it is |
 |---|---|
-| `train_generalist.sh` | the generalist's current stage: its size and options, the one place they are set |
-| `../model/` | the network: the set encoder and the request-conditioned generalist |
-| `../training/` | the trainer (`distill.py`), the run launcher (`run_distill.sh`), the bar scorer (`bars.py`) |
+| `spec.py` | what a skill declares (`SkillSpec`, `Pose`, `RequestRow`) and the verb ids (`VERBS`) |
+| `../model/skill_module.py` | a skill's module and the shared trunk: init, outputs, the visibility rule, save and load with fingerprints |
+| `../training/skill_dagger.py` | the DAgger blocks for one skill: lanes, requests, teachers, rollout, loss, training, evaluation, the command line |
+| `../training/blocks.py` | the building blocks every trainer shares: frames, request features, the hold rule, legality, saving |
+| `../training/bars.py` | the bars, for a skill module's report and for the A2 reference reports |
+| `../training/distill.py` | the A2 reference trainer (the joint network of runs A2 to C'), kept to reproduce those runs |
 | `../teaching/` | the teacher registry, the observed-state rule and the certificate harness |
 | `../tasks/` | the flat `npc_walk` task world and `run_episode` |
 | `../docs/TRAINING_PLAN.md` | the method, the hypotheses and the staged approvals every plan follows |
@@ -36,8 +49,8 @@ from walk_to's layout. Training is paused (owner, 2026-10-19): the launchers sta
 
 | Skill | Status (2026-10-19) | Teacher |
 |---|---|---|
-| [walk_to](walk_to/README.md) | trained in the generalist; passes every walk_to bar | v3, certified |
-| [look_at](look_at/README.md) | trained in the generalist; the held-out look fails its bar | v2, certified |
+| [walk_to](walk_to/README.md) | its strategy is built; its module is not trained yet. In the joint reference network it passes every bar (run C') | v3, certified |
+| [look_at](look_at/README.md) | its strategy is built; its module is not trained yet. In the joint reference network it passes every bar (run C') | v2, certified |
 | [come_here](come_here/README.md) | planned; next, as it needs no new mechanic | walk_to v3 aimed at an entity |
 | [track](track/README.md) | planned; needs a moving entity | look_at v2 aimed at an entity |
 | [follow](follow/README.md) | planned; needs come_here and a moving person | walk_to v3 behind the person |

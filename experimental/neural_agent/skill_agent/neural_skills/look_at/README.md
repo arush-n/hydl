@@ -1,8 +1,10 @@
 # look_at — turn the head to face a point and hold it there
 
-The second neural skill. It trains inside the shared generalist (`../../model/generalist.py`) together with walk_to,
-by DAgger distillation from a scripted teacher (`../../training/distill.py`, README 2.16). This folder holds what is
-specific to look_at; the network, the trainer and the certificate harness are shared (`../README.md`).
+A neural skill with its own module and its own training strategy (owner, 2026-10-19): `train.py` trains
+look_at's module, the request-reading head of `../../model/generalist.py` with look_at's own weights, on the
+shared frozen trunk, by DAgger from its scripted teacher (`../../training/skill_dagger.py`). The module reads
+walk_to's request when both run, since it trains beside it, and drives only look_at's own heads. This folder
+holds everything specific to look_at (`../README.md`).
 
 | | |
 |---|---|
@@ -14,9 +16,12 @@ specific to look_at; the network, the trainer and the certificate harness are sh
 | Held out | look-only targets 25 to 40 degrees left of the body: the left edge of the range, so it asks for extrapolation |
 | World | flat, with the `npc_walk` body; the head turns within 45 degrees of the body |
 
-## Status (2026-10-19): every look_at bar passes in run C'
+## Status (2026-10-19): its own module is not trained yet; in the joint reference network every look_at bar passes
 
-Held success (on target 5 ticks in a row) on evaluation seed 77001, 256 lanes, about 85 per mode:
+look_at's strategy (`train.py`) is built and unit-tested, and its module waits for training to reopen (paused by the
+owner, 2026-10-19). What is measured so far comes from the joint reference network of runs A2 to C' (one head for
+walk_to and look_at together, README 2.16), which the module will be compared against. Held success (on target 5
+ticks in a row) on evaluation seed 77001, 256 lanes, about 85 per mode:
 
 | Run (README 2.16) | Change | look only, seen / held out | T5 gap | held out / seen | walk while looking, seen (T5 gap) |
 |---|---|---|---|---|---|
@@ -56,8 +61,10 @@ walk_to's stop at the radius; not checked.
 |---|---|
 | `teacher.py` | `look_at_choices`: aim the head at the target within the 45-degree window around the body |
 | `task.py` | `LookAtGoals`, `LookAtTasks` (`sample`, `success`) and the episode ranges |
+| `skill.py` | look_at as the training blocks see it (`spec()`): its request, its sampler and held-out region, its teacher binding |
+| `train.py` | **its training strategy**: DAgger from v2, the direction in the head's frame, walk_to beside it in half the lanes, the left band held out, A2's sizes |
+| `train.sh` | runs `train.py` into `agent_skills/training_runs/skill_modules/look_at/NAME/` |
 | `certify.sh` | the teacher certificate, T1 to T3, on the four certificate seeds |
-| `train.sh` | the generalist's current stage, which trains walk_to and look_at together |
 | `evaluate.sh` | a run's look_at bars: T5 and held out for look only and both |
 | `TRAINING.md` | the plan: what is done, what is next |
 
@@ -65,10 +72,12 @@ walk_to's stop at the radius; not checked.
 
 ```sh
 experimental/neural_agent/skill_agent/neural_skills/look_at/certify.sh            # -> certificates/look_at_v2.json
-experimental/neural_agent/skill_agent/neural_skills/look_at/train.sh NAME         # -> skill_agent_a2/NAME/
+experimental/neural_agent/skill_agent/neural_skills/look_at/train.sh NAME TRUNK.npz  # -> skill_modules/look_at/NAME/
 experimental/neural_agent/skill_agent/neural_skills/look_at/evaluate.sh NAME      # the bars of that run
 ```
 
 Every output goes to `agent_skills/training_runs/` (private, never staged); `train.sh` and `certify.sh` refuse to
 overwrite. Training needs the owner's approval of its stage (`../../docs/TRAINING_PLAN.md`). Gates:
-`test_sa_teachers.py`, `test_sa_simple_tasks.py`, `test_sa_certificates.py`, `test_sa_distill.py`, `test_sa_bars.py`.
+`test_sa_teachers.py`, `test_sa_simple_tasks.py`, `test_sa_certificates.py`, `test_sa_skill_modules.py`,
+`test_sa_distill.py`, `test_sa_bars.py`. `TRUNK.npz` is the shared trunk (`../../model/skill_module.py`,
+`save_trunk`); the first one is to be exported from the encoder of run C' (`trunk_from_run`).

@@ -211,6 +211,11 @@ Status (2026-10-18, late):
   out 1.00, 1.01 and 0.96 of seen), and the bars hold on 256 fresh lanes per mode. A2 is the first proof of the
   generalist to pass: one network serves two requests, alone or together, and together costs nothing beyond the
   parts (both 0.882 against walk x look 0.884).
+- Owner, 2026-10-19: "in each skill there should be its own training strategy ... there should not be one training
+  script." Chosen: each skill's own module (the generalist's head with its own weights) on a shared frozen trunk,
+  trained by the skill's own strategy, with modules that read the requests of the skills they trained beside (README
+  2.17). This replaces joint training of one generalist as the training design; the joint network of C' is the
+  reference. Built and unit-tested on 2026-10-19; no module is trained yet (training paused).
 
 ## 5. Decisions for the owner (answered 2026-10-18, late; docs/BUILD.md section 0)
 

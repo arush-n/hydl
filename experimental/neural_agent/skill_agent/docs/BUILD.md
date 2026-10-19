@@ -96,12 +96,14 @@ experimental/neural_agent/skill_agent/
     encoder.py          the token-set trunk (B1)
     freezing.py         a frozen trunk and per-verb adapters; the trunk once per tick (B4, E13)
     generalist.py       the request-conditioned generalist (docs/ARCHITECTURE_RESEARCH.md)
+    skill_module.py     a skill's own module (the generalist's head, its own weights) and the shared frozen trunk
     observation_adapter.py
                         the legal observation as the trunk's token sets
-  neural_skills/        one folder per neural skill (2026-10-19): its plan, teacher, task and launchers
+  neural_skills/        one folder per neural skill (2026-10-19): its plan, teacher, task, strategy and launchers
     README.md           the index: every catalogue skill, its status and what it waits on
-    train_generalist.sh the generalist's current stage (its size and options), run by every train.sh
-    walk_to/, look_at/  README.md, TRAINING.md, teacher.py, task.py, certify.sh, train.sh, evaluate.sh
+    spec.py             what a skill declares (SkillSpec) and the verb ids (VERBS)
+    walk_to/, look_at/  README.md, TRAINING.md, skill.py, train.py (its own training strategy), teacher.py,
+                        task.py, certify.sh, train.sh, evaluate.sh
     come_here/, track/, follow/, step_and_hop/, go_around/
                         planned: README.md and TRAINING.md only
   teaching/             what scripted teachers share, and their certificates (docs/TRAINING_PLAN.md 2c)
@@ -112,8 +114,11 @@ experimental/neural_agent/skill_agent/
     traces.py           native NPC trace ingestion (A7)
     bc_dataset.py, bc_smoke.py
                         the behaviour-cloning dataset and its smoke (B2)
-    distill.py, bars.py, run_distill.sh
-                        DAgger into the generalist (A2), its bars, its launcher
+    blocks.py           the building blocks every trainer shares
+    skill_dagger.py     DAgger for one skill's module on the frozen trunk; each skill's train.py runs it
+    bars.py             the bars, for a skill module's report and the A2 reference reports
+    distill.py, run_distill.sh
+                        the A2 reference trainer (the joint network of runs A2 to C') and its launcher
   bench/                per-tick latency, the 30 Hz gate
     bench_tick.py, bench_bodies.py, bench_generalist.py
   docs/                 this document, TRAINING_PLAN.md, ARCHITECTURE_RESEARCH.md, FIDELITY.md, AGENT_BRIEF.md

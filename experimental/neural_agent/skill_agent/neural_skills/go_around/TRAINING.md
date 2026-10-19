@@ -28,17 +28,19 @@ flat ground would let the first stage start earlier.
 
 ## 4. Student
 
-Geometry tokens in the adapter and the trainer, as for step_and_hop (`../step_and_hop/TRAINING.md` section 4;
-neither exists today). A success-gated
-curriculum: the ratio of path length to straight-line distance grows only when development success on the current
-level passes 70 % (TRAINING_PLAN 2b, rule 3).
+Geometry tokens in the adapter and the trainer, as for step_and_hop (`../step_and_hop/TRAINING.md` section 4; neither
+exists today). Its own module on the shared frozen trunk (`../../model/skill_module.py`), trained by its own strategy
+(a `train.py` here, through `../../training/skill_dagger.py`; owner, 2026-10-19). Its name is appended to
+`../spec.py`'s `VERBS` for its verb id. It starts from step_and_hop's module weights (the chain's third lesson). Its
+strategy is a success-gated curriculum: the ratio of path length to straight-line distance grows only when development
+success on the current level passes 70 % (TRAINING_PLAN 2b, rule 3).
 
 ## 5. Bars
 
 - T5: at most 10 points under the teacher;
 - held out: unseen worlds or wall layouts, at least 0.9 of seen;
 - T2-style efficiency: the student's path time against the teacher's;
-- no regression on walk_to, step_and_hop and look_at.
+- the modules of walk_to, step_and_hop and look_at do not change (structural).
 
 ## 6. Stages
 

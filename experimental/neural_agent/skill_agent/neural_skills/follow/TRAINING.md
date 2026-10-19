@@ -26,14 +26,16 @@ A person that approaches the agent cannot be followed, so the scripted mover is 
 
 ## 4. Student
 
-The shared generalist with a new verb carrying the entity pointer and the band (scalar arguments), grown from the
-release (A3) after come_here, which first teaches the entity argument on a static target.
+Its own module on the shared frozen trunk (`../../model/skill_module.py`), trained by its own strategy (a `train.py`
+here, through `../../training/skill_dagger.py`; owner, 2026-10-19). Its name is appended to `../spec.py`'s `VERBS` for
+its verb id. Its request carries the entity pointer and the band (scalar arguments). It may start from come_here's
+module weights, which first learns the entity argument on a static target; come_here's own module never changes.
 
 ## 5. Bars
 
 - T5 on the share in band, at most 10 points under the teacher;
 - held out: person speeds not trained, at least 0.9 of seen;
-- no regression on walk_to, look_at and come_here.
+- the modules of walk_to, look_at and come_here do not change (structural).
 
 ## 6. Stages
 

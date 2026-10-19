@@ -8,9 +8,11 @@ checkpoints) stays under `agent_skills/training_runs/` and is never staged.
 | `traces.py` | 222 | Native NPC trace ingestion: recorded `NpcTraceFrame` batches as arrays with a documented schema (A7). |
 | `bc_dataset.py` | 751 | The behaviour-cloning dataset from those traces on the gen-7 surface; the compass labelled in the commanded body frame (v4); the self token's head yaw offset (v5). |
 | `bc_smoke.py` | 235 | B2's smoke: a tiny behaviour-cloning body held out by world, and the trained body run through the combiner. |
-| `distill.py` | 1067 | DAgger distillation of the request-conditioned generalist: walk_to and look_at from the two scripted teachers, with held-out argument regions and a report of student against teacher, first hit and held 5 ticks (A2; README 2.16). Opt-in: walk_to v3's stop margin, the look request's direction, in the body's or the head's frame. |
-| `bars.py` | 115 | A distillation report scored on A2's bars on held success, the first hit beside: T5, held out and E4 per mode, composition reported, a skill filter (README 2.16). |
-| `run_distill.sh` | 21 | One DAgger run at nice 10 on the CPU: `run_distill.sh NAME ITERATIONS LANES STEPS EVAL_LANES [options]`, outputs to the private runs folder, refusing a name that exists. The skills' `train.sh` scripts call it through `../neural_skills/train_generalist.sh`. |
+| `distill.py` | 754 | The A2 reference trainer: DAgger distillation of walk_to and look_at together into one generalist head (runs A2 to C', README 2.16), kept to reproduce those runs; per-skill training (2.17) replaced it as the training design. It uses `blocks.py` and the two skills' `skill.py`. |
+| `bars.py` | 189 | A report scored on its bars on held success, the first hit beside: a skill module's report (per lane kind: T5, held out, the skills beside it, E4) or an A2 reference report (per mode, with a skill filter). |
+| `blocks.py` | 312 | The building blocks every trainer shares (moved from `distill.py`, 2026-10-19): frames, request features, resampling, the hold rule, legality, dataset chunks, saving and loading, run provenance. |
+| `skill_dagger.py` | 519 | DAgger for one skill's module on the frozen trunk (2.17): lanes, requests, the teachers of the skill and of the skills beside it, rollout, loss, training, evaluation per lane kind, and the command line every skill's `train.py` shares (`run_main`). |
+| `run_distill.sh` | 22 | The A2 reference trainer's launcher: one run at nice 10 on the CPU, `run_distill.sh NAME ITERATIONS LANES STEPS EVAL_LANES [options]`, into the private runs folder, refusing a name that exists. Skills train through their own `train.sh`. |
 
 Run:
 
@@ -30,4 +32,6 @@ PYTHONPATH=/Users/arush/hydl:/Users/arush/hydl/HytaleRL/hytalegym .venv/bin/pyth
     experimental.neural_agent.skill_agent.training.bars REPORT.json [--skill walk_to|look_at]
 ```
 
-Gates: `test_sa_traces.py`, `test_sa_bc_dataset.py`, `test_sa_bc_smoke.py`, `test_sa_distill.py`, `test_sa_bars.py`.
+Gates: `test_sa_traces.py`, `test_sa_bc_dataset.py`, `test_sa_bc_smoke.py`, `test_sa_distill.py`, `test_sa_bars.py`,
+`test_sa_skill_modules.py`. A skill trains by its own strategy: `../neural_skills/<skill>/train.sh NAME TRUNK.npz`
+(its `train.py`).

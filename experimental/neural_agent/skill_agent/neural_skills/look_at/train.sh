@@ -1,5 +1,21 @@
 #!/bin/bash
-# look_at trains inside the shared generalist together with walk_to, so this runs the generalist's current stage
-# (../train_generalist.sh: its size and options). Usage: train.sh <run name> [extra distill options]
+# look_at's own training strategy (train.py: its teacher, the skills beside it, its lanes and its sizes), which trains
+# look_at's module on the shared frozen trunk. Writes the module and its report to
+# agent_skills/training_runs/skill_modules/look_at/<run name>/ (private, never staged) with the log beside it, and
+# refuses a name that exists. Training is paused (owner, 2026-10-19).
+# Usage: train.sh <run name> <trunk .npz> [train.py options, e.g. --iterations 2 --lanes 32 --steps 200]
 set -euo pipefail
-exec "$(cd "$(dirname "$0")" && pwd)/../train_generalist.sh" "$@"
+ROOT=$(cd "$(dirname "$0")/../../../../.." && pwd)
+NAME=${1:?usage: train.sh <run name> <trunk .npz> [train.py options]}
+TRUNK=${2:?usage: train.sh <run name> <trunk .npz> [train.py options]}
+shift 2
+OUT=$ROOT/agent_skills/training_runs/skill_modules/look_at/$NAME
+if [ -e "$OUT" ] || [ -e "$OUT.log" ]; then echo "refusing: $OUT exists" >&2; exit 2; fi
+cd "$ROOT"
+mkdir -p "$(dirname "$OUT")"
+export PYTHONPATH=$ROOT:$ROOT/HytaleRL/hytalegym JAX_PLATFORMS=cpu
+{ echo "start $(date -u +%FT%TZ) head $(git rev-parse --short HEAD) trunk $TRUNK options: $*"; uptime; } > "$OUT.log"
+nice -n 10 .venv/bin/python -u -m experimental.neural_agent.skill_agent.neural_skills.look_at.train \
+    --trunk "$TRUNK" --out "$OUT" "$@" > /dev/null 2>> "$OUT.log"
+{ echo "end $(date -u +%FT%TZ)"; uptime; } >> "$OUT.log"
+echo "done: $OUT"

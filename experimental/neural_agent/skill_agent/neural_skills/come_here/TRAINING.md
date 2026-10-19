@@ -28,27 +28,30 @@ student.
 
 ## 4. Student
 
-The shared generalist (`../../model/generalist.py`) with a new verb whose request sets the entity pointer
-(`GeneralistRequests.entity_pointer`). Two ways, A3's choice (`../../docs/ARCHITECTURE_RESEARCH.md`): continued
-distillation from the walk_to and look_at release with rehearsal of both, or a joint run from scratch at A2's size.
+Its own module on the shared frozen trunk (`../../model/skill_module.py`), trained by its own strategy (a `train.py`
+here, through `../../training/skill_dagger.py`; owner, 2026-10-19). Its name is appended to `../spec.py`'s `VERBS` for
+its verb id. Its request sets the entity pointer (`GeneralistRequests.entity_pointer`). Its strategy trains it with
+look_at beside it in some lanes (by look_at's teacher), so it reads look_at's request. It may start from walk_to's
+module weights, since the movement is walk_to's (dependent skills start from their prerequisites); walk_to's own
+module never changes.
 
 ## 5. Bars (as walk_to's, `../../training/bars.py`)
 
 - T5: teacher minus student at most 10 points, on held success;
 - held out: entity bearings 180 to 270 degrees from the spawn body (walk_to's region) at least 0.9 of seen;
 - E4: pace within 5 % and the radius kept, in 95 %;
-- no regression: walk_to and look_at stay within tolerance of their bars (A3).
+- composition: come_here beside look_at, against each alone; walk_to's and look_at's modules do not change.
 
 ## 6. Stages
 
 1. **Build (no training):** the sampler places the entity; the teacher wrapper; the certificate task; the verb and its
-   request in `../../training/distill.py`. Gate: unit tests, and the certificate passes T1 to T3.
+   request in its `skill.py`, its strategy in `train.py`. Gate: unit tests, and the certificate passes T1 to T3.
 2. **Smoke** at 2 iterations x 32 lanes x 200 steps, end to end, before any long run.
 3. **The run** at A2's size, scored on the bars, with a breakdown of how misses end.
 
 ## 7. Waits on
 
-The walk_to and look_at release (the generalist A3 grows from), and the owner's approval of stage 1.
+Training to reopen, and the owner's approval of stage 1.
 
 ## 8. If it fails
 

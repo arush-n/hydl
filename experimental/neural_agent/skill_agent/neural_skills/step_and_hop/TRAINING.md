@@ -33,16 +33,21 @@ sampled sizes (fixtures), since `tasks/simple_tasks.py` is flat with no geometry
 **The student sees no terrain today,** for two reasons, both confirmed in the code: the legal observation adapter
 emits its geometry tokens as invalid, zero features (`../../model/observation_adapter.py:16-17`: "The observation's
 block, inventory and geometry tokens are not read"), and the trainer passes only the entity and self tokens
-(`../../training/distill.py`, `_batch_tokens`). Both are built first: geometry tokens from the observation's geometry,
-then passed in training. Then the shared generalist learns it as walk_to on terrain, by continued distillation with
-rehearsal of flat walk_to (H2: each verb at or above its single-skill result).
+(`../../training/blocks.py`, `batch_tokens`). Both are built first: geometry tokens from the observation's geometry,
+then passed in training.
+
+Its own module on the shared frozen trunk (`../../model/skill_module.py`), trained by its own strategy (a `train.py`
+here, through `../../training/skill_dagger.py`; owner, 2026-10-19). Its name is appended to `../spec.py`'s `VERBS` for
+its verb id. It starts from walk_to's module weights, as the navigation chain's next lesson (owner, 2026-10-17), and
+trains by its own strategy on terrain; walk_to's own module never changes. H2's check stays: step_and_hop at or above
+walk_to on flat ground.
 
 ## 5. Bars
 
 - T5: at most 10 points under the teacher, on held success;
 - held out: ledge heights or gap widths not trained, at least 0.9 of seen;
 - E4: pace and radius as walk_to's;
-- no regression: flat walk_to and look_at within tolerance of their bars.
+- flat ground: step_and_hop's module at or above walk_to's on walk_to's lanes (H2); walk_to's module does not change.
 
 ## 6. Stages
 

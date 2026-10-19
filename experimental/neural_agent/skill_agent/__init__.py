@@ -29,13 +29,14 @@ Import the submodules, which are sorted into subfolders by purpose (each subfold
 * ``model.freezing``: one frozen trunk and one adapter per verb; adding a verb never changes a frozen one (B4); the
   trunk once per tick (``encode_contexts``) and the trained verb as a body (``VerbBody``).
 * ``model.generalist``: the request-conditioned generalist policy (``docs/ARCHITECTURE_RESEARCH.md``).
+* ``model.skill_module``: a skill's own module on the shared frozen trunk, and the trunk.
 * ``model.observation_adapter``: the legal observation to the trunk's token sets (self and entity; body frame).
 
 ``neural_skills``: one folder per neural skill (``neural_skills/README.md``): its plan, teacher, task and launchers.
 
-* ``neural_skills.walk_to.teacher`` and ``.task``: walk_to's scripted teacher (v2, v3 with a stop margin), its goals
-  and its success test.
-* ``neural_skills.look_at.teacher`` and ``.task``: look_at's scripted teacher, its goals and its success test.
+* ``neural_skills.spec``: what a skill declares (``SkillSpec``) and the verb ids (``VERBS``).
+* ``neural_skills.walk_to`` and ``neural_skills.look_at``: each skill's ``teacher``, ``task``, ``skill`` (its spec) and
+  ``train`` (its own training strategy, which trains its own module).
 
 ``teaching``: what scripted teachers share, and their certificates.
 
@@ -53,7 +54,9 @@ Import the submodules, which are sorted into subfolders by purpose (each subfold
 * ``training.traces``: the loader for native NPC traces from the live server (A7).
 * ``training.bc_dataset`` and ``training.bc_smoke``: the behaviour-cloning dataset from those traces and its smoke
   (B2).
-* ``training.distill``: DAgger distillation of walk_to and look_at into the generalist (A2).
+* ``training.blocks``: the building blocks every trainer shares.
+* ``training.skill_dagger``: DAgger for one skill's module on the frozen trunk, run by each skill's strategy.
+* ``training.distill``: the A2 reference trainer, walk_to and look_at distilled together into one generalist.
 * ``training.bars``: a distillation report scored on A2's bars, on held success.
 
 ``bench``: per-tick latency, the 30 Hz gate.

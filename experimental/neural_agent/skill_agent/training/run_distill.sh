@@ -3,7 +3,8 @@
 # Usage: run_distill.sh <run name> <iterations> <lanes> <steps> <eval lanes> [distill options, e.g. --look-direction]
 # Writes report.json, params.npz and log.txt (the start line records the commit and the options, and the load) to
 # agent_skills/training_runs/skill_agent_a2/<run name>/, which is private and never staged, and refuses a name that
-# exists. The skills' train.sh scripts (../neural_skills/<skill>/train.sh) call it with their stage's size and options.
+# exists. It launches the A2 reference trainer (the joint network of runs A2 to C'); skills train through their own
+# strategies (../neural_skills/<skill>/train.sh, README 2.17).
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../../../.." && pwd)
 cd "$ROOT"

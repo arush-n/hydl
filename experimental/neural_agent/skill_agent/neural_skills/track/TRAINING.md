@@ -29,15 +29,18 @@ The flat task world's entity 1 is inert today (`../../tasks/simple_tasks.py`, `t
 
 ## 4. Student
 
-The shared generalist with a new verb whose request sets the entity pointer, grown from the release by continued
-distillation with rehearsal (A3), or a joint run.
+Its own module on the shared frozen trunk (`../../model/skill_module.py`), trained by its own strategy (a `train.py`
+here, through `../../training/skill_dagger.py`; owner, 2026-10-19). Its name is appended to `../spec.py`'s `VERBS` for
+its verb id. Its request sets the entity pointer. It may start from look_at's module weights (the gaze is look_at's);
+look_at's own module never changes. Its strategy trains it with walk_to beside it in some lanes, so it learns to track
+while walking.
 
 ## 5. Bars
 
 - T5 on the share in view, at most 10 points under the teacher;
 - held out: target speeds or paths not trained, at least 0.9 of seen;
 - composition: track while walk_to runs, against the two alone (the "both" lanes of A2);
-- no regression on walk_to and look_at.
+- walk_to's and look_at's modules do not change (structural).
 
 ## 6. Stages
 
