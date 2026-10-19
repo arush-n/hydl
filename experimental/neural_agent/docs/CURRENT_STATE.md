@@ -184,6 +184,13 @@ the overlay rows 5f and 11 and the learner-row harness repair, each as its own c
 both sim gates before any overlay commit. P6 is concluded; the phase 3, 4 and 4b port agents have reported and their
 work is committed.
 
+Later on 2026-10-19 (`fc2d32c`, whose message says "current state updated" though this paragraph landed one commit later): the
+writer for the inherited labels landed (`7b4ca63`: `create_region_artifact_library(inherit_split_from=...)` regenerates the staged
+0.7.2 manifest byte for byte; no publish step calls it yet), and #78 finished (section (am)): the guard 0.35 s and the bank 1.0 s
+stand in the short-tick regime the simulator's 30 Hz step assumes, and the native reopen's dependence on the engine tick period is
+recorded as a known deviation. No lane is running. The swap waits on the publish gate (recertification's audit gate stops at
+perception; re-word the B claims and accept, or publish with the audit state recorded).
+
 ## 7. Decisions taken and still open (2026-10-18, evening)
 
 Resolved today under the owner's delegation ("manage the remaining commits the best way you think"):
