@@ -109,17 +109,21 @@ benches, progress and fuel at one recipe second per 30 ticks, charcoal on the se
 two ticks after the request; all six receipts replay in order, fuel and seconds; the render admits 1,945 recipes) and the three
 timing constructs (section (af): guard re-entry 0.35 s from the claim, the attack-start split one drain after the claim, the
 shortbow reset ammo 0; native under load reopened one tick earlier in 17 of 24 runs, recorded as jitter with the idle-machine
-re-measurement filed as #78); coordinator quick gate 292, identity 4. Running: the crossbow lane (#74, bridge 5558): the duel
-harness and the expectations are fixed on the gitignored tests (6 of 8 rows pass; the two left need the construct), the
-construct `crossbow_variant` (ancient steel 10.5 / 14 / 82 through a hook on the scalar variant profile) is being wired, then
-the gates and the eight-row live re-run; the kernel already rounds applied damage half up (kernel.py 320 to 322), so the test
-asserts the applied integer and no rounding construct exists. The lower-layer session moved `skill_agent` into subfolders
-(`1b2b780`); the stale document paths in this lane's files follow. Two more lanes launched after the combined commit: a live
-Region-step run of the timed, processing and diagram executor paths on the gen-7 render (bridge 5560; the claim most likely
-wrong in (ac) and (ae); a versioned tests/sim test is the deliverable) and the simulator half of the shield-bash root (#71,
-bridge 5556: construct `shield_bash_fork`, the bash offered only under a held, active guard, as the bridge advertises since
-`bdb6245`). Queued: the simulator half of #71, the terrain recapture itself, the stub mechanics (#69), a live Region-step run of the
-timed executor path.
+re-measurement filed as #78); coordinator quick gate 292, identity 4. Landed on the evening of 2026-10-18: `2c311c9`, the joint construct commit (the crossbow
+scalar variant, section (ag); the crafting executors run inside a live Region step for the first time and five defects fixed, among
+them that none of the three wrappers set `state_commit`, (ah); the shield bash as a held-guard fork, offered on ticks 3 to 12 of a hold as
+live 0.7.2 does, (ai); the head-at-reset measurement, (ak); quick gate 314 passed on the final tree, identity gate 4 passed on HEAD
+2c311c9 in 16:02 under load); `41981ca`, the Region recapture on 0.7.2 (500 of 500 sections; the exact-digest compare fails on 5 to 6
+non-damaging fluid cells while the dry projection is identical, so the 0.5.7 contract methodology applies and passes with a cap of 6;
+the terrain differs from the 0.5.7 capture in 46 of 250 sections; `tools/worldgen/recapture_region.py` and its README; section (aj));
+`0161a16`, the source-pin audits second pass (1 of 11 verified, inventory with a recorded caveat; 10 fail closed with their gaps named;
+`tools/source_pins/rebaseline.py` and README; the gate now passes `HYTALE_ASSETS_ZIP` to the audits; section (al)); `9722621`, the
+design record and thirteen probes for the unimplemented switches (`sim/gen7/mechanics/DESIGNS-072.md`). Running: the head-heading
+construct lane (#75, under the overlay lock: both heads seeded from `entity_yaw` on the gen-7 render, a no-op when none is given).
+Waiting for a quiet machine: the stub measurement lanes in the DESIGNS-072.md 14a order (#69) and the idle timing re-measurement (#78).
+The owner's: the library swap and the product rebuild after the recapture (`tools/worldgen/README.md` steps 1 to 5), the 43-row
+expectation in `test_region_runtime_provider` (#76: committed code gives 42, the arena session's uncommitted edit 32), the phase-6
+training ruling.
 Committed earlier: the
 crafting oracle stage 3 (`274aaec`, timed bench crafts with probe events; pin `5FE609E2`), phase 4j (`a534e83`: the Trork
 target no longer gets a headless Player, which the PvP-off filter used to cancel the agent's damage; the iron combo and
