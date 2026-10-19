@@ -817,13 +817,18 @@ body (bearing 180 to 270 degrees), and look-only points 25 to 40 degrees to the 
 held out by its walk target). Look-only offsets span 40 degrees either side (`tasks/simple_tasks.py:80`), so the look
 region is the left edge of the range while the right edge is trained: it asks for extrapolation on one side. The
 evaluation runs the student and the teachers on the same seeds, seen and held out, and reports success per mode, walk
-pace (within 5 %), radius and illegal decisions. [test: test_sa_distill.py, 17 tests]
+pace (within 5 %), radius and illegal decisions. [test: test_sa_distill.py, 24 tests]
 
 **Options and held success (2026-10-18, late).** Both options are off by default, and off they reproduce A2 exactly
 (an A/B against the trainer at dcec3d9: the same losses, dataset, parameters and evaluation):
 - `--walk-stop-margin M` labels the walks with walk_to v3 (2.11), which stops M blocks inside the radius;
 - `--look-direction` fills the look request's direction group with the unit body-frame vector from the eye to the
-  target (the walk request's stays empty).
+  target (the walk request's stays empty);
+- `--look-frame head` (with `--look-direction`) measures that vector in the head's frame instead (2026-10-19): the
+  body frame turned to the head's yaw, then pitched up by the head's pitch (`training/distill.py:229`). A target the
+  head faces reads (1, 0, 0), so the input shrinks toward forward as the look closes, while the body-frame vector
+  stays where it started. The head angles are the absolute ones `LookAtTasks.success` judges
+  (`tasks/simple_tasks.py:391`).
 
 The evaluation reports held success, on target `HOLD_TICKS` = 5 ticks in a row with the first of them inside the
 horizon, beside the first hit, and the owner chose held success for A2's bars (2026-10-18). The report (schema v2)
@@ -860,7 +865,7 @@ every walk and look bin of the same episodes):
   horizon. Small radii miss most (0.74 below 0.83 blocks, against 0.93 and 0.95 above), and run misses least (0.95,
   against walk 0.87 and sneak 0.80). The 97 missed walks of the "both" lanes look the same. The teacher stops exactly
   at the edge (`teaching/teachers.py:117`, v2's margin is 0), so a student whose stop is a few centimetres off lands outside about half
-  the time, and it acts by argmax (`training/distill.py:470`), so a parked agent repeats its choice every tick.
+  the time, and it acts by argmax (`training/distill.py:498`), so a parked agent repeats its choice every tick.
 - **Missed looks end near the target but outside the 3 degrees,** a median 5.2 degrees off in yaw and 3.2 in pitch,
   as often short of the target as past it: imprecision, not a bias. Near targets miss most (0.55 at 2 to 4.7 blocks,
   0.74 beyond), and so do steep ones (0.56 and 0.58 beyond 15 degrees of pitch either way, 0.77 and 0.85 within).

@@ -121,7 +121,7 @@ HOLD_TICKS = 5
 
 @dataclass(frozen=True)
 class DistillConfig:
-    """Everything that sizes a run. The defaults are the full run's; the CLI overrides the first four and last two."""
+    """Everything that sizes a run. The defaults are the full run's; the CLI overrides the first four and last three."""
 
     iterations: int = 6
     lanes: int = 128
@@ -134,7 +134,14 @@ class DistillConfig:
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
     generalist: GeneralistConfig = field(default_factory=lambda: DEFAULT_GENERALIST)
     walk_stop_margin: float = 0.0  # walk_to v3 when positive: it stops this many blocks inside the radius
-    look_direction: bool = False  # look_at's request carries the unit body-frame direction to its target
+    look_direction: bool = False  # look_at's request carries the unit direction to its target, in look_frame
+    look_frame: str = "body"  # "head": that direction is measured from where the head points (needs look_direction)
+
+    def __post_init__(self) -> None:
+        if self.look_frame not in ("body", "head"):
+            raise ValueError(f"look_frame must be 'body' or 'head', got {self.look_frame!r}")
+        if self.look_frame == "head" and not self.look_direction:
+            raise ValueError("look_frame 'head' needs look_direction: it measures the look request's direction")
 
 
 class Episodes(NamedTuple):
@@ -217,6 +224,19 @@ def _body_vector(vector: jax.Array, yaw_degrees: jax.Array) -> jax.Array:
     forward = -jnp.sin(yaw) * x - jnp.cos(yaw) * z
     right = jnp.cos(yaw) * x - jnp.sin(yaw) * z
     return jnp.stack([forward, right, y], axis=1)
+
+
+def _head_vector(vector: jax.Array, head_yaw_degrees: jax.Array, head_pitch_degrees: jax.Array) -> jax.Array:
+    """A world vector [B, 3] as (forward, right, up) in the head frame: ``_body_vector`` at the head's yaw, then pitched
+    about the right axis, positive pitch up. The head's forward is the gaze, so a target the head faces is (1, 0, 0)."""
+
+    body = _body_vector(vector, head_yaw_degrees)
+    pitch = jnp.deg2rad(head_pitch_degrees)
+    forward, right, up = body[:, 0], body[:, 1], body[:, 2]
+    return jnp.stack(
+        [jnp.cos(pitch) * forward + jnp.sin(pitch) * up, right, -jnp.sin(pitch) * forward + jnp.cos(pitch) * up],
+        axis=1,
+    )
 
 
 def _planar(xz: jax.Array) -> jax.Array:
@@ -394,13 +414,16 @@ def _request_slots(episode: Episodes, walk_args: jax.Array, look_args: jax.Array
     )
 
 
-def build_requests(episode: Episodes, position: jax.Array, yaw: jax.Array, ticks: jax.Array, *,
-                   look_direction: bool = False) -> GeneralistRequests:
+def build_requests(episode: Episodes, position: jax.Array, yaw: jax.Array, ticks: jax.Array,
+                   head_yaw: jax.Array | None = None, head_pitch: jax.Array | None = None, *,
+                   look_direction: bool = False, look_frame: str = "body") -> GeneralistRequests:
     """The request slots at one decision: walk_to in slot 0 and look_at in slot 1, from the agent's own pose.
 
     ``position`` is float32[B, 3] (the agent's position), ``yaw`` the body yaw in degrees, ``ticks`` the decisions taken
     since the episode started (the age feature). Positions are body-frame vectors over 16 blocks; the eye is the position
     plus one block up. With ``look_direction`` the look request's direction is the unit body-frame vector from the eye.
+    With ``look_frame="head"`` it is the unit vector in the head's frame instead, which needs ``head_yaw`` and
+    ``head_pitch``, the head's absolute yaw and pitch in degrees.
     """
 
     batch = position.shape[0]
@@ -414,7 +437,12 @@ def build_requests(episode: Episodes, position: jax.Array, yaw: jax.Array, ticks
     look_body = _body_vector(to_look, yaw)
     look_unit = None
     if look_direction:
-        look_unit = look_body / jnp.maximum(jnp.linalg.norm(look_body, axis=1, keepdims=True), 1e-6)
+        look_from = look_body
+        if look_frame == "head":
+            if head_yaw is None or head_pitch is None:
+                raise ValueError("look_frame 'head' needs head_yaw and head_pitch")
+            look_from = _head_vector(to_look, head_yaw, head_pitch)
+        look_unit = look_from / jnp.maximum(jnp.linalg.norm(look_from, axis=1, keepdims=True), 1e-6)
     look_args = _argument_row(look_body / POSITION_SCALE, look_scalars, ticks, look_unit)
     return _request_slots(episode, walk_args, look_args, look_direction=look_direction)
 
@@ -474,14 +502,14 @@ def student_factors(
 
 @functools.lru_cache(maxsize=None)
 def _kernels(encoder: EncoderConfig, generalist: GeneralistConfig, maximum_turn_degrees: float, *,
-             walk_stop_margin: float = 0.0, look_direction: bool = False) -> Kernels:
+             walk_stop_margin: float = 0.0, look_direction: bool = False, look_frame: str = "body") -> Kernels:
     def student(params, action_mask, tokens, requests, walk_active, look_active):
         return student_factors(params, action_mask, tokens, requests, walk_active, look_active, encoder, generalist)
 
     return Kernels(
         tokens=jax.jit(lambda observation, yaw: legal_tokens(
             observation, capacities=bench_tick.CAPACITIES, body_yaw_degrees=yaw)),
-        requests=jax.jit(functools.partial(build_requests, look_direction=look_direction)),
+        requests=jax.jit(functools.partial(build_requests, look_direction=look_direction, look_frame=look_frame)),
         teacher=jax.jit(functools.partial(
             teacher_labels, maximum_turn_degrees=maximum_turn_degrees, walk_stop_margin=walk_stop_margin)),
         student=jax.jit(student),
@@ -593,7 +621,9 @@ def _rollout(env, params, episode: Episodes, decide: Callable[[Tick], Any], kern
         combat = carry.runtime.combat
         position = combat.position[:, AGENT_ENTITY]
         yaw = combat.yaw[:, AGENT_ENTITY]
-        requests = kernels.requests(episode, position, yaw, jnp.float32(index))
+        # The head's angles feed the head frame only; the body frame ignores them (build_requests).
+        requests = kernels.requests(episode, position, yaw, jnp.float32(index), combat.agent_head_yaw,
+                                    combat.agent_head_pitch)
         tokens = kernels.tokens(observation, yaw)
         teacher = kernels.teacher(combat, episode)
         student = kernels.student(params, carry.action_mask, tokens, requests, episode.walk_active, episode.look_active)
@@ -705,7 +735,8 @@ def run_dagger(config: DistillConfig = DistillConfig()) -> DaggerResult:
 
     env = _environment(config.lanes, config.maximum_turn_degrees)
     kernels = _kernels(config.encoder, config.generalist, config.maximum_turn_degrees,
-                       walk_stop_margin=config.walk_stop_margin, look_direction=config.look_direction)
+                       walk_stop_margin=config.walk_stop_margin, look_direction=config.look_direction,
+                       look_frame=config.look_frame)
     key, init_key = jax.random.split(jax.random.key(config.seed))
     params = init_params(init_key, config)
     optimizer = optax.adam(config.learning_rate)
@@ -869,7 +900,8 @@ def evaluate(
     codes = chosen[np.arange(lanes) % len(chosen)]
     env = _environment(lanes, config.maximum_turn_degrees)
     kernels = _kernels(config.encoder, config.generalist, config.maximum_turn_degrees,
-                       walk_stop_margin=config.walk_stop_margin, look_direction=config.look_direction)
+                       walk_stop_margin=config.walk_stop_margin, look_direction=config.look_direction,
+                       look_frame=config.look_frame)
     key_goals, key_rollout = jax.random.split(jax.random.key(seed))
     episode = sample_episodes(key_goals, jnp.asarray(codes), held_out=held_out)
     decide = (lambda tick: tick.student) if isinstance(policy, str) else policy
@@ -953,13 +985,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                         help="walk_to v3 when positive: it stops this many blocks inside the radius "
                              "(teachers.WALK_TO_V3_STOP_MARGIN_BLOCKS is 0.25); 0 is walk_to v2")
     parser.add_argument("--look-direction", action="store_true",
-                        help="look_at's request also carries the unit body-frame direction to its target")
+                        help="look_at's request also carries the unit direction to its target (frame: --look-frame)")
+    parser.add_argument("--look-frame", choices=("body", "head"), default=defaults.look_frame,
+                        help="the frame of --look-direction: body (default), or head: "
+                             "measured from where the head points")
     args = parser.parse_args(argv)
     if args.walk_stop_margin < 0:
         parser.error("--walk-stop-margin must be at least 0: the stop is inside the radius")
+    if args.look_frame == "head" and not args.look_direction:
+        parser.error("--look-frame head needs --look-direction")
 
     config = DistillConfig(iterations=args.iterations, lanes=args.lanes, steps=args.steps, seed=args.seed,
-                           walk_stop_margin=args.walk_stop_margin, look_direction=args.look_direction)
+                           walk_stop_margin=args.walk_stop_margin, look_direction=args.look_direction,
+                           look_frame=args.look_frame)
     provenance = _provenance()
     started = time.perf_counter()
     result = run_dagger(config)
