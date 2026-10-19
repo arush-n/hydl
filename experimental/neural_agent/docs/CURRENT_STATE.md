@@ -205,6 +205,23 @@ first-capture run on 0.7.2 once the gate passes all eleven (launcher on 5556/255
 references absent, lease free, jar `460054A8`), then the 0.7.2 products and the suites' frozen v7, the pointer flips, and the
 stamp #79 and default flip #80 which wait for the owner's training. Nothing is pushed.
 
+Evening of 2026-10-19: all eleven World source audits are accepted on 0.7.2 (`f74968e`; the verifier keys the audit subprocesses
+by the audited JAR, `455c7a2`; a per-line pin helper `expected_source_pin`, `2d1e993`). The first live first-capture run on
+0.7.2 passed the gate, the seed-570057 projection (digest `408D5FB2` reproduced, 5 fluid-only cells against a cap of 6), the
+capacity report, two byte-identical stationary captures and the native graph build (20 graphs), then stopped at the first
+world-action probe: the gitignored live compare scripts under `tests/fidelity` gated on the audits' 0.5.7 literal match
+instead of the per-line semantic pin. A repair lane routed the twelve scripts through the per-line pin, and the probes now record
+the bridge's own server version; the run is being repeated (run 2). Landed beside it: the promotion tool
+`tools/worldgen/promote_world_evidence.py` (`895224a`; the manual copy made checkable, keyed by line, refusing overwrites,
+writing the receipt) and the diagnosis of the Arsenal Region v6 suite drift (`cf906ee`: the engine batch `879321e` moved the
+0.5 bridge pin the arsenal contract embeds; the frozen v6 value is not reproducible from any on-disk input; the 0.7.2 suite v7
+will be per line, task #88). Hit interrupt (#69): under the learner-row harness the opponent carries no Eligible until late, and
+any observed actor's unknown 0.7.2 status fails the gen-5 observation closed (failure bits 128 and 4, empty ability head), so
+the construct must declare the eight Hit_Interrupt_* statuses before a 0.7.2 checkpoint can run live against such NPCs; the
+native-AI duel measured the Eligible refresh (about 0.27 s) but its club hits are unflagged, so the eligible-hit rows rest on
+asset values unless a flagged NPC attack exists (last probe round). Running: run 2 of the first capture, the pointer keying
+lane (#89), the probe's last round. Next: promotion with the tool, then products (#90), suites v7 (#88), pointers (#89).
+
 ## 7. Decisions taken and still open (2026-10-18, evening)
 
 Resolved today under the owner's delegation ("manage the remaining commits the best way you think"):
