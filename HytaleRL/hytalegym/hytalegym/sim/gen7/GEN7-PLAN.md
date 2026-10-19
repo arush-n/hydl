@@ -392,16 +392,17 @@ without the variable. Findings beyond the pins: `EntityScaleComponent` is a phys
 several (ad) "removed" members were signature changes; the explosion host contract is keyed to 0.5.7 digests. Phase 5's gate stays
 open until the ten audits are re-derived claim by claim.
 
-**Phase 5, classification of the ten failing audits (2026-10-19; FIDELITY-0.7.2.md section (al), classification addendum and
-correction).** A 1 (`explosion_dynamics`, accepted as pin-only, 2 of 11 verified), B 6 (`perception`, `entity_geometry`,
-`locomotion`, `doors`, `mutable_blocks`, `explosion_mutation`), C 3 (`navigation`, `actor_world_state`, `crafting`). Genuine 0.7.2
-changes among the B claims: block health per `BlockHealthSection` with the write path `BlockOperations.setBlock`, entity scale
-made physical, the `MovementStates` extra byte, the content censuses (doors, projected-distance declarations, support census,
-falling blocks); claims already false on the 0.5.10 control are gen-5 test artifacts (`DeathComponent` exclusion, 25
-`InteractionType`, `WorldChunk.breakBlock`). Every claim's verdict is in `worldgen/source_pin_baselines_072.json` and
-`tools/source_pins/evidence_072/`; the claim-level pin design is in `tools/source_pins/README.md`. The gate still stops at
-`perception`; next are the C leaves (the lanes stopped at the Haiku weekly limit, which resets 2026-10-23), then the B claims
-re-worded for 0.7.2 and the constructs the genuine changes need (block health reset on write is design-only today).
+**Phase 5, classification complete (2026-10-19; FIDELITY-0.7.2.md section (al), second correction).** All ten audits classified
+claim by claim after the resumed lanes: A 1 (`explosion_dynamics`), B 7 (`perception`, `entity_geometry`, `locomotion`, `doors`,
+`mutable_blocks`, `explosion_mutation`, `crafting`), C 2 (`navigation`, `actor_world_state`, both on repo-side or runtime-only
+claims with no claim false). Genuine 0.7.2 changes: block health per `BlockHealthSection` cleared on a changing write, entity
+scale physical, the LOS detail-hitbox test (modelled by `line_of_sight`), the bench gate's augment tags (unmodelled, 50 generated
+recipes), the `MovementStates` byte (not reaching the bridge), 28 interaction types, and the content censuses. Gen-5 test
+artifacts (false on the control too): the `DeathComponent` exclusion, the sprint fallback 1.65, `WorldChunk.breakBlock`, the
+bridge `canCraft` output-room omission, the recipe id split. Every claim's verdict is in `worldgen/source_pin_baselines_072.json`
+and `tools/source_pins/evidence_072/`. Next: re-word each B claim for 0.7.2 and accept the audits whose claims the simulator
+relies on all hold (the gate still stops at `perception`), then the constructs the genuine changes need: block health reset on a
+changing write (design-only today), the augment-tag bench gate, and entity scale once a simulator entity carries one.
 
 **Phase 4 stubs, offline design pass (2026-10-18; `sim/gen7/mechanics/DESIGNS-072.md`).** The thirteen unimplemented switches
 now have a design record each (authored 0.7.2 facts with their class or asset, the hook target, the state needed, the receipt and a

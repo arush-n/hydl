@@ -1,104 +1,526 @@
 {
  "actor_world_state": [
   {
-   "claim": "fall_state.* (owner, accumulate, reset, npc_landing_gate, npc_landing_speed, player_boundary)",
-   "locator": "LivingEntity.currentFallDistance; MotionControllerWalk.computeNewFallSpeed (changed on 0.7.2, previous pass)",
+   "claim": "fall_state.owner",
+   "locator": "LivingEntity.currentFallDistance (field; getCurrentFallDistance/setCurrentFallDistance)",
    "methods": [
-    "LivingEntity.currentFallDistance",
-    "MotionControllerWalk.computeNewFallSpeed"
+    "LivingEntity.currentFallDistance"
    ],
-   "verdict": "C"
+   "verdict": "A"
   },
   {
-   "claim": "breathing_state.* (sample interval, point TargetUtil.getLook_position, default_can_breathe, head_occlusion, event_override, classification, component_fields)",
-   "locator": "TargetUtil.getLook (changed on 0.7.2, previous pass), BreathingCheckEvent, DamageSystems$BreathingSystem",
+   "claim": "fall_state.accumulate",
+   "locator": "LivingEntity.moveTo(Ref,double,double,double,ComponentAccessor) (0.7.2 normalised idx 14-84, scratch lm72.txt)",
    "methods": [
+    "LivingEntity.moveTo"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "fall_state.reset",
+   "locator": "LivingEntity.moveTo",
+   "methods": [
+    "LivingEntity.moveTo"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "fall_state.npc_landing_gate",
+   "locator": "DamageSystems$FallDamageNPCs.tick",
+   "methods": [
+    "DamageSystems$FallDamageNPCs.tick"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "fall_state.npc_landing_speed",
+   "locator": "DamageSystems$FallDamageNPCs.tick",
+   "methods": [
+    "DamageSystems$FallDamageNPCs.tick"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "fall_state.player_boundary",
+   "locator": "DamageSystems$FallDamagePlayers.tick",
+   "methods": [
+    "DamageSystems$FallDamagePlayers.tick"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "breathing_state.sample_interval_seconds",
+   "locator": "DamageSystems$BreathingSystem.<init> (fconst_1 -> DelayedEntitySystem(float))",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "breathing_state.point",
+   "locator": "LivingEntity.getPackedMaterialAndFluidAtBreathingHeight -> TargetUtil.getLook(Ref,ComponentAccessor).getPosition()",
+   "methods": [
+    "LivingEntity.getPackedMaterialAndFluidAtBreathingHeight",
     "TargetUtil.getLook"
    ],
-   "verdict": "C"
+   "verdict": "A"
   },
   {
-   "claim": "compiled_provider_boundary.*",
-   "locator": "repo-side provider",
-   "methods": [],
-   "verdict": "C"
-  },
-  {
-   "claim": "controller_medium.* (SensorInWater to activeMotionController.inWater; floor sample; predicate fluid id not empty)",
-   "locator": "SensorInWater, MotionControllerBase.inWater",
+   "claim": "breathing_state.default_can_breathe",
+   "locator": "EntityUtils.processEntityBreathing (raw 0.7.2 offsets 50-72; J05 identical)",
    "methods": [
-    "MotionControllerBase.inWater"
+    "EntityUtils.processEntityBreathing"
    ],
-   "verdict": "C"
+   "verdict": "A"
   },
   {
-   "claim": "submersion.* (WorldUtil.getPackedMaterialAndFluidAtPosition; fill height Fluid.getMaxFluidLevel; boundary)",
-   "locator": "WorldUtil (now takes ChunkStore; 0.5.7 took Ref and ComponentAccessor, previous pass)",
+   "claim": "breathing_state.head_occlusion",
+   "locator": "WorldUtil.getPackedMaterialAndFluidAtPosition containsPosition path -> processEntityBreathing",
+   "methods": [
+    "WorldUtil.getPackedMaterialAndFluidAtPosition"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "breathing_state.event_override",
+   "locator": "EntityUtils.processEntityBreathing raw 74-104",
+   "methods": [
+    "EntityUtils.processEntityBreathing"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "breathing_state.classification",
+   "locator": "DamageSystems$CanBreathe.tick (normalised 0.7.2, identical J05)",
+   "methods": [
+    "DamageSystems$CanBreathe.tick"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "breathing_state.component_fields",
+   "locator": "BreathingComponent accessors used by the chain",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "compiled_provider_boundary.solid_head_occupancy",
+   "locator": "repo jax/world/entities/physical_state.py (head_occluded)",
    "methods": [],
    "verdict": "C"
   },
   {
-   "claim": "drop.* (MotionControllerWalk.findDropBlockCollision; entity AABB; negative y; first collision times max distance)",
-   "locator": "MotionControllerWalk.findDropBlockCollision (changed on 0.7.2, previous pass)",
+   "claim": "compiled_provider_boundary.nonzero_fluid_identity",
+   "locator": "repo jax/world/entities/physical_state.py:188-191 (fluid_identity zeroed, available only when not submerged)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "compiled_provider_boundary.temporal_runtime_differential",
+   "locator": "hytale-plugin-0.7.2/src/main/java (bridge source, grep)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "controller_medium.sensor_call",
+   "locator": "SensorInWater.matches -> MotionController.inWater()",
+   "methods": [
+    "MotionController.inWater",
+    "SensorInWater.matches"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "controller_medium.sample",
+   "locator": "MotionControllerWalk.postReadPosition (walk water flag) and MotionControllerBase.touchesWater",
+   "methods": [
+    "MotionControllerBase.touchesWater",
+    "MotionControllerWalk.postReadPosition"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "controller_medium.predicate",
+   "locator": "postReadPosition: inWater = fluid != null && fluid != Fluid.EMPTY at the sample (FluidSection.getFluidId, Fluid.getAssetMap().getAsset) ; touchesWater: getFluid",
+   "methods": [
+    "Fluid.EMPTY",
+    "Fluid.getAssetMap",
+    "FluidSection.getFluidId"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "submersion.source",
+   "locator": "WorldUtil.getPackedMaterialAndFluidAtPosition (0.7.2 signature (ChunkStore,double,double,double); 0.5.10 (Ref,ComponentAccessor,...))",
+   "methods": [
+    "WorldUtil.getPackedMaterialAndFluidAtPosition"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "submersion.fill_height",
+   "locator": "WorldUtil.getPackedMaterialAndFluidAtPosition: level / Fluid.getMaxFluidLevel()",
+   "methods": [
+    "Fluid.getMaxFluidLevel",
+    "WorldUtil.getPackedMaterialAndFluidAtPosition"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "submersion.boundary",
+   "locator": "WorldUtil fill test: fracY = y - iy; keep fluid iff fracY <= level/max",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "drop.source",
+   "locator": "MotionControllerWalk.findDropBlockCollision(Vector3d,double,ComponentAccessor)",
    "methods": [
     "MotionControllerWalk.findDropBlockCollision"
    ],
-   "verdict": "C"
+   "verdict": "A"
   },
   {
-   "claim": "stationary_traversal.* (CollisionModule.validatePosition, BoxBlockIntersectionEvaluator.intersectBoxComputeOnGround, detail boxes, filler root offset, clearance)",
-   "locator": "CollisionConfig.canCollide, CollisionModule (changed on 0.7.2, previous pass)",
+   "claim": "drop.shape",
+   "locator": "findDropBlockCollision: CollisionModule.findCollisions(this.collisionBoundingBox, position, tmpClimbMovement, tmpResults, accessor)",
+   "methods": [
+    "CollisionModule.findCollisions"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "drop.direction",
+   "locator": "worldAntiNormal = Vector3dUtil.DOWN = (0, -1.0, 0)",
+   "methods": [
+    "Vector3dUtil.DOWN"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "drop.result",
+   "locator": "MotionControllerWalk.dropDistance: collisionStart * dist when the first block collision exists, else dist",
+   "methods": [
+    "MotionControllerWalk.dropDistance"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "stationary_traversal.standability",
+   "locator": "CollisionModule.validatePosition -> lambda$validatePosition$1 validate bits",
+   "methods": [
+    "CollisionModule.validatePosition"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "stationary_traversal.intersection",
+   "locator": "BoxBlockIntersectionEvaluator.intersectBoxComputeOnGround(Box,double,double,double)",
+   "methods": [
+    "BoxBlockIntersectionEvaluator.intersectBoxComputeOnGround"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "stationary_traversal.detail_boxes",
+   "locator": "CollisionResult.accept(long,long,long)",
+   "methods": [
+    "CollisionResult.accept"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "stationary_traversal.detail_box_origin",
+   "locator": "CollisionConfig.canCollide: boundingBoxOffset = -unpackX/Y/Z(filler)",
    "methods": [
     "CollisionConfig.canCollide"
    ],
-   "verdict": "C"
+   "verdict": "A"
+  },
+  {
+   "claim": "stationary_traversal.filler_source",
+   "locator": "CollisionConfig.canCollide -> BlockSection.getFiller(x,y,z) -> FillerBlockUtil.unpackX/Y/Z",
+   "methods": [
+    "BlockSection.getFiller",
+    "CollisionConfig.canCollide",
+    "FillerBlockUtil.unpackX"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "stationary_traversal.clearance",
+   "locator": "MotionControllerWalk.computeClimbHeight (upward probe)",
+   "methods": [
+    "MotionControllerWalk.computeClimbHeight"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "stationary_traversal.portable_region_requirement",
+   "locator": "server: canCollide reads the filler, getRotationIndex and the hitbox; WorldUtil uses the filler offset in containment",
+   "methods": [],
+   "verdict": "A"
   }
  ],
  "crafting": [
   {
-   "claim": "recipe_identity.* (String asset key; BenchRecipeRegistry and CraftRecipeAction java file:line citations)",
-   "locator": "old decompile file:line citations, not bytecode",
-   "methods": [],
-   "verdict": "C"
+   "claim": "recipe_identity.native_type (\"String asset key\")",
+   "locator": "CraftRecipeAction.recipeId; CraftingWindow.craftSimpleItem; CraftingRecipe.getAssetMap",
+   "methods": [
+    "CraftRecipeAction.recipeId",
+    "CraftingRecipe.getAssetMap",
+    "CraftingWindow.craftSimpleItem"
+   ],
+   "verdict": "A"
   },
   {
-   "claim": "bench_gate.* (window attachment; execution_predicate; fieldcraft; page types)",
-   "locator": "bench-match predicate not located (see note)",
+   "claim": "recipe_identity.registry[0] (BenchRecipeRegistry maps String recipe IDs)",
+   "locator": "BenchRecipeRegistry (fields)",
    "methods": [],
-   "verdict": "C"
+   "verdict": "A"
   },
   {
-   "claim": "execution_boundary.* (player_requirement assert; non_player_output; certificate)",
-   "locator": "CraftingManager.craftItem and giveOutput",
+   "claim": "recipe_identity.registry[1] (stores CraftingRecipe.getId())",
+   "locator": "BenchRecipeRegistry.addRecipe(BenchRequirement, CraftingRecipe)",
+   "methods": [
+    "BenchRecipeRegistry.addRecipe"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "recipe_identity.registry[2] (resolves through getAsset(recipeId))",
+   "locator": "BenchRecipeRegistry.getAllRecipes; extractMaterialFromRecipes",
+   "methods": [
+    "BenchRecipeRegistry.getAllRecipes"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "recipe_identity.action[0] (CraftRecipeAction.recipeId is a String)",
+   "locator": "CraftRecipeAction (field)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "recipe_identity.action[1] (CraftingWindow resolves action.recipeId in the asset map)",
+   "locator": "CraftingWindow.craftSimpleItem(Store,..., CraftRecipeAction)",
+   "methods": [
+    "CraftingWindow.craftSimpleItem"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "recipe_identity.bridge_int_status (an integer alone is not a native recipe identity)",
+   "locator": "CraftRecipeAction (protocol), CraftingRecipe.getAssetMap",
+   "methods": [
+    "CraftingRecipe.getAssetMap"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "bench_gate.window_attachment[0] (OpenBenchPageInteraction targets a BenchState and opens a typed crafting window)",
+   "locator": "OpenBenchPageInteraction.interactWithBlock",
+   "methods": [
+    "OpenBenchPageInteraction.interactWithBlock"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "bench_gate.window_attachment[1] (BenchWindow attaches the bench to CraftingManager)",
+   "locator": "BenchWindow.onOpen0",
+   "methods": [
+    "BenchWindow.onOpen0"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "bench_gate.execution_predicate (matches bench type, String id, and tier against one BenchRequirement)",
+   "locator": "CraftingManager.isValidBenchForRecipe, per-requirement loop",
+   "methods": [
+    "CraftingManager.isValidBenchForRecipe"
+   ],
+   "verdict": "B"
+  },
+  {
+   "claim": "bench_gate.fieldcraft (uses Crafting/Fieldcraft/tier 0 when no physical bench is attached)",
+   "locator": "CraftingManager.isValidBenchForRecipe offsets 176-240",
+   "methods": [
+    "CraftingManager.isValidBenchForRecipe"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "bench_gate.page_types (OpenBenchPageInteraction has Simple, Diagram and Structural page types; this is not recipe pagination)",
+   "locator": "OpenBenchPageInteraction$PageType; interactWithBlock",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "execution_boundary.recipe_identity (CraftRecipeAction.recipeId is a String asset key)",
+   "locator": "CraftRecipeAction.recipeId; CraftingWindow.craftSimpleItem",
+   "methods": [
+    "CraftRecipeAction.recipeId",
+    "CraftingWindow.craftSimpleItem"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "execution_boundary.player_requirement (CraftingManager.craftItem asserts a Player component after events and bench validation)",
+   "locator": "CraftingManager.craftItem",
    "methods": [
     "CraftingManager.craftItem"
    ],
-   "verdict": "C"
+   "verdict": "A"
   },
   {
-   "claim": "learning.* (PlayerConfigData codecs; execution key; interaction key; unverified consistency)",
-   "locator": "PlayerConfigData, LearnRecipeInteraction",
-   "methods": [],
-   "verdict": "C"
-  },
-  {
-   "claim": "craftable_count.* (simulator counts; native writes zero)",
-   "locator": "repo-side simulator (BaseBuilderTask.java and NativeEnvironmentSession.java file:line)",
+   "claim": "execution_boundary.non_player_output (CraftingManager.giveOutput logs and returns when Player is absent)",
+   "locator": "CraftingManager.giveOutput (overload taking the player ref)",
    "methods": [
-    "BaseBuilderTask.java",
-    "NativeEnvironmentSession.java"
+    "CraftingManager.giveOutput"
    ],
-   "verdict": "C"
+   "verdict": "A"
   },
   {
-   "claim": "inventory_boundary.* (getInputMaterials clone; resource selectors; simple input priority; crafted stack; pickup priority; overflow)",
-   "locator": "CraftingManager.getInputMaterials, getOutputItemStack; InventoryUtils.moveItem, smartMoveItem, getSectionById (changed, previous pass); SimpleItemContainer.addO",
+   "claim": "execution_boundary.certificate (headless NPC evidence cannot certify public player queue, completion, rejection or output pickup)",
+   "locator": "CraftingManager.craftItem; giveOutput",
+   "methods": [
+    "CraftingManager.craftItem"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "learning.persistent_state (PlayerConfigData codecs KnownRecipes and mutates it with markChanged)",
+   "locator": "PlayerConfigData.CODEC; PlayerConfigData.setKnownRecipes",
+   "methods": [
+    "PlayerConfigData.CODEC",
+    "PlayerConfigData.setKnownRecipes"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "learning.execution_key (CraftingManager.checks the primary output item ID)",
+   "locator": "CraftingManager.isValidBenchForRecipe, known-recipe test",
+   "methods": [
+    "CraftingManager.isValidBenchForRecipe"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "learning.interaction_key (LearnRecipeInteraction learns an ItemId)",
+   "locator": "LearnRecipeInteraction.firstRun; CODEC ITEM_ID",
+   "methods": [
+    "LearnRecipeInteraction.firstRun"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "inventory_boundary.current_material_clone (installed CraftingManager.getInputMaterials clones the full MaterialQuantity at scaled quantity, preserving ItemTag and metadata; the March decompile's tag-dropping reconstruction is stale)",
+   "locator": "CraftingManager.getInputMaterials(MaterialQuantity[], int) -> MaterialQuantity.clone(int)",
    "methods": [
     "CraftingManager.getInputMaterials",
-    "InventoryUtils.moveItem",
+    "MaterialQuantity.clone"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "inventory_boundary.installed_selector_surface (normalized installed recipe corpus has 974 resource selectors and zero ItemTag or metadata selectors)",
+   "locator": "nav_craft/corpus.py (audit's _asset_metrics on the 0.7.2 Assets.zip reader output)",
+   "methods": [
+    "Assets.zip"
+   ],
+   "verdict": "B"
+  },
+  {
+   "claim": "inventory_boundary.resource_output_exclusions (CraftingRecipe.processConfig applies every output item ID to non-concrete input selectors; CraftingManager.matches rejects those IDs before resource membership)",
+   "locator": "CraftingRecipe.processConfig -> applyOutputExclusions; CraftingManager.matches(MaterialQuantity, ItemStack)",
+   "methods": [
+    "CraftingManager.matches",
+    "CraftingRecipe.processConfig"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "inventory_boundary.crafted_stack (installed CraftingManager.getOutputItemStack constructs an ItemStack from item ID, scaled quantity and metadata; ItemStack initializes durability and max durability from the Item asset)",
+   "locator": "CraftingManager.getOutputItemStack(MaterialQuantity, int); ItemStack.<init>(String, int, BsonDocument)",
+   "methods": [
+    "CraftingManager.getOutputItemStack"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "inventory_boundary.simple_input_priority (SimpleCraftingWindow and FieldCraftingWindow use BACKPACK_STORAGE_HOTBAR; diagram and structural windows use ordered window-local input containers)",
+   "locator": "SimpleCraftingWindow ctor; FieldCraftingWindow.handleAction -> CraftingWindow.craftSimpleItem; DiagramCraftingWindow; StructuralCraftingWindow ctor",
+   "methods": [
+    "CraftingWindow.craftSimpleItem",
+    "FieldCraftingWindow.handleAction"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "inventory_boundary.pickup_priority (InventoryUtils routes by PlayerSettings to a combined Hotbar, Storage or Backpack priority; defaults are HOTBAR_STORAGE_BACKPACK)",
+   "locator": "CraftingManager.giveOutput -> InventoryUtils.getContainerForItemPickup -> getItemContainerForPickupLocation; PlayerSettings.<clinit>",
+   "methods": [
+    "CraftingManager.giveOutput",
+    "InventoryUtils.getContainerForItemPickup"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "inventory_boundary.overflow (installed SimpleItemContainer.addOrDropItemStack inserts what fits and drops the transaction remainder into the world)",
+   "locator": "SimpleItemContainer.addOrDropItemStack -> ItemContainer.addItemStack(ItemStack) -> addItemStack(ItemStack,Z,Z,Z) -> InternalContainerUtilItemStack.internal_addI",
+   "methods": [
+    "InternalContainerUtilItemStack.internal_addItemStack",
+    "ItemContainer.addItemStack",
     "SimpleItemContainer.addOrDropItemStack"
    ],
-   "verdict": "C"
+   "verdict": "A"
+  },
+  {
+   "claim": "craftable_count.simulator (BaseBuilderTask counts bridge-simulator recipes whose inputs fit the current int[] inventory)",
+   "locator": "hytale-plugin-0.7.2 bridge: task/builtin/BaseBuilderTask.java:386-397 (not game bytecode)",
+   "methods": [
+    "BaseBuilderTask.java"
+   ],
+   "verdict": "B"
+  },
+  {
+   "claim": "craftable_count.simulator_omissions (learned state; bench identity/type/tier; memories level)",
+   "locator": "CraftingManager.isValidBenchForRecipe (the gate the native craft uses)",
+   "methods": [
+    "CraftingManager.isValidBenchForRecipe"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "craftable_count.native (NativeEnvironmentSession writes literal zero)",
+   "locator": "hytale-plugin-0.7.2 bridge NativeEnvironmentSession.java (live observation constructor near lines 6567-6590; the cited 2728-2747 is a reset block)",
+   "methods": [
+    "NativeEnvironmentSession.java"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "learning.unverified_consistency (DiagramCraftingWindow.java:171 and :276 use recipe.getId(); the source does not prove this is always the primary output ID)",
+   "locator": "DiagramCraftingWindow.collectRecipes (offsets 208-226), DiagramCraftingWindow.handleAction (offset 434-438); CraftingManager.isValidBenchForRecipe (offsets 42-8",
+   "methods": [
+    "CraftingManager.isValidBenchForRecipe",
+    "CraftingRecipe.generateIdFromItemRecipe",
+    "DiagramCraftingWindow.collectRecipes",
+    "DiagramCraftingWindow.handleAction",
+    "Item.processConfig"
+   ],
+   "verdict": "B"
+  },
+  {
+   "claim": "payload.asset_metrics.recipe_assets_total (recipe corpus expectation 1,947 -> 2,047)",
+   "locator": "nav_craft/corpus.py (audit's _normalize_recipe, _asset_metrics on the Assets.zip reader output)",
+   "methods": [
+    "Assets.zip"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload.maximum_assets (pinned witness assets for the maxima)",
+   "locator": "nav_craft/corpus.py",
+   "methods": [],
+   "verdict": "A"
   }
  ],
  "doors": [
@@ -190,115 +612,149 @@
  ],
  "entity_geometry": [
   {
-   "claim": "physical_bounds.semantics (current rotation-adjusted local AABB per entity)",
-   "locator": "ModelSystems$UpdateBoundingBox",
-   "methods": [],
-   "verdict": "A"
-  },
-  {
-   "claim": "physical_bounds.producer (ModelSystems.UpdateBoundingBox)",
-   "locator": "ModelSystems$UpdateBoundingBox",
-   "methods": [],
-   "verdict": "A"
-  },
-  {
-   "claim": "collision_eligibility.system (TangiableEntitySpatialSystem)",
-   "locator": "TangiableEntitySpatialSystem",
-   "methods": [],
-   "verdict": "A"
-  },
-  {
-   "claim": "collision_eligibility.required (TransformComponent, BoundingBox)",
-   "locator": "TangiableEntitySpatialSystem.<clinit>",
-   "methods": [],
-   "verdict": "A"
-  },
-  {
-   "claim": "collision_eligibility.excluded (Intangible, DeathComponent)",
-   "locator": "TangiableEntitySpatialSystem.<clinit>",
+   "claim": "class_sha256",
+   "locator": "BoundingBox (0.7.2 adds setScale, rescaleBoundingBox, rescaleDetailBoxes, getScale; raw keys); TangiableEntitySpatialSystem (claim attribution, see collision_el",
    "methods": [],
    "verdict": "B"
   },
   {
-   "claim": "perception_endpoint.owner (PositionCache)",
-   "locator": "PositionCache.testLineOfSightEntity",
+   "claim": "physical_bounds.semantics",
+   "locator": "ModelSystems$UpdateBoundingBox.updateBoundingBox (both jars: Model.getBoundingBox(movementStates) -> BoundingBox.setBoundingBox and setBaseModelBox; 12 methods,",
    "methods": [
-    "PositionCache.testLineOfSightEntity"
+    "BoundingBox.applyRotation",
+    "BoundingBox.setBoundingBox",
+    "Model.getBoundingBox",
+    "ModelSystems$UpdateBoundingBox.updateBoundingBox"
    ],
-   "verdict": "C"
+   "verdict": "A"
   },
   {
-   "claim": "perception_endpoint.model_present (Model.eyeHeight)",
-   "locator": "PositionCache.testLineOfSightEntity",
+   "claim": "physical_bounds.producer",
+   "locator": "ModelSystems$UpdateBoundingBox (writes the base box) and ModelSystems$ModelSpawned.onEntityAdd (calls BoundingBox.applyRotation at 3 sites; both jars)",
    "methods": [
-    "PositionCache.testLineOfSightEntity"
+    "BoundingBox.applyRotation",
+    "ModelSystems$ModelSpawned.onEntityAdd"
    ],
-   "verdict": "C"
+   "verdict": "A"
   },
   {
-   "claim": "perception_endpoint.model_absent (BoundingBox.center)",
-   "locator": "PositionCache.testLineOfSightEntity",
-   "methods": [
-    "PositionCache.testLineOfSightEntity"
-   ],
-   "verdict": "C"
+   "claim": "collision_eligibility.system",
+   "locator": "TangiableEntitySpatialSystem (0.7.2 bytes identical to the pin)",
+   "methods": [],
+   "verdict": "A"
   },
   {
-   "claim": "perception_endpoint.entity_body_blocks_los (false)",
-   "locator": "PositionCache.testLineOfSightEntity",
+   "claim": "collision_eligibility.required",
+   "locator": "TangiableEntitySpatialSystem.<clinit> (0.7.2 raw offsets 0-16): query array of 3: TransformComponent, BoundingBox, not(Intangible), combined with Query.and into",
    "methods": [
-    "PositionCache.testLineOfSightEntity"
+    "Query.and"
    ],
-   "verdict": "C"
+   "verdict": "A"
   },
   {
-   "claim": "scale_boundary.EntityScaleComponent (diagnostic_display_network_scale)",
-   "locator": "EntityScaleBoundingBoxSystem.tick",
+   "claim": "collision_eligibility.excluded",
+   "locator": "TangiableEntitySpatialSystem.<clinit> (identical on both jars); the DeathComponent test sits in EntityRefCollisionProvider.defaultEntityFilter (0.7.2 normalised",
+   "methods": [
+    "Archetype.contains",
+    "EntityRefCollisionProvider.defaultEntityFilter"
+   ],
+   "verdict": "B"
+  },
+  {
+   "claim": "perception_endpoint.owner",
+   "locator": "EntityFilterLineOfSight.matchesEntity -> ExecutionSupport.getPositionCache -> PositionCache (0.7.2); 0.5.10: Role.getPositionCache",
+   "methods": [
+    "EntityFilterLineOfSight.matchesEntity",
+    "ExecutionSupport.getPositionCache",
+    "Role.getPositionCache"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "perception_endpoint.model_present",
+   "locator": "PositionCache.testLineOfSightRays (body identical on both jars; model-present branch: when the target has a ModelComponent, the ray end y is target y + Model.ge",
+   "methods": [
+    "Model.getEyeHeight",
+    "PositionCache.testLineOfSightRays"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "perception_endpoint.model_absent",
+   "locator": "PositionCache.testLineOfSightRays (model-absent branch: without a ModelComponent the ray end is offset by the BoundingBox centre, (max+min)/2 per axis; with no ",
+   "methods": [
+    "PositionCache.testLineOfSightRays"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "perception_endpoint.entity_body_blocks_los",
+   "locator": "PositionCache.hasLineOfSight -> hasLineOfSightInternal -> testLineOfSightRays with the block predicate lambda$hasLineOfSightInternal$0; PositionCache.testLineOf",
+   "methods": [
+    "PositionCache.hasLineOfSight",
+    "PositionCache.testLineOfSightEntity"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "scale_boundary.EntityScaleComponent",
+   "locator": "EntityScaleBoundingBoxSystem.tick (0.7.2 normalised 0-41) and resolveBoxScale (normalised 0-35)",
    "methods": [
     "EntityScaleBoundingBoxSystem.tick"
    ],
    "verdict": "B"
   },
   {
-   "claim": "scale_boundary.physical_scale_application (already_reflected_in_BoundingBox)",
-   "locator": "EntityScaleBoundingBoxSystem.tick",
+   "claim": "scale_boundary.physical_scale_application",
+   "locator": "EntityScaleBoundingBoxSystem.tick over the Model box (the model scale is baked in by Model.createScaledModel)",
    "methods": [
-    "EntityScaleBoundingBoxSystem.tick"
+    "EntityScaleBoundingBoxSystem.tick",
+    "Model.createScaledModel"
    ],
    "verdict": "B"
   },
   {
-   "claim": "scale_boundary.double_application_forbidden (true)",
-   "locator": "EntityScaleBoundingBoxSystem.resolveBoxScale",
+   "claim": "scale_boundary.double_application_forbidden",
+   "locator": "EntityScaleBoundingBoxSystem.resolveBoxScale (divides by Model.getScale()); Model.createScaledModel (ModelAsset.getBoundingBox().clone().scale(scale))",
    "methods": [
-    "EntityScaleBoundingBoxSystem.resolveBoxScale"
+    "EntityScaleBoundingBoxSystem.resolveBoxScale",
+    "Model.createScaledModel",
+    "Model.getScale",
+    "ModelAsset.getBoundingBox"
    ],
-   "verdict": "C"
+   "verdict": "A"
   },
   {
-   "claim": "transport.schema (hytalerl_privileged_npc_snapshot_v2)",
-   "locator": "hytale-plugin-0.7.2 PrivilegedNpcSnapshot.java:17",
+   "claim": "transport.schema",
+   "locator": "com/hytalerlbridge/entity/PrivilegedNpcSnapshot.java:16-18 (SCHEMA \"hytalerl_privileged_npc_snapshot_v2\", VERSION 2)",
    "methods": [
     "PrivilegedNpcSnapshot.java"
    ],
    "verdict": "A"
   },
   {
-   "claim": "transport.ordering (uuid_lexicographic_aligned_spatial_and_geometry_rows)",
-   "locator": "hytale-plugin-0.7.2 PrivilegedNpcSnapshot.java:79-82",
+   "claim": "transport.ordering",
+   "locator": "PrivilegedEntityRow.java:23-35 (UUID_BYTE_ORDER: Long.compareUnsigned on the most then least significant bits); PrivilegedEntitySnapshot.java:121 (spatial rows ",
    "methods": [
+    "Long.compareUnsigned",
+    "PrivilegedEntityRow.java",
+    "PrivilegedEntitySnapshot.java",
     "PrivilegedNpcSnapshot.java"
    ],
    "verdict": "A"
   },
   {
-   "claim": "transport.missing_or_invalid (physical_scene_unavailable_fail_closed)",
-   "locator": "hytale-plugin-0.7.2 PrivilegedNpcSnapshot.java, SnapshotCodec.java",
+   "claim": "transport.missing_or_invalid",
+   "locator": "ClientHandler.handlePrivilegedNpcSnapshot (ClientHandler.java:906-947) -> requireEnvironment (ClientHandler.java:1120-1126) -> EnvironmentManager.capturePrivile",
    "methods": [
-    "PrivilegedNpcSnapshot.java",
-    "SnapshotCodec.java"
+    "ClientHandler.handlePrivilegedNpcSnapshot",
+    "ClientHandler.java",
+    "EnvironmentManager.capturePrivilegedNpcSnapshot",
+    "EnvironmentManager.java",
+    "FrameWriter.java",
+    "FrameWriter.sendError"
    ],
-   "verdict": "C"
+   "verdict": "A"
   }
  ],
  "explosion_dynamics": [
@@ -531,145 +987,1818 @@
  ],
  "locomotion": [
   {
-   "claim": "movement_state_observation.protocol (MovementStates_23_ordered_boolean_fields)",
-   "locator": "com.hypixel.hytale.protocol.MovementStates",
+   "claim": "movement_state_observation.protocol",
+   "locator": "com.hypixel.hytale.protocol.MovementStates (fields; serialize(MemorySegment,int); codec moved to MemorySegment/ReadCursor)",
    "methods": [],
    "verdict": "B"
   },
   {
-   "claim": "movement_state_observation.component / npc_update / bridge_transport / availability / client_transition_boundary",
-   "locator": "MovementStatesComponent, MovementStatesSystem, bridge codec",
+   "claim": "movement_state_observation.component",
+   "locator": "com.hypixel.hytale.server.core.entity.movement.MovementStatesComponent.getMovementStates()",
+   "methods": [
+    "MovementStatesComponent.getMovementStates"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "movement_state_observation.npc_update",
+   "locator": "com.hypixel.hytale.server.npc.systems.MovementStatesSystem (ctor SystemDependency(Order.AFTER, ComputeVelocitySystem); steppedTick -> Role.updateMovementState)",
+   "methods": [
+    "Order.AFTER",
+    "Role.updateMovementState"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "movement_state_observation.bridge_transport",
+   "locator": "bridge com/hytalerlbridge/observation/MovementStateFrame.java (schema hytalerl_native_movement_states_v1, STATE_COUNT 23, ORDER list) and EvidenceCapture.captur",
+   "methods": [
+    "EvidenceCapture.captureMovementStates",
+    "MovementStateFrame.java"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "movement_state_observation.availability",
+   "locator": "MovementStateFrame.unavailable() (available=false) vs from(states) (available=true)",
+   "methods": [
+    "MovementStateFrame.unavailable"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "movement_state_observation.client_transition_boundary",
+   "locator": "com.hypixel.hytale.protocol.MovementStates (method list) and MovementStatesSystems$TickingSystem.copyMovementStatesFrom",
+   "methods": [
+    "MovementStatesSystems$TickingSystem.copyMovementStatesFrom"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "npc_walk_movement_state_producer.publication",
+   "locator": "jax.world.movement_states.npc_walk_movement_state_result (repo)",
    "methods": [],
    "verdict": "C"
   },
   {
-   "claim": "npc_walk_movement_state_producer.* (publication, source_order, run_threshold, configuration, player_sprint_boundary, external_fields, invalid)",
-   "locator": "repo producer (jax/world) citing Role.updateMovementState and MovementStatesSystem",
-   "methods": [
-    "Role.updateMovementState"
-   ],
+   "claim": "npc_walk_movement_state_producer.source_order",
+   "locator": "repo producer order of operations",
+   "methods": [],
    "verdict": "C"
   },
   {
-   "claim": "walk_steering.* (source, turn, maximum_turn, epsilon, otherwise, movement_stop, builder_defaults_degrees)",
-   "locator": "MotionControllerWalk.computeHeading; BuilderMotionControllerWalk",
+   "claim": "npc_walk_movement_state_producer.run_threshold.walking_to_running",
+   "locator": "repo RunThreshold+RunThresholdRange",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "npc_walk_movement_state_producer.run_threshold.running_to_walking",
+   "locator": "repo RunThreshold-RunThresholdRange",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "npc_walk_movement_state_producer.run_threshold.scale",
+   "locator": "repo scale by MaxHorizontalSpeed",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "npc_walk_movement_state_producer.run_threshold.jumping_ascent",
+   "locator": "repo retain previous fast motion during ascent",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "npc_walk_movement_state_producer.configuration",
+   "locator": "role values are required inputs",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "npc_walk_movement_state_producer.player_sprint_boundary",
+   "locator": "NPC fast motion is running, not client sprinting",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "npc_walk_movement_state_producer.external_fields",
+   "locator": "external fields preserved with independent availability",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "npc_walk_movement_state_producer.invalid",
+   "locator": "invalid input clears the complete row",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "walk_steering.source",
+   "locator": "com.hypixel.hytale.server.npc.movement.controllers.MotionControllerWalk.computeHeading(float,double,float,double,boolean,boolean)",
    "methods": [
     "MotionControllerWalk.computeHeading"
    ],
-   "verdict": "C"
+   "verdict": "A"
   },
   {
-   "claim": "sprint.installed_gameplay_config (Default)",
-   "locator": "Assets.zip 0.7.2 Server/GameplayConfigs/Default.json",
+   "claim": "walk_steering.turn",
+   "locator": "NPCPhysicsMath.turnAngle(float,float)",
    "methods": [
-    "Assets.zip",
+    "NPCPhysicsMath.turnAngle"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "walk_steering.maximum_turn",
+   "locator": "computeHeading dload 5 (delta) * getCurrentMaxBodyRotationSpeed() * param2",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "walk_steering.epsilon",
+   "locator": "computeHeading snap branch:",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "walk_steering.otherwise",
+   "locator": "computeHeading non-snap path: clamp(turn, -maxTurn, maxTurn), then PhysicsMath.normalizeTurnAngle(current + turn)",
+   "methods": [
+    "PhysicsMath.normalizeTurnAngle"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "walk_steering.movement_stop",
+   "locator": "computeHeading: if the second flag is true and",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "walk_steering.builder_defaults_degrees.maximum_rotation_speed",
+   "locator": "BuilderMotionControllerWalk.readConfig default for MaxRotationSpeed",
+   "methods": [
+    "BuilderMotionControllerWalk.readConfig"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "walk_steering.builder_defaults_degrees.epsilon_angle",
+   "locator": "BuilderMotionControllerBase.readCommonConfig default for EpsilonAngle",
+   "methods": [
+    "BuilderMotionControllerBase.readCommonConfig"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "walk_steering.builder_defaults_degrees.maximum_move_turn_angle",
+   "locator": "BuilderMotionControllerWalk.readConfig default for MaxWalkTurnAngle",
+   "methods": [
+    "BuilderMotionControllerWalk.readConfig"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "sprint.npc_walk_controller",
+   "locator": "MotionControllerWalk.updateAscendingStates (putfield MovementStates.sprinting = false, idx 112-114) and updateDescendingStates (idx 95-97)",
+   "methods": [
+    "MotionControllerWalk.updateAscendingStates",
+    "MovementStates.sprinting"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "sprint.player_config_selection",
+   "locator": "MovementManager.refreshDefaultSettings: World.getGameplayConfig().getPlayerConfig().getMovementConfigIndex() -> MovementConfig asset map getAsset(index) -> setD",
+   "methods": [
+    "MovementConfig.toPacket",
+    "MovementManager.refreshDefaultSettings",
+    "World.getGameplayConfig"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "sprint.installed_gameplay_config",
+   "locator": "Server/GameplayConfigs/Default.json (0.7.2 zip)",
+   "methods": [
     "Default.json"
    ],
    "verdict": "A"
   },
   {
-   "claim": "sprint.installed_forward_sprint_multiplier (1.273)",
-   "locator": "Assets.zip 0.7.2 Server/Entity/MovementConfig/Default.json",
+   "claim": "sprint.installed_forward_sprint_multiplier",
+   "locator": "Server/Entity/MovementConfig/Default.json ForwardSprintSpeedMultiplier",
    "methods": [
-    "Assets.zip",
     "Default.json"
    ],
    "verdict": "A"
   },
   {
-   "claim": "sprint.master_fallback_forward_sprint_multiplier (1.65)",
-   "locator": "MovementConfig class default (not a float literal in the 0.7.2 server bytecode, per the analysis agent)",
+   "claim": "sprint.master_fallback_forward_sprint_multiplier",
+   "locator": "no master-fallback path on 0.7.2; the value 1.65 exists only as the forward-sprint multiplier of the separate 0.7.2 config Server/Entity/MovementConfig/Mount.js",
+   "methods": [
+    "Mount.json"
+   ],
+   "verdict": "B"
+  },
+  {
+   "claim": "sprint.server_stamina_scope",
+   "locator": "StaminaSystems$SprintStaminaEffectSystem.tick and updateResource",
+   "methods": [
+    "StaminaSystems$SprintStaminaEffectSystem.tick"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "sprint.transition_physics_location",
+   "locator": "server jar: no sprint speed transition",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "sprint.native_npc_oracle",
+   "locator": "the native NPC oracle's capability (cannot certify player sprint transitions)",
    "methods": [],
    "verdict": "C"
   },
   {
-   "claim": "sprint.npc_walk_controller / player_config_selection / server_stamina_scope / transition_physics_location / native_npc_oracle (and the keys after native_npc_oracle)",
-   "locator": "not re-derived in this pass",
+   "claim": "mantling.plugin",
+   "locator": "com.hypixel.hytale.builtin.mantling.MantlingPlugin.setup",
+   "methods": [
+    "MantlingPlugin.setup"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "mantling.movement_config_fields",
+   "locator": "com.hypixel.hytale.server.core.entity.entities.player.movement.MovementConfig (keys)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "mantling.server_state_handling",
+   "locator": "MovementStatesSystems$TickingSystem.copyMovementStatesFrom",
+   "methods": [
+    "MovementStatesSystems$TickingSystem.copyMovementStatesFrom"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "mantling.server_motion_consumers",
+   "locator": "refscan 'mantling' over the 0.7.2 jar",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "mantling.npc_walk_graph",
+   "locator": "MotionControllerWalk / MotionControllerBase",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "mantling.fidelity_boundary",
+   "locator": "server state for the player client mantle transition",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "swim.installed_swim_jump_force",
+   "locator": "Server/Entity/MovementConfig/Default.json SwimJumpForce",
+   "methods": [
+    "Default.json"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "swim.transport",
+   "locator": "MovementConfig.toPacket -> MovementSettings.swimJumpForce",
+   "methods": [
+    "MovementConfig.toPacket",
+    "MovementSettings.swimJumpForce"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "swim.fluidfx_walk_input",
+   "locator": "MotionControllerWalk.postReadPosition (FluidFX read)",
+   "methods": [
+    "MotionControllerWalk.postReadPosition"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "swim.fluidfx_swim_up_down",
+   "locator": "FluidFXMovementSettings.swimUpSpeed/swimDownSpeed",
+   "methods": [
+    "FluidFXMovementSettings.swimUpSpeed"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "swim.fluidfx_sink_consumer",
+   "locator": "MotionControllerDive (passive branch)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "swim.walk_vertical_limit",
+   "locator": "BuilderMotionControllerWalk.maxSinkSpeedFluid vs FluidFX sinkSpeed",
+   "methods": [
+    "BuilderMotionControllerWalk.maxSinkSpeedFluid"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "swim.transition_physics_location",
+   "locator": "server jar: no swim-jump transition physics",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "swim.native_oracle",
+   "locator": "controlled real-player client trace required",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "swim.action_publication",
+   "locator": "action_publication None",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "swim.npc_dive.publication",
+   "locator": "jax.world.swimming.dive_motion_result",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "swim.npc_dive.source_scope",
+   "locator": "MotionControllerDive.computeMove (active motion kind) and getDesiredVerticalRange",
+   "methods": [
+    "MotionControllerDive.computeMove"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "swim.npc_dive.builder_defaults.MaxSwimSpeed",
+   "locator": "BuilderMotionControllerDive.readConfig 'MaxSwimSpeed' ldc2_w 3.0",
+   "methods": [
+    "BuilderMotionControllerDive.readConfig"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "swim.npc_dive.builder_defaults.MaxDiveSpeed",
+   "locator": "readConfig 'MaxDiveSpeed' ldc2_w 8.0",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "swim.npc_dive.builder_defaults.Acceleration",
+   "locator": "readConfig 'Acceleration' ldc2_w 3.0",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "swim.npc_dive.builder_defaults.MaxRotationSpeedDegrees",
+   "locator": "readConfig 'MaxRotationSpeed' ldc2_w 360.0 (description 'Maximum rotational speed in degrees')",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "swim.npc_dive.builder_defaults.MaxSwimTurnAngleDegrees",
+   "locator": "readConfig 'MaxSwimTurnAngle' ldc float 90.0",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "swim.npc_dive.builder_defaults.SwimDepthRelative",
+   "locator": "readConfig 'SwimDepth' ldc2_w 0.4",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "swim.npc_dive.water_probe",
+   "locator": "PositionProbeWater.probePosition: ySwim = position.y + dy + 1e-6, dy = Dive.swimDepth (absolute)",
+   "methods": [
+    "Dive.swimDepth",
+    "PositionProbeWater.probePosition"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "swim.npc_dive.translation_trigonometry",
+   "locator": "PhysicsMath.headingX -> TrigMathUtil.sin -> TrigMathUtil$Riven.sin (table SIN, index = radians*radToIndex & SIN_MASK; headingZ -> cos)",
+   "methods": [
+    "PhysicsMath.headingX",
+    "TrigMathUtil$Riven.sin",
+    "TrigMathUtil.sin"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "swim.npc_dive.direction_trigonometry",
+   "locator": "PhysicsMath.headingFromDirection -> TrigMathUtil.atan2 -> Icecore.atan2; pitchFromDirection (sqrt, atan2)",
+   "methods": [
+    "Icecore.atan2",
+    "PhysicsMath.headingFromDirection",
+    "TrigMathUtil.atan2"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "swim.npc_dive.fluid_fill_height_used",
+   "locator": "MotionControllerDive, PositionProbeWater, PositionProbeBase (no fill-height reads)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "swim.npc_dive.authored_role_asset_count",
+   "locator": "len(DIVE_ROLE_ASSETS) = 5 (the audit's pinned Server/NPC/Roles tuple) vs 6 dive-type assets on 0.7.2",
+   "methods": [],
+   "verdict": "B"
+  },
+  {
+   "claim": "swim.npc_dive.configuration_policy",
+   "locator": "role values are inputs; defaults are not assumed globally",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "swim.npc_dive.runtime_differential",
+   "locator": "hytalerl_native_dive_motion_evidence_v1_certified",
    "methods": [],
    "verdict": "C"
   }
  ],
  "mutable_blocks": [
   {
-   "claim": "health.storage (BlockHealthChunk sparse absolute-position map; missing entry = full health)",
-   "locator": "BlockHarvestUtils.damageSingleBlock",
+   "claim": "health.storage",
+   "locator": "BlockHealthSection (0.7.2 live store); BlockHarvestUtils.damageSingleBlock; BlockHealthChunk (legacy)",
    "methods": [
     "BlockHarvestUtils.damageSingleBlock"
    ],
    "verdict": "B"
   },
   {
-   "claim": "health.destroyed (health < 0 or closeToZero)",
-   "locator": "BlockHealth.isDestroyed(float) (0.7.2)",
+   "claim": "health.default",
+   "locator": "BlockHealthSection.getHealth(int) / getHealth(int,int,int) (0.7.2)",
    "methods": [
+    "BlockHealthSection.getHealth"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "health.damage",
+   "locator": "BlockHealthSection.damage(int,int,int,float,Instant) (ChunkUtil.indexBlock, then damage(int,float,Instant)); BlockHarvestUtils.damageSingleBlock (DamageBlockEve",
+   "methods": [
+    "BlockHarvestUtils.damageSingleBlock",
+    "BlockHealthSection.damage",
+    "ChunkUtil.indexBlock"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "health.destroyed",
+   "locator": "BlockHealth.isDestroyed(float) (0.7.2); used by BlockHarvestUtils.damageSingleBlock (offset 1583)",
+   "methods": [
+    "BlockHarvestUtils.damageSingleBlock",
     "BlockHealth.isDestroyed"
    ],
    "verdict": "A"
   },
   {
-   "claim": "health.damage (current minus resolved normalised damage)",
-   "locator": "BlockHealthSection.damage(III,F,Instant)",
+   "claim": "health.repair.delay_seconds",
+   "locator": "BlockHealthSystems$Tick.tick (ldc2_w 5l, offset 96) -> BlockHealthSection.tickRegeneration(Instant,float,long,float)",
    "methods": [
-    "BlockHealthSection.damage"
+    "BlockHealthSection.tickRegeneration",
+    "BlockHealthSystems$Tick.tick"
    ],
-   "verdict": "C"
+   "verdict": "A"
   },
   {
-   "claim": "health.repair (delay 5.0 s, rate 0.1 per s, threshold, tick amount, full removes entry)",
-   "locator": "BlockHealthSystems$Tick (0.7.2)",
-   "methods": [],
-   "verdict": "C"
+   "claim": "health.repair.rate_per_second",
+   "locator": "BlockHealthSystems$Tick.tick (ldc 0.1f, offset 99); BlockHealthSection.tickRegeneration (fmul, offsets 97-101)",
+   "methods": [
+    "BlockHealthSection.tickRegeneration",
+    "BlockHealthSystems$Tick.tick"
+   ],
+   "verdict": "A"
   },
   {
-   "claim": "mutation.world (WorldChunk.setBlock)",
-   "locator": "WorldChunk (0.7.2) and BlockOperations.setBlock",
+   "claim": "health.repair.threshold",
+   "locator": "BlockHealthSection.tickRegeneration (offsets 68-82)",
+   "methods": [
+    "BlockHealthSection.tickRegeneration"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "health.repair.tick_amount",
+   "locator": "BlockHealthSection.tickRegeneration (offsets 97-101) with Tick.tick dt (fload_1)",
+   "methods": [
+    "BlockHealthSection.tickRegeneration",
+    "Tick.tick"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "health.repair.full",
+   "locator": "BlockHealthSection.tickRegeneration (offsets 113-146, 169-174)",
+   "methods": [
+    "BlockHealthSection.tickRegeneration"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "mutation.world",
+   "locator": "WorldChunk (0.7.2, no block methods); BlockOperations.setBlock(ChunkStore,Ref,ChunkSection,...) offsets 302-312",
    "methods": [
     "BlockOperations.setBlock"
    ],
    "verdict": "B"
   },
   {
-   "claim": "mutation.break (BlockHarvestUtils)",
-   "locator": "BlockHarvestUtils.performBlockBreak, naturallyRemoveBlock",
+   "claim": "mutation.break",
+   "locator": "BlockHarvestUtils.performBlockBreak (0.7.2, BlockOperations.setBlock); naturallyRemoveBlock; damageSingleBlock -> performBlockBreak (offset 1643)",
    "methods": [
-    "BlockHarvestUtils.performBlockBreak"
+    "BlockHarvestUtils.performBlockBreak",
+    "BlockOperations.setBlock"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "mutation.place",
+   "locator": "BlockPlaceUtils.placeBlock (PlaceBlockEvent) -> tryPlaceBlock (offset 590)",
+   "methods": [
+    "BlockPlaceUtils.placeBlock"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "mutation.first_run",
+   "locator": "PlaceBlockInteraction.tick0 (BlockPlaceUtils.placeBlock at normalised-dump instruction index 351); BreakBlockInteraction.tick0 -> SimpleBlockInteraction.tick0 -",
+   "methods": [
+    "BlockPlaceUtils.placeBlock",
+    "BreakBlockInteraction.tick0",
+    "PlaceBlockInteraction.tick0",
+    "SimpleBlockInteraction.tick0"
    ],
    "verdict": "C"
   },
   {
-   "claim": "mutation.place (BlockPlaceUtils)",
-   "locator": "BlockPlaceUtils",
+   "claim": "design.block_health_reset_on_write (DESIGNS-072 section 7)",
+   "locator": "DESIGNS-072.md section 7 vs BlockOperations.setBlock (changed flag offsets 42-98, hook at 312); BlockHealthModule.onBlockReplaced (offsets 27-33); BlockHealthSe",
+   "methods": [
+    "BlockHealthModule.onBlockReplaced",
+    "BlockHealthSection.clearHealth",
+    "BlockOperations.setBlock"
+   ],
+   "verdict": "B"
+  },
+  {
+   "claim": "health-API group (BlockHealthSystems: Tick, ReplicateChanges, PlaceBlockEventSystem, EnsureSection, LoadPacket, MigrateBlockHealthChunk)",
+   "locator": "BlockHealthSystems$* (0.7.2)",
    "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class BlockHealthModule$BlockHealthSystem (CLASS_SHA256 pin)",
+   "locator": "com/hypixel/hytale/server/core/modules/blockhealth/BlockHealthModule$BlockHealthSystem.class",
+   "methods": [
+    "BlockHealthModule$BlockHealthSystem.class"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "mutation_outcome_certifier.player_free_effects.place",
+   "locator": "com.hypixel.hytale.builtin.triggervolumes.effect.builtin.PlaceBlockEffect.execute (0.7.2)",
+   "methods": [
+    "PlaceBlockEffect.execute"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "mutation_outcome_certifier.player_free_effects.replace",
+   "locator": "ReplaceBlockTypeEffect.replaceMatchedCell (0.7.2)",
+   "methods": [
+    "ReplaceBlockTypeEffect.replaceMatchedCell"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "mutation_outcome_certifier.bridge_helper",
+   "locator": "hytale-plugin-0.7.2 bridge: worldgen/NativeMutableBlockEvidence.java lines 76-166",
+   "methods": [
+    "NativeMutableBlockEvidence.java"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "mutation_outcome_certifier.synthetic_player_fixture.contract_sha256",
+   "locator": "repo digest native_synthetic_world_interaction_contract_sha256()",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "mutation_outcome_certifier.synthetic_player_fixture.path",
+   "locator": "PlaceBlockInteraction.tick0 reads InteractionSyncData (blockPosition, blockRotation, placedBlockId); Player and InteractionManager classes present",
+   "methods": [
+    "PlaceBlockInteraction.tick0"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "mutation_outcome_certifier.synthetic_player_fixture.scope",
+   "locator": "repo fixture scope statement",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "mutation_outcome_certifier.synthetic_player_fixture.public_action_mask",
+   "locator": "repo flag",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "mutation_outcome_certifier.certifies",
+   "locator": "repo certifier scope",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "mutation_outcome_certifier.does_not_certify",
+   "locator": "repo certifier scope (4 items)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "mutation_outcome_certifier.give_item",
+   "locator": "com.hypixel.hytale.builtin.triggervolumes.effect.builtin.GiveItemEffect.execute (0.7.2)",
+   "methods": [
+    "GiveItemEffect.execute"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "mutation_outcome_certifier.run_root_interaction",
+   "locator": "com.hypixel.hytale.builtin.triggervolumes.effect.builtin.RunRootInteractionEffect.execute (0.7.2) -> InteractionManager.initChain / queueExecuteChain",
+   "methods": [
+    "InteractionManager.initChain",
+    "RunRootInteractionEffect.execute"
+   ],
    "verdict": "C"
   },
   {
-   "claim": "mutation.first_run (side effect before interaction runtime wait)",
-   "locator": "BlockHarvestUtils / BlockPlaceUtils",
+   "claim": "resolved_item_interactions.contract_sha256",
+   "locator": "repo digest native_item_interaction_contract_sha256()",
    "methods": [],
-   "verdict": "C"
+   "verdict": "A"
   },
   {
-   "claim": "mutation_outcome_certifier (player_free_effects, bridge_helper, synthetic_player_fixture, certifies, does_not_certify, give_item, run_root_interaction)",
-   "locator": "bridge and repo contracts",
-   "methods": [],
-   "verdict": "C"
-  },
-  {
-   "claim": "resolved_item_interactions.trigger_vocabulary (all_25_InteractionType_values)",
-   "locator": "com.hypixel.hytale.protocol.InteractionType",
+   "claim": "resolved_item_interactions.trigger_vocabulary",
+   "locator": "com.hypixel.hytale.protocol.InteractionType (0.7.2 enum)",
    "methods": [],
    "verdict": "B"
   },
   {
-   "claim": "resolved_item_interactions (active_item_resolution, equipped_resolution, game_modes, root_rules, chain, contract_sha256)",
-   "locator": "repo and bridge contracts",
+   "claim": "resolved_item_interactions.active_item_resolution",
+   "locator": "com.hypixel.hytale.server.core.entity.InteractionContext (getHeldItem, getHeldItemContainer, getHeldItemSectionId, getHeldItemSlot, createHeldItemContext)",
    "methods": [],
    "verdict": "C"
   },
   {
-   "claim": "tick procedures and the remaining health-API claims (BlockHealthSystems Tick, ReplicateChanges, PlaceBlockEventSystem, EnsureSection, LoadPacket, MigrateBlockHealthChunk)",
-   "locator": "BlockHealthSystems (not dumped)",
+   "claim": "resolved_item_interactions.equipped_resolution",
+   "locator": "InventoryComponent$Armor (0.7.2, changed pin)",
    "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "resolved_item_interactions.game_modes",
+   "locator": "BlockPlaceUtils.tryPlaceBlock (GameMode.Adventure); PlaceBlockInteraction.tick0 (GameMode.Creative, PlayerCreativeSettings noPhysics, quickReplace, quickRetype)",
+   "methods": [
+    "BlockPlaceUtils.tryPlaceBlock",
+    "GameMode.Adventure",
+    "GameMode.Creative",
+    "PlaceBlockInteraction.tick0"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "resolved_item_interactions.root_rules",
+   "locator": "com.hypixel.hytale.server.core.modules.interaction.interaction.config.InteractionRules (constant pools)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "resolved_item_interactions.chain",
+   "locator": "Interaction node fields on 0.7.2 (constant-pool scan)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "resolved_item_interactions.typed_payload_slice",
+   "locator": "PlaceBlockInteraction, ChangeBlockInteraction, ModifyInventoryInteraction (client and server packages)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "resolved_item_interactions.typed_payload_identity",
+   "locator": "repo identity rule",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "resolved_item_interactions.authored_node_census.rules",
+   "locator": "audit constant (authored_node_census)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "resolved_item_interactions.authored_node_census.settings",
+   "locator": "audit constant (authored_node_census)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "resolved_item_interactions.authored_node_census.effects",
+   "locator": "audit constant (authored_node_census)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "resolved_item_interactions.authored_node_census.horizontal_speed_multiplier",
+   "locator": "audit constant (authored_node_census)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "resolved_item_interactions.authored_node_census.wait_for_animation_to_finish",
+   "locator": "audit constant (authored_node_census)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "resolved_item_interactions.authored_node_census.movement_effects",
+   "locator": "audit constant (authored_node_census)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "resolved_item_interactions.authored_node_census.place_block_payload",
+   "locator": "audit constant (authored_node_census)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "resolved_item_interactions.authored_node_census.change_block_payload",
+   "locator": "audit constant (authored_node_census)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "resolved_item_interactions.authored_node_census.modify_inventory_payload",
+   "locator": "audit constant (authored_node_census)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "resolved_item_interactions.public_player_acceptance",
+   "locator": "repo flag",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "resolved_item_interactions.capacity_or_partial_graph",
+   "locator": "repo rule (fail closed)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "delta.positions",
+   "locator": "BlockSection.getAndClearChangedPositions (0.7.2 offsets 0-47)",
+   "methods": [
+    "BlockSection.getAndClearChangedPositions"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "delta.counters",
+   "locator": "BlockSection fields localChangeCounter and globalChangeCounter (javap -p)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "delta.counter_only_light_change",
+   "locator": "BlockSection.invalidateLocalLight / invalidateGlobalLight (putfield at normalised-dump instruction index 6); set() positions guard (bytecode offsets 343-362)",
+   "methods": [
+    "BlockSection.invalidateLocalLight"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "delta.required_base",
+   "locator": "repo consumer rule",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "jax_publication.function",
+   "locator": "repo function name",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "jax_publication.contract_sha256",
+   "locator": "repo digest mutable_block_contract_sha256()",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "jax_publication.live_cell_contract_sha256",
+   "locator": "repo digest native_mutable_block_cells_contract_sha256()",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "jax_publication.live_cell_capture",
+   "locator": "bridge-side native snapshot (NativeMutableBlockCells.java)",
+   "methods": [
+    "NativeMutableBlockCells.java"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "jax_publication.geometry",
+   "locator": "repo rule (exact values, not boolean)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "jax_publication.failure",
+   "locator": "repo rule (atomic row rejection)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "affordance_publication.dictionary_sha256",
+   "locator": "repo digest block_affordance_dictionary_sha256()",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "affordance_publication.gather_types",
+   "locator": "audit payload asset_gather_types vs GATHER_TYPES[1:] (repo block_affordances.py)",
+   "methods": [],
+   "verdict": "B"
+  },
+  {
+   "claim": "affordance_publication.raw_runtime_ordinals",
+   "locator": "repo rule (never published)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "affordance_publication.unknown",
+   "locator": "repo rule (reject complete geometry value)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "action_resolution.host_contract_sha256",
+   "locator": "repo digest block_action_contract_sha256()",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "action_resolution.jax_contract_sha256",
+   "locator": "repo digest block_action_target_contract_sha256()",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "action_resolution.region_semantic_atlas_contract_sha256",
+   "locator": "repo digest region_block_semantic_atlas_contract_sha256()",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "action_resolution.tool_rule",
+   "locator": "BlockHarvestUtils.getSpecPowerDamageBlock(Item,BlockType,ItemTool) (0.7.2)",
+   "methods": [
+    "BlockHarvestUtils.getSpecPowerDamageBlock"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "action_resolution.drop_rule.direct_or_default",
+   "locator": "BlockHarvestUtils.getDrops (0.7.2): BlockType.getItem then new ItemStack",
+   "methods": [
+    "BlockHarvestUtils.getDrops",
+    "BlockType.getItem"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "action_resolution.drop_rule.droplist",
+   "locator": "ItemModule.getRandomItemDrops (0.7.2) via getDrops",
+   "methods": [
+    "ItemModule.getRandomItemDrops"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "action_resolution.drop_rule.program_contract_sha256",
+   "locator": "repo digest block_drop_program_contract_sha256()",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "action_resolution.drop_rule.native_evidence_contract_sha256",
+   "locator": "repo digest native_drop_program_evidence_contract_sha256()",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "action_resolution.drop_rule.native_rng",
+   "locator": "ItemModule (0.7.2): ThreadLocalRandom.current as a DoubleSupplier (constant-pool strings)",
+   "methods": [
+    "ThreadLocalRandom.current"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "action_resolution.drop_rule.filler",
+   "locator": "repo rule (asset root canonicalisation)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "removal_cascade.dependency",
+   "locator": "BlockType.hasSupport() (0.7.2 and 0.5.10 identical bytecode, offsets 0-31)",
+   "methods": [
+    "BlockType.hasSupport"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "removal_cascade.neighbourhood",
+   "locator": "BlockFace enum (0.7.2 javap -p)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "removal_cascade.native_failure",
+   "locator": "BlockPhysicsUtil.applyBlockPhysics (0.7.2): switch on SupportDropType ordinal",
+   "methods": [
+    "BlockPhysicsUtil.applyBlockPhysics"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "removal_cascade.published_slice",
+   "locator": "repo scope (covered dry single-cell root blocks)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "removal_cascade.unknown_or_dependency",
+   "locator": "repo rule (fail closed)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "removal_cascade.full_cascade_simulation_in_published_slice",
+   "locator": "repo flag (True)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "support_cascade.host_contract_sha256",
+   "locator": "repo digest block_support_contract_sha256()",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "support_cascade.jax_contract_sha256",
+   "locator": "repo digest block_support_cascade_contract_sha256()",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "support_cascade.asset_census",
+   "locator": "audit EXPECTED_BLOCK_SUPPORT_CENSUS vs 0.7.2 Assets.zip (zipfile replica of _asset_block_support_census)",
+   "methods": [
+    "Assets.zip"
+   ],
+   "verdict": "B"
+  },
+  {
+   "claim": "support_cascade.decode_defaults",
+   "locator": "repo _effective_support (block_support.py) and the 0.7.2 BlockType codec defaults",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "support_cascade.predicate",
+   "locator": "RequiredBlockFaceSupport and BlockFaceSupport (0.7.2 constant pools)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "support_cascade.dispatch",
+   "locator": "SupportDropType enum (0.7.2 javap -p) and BlockPhysicsUtil.applyBlockPhysics switch",
+   "methods": [
+    "BlockPhysicsUtil.applyBlockPhysics"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "support_cascade.deco",
+   "locator": "BlockPhysics.isDeco / markDeco / set (bipush 15; class unchanged from pin); BlockPhysicsUtil.testBlockPhysicsAtPosition (bipush 15)",
+   "methods": [
+    "BlockPhysics.isDeco",
+    "BlockPhysicsUtil.testBlockPhysicsAtPosition"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "support_cascade.normal_player_placement",
+   "locator": "BlockPlaceUtils.tryPlaceBlock -> BlockType.canBePlacedAsDeco (normalised-dump instruction index 172) -> BlockPhysics.markDeco (index 182)",
+   "methods": [
+    "BlockPhysics.markDeco",
+    "BlockPlaceUtils.tryPlaceBlock",
+    "BlockType.canBePlacedAsDeco"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "support_cascade.runtime_scope",
+   "locator": "repo scope (covered dry single-cell root blocks)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "support_cascade.tick_timing",
+   "locator": "repo claim (final cascade only)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "support_cascade.fluid_filler_unloaded_or_capacity",
+   "locator": "repo rule (fail closed)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "placement_cascade.jax_contract_sha256",
+   "locator": "repo digest block_placement_cascade_contract_sha256()",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "placement_cascade.positive_certificate",
+   "locator": "BlockType.hasSupport() (see removal_cascade.dependency)",
+   "methods": [
+    "BlockType.hasSupport"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "placement_cascade.support_dependent",
+   "locator": "repo rule (known unsafe, not unavailable)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "placement_cascade.installed_falling_blocks",
+   "locator": "audit EXPECTED_FALLING_BLOCKS vs 0.7.2 Assets.zip (zipfile replica of _asset_falling_blocks)",
+   "methods": [
+    "Assets.zip"
+   ],
+   "verdict": "B"
+  },
+  {
+   "claim": "placement_cascade.installed_place_impact_count",
+   "locator": "zipfile replica of _asset_falling_blocks on 0.7.2 (impact None maps to Place)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "placement_cascade.support_cascade_dispatch_available",
+   "locator": "repo flag (True)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "placement_cascade.falling_trajectory_simulation",
+   "locator": "repo scope (dry-air fixture only)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "region_placement_support.jax_contract_sha256",
+   "locator": "repo digest region_block_placement_support_contract_sha256()",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "region_placement_support.native_predicate",
+   "locator": "com.hypixel.hytale.server.npc.util.BlockPlacementHelper.testSupportingBlock(BlockType,int,int) (0.7.2)",
+   "methods": [
+    "BlockPlacementHelper.testSupportingBlock"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "region_placement_support.solid_material",
+   "locator": "BlockPlacementHelper.testSupportingBlock (offsets 36-46)",
+   "methods": [
+    "BlockPlacementHelper.testSupportingBlock"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "region_placement_support.direct_cell",
+   "locator": "BlockPlacementHelper.testSupportingBlock and testBlock (no FillerBlockUtil call in either)",
+   "methods": [
+    "BlockPlacementHelper.testSupportingBlock"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "region_placement_support.unit_box",
+   "locator": "BlockPlacementHelper.testSupportingBlock (BlockBoundingBoxes variant box, then Box.isUnitBox, offsets 50-53)",
+   "methods": [
+    "BlockPlacementHelper.testSupportingBlock",
+    "Box.isUnitBox"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "region_placement_support.installed_target_predicate",
+   "locator": "BlockPlacementHelper.testBlock(BlockType,...) (offsets 0-26)",
+   "methods": [
+    "BlockPlacementHelper.testBlock"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "region_placement_support.unknown_or_uncovered",
+   "locator": "repo rule (fail closed)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "falling_impact.jax_contract_sha256",
+   "locator": "repo digest falling_block_impact_dispatch_contract_sha256()",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "falling_impact.jax_dry_air_motion_contract_sha256",
+   "locator": "repo digest falling_block_dry_air_motion_contract_sha256()",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "falling_impact.native_trace_contract_sha256",
+   "locator": "repo digest native_falling_block_trace_contract_sha256()",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "falling_impact.installed_falling_blocks",
+   "locator": "audit EXPECTED_FALLING_BLOCKS vs 0.7.2 Assets.zip (same replica as placement_cascade.installed_falling_blocks)",
+   "methods": [
+    "Assets.zip"
+   ],
+   "verdict": "B"
+  },
+  {
+   "claim": "falling_impact.dispatch",
+   "locator": "com.hypixel.hytale.builtin.fallingblocks.FallingBlockTickingSystem.tick (0.7.2) and PlaceFallingBlockImpact.placeFallingBlock",
+   "methods": [
+    "FallingBlockTickingSystem.tick",
+    "PlaceFallingBlockImpact.placeFallingBlock"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "falling_impact.effect_execution",
+   "locator": "repo flag (False)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "falling_impact.trajectory_simulation",
+   "locator": "repo scope (dry air until first collision)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "falling_impact.trajectory_unsupported",
+   "locator": "repo scope (fluid entry or exit; general support cascade; explosion effect kernel)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "block_ticking.native_gate",
+   "locator": "ChunkBlockTickSystem$Ticking.tick(float,ArchetypeChunk,Store,CommandBuffer) (0.7.2, offsets 13-16); tick(float,int,...) and tick(ChunkSection,...) and tickProce",
+   "methods": [
+    "ChunkBlockTickSystem$Ticking.tick"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "block_ticking.static_region_fixture",
+   "locator": "WorldConfig.setBlockTicking(boolean) and isBlockTicking() (0.7.2 javap -p)",
+   "methods": [
+    "WorldConfig.setBlockTicking"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "block_ticking.reset_evidence",
+   "locator": "repo evidence rule (block_ticking_enabled_false)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "block_ticking.installed_resolved_asset_count",
+   "locator": "audit len(EXPECTED_BLOCK_TICK_PROCEDURES) vs zipfile replica of _asset_block_tick_procedures on 0.7.2",
+   "methods": [],
+   "verdict": "B"
+  },
+  {
+   "claim": "block_ticking.installed_resolved_procedures",
+   "locator": "audit EXPECTED_BLOCK_TICK_PROCEDURES vs the zipfile replica (scheduled None, random type)",
+   "methods": [],
+   "verdict": "B"
+  },
+  {
+   "claim": "block_ticking.supported_fidelity_mode",
+   "locator": "repo mode statement (immutable snapshot, block ticking disabled)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "block_ticking.ticking_worlds",
+   "locator": "repo claim (unsupported for long-horizon parity)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "fidelity.installed_source_pinned",
+   "locator": "repo flag (True) on the audit's pins (0.5.7-keyed)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "fidelity.array_behavior",
+   "locator": "repo flag (eager and jit)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "fidelity.native_runtime_differential",
+   "locator": "repo artefact (recorded bridge mutation outcome)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: asset_gather_types",
+   "locator": "payload key asset_gather_types (same check as affordance_publication.gather_types)",
+   "methods": [],
+   "verdict": "B"
+  },
+  {
+   "claim": "payload: asset_block_tick_procedures",
+   "locator": "payload key asset_block_tick_procedures (same check as block_ticking.installed_resolved_asset_count)",
+   "methods": [],
+   "verdict": "B"
+  },
+  {
+   "claim": "payload: asset_falling_blocks",
+   "locator": "payload key asset_falling_blocks (same check as falling_impact.installed_falling_blocks)",
+   "methods": [],
+   "verdict": "B"
+  },
+  {
+   "claim": "payload: asset_block_support",
+   "locator": "payload key asset_block_support (same check as support_cascade.asset_census)",
+   "methods": [],
+   "verdict": "B"
+  },
+  {
+   "claim": "payload: EXPECTED_SEMANTIC_SHA256",
+   "locator": "semantic digest over the payload (class_sha256, the four asset keys and source_contract)",
+   "methods": [],
+   "verdict": "B"
+  },
+  {
+   "claim": "payload: EXPECTED_SERVER_SHA256",
+   "locator": "server jar digest (0.5.7 pin 43d9bcff...) vs 0.7.2 jar digest 23f71f03... (baseline)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class codec/ContainedAssetCodec.class (CLASS_SHA256; 0.7.2 identical to pin)",
+   "locator": "assetstore codec",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class blockhealth/BlockHealth.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "BlockHealth.isDestroyed / isDamaged / default constructor (1.0)",
+   "methods": [
+    "BlockHealth.isDestroyed"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class config/BlockGathering.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "BlockGathering tool data and breaking",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class config/BlockBreakingDropType.class (CLASS_SHA256; 0.7.2 identical to pin)",
+   "locator": "drop types",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class config/SoftBlockDropType.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "soft drop type",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class config/BlockType.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "BlockType (hasSupport, support, census)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "payload: class config/SupportDropType.class (CLASS_SHA256; 0.7.2 identical to pin)",
+   "locator": "SupportDropType enum",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class config/RequiredBlockFaceSupport.class (CLASS_SHA256; 0.7.2 identical to pin)",
+   "locator": "support clause class",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class config/BlockFaceSupport.class (CLASS_SHA256; 0.7.2 identical to pin)",
+   "locator": "support offer class",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class config/BlockFace.class (CLASS_SHA256; 0.7.2 identical to pin)",
+   "locator": "BlockFace enum",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class config/RotationTuple.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "RotationTuple",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class config/HarvestingDropType.class (CLASS_SHA256; 0.7.2 identical to pin)",
+   "locator": "drop types",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class config/Item.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "Item.getWeapon, getBuilderTool, getTool",
+   "methods": [
+    "Item.getWeapon"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class config/ItemToolSpec.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "ItemToolSpec.getGatherType / getQuality",
+   "methods": [
+    "ItemToolSpec.getGatherType"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class config/ItemTool.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "ItemTool.getSpecs",
+   "methods": [
+    "ItemTool.getSpecs"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class config/ItemDrop.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "drop list items",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class config/ItemDropList.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "drop lists",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class container/ItemDropContainer.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "drop containers",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class container/SingleItemDropContainer.class (CLASS_SHA256; 0.7.2 identical to pin)",
+   "locator": "drop containers",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class container/MultipleItemDropContainer.class (CLASS_SHA256; 0.7.2 identical to pin)",
+   "locator": "drop containers",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class container/ChoiceItemDropContainer.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "drop containers",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class container/DroplistItemDropContainer.class (CLASS_SHA256; 0.7.2 identical to pin)",
+   "locator": "drop containers",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class container/EmptyItemDropContainer.class (CLASS_SHA256; 0.7.2 identical to pin)",
+   "locator": "drop containers",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class item/ItemModule.class (CLASS_SHA256; 0.7.2 identical to pin)",
+   "locator": "ItemModule.getRandomItemDrops",
+   "methods": [
+    "ItemModule.getRandomItemDrops"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class inventory/ItemStack.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "ItemStack payload",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class blockhealth/BlockHealthChunk.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "BlockHealthChunk (legacy absolute-position map)",
+   "methods": [],
+   "verdict": "B"
+  },
+  {
+   "claim": "payload: class interaction/BlockHarvestUtils.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "break, damage, tool, drop paths",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class interaction/BlockPlaceUtils.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "placeBlock / tryPlaceBlock",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class util/BlockPlacementHelper.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "testSupportingBlock / testBlock",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "payload: class blockhitbox/BlockBoundingBoxes.class (CLASS_SHA256; 0.7.2 identical to pin)",
+   "locator": "hitbox boxes",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class blockhitbox/BlockBoundingBoxes$RotatedVariantBoxes.class (CLASS_SHA256; 0.7.2 identical to pin)",
+   "locator": "hitbox boxes",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class shape/Box.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "Box.isUnitBox",
+   "methods": [
+    "Box.isUnitBox"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class entities/Player.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "Player component (synthetic fixture, give_item)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class entity/InteractionManager.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "InteractionManager.initChain / queueExecuteChain",
+   "methods": [
+    "InteractionManager.initChain"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "payload: class entity/InteractionContext.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "held-item resolution",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "payload: class entity/InteractionChain.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "chain state",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "payload: class system/InteractionSystems$TickInteractionManagerSystem.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "interaction ticking",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "payload: class protocol/InteractionSyncData.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "InteractionSyncData fields",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class protocol/InteractionType.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "InteractionType enum",
+   "methods": [],
+   "verdict": "B"
+  },
+  {
+   "claim": "payload: class protocol/RootInteraction.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "protocol copy of RootInteraction",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class protocol/InteractionRules.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "protocol copy of InteractionRules",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class inventory/InventoryComponent.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "InventoryComponent (held and armour access)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "payload: class inventory/InventoryComponent$Armor.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "armour capacity",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "payload: class blockphysics/BlockPhysicsUtil.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "applyBlockPhysics / testBlockPhysics",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "payload: class blockphysics/BlockPhysicsSystems.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "BlockPhysicsSystems ticking",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "payload: class blockset/BlockSetModule.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "block sets",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class component/BlockPhysics.class (CLASS_SHA256; 0.7.2 identical to pin)",
+   "locator": "BlockPhysics.isDeco / markDeco",
+   "methods": [
+    "BlockPhysics.isDeco"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class fallingblocks/FallingBlock.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "FallingBlock.fallBlock",
+   "methods": [
+    "FallingBlock.fallBlock"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class fallingblocks/FallingBlockTickingSystem.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "falling tick and dispatch",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class entity/BlockEntitySystems$Ticking.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "dry-air motion ticking",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "payload: class item/ItemPrePhysicsSystem.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "applyGravity for the dry-air model",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "payload: class physics/SimplePhysicsProvider.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "physics provider for the dry-air model",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "payload: class util/PhysicsMath.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "physics math for the dry-air model",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "payload: class fallingblocks/PlaceFallingBlockImpact.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "placeFallingBlock",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class fallingblocks/BreakFallingBlockImpact.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "breakFallingBlock",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class fallingblocks/ExplodeFallingBlockImpact.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "explodeFallingBlock",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class fallingblocks/FallingBlockSettings.class (CLASS_SHA256; 0.7.2 identical to pin)",
+   "locator": "FallingBlockSettings",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class fallingblocks/FallingBlockImpact.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "FallingBlockImpact.apply (asset type)",
+   "methods": [
+    "FallingBlockImpact.apply"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class world/WorldConfig.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "WorldConfig.setBlockTicking / isBlockTicking",
+   "methods": [
+    "WorldConfig.setBlockTicking"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class system/ChunkBlockTickSystem.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "ChunkBlockTickSystem$Ticking gate",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "payload: class blocktick/BlockTickManager.class (CLASS_SHA256; 0.7.2 identical to pin)",
+   "locator": "BlockTickManager",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class config/RandomTickProcedure.class (CLASS_SHA256; 0.7.2 identical to pin)",
+   "locator": "RandomTickProcedure",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class procedure/BasicChanceBlockGrowthProcedure.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "growth procedure",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class procedure/SplitChanceBlockGrowthProcedure.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "growth procedure",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class client/BreakBlockInteraction.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "break interaction tick0 path",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "payload: class client/PlaceBlockInteraction.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "place interaction tick0 path",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "payload: class config/RootInteraction.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "RootInteraction (server config)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "payload: class config/InteractionRules.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "InteractionRules (server config)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class config/Interaction.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "Interaction runtime (RunTime, waits, chain)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "payload: class config/SimpleInteraction.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "SimpleInteraction.tick0 path",
+   "methods": [
+    "SimpleInteraction.tick0"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "payload: class client/SimpleBlockInteraction.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "SimpleBlockInteraction.tick0 path",
+   "methods": [
+    "SimpleBlockInteraction.tick0"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "payload: class chunk/WorldChunk.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "WorldChunk (no block methods on 0.7.2)",
+   "methods": [],
+   "verdict": "B"
+  },
+  {
+   "claim": "payload: class section/BlockSection.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "BlockSection delta and light",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class builtin/PlaceBlockEffect.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "PlaceBlockEffect.execute",
+   "methods": [
+    "PlaceBlockEffect.execute"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class builtin/ReplaceBlockTypeEffect.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "ReplaceBlockTypeEffect.replaceMatchedCell",
+   "methods": [
+    "ReplaceBlockTypeEffect.replaceMatchedCell"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class builtin/GiveItemEffect.class (CLASS_SHA256; 0.7.2 identical to pin)",
+   "locator": "GiveItemEffect.execute",
+   "methods": [
+    "GiveItemEffect.execute"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "payload: class builtin/RunRootInteractionEffect.class (CLASS_SHA256; 0.7.2 changed)",
+   "locator": "RunRootInteractionEffect.execute",
+   "methods": [
+    "RunRootInteractionEffect.execute"
+   ],
    "verdict": "C"
   }
  ],
@@ -1107,8 +3236,16 @@
  ],
  "perception": [
   {
-   "claim": "projected_distance_declarations (the authored set of UseProjectedDistance declarations, expected 11 by EXPECTED_PROJECTED_DISTANCE_DECLARATIONS)",
-   "locator": "Assets.zip 0.7.2 via the audit's own _projected_distance_declarations",
+   "claim": "class_sha256",
+   "locator": "class.method: PositionCache.lambda$hasLineOfSightInternal$1 (blocking branch; see los_contract.perception.predicate)",
+   "methods": [
+    "PositionCache.lambda$hasLineOfSightInternal$1"
+   ],
+   "verdict": "B"
+  },
+  {
+   "claim": "projected_distance_declarations",
+   "locator": "file: Assets.zip (0.7.2), Server/NPC/*.json, UseProjectedDistance (scratch/pd_decl.py)",
    "methods": [
     "Assets.zip"
    ],
@@ -1116,46 +3253,234 @@
   },
   {
    "claim": "projected_distance_values_boolean",
-   "locator": "payload check",
+   "locator": "scratch/pd_decl.py over the 17 live entries: type(value) is bool for all 17; the value set is {True}. status: confirmed (run over all 17 entries).",
    "methods": [],
-   "verdict": "C"
+   "verdict": "A"
   },
   {
-   "claim": "effective_component_selectors (default_and_walk, fly, dive, use_projected_distance_false)",
-   "locator": "MotionControllerBase, MotionControllerWalk, MotionControllerFly, MotionControllerDive component selectors",
-   "methods": [],
-   "verdict": "C"
-  },
-  {
-   "claim": "component_selector_contract.*",
-   "locator": "MotionController selector path",
-   "methods": [],
-   "verdict": "C"
-  },
-  {
-   "claim": "los_contract.perception.unloaded_chunk (blocked)",
-   "locator": "PositionCache lambda$hasLineOfSightInternal$0 (0.7.2)",
-   "methods": [],
-   "verdict": "C"
-  },
-  {
-   "claim": "los_contract.hit_confirmation.* and los_contract.cache.*",
-   "locator": "HorizontalSelector.RuntimeSelector.tick, HitDetectionExecutor.LineOfSightProvider, PositionCache",
+   "claim": "effective_component_selectors",
+   "locator": "MotionControllerBase.<init> (0.7.2 and 0.5.10): componentSelector = new Vector3d(1,0,1) and planarComponentSelector = new Vector3d(1,0,1). MotionControllerFly.<",
    "methods": [
-    "HitDetectionExecutor.LineOfSightProvider",
-    "HorizontalSelector.RuntimeSelector"
+    "MotionController.getSquaredDistance"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "component_selector_contract.source",
+   "locator": "SensorEntityBase.filterEntityWithRange (0.7.2 normalised idx 51-63): ExecutionSupport.getMotionContextSupport().getActiveMotionController().getSquaredDistance(a",
+   "methods": [
+    "ExecutionSupport.getMotionContextSupport",
+    "Role.getActiveMotionController",
+    "SensorEntityBase.filterEntityWithRange"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "component_selector_contract.scope (per_observer_per_query)",
+   "locator": "the controller is taken from the querying NPC's own motion context on each filter call (SensorEntityBase, above); the selector is an instance field of that cont",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "component_selector_contract.runtime_mutable",
+   "locator": "MotionControllerBase.setComponentSelector(Vector3d): getfield componentSelector; Vector3d.set(Vector3dc); return (0.7.2, normalised 0-5). The setter writes the ",
+   "methods": [
+    "MotionController.setComponentSelector",
+    "MotionControllerBase.setComponentSelector",
+    "Vector3d.set"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "component_selector_contract.controller_class_defaults_are_cache_keys",
+   "locator": "PositionCache.lineOfSightCache and inverseLineOfSightCache are Reference2ByteMap<Ref<EntityStore>> (0.7.2 raw field lines 158509 and 158511); keys are target en",
+   "methods": [
+    "PositionCache.lineOfSightCache"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "component_selector_contract.planar_component_selector",
+   "locator": "value (1,0,1) set in the base constructor on both jars; planarComponentSelector is a separate field (Fly and Dive change componentSelector only, so the two diff",
+   "methods": [
+    "BodyMotionFindBase.scaleSteering",
+    "SteeringForceWithTarget.setComponentSelector"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "los_contract.perception.call_site",
+   "locator": "EntityFilterLineOfSight.matchesEntity -> ExecutionSupport.getPositionCache() -> PositionCache.hasLineOfSight(Ref,Ref,ComponentAccessor)",
+   "methods": [
+    "EntityFilterLineOfSight.matchesEntity",
+    "ExecutionSupport.getPositionCache",
+    "PositionCache.hasLineOfSight"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "los_contract.perception.unloaded_chunk",
+   "locator": "PositionCache.lambda$hasLineOfSightInternal$0; LineOfSightBuffer.resolveSection(int,int,int); ChunkGrid.getChunkSectionReference(int,int,int); ChunkGrid.getChun",
+   "methods": [
+    "ChunkGrid.getChunkReference",
+    "ChunkGrid.getChunkSectionReference",
+    "LineOfSightBuffer.resolveSection",
+    "PositionCache.lambda$hasLineOfSightInternal$0"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "los_contract.perception.predicate",
+   "locator": "PositionCache.lambda$hasLineOfSightInternal$1 (0.7.2 raw javap offsets 0-302; control 0.5.10 raw offsets 0-152)",
+   "methods": [
+    "PositionCache.lambda$hasLineOfSightInternal$1"
+   ],
+   "verdict": "B"
+  },
+  {
+   "claim": "los_contract.hit_confirmation.call_site",
+   "locator": "HorizontalSelector.RuntimeSelector.tick -> HitDetectionExecutor.setLineOfSightProvider(indy lambda$tick$0(World,DDDDDD)Z) -> HitDetectionExecutor.testPoint / te",
+   "methods": [
+    "HitDetectionExecutor.setLineOfSightProvider",
+    "HitDetectionExecutor.testPoint",
+    "HorizontalSelector.RuntimeSelector",
+    "LineOfSightProvider.test"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "los_contract.hit_confirmation.unloaded_chunk",
+   "locator": "lambda$tick$1 (0.7.2 normalised 0-26); lambda$tick$0 (ACCESSOR.getAtBlock); AbstractCachedAccessor$Registry.threadLocal and lambda$threadLocal$0/$1; CachedAcces",
+   "methods": [
+    "ACCESSOR.getAtBlock",
+    "AbstractCachedAccessor$Registry.threadLocal",
+    "AbstractCachedAccessor.getComponentSectionAtBlock",
+    "CachedAccessor.getComponentSectionAtBlock",
+    "ChunkGrid.getChunkSectionReference"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "los_contract.hit_confirmation.predicate",
+   "locator": "lambda$tick$1 (0.7.2 normalised body, from the Solid test through Box.intersectsLine); control lambda$tick$1 (0.5.10 normalised 24-95)",
+   "methods": [
+    "Box.intersectsLine"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "los_contract.cache.forward_inverse_independent",
+   "locator": "PositionCache constructor (lineOfSightCache, inverseLineOfSightCache: two Reference2ByteMap instances; raw 0.7.2 ctor offsets 61 and 72)",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "los_contract.cache.los_ttl_seconds",
+   "locator": "PositionCache.clearLineOfSightCache(): ldc 0.09f; ldc 0.11f; RandomExtra.randomRange(float,float)",
+   "methods": [
+    "PositionCache.clearLineOfSightCache",
+    "RandomExtra.randomRange"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "los_contract.cache.position_ttl_seconds",
+   "locator": "PositionCache.reset(boolean): positionCacheNextUpdate = RandomExtra.randomRange(0.0f, 0.2f) (0.7.2 normalised 18-22; 0.5.10 same); resetPositionCacheNextUpdate(",
+   "methods": [
+    "PositionCache.reset",
+    "RandomExtra.randomRange"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "los_contract.cache.jax_policy",
+   "locator": "repo-side (JAX fresh_per_query policy in worldgen; no server method)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "chunk_perception_channels.heightmap",
+   "locator": "0.5.10 BlockChunk.getHeight(int,int) (ShortBytePalette.get, short); 0.7.2 NativeWorldAccess.getHeight (bridge lines 389-396) -> HeightmapColumn.getHeight(int,in",
+   "methods": [
+    "BlockChunk.getHeight",
+    "HeightmapColumn.getHeight",
+    "IHeightmap.getHeight",
+    "NativeWorldAccess.getHeight",
+    "ShortBytePalette.get"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "chunk_perception_channels.environment",
+   "locator": "0.5.10 BlockChunk.getEnvironment(x,y,z); 0.7.2 NativeWorldAccess.getEnvironment (bridge lines 407-419) -> EnvironmentSection.get(int,int,int)",
+   "methods": [
+    "BlockChunk.getEnvironment",
+    "EnvironmentSection.get",
+    "NativeWorldAccess.getEnvironment"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "chunk_perception_channels.tint",
+   "locator": "BlockChunk.getTint(int,int) (IntBytePalette.get, int; bytes identical on both jars, normalised 0-5); NativeWorldAccess.getTint (bridge 399-404); colour encoding",
+   "methods": [
+    "ArgTypes$30.parse",
+    "ArgTypes$31.parse",
+    "BlockChunk.getTint",
+    "IntBytePalette.get",
+    "NativeWorldAccess.getTint"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "chunk_perception_channels.sky_light",
+   "locator": "NativeWorldAccess.getSkyLight (bridge lines 420-423) -> BlockSection.getGlobalLight() -> ChunkLightData.getSkyLight(int,int,int) -> getSkyLight(ChunkUtil.indexB",
+   "methods": [
+    "BlockSection.getGlobalLight",
+    "ChunkLightData.getSkyLight",
+    "ChunkUtil.indexBlock",
+    "NativeWorldAccess.getSkyLight"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "chunk_perception_channels.block_light_rgb",
+   "locator": "NativeWorldAccess.getRedBlockLight / getGreenBlockLight / getBlueBlockLight (bridge lines 432-446) -> ChunkLightData.getRedBlockLight(x,y,z) = getLight(index,0)",
+   "methods": [
+    "ChunkLightData.getRedBlockLight",
+    "NativeWorldAccess.getRedBlockLight"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "native_perception_channel_capture",
+   "locator": "repo-side contract (native_channels.py: schema hytalerl_native_perception_channels_v1, MAX_SAMPLES 4096) and bridge PerceptionBuilders.buildPerceptionChannels",
+   "methods": [
+    "PerceptionBuilders.buildPerceptionChannels"
    ],
    "verdict": "C"
   },
   {
-   "claim": "chunk_perception_channels.* (heightmap getHeight, environment getEnvironment, tint getTint, sky light, block light RGB)",
-   "locator": "ChunkStore, BlockSection, ChunkLightData, ChunkLightingManager, FloodLightCalculation",
+   "claim": "native_region_light_capture",
+   "locator": "repo-side contract (region/native_light.py:191-244) and bridge RegionLightCapture",
    "methods": [],
    "verdict": "C"
   },
   {
-   "claim": "native_perception_channel_capture, native_region_light_capture, native_los_evidence_capture, section_aggregates, region_delta",
-   "locator": "repo-side contract functions (worldgen)",
+   "claim": "native_los_evidence_capture",
+   "locator": "repo-side contract (native_los.py:226-250)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "section_aggregates",
+   "locator": "repo-side contract (region/contract.py:186-245)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "region_delta",
+   "locator": "repo-side contract (region/contract.py:253-321)",
    "methods": [],
    "verdict": "C"
   }
