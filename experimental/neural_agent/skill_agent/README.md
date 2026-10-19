@@ -871,10 +871,41 @@ every walk and look bin of the same episodes):
   of an input and a 3 degree gaze error at 2 blocks about 0.007, and the look request's direction group is empty
   (`training/distill.py:99`).
 
-**Next: two one-change runs at A2's size and seeds (approved by the owner, 2026-10-18), from the commit that adds the
-options above.** W runs with `--walk-stop-margin 0.25`: walk_to v3, certified first (2.15). L runs with
-`--look-direction`. Each is scored on held success against A2's held rows above, which the new evaluation reproduces
-exactly from A2's parameters (0 mismatches against its report and the independent hold check).
+**Runs W and L (2026-10-18, late).** One change each, at A2's size and seeds, from 149a840, approved by the owner;
+27 minutes each, side by side, at load 10 to 59. W is walk_to v3 (`--walk-stop-margin 0.25`, certified first, 2.15)
+and L is the look direction (`--look-direction`). Held success on evaluation seed 77001, 256 lanes; the new
+evaluation reproduces A2's rows exactly from A2's parameters (0 mismatches against its report and the independent
+hold check):
+
+| held success, seen / held out | walk only | look only | both | both, seen: walk, look | walk lanes missed (of 342) |
+|---|---|---|---|---|---|
+| A2 | 0.837 / 0.837 | 0.776 / 0.459 | 0.565 / 0.588 | 0.812, 0.682 | 55 |
+| W, the stop margin | 1.000 / 1.000 | 0.800 / 0.624 | 0.741 / 0.671 | 1.000, 0.741 | 0 |
+| L, the look direction | 0.988 / 0.965 | 0.906 / 0.576 | 0.753 / 0.800 | 0.882, 0.859 | 22 |
+| teachers | 1.000 / 1.000 | 1.000 / 1.000 | 0.906 / 0.871 | 1.000, 0.906 | 0 |
+
+- **The margin fixes walking (confirmed).** W misses no walk in either region or mode, and every walk bar passes: T5
+  0 points, held out 1.00 of seen. On the breakdown's fresh episodes, 1 of its 512 walk-only lanes misses, and not by
+  parking (it ends 1.9 blocks out). Without the margin, the parked misses remain: L's 23 walk-only misses all stop
+  within half a block of the edge, a median 0.01 short. A2's 0.837 was partly a bad draw, since L walks 0.988 without
+  the margin. Rates of the same kind of run differ by about 15 points; the margin removes the mechanism.
+- **The direction makes looks more precise (confirmed in these runs).** L's look-only rises from 0.776 to 0.906 seen,
+  so T5 is 9.4 points and passes, at the edge of the bar. Its looks while walking rise from 0.682 to 0.859. On fresh
+  episodes, near targets go from 0.55 to 0.89 and steep pitch from 0.56 and 0.58 to 0.80 and 0.78. Misses end a
+  median 3.8 degrees off in yaw and 2.3 in pitch (A2: 5.2 and 3.2).
+- **Still failing:**
+  - **Walk while looking (T5):** W 0.741 and L 0.753, against 0.806 needed. Each run fixed one half, and the rate is
+    still the product of its halves (L: 0.882 x 0.859 = 0.758, against 0.753).
+  - **The held-out look:** L scores 0.636 of seen, against the 0.90 needed. The far-left band stays weakest on fresh
+    episodes (0.67 at 32.5 to 40 degrees, 0.85 at 25 to 32.5). So does the trained band next to it, 15 to 25 degrees
+    left, in all three runs (A2 0.81, W 0.67, L 0.74), while its mirror on the right scores 0.82 to 1.00.
+- One seed per variant and about 85 lanes per mode, so a difference under about 8 points is noise.
+
+**Next, for the owner's approval:** one run with both changes (`--walk-stop-margin 0.25 --look-direction`). If the
+halves stack, both is about 1.0 x 0.86, above the 0.806 bar (inferred). The held-out look needs a change of its own.
+The body-frame direction stays fixed while the head turns, so a far-left target sits outside the trained range for
+the whole look. A direction measured from where the head points would leave that range after the first turn or two
+(inferred, untested).
 
 **Before the run.** A 2-iteration smoke (32 lanes, 50 steps per iteration, 10,191 samples) ran end to end with 0
 illegal decisions. Its student was untrained by design: walk 0.23 and look 0.0, against the teachers' 1.0 and 1.0.

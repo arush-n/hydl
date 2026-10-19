@@ -211,6 +211,9 @@ Status (2026-10-18, late; `teaching/certificates.py`, README 2.15):
   decision boundaries instead. Missed walks park a median 0.02 blocks outside the radius, and missed looks end a
   median 5.2 degrees off against a 3 degree tolerance. The next changes, one at a time: walk_to v3 with a stopping
   margin, and a look request that carries the direction to its target.
+- Runs W and L (README 2.16): with walk_to v3, walk_to's T5 gap is 0 points, and with the look direction, look_at's
+  is 9.4 (a pass, at the edge of the bar). The margin is now the measured fix for a teacher that decides on the
+  success boundary.
 
 A teacher need not be perfect, because stage 3's practice can go past it. But a systematic teacher error is copied
 into the student, which is why nothing teaches before its certificate.

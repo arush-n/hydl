@@ -201,6 +201,10 @@ Status (2026-10-18, late):
   walk x look). Missed walks park a few centimetres outside the radius, and missed looks end about 5 degrees off. The
   next changes, one at a time: a stopping margin in walk_to (v3), and the direction to the target in the look
   request.
+- Runs W and L (README 2.16), one change each, confirm both diagnoses. The stopping margin makes walking match the
+  teacher (0 of 342 walk lanes missed, against 55 in A2). The look direction lifts look-only to within the 10-point
+  bar (0.906 held). Walk while looking (0.74 and 0.75, against 0.81 needed) and the held-out look (0.64 of seen) still
+  fail. A run with both changes is next, for the owner's approval.
 
 ## 5. Decisions for the owner (answered 2026-10-18, late; docs/BUILD.md section 0)
 
