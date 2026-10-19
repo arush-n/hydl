@@ -5,7 +5,8 @@ the green light"), then A2, the first student training ("ok continue"). The arch
 with per-verb adapters, toward one generalist, request-conditioned policy ("similar to a vla model"):
 `docs/ARCHITECTURE_RESEARCH.md` recommends it, trained by teacher distillation (DAgger) and KL-anchored RL, and the
 owner's answers made it the working design (docs/BUILD.md section 0). The method (section 2b), the staging, the
-gates and the dependencies stand. 2026-10-19: A2 passes with run C' (README 2.16).
+gates and the dependencies stand. 2026-10-19: A2 passes with run C' (README 2.16). Each skill's own plan is now in its
+folder, `neural_skills/<skill>/TRAINING.md`; this file keeps the shared method, the hypotheses and the staging.
 
 Nothing in this plan runs until the owner approves it (docs/BUILD.md section 0). It answers the owner's condition for
 training: what trains, on what, for how long, what counts as success, what happens on failure, and what each step

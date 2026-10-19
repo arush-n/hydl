@@ -29,8 +29,9 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from experimental.neural_agent.skill_agent.neural_skills.walk_to.teacher import walk_to_choices
 from experimental.neural_agent.skill_agent.tasks import simple_tasks as st
-from experimental.neural_agent.skill_agent.teaching.teachers import TEACHERS, state_for, walk_to_choices
+from experimental.neural_agent.skill_agent.teaching.teachers import TEACHERS, state_for
 from hytalegym.envs.hytale_env import HytaleEnv
 from hytalegym.jax.combat import AGENT_ENTITY, ARSENAL_POLICY_ACTION_HEAD_SIZES
 from hytalegym.jax.combat.native.evidence import acquire_combat_native_evidence_leases

@@ -31,6 +31,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from experimental.neural_agent.skill_agent.neural_skills.look_at.task import LookAtTasks
+from experimental.neural_agent.skill_agent.neural_skills.look_at.teacher import look_at_choices
+from experimental.neural_agent.skill_agent.neural_skills.walk_to.task import WalkToTasks
+from experimental.neural_agent.skill_agent.neural_skills.walk_to.teacher import walk_to_choices, walk_to_version
 from experimental.neural_agent.skill_agent.tasks.simple_tasks import (
     AGENT_EYE_HEIGHT,
     DEFAULT_LOADOUT,
@@ -38,18 +42,9 @@ from experimental.neural_agent.skill_agent.tasks.simple_tasks import (
     DEFAULT_SPAWN_XZ,
     NPC_WALK_BASE_SPEED,
     TICKS_PER_SECOND,
-    LookAtTasks,
-    WalkToTasks,
     make_flat_npc_environment,
 )
-from experimental.neural_agent.skill_agent.teaching.teachers import (
-    TEACHERS,
-    TeacherOutput,
-    look_at_choices,
-    state_for,
-    walk_to_choices,
-    walk_to_version,
-)
+from experimental.neural_agent.skill_agent.teaching.teachers import TEACHERS, TeacherOutput, state_for
 from hytalegym.jax.combat.observation.v3.policy.layout import ARSENAL_POLICY_ACTION_HEAD_SIZES
 from hytalegym.jax.combat.types import (
     AGENT_ENTITY,

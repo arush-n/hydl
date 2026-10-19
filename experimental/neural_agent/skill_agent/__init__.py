@@ -31,17 +31,22 @@ Import the submodules, which are sorted into subfolders by purpose (each subfold
 * ``model.generalist``: the request-conditioned generalist policy (``docs/ARCHITECTURE_RESEARCH.md``).
 * ``model.observation_adapter``: the legal observation to the trunk's token sets (self and entity; body frame).
 
-``teaching``: scripted teachers and their certificates.
+``neural_skills``: one folder per neural skill (``neural_skills/README.md``): its plan, teacher, task and launchers.
 
-* ``teaching.teachers``: scripted walk_to and look_at teachers over the full simulator state (the simple track).
+* ``neural_skills.walk_to.teacher`` and ``.task``: walk_to's scripted teacher (v2, v3 with a stop margin), its goals
+  and its success test.
+* ``neural_skills.look_at.teacher`` and ``.task``: look_at's scripted teacher, its goals and its success test.
+
+``teaching``: what scripted teachers share, and their certificates.
+
+* ``teaching.teachers``: the head layout, ``TeacherOutput``, the ``TEACHERS`` registry and the observed-state rule.
 * ``teaching.certificates``: the teacher certificate (T1 success, T2 efficiency, T3 obedience, failure sorting) and
   its CLI.
 * ``teaching.certify_live``: T4, the walk_to teacher in closed loop on the live 0.7.2 server.
 
 ``tasks``: the episodes skills are trained and measured on.
 
-* ``tasks.simple_tasks``: the flat npc_walk environment with explicit spawns, walk_to and look_at goals, and
-  run_episode.
+* ``tasks.simple_tasks``: the flat npc_walk environment with explicit spawns, and run_episode.
 
 ``training``: data and trainers.
 

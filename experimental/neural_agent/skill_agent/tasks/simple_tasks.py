@@ -1,4 +1,7 @@
-"""Batched flat-world episodes for the two simple skills, walk_to and look_at.
+"""The flat task world the simple skills train and are measured on, and ``run_episode``.
+
+Each skill's goals and success test are in its own folder: ``neural_skills/walk_to/task.py`` and
+``neural_skills/look_at/task.py``.
 
 The world is a flat floor at ``params.floor_y`` with no geometry provider. The learner is
 entity 0 and moves under the simulator's ``npc_walk`` motion model, the body the game
@@ -11,7 +14,6 @@ timing profile pinned to 0 one tick is 1/30 s.
 
 from __future__ import annotations
 
-import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import NamedTuple
@@ -48,10 +50,6 @@ from hytalegym.jax.combat.observation.v3.tokens.world import (
 )
 from hytalegym.jax.combat.types import (
     AGENT_ENTITY,
-    GAIT_RUN,
-    GAIT_SNEAK,
-    GAIT_WALK,
-    PLAYER_GAIT_FORWARD_SPEED_MULTIPLIERS,
     CombatParams,
     CombatState,
     default_combat_params,
@@ -69,38 +67,12 @@ DEFAULT_SPAWN_XZ = (0.5, 0.5)
 DEFAULT_OTHER_XYZ = (0.5, 65.0, -2.0)
 DEFAULT_EYE_XYZ = (0.5, 66.0, 0.5)
 
-WALK_DISTANCE_RANGE = (3.0, 15.0)
-WALK_RADIUS_RANGE = (0.5, 1.5)
-#: Walk, run and sneak. Sprint is left out for now.
-WALK_GAITS = (GAIT_WALK, GAIT_RUN, GAIT_SNEAK)
-WALK_HORIZON_SLACK = 1.5
-WALK_HORIZON_PAD_TICKS = 30
-
-LOOK_DISTANCE_RANGE = (2.0, 10.0)
-LOOK_YAW_RANGE_DEGREES = 40.0
-LOOK_PITCH_RANGE_DEGREES = 30.0
-LOOK_TOLERANCE_DEGREES = 3.0
-LOOK_HORIZON_TICKS = 90
-
 #: The 12 policy factors (``ARSENAL_POLICY_ACTION_HEAD_SIZES``): base, ability, guard, jump,
 #: locomotion, yaw, body yaw, pitch, hotbar, use, block trigger, block candidate. The
 #: locomotion choice 9 is run, forward (``split_locomotion_choice(9) == (GAIT_RUN, 1, 0)``).
 #: Yaw and body yaw bin 4 and pitch bin 2 are the zero deltas of their 9- and 5-bin heads.
 NEUTRAL_FACTORS = (0, 0, 0, 0, 0, 4, 4, 2, 0, 0, 0, 0)
 RUN_FORWARD_FACTORS = (0, 0, 0, 0, 9, 4, 4, 2, 0, 0, 0, 0)
-
-
-class WalkToGoals(NamedTuple):
-    target_xz: jax.Array  # f32[B, 2]
-    radius: jax.Array  # f32[B]
-    gait: jax.Array  # int32[B]
-    horizon_ticks: jax.Array  # int32[B]
-
-
-class LookAtGoals(NamedTuple):
-    target_xyz: jax.Array  # f32[B, 3]
-    tolerance_degrees: jax.Array  # f32[B]
-    horizon_ticks: jax.Array  # int32[B]
 
 
 class EpisodeResult(NamedTuple):
@@ -110,10 +82,6 @@ class EpisodeResult(NamedTuple):
     first_success_tick: jax.Array  # int32[B]
     #: The combat state after the last tick.
     combat: CombatState
-
-
-def _wrap_degrees(value: jax.Array) -> jax.Array:
-    return jnp.mod(value + 180.0, 360.0) - 180.0
 
 
 def _carry_from_runtime(runtime, params: CombatParams, config: ArsenalRuntimeConfig, capability_provider=None):
@@ -287,118 +255,11 @@ def make_flat_npc_environment(
     )
 
 
-class WalkToTasks:
-    """walk_to: walk to a world point at a pace and stop inside a radius."""
-
-    @staticmethod
-    def sample(
-        key: jax.Array, batch: int, *, spawn_xz: tuple[float, float] = DEFAULT_SPAWN_XZ
-    ) -> WalkToGoals:
-        """Goals 3 to 15 blocks from ``spawn_xz`` in a random direction."""
-
-        key_distance, key_angle, key_radius, key_gait = jax.random.split(key, 4)
-        distance = jax.random.uniform(
-            key_distance, (batch,), dtype=jnp.float32,
-            minval=WALK_DISTANCE_RANGE[0], maxval=WALK_DISTANCE_RANGE[1],
-        )
-        angle = jax.random.uniform(
-            key_angle, (batch,), dtype=jnp.float32, minval=0.0, maxval=2.0 * math.pi
-        )
-        direction = jnp.stack((jnp.sin(angle), jnp.cos(angle)), axis=1)
-        spawn = jnp.asarray(spawn_xz, dtype=jnp.float32)
-        target_xz = spawn[None, :] + distance[:, None] * direction
-        radius = jax.random.uniform(
-            key_radius, (batch,), dtype=jnp.float32,
-            minval=WALK_RADIUS_RANGE[0], maxval=WALK_RADIUS_RANGE[1],
-        )
-        gait_table = jnp.asarray(WALK_GAITS, dtype=jnp.int32)
-        gait = gait_table[jax.random.randint(key_gait, (batch,), 0, len(WALK_GAITS))]
-        multiplier = jnp.asarray(PLAYER_GAIT_FORWARD_SPEED_MULTIPLIERS, dtype=jnp.float32)[gait]
-        horizon_ticks = (
-            jnp.ceil(
-                distance / (NPC_WALK_BASE_SPEED * multiplier)
-                * WALK_HORIZON_SLACK * TICKS_PER_SECOND
-            ).astype(jnp.int32)
-            + WALK_HORIZON_PAD_TICKS
-        )
-        return WalkToGoals(
-            target_xz=target_xz, radius=radius, gait=gait, horizon_ticks=horizon_ticks
-        )
-
-    @staticmethod
-    def success(combat: CombatState, goals: WalkToGoals) -> jax.Array:
-        """True where the learner's planar distance to the target is within the radius."""
-
-        planar = combat.position[:, AGENT_ENTITY][:, [0, 2]]
-        offset = planar - goals.target_xz
-        return jnp.hypot(offset[:, 0], offset[:, 1]) <= goals.radius
-
-
-class LookAtTasks:
-    """look_at: turn the head to face a point."""
-
-    @staticmethod
-    def sample(
-        key: jax.Array,
-        batch: int,
-        *,
-        eye_xyz: tuple[float, float, float] = DEFAULT_EYE_XYZ,
-        body_yaw_degrees: float = 0.0,
-    ) -> LookAtGoals:
-        """Points 2 to 10 blocks from the eye, within +-40 degrees of the body yaw and +-30 of pitch."""
-
-        key_distance, key_yaw, key_pitch = jax.random.split(key, 3)
-        distance = jax.random.uniform(
-            key_distance, (batch,), dtype=jnp.float32,
-            minval=LOOK_DISTANCE_RANGE[0], maxval=LOOK_DISTANCE_RANGE[1],
-        )
-        body_yaw = jnp.broadcast_to(jnp.asarray(body_yaw_degrees, dtype=jnp.float32), (batch,))
-        yaw_offset = jax.random.uniform(
-            key_yaw, (batch,), dtype=jnp.float32,
-            minval=-LOOK_YAW_RANGE_DEGREES, maxval=LOOK_YAW_RANGE_DEGREES,
-        )
-        pitch = jax.random.uniform(
-            key_pitch, (batch,), dtype=jnp.float32,
-            minval=-LOOK_PITCH_RANGE_DEGREES, maxval=LOOK_PITCH_RANGE_DEGREES,
-        )
-        yaw = jnp.deg2rad(body_yaw + yaw_offset)
-        pitch = jnp.deg2rad(pitch)
-        horizontal = distance * jnp.cos(pitch)
-        # The inverse of the bearing and pitch in ``success``, and of
-        # ``projectile_look_direction`` (arsenal/projectiles/runtime.py:2267-2275).
-        direction = jnp.stack(
-            (-jnp.sin(yaw) * horizontal, distance * jnp.sin(pitch), -jnp.cos(yaw) * horizontal),
-            axis=1,
-        )
-        target_xyz = jnp.asarray(eye_xyz, dtype=jnp.float32)[None, :] + direction
-        return LookAtGoals(
-            target_xyz=target_xyz,
-            tolerance_degrees=jnp.full((batch,), LOOK_TOLERANCE_DEGREES, dtype=jnp.float32),
-            horizon_ticks=jnp.full((batch,), LOOK_HORIZON_TICKS, dtype=jnp.int32),
-        )
-
-    @staticmethod
-    def success(combat: CombatState, goals: LookAtGoals) -> jax.Array:
-        """True where the head's yaw and pitch are within tolerance of facing the target."""
-
-        eye = combat.position[:, AGENT_ENTITY] + jnp.asarray(
-            [0.0, AGENT_EYE_HEIGHT, 0.0], dtype=jnp.float32
-        )
-        offset = goals.target_xyz - eye
-        dx, dy, dz = offset[:, 0], offset[:, 1], offset[:, 2]
-        yaw_facing = jnp.rad2deg(jnp.arctan2(-dx, -dz))
-        pitch_facing = jnp.rad2deg(jnp.arctan2(dy, jnp.hypot(dx, dz)))
-        yaw_error = _wrap_degrees(combat.agent_head_yaw - yaw_facing)
-        pitch_error = combat.agent_head_pitch - pitch_facing
-        return (jnp.abs(yaw_error) <= goals.tolerance_degrees) & (
-            jnp.abs(pitch_error) <= goals.tolerance_degrees
-        )
-
-
 def run_episode(
     env: FlatTaskEnvironment,
-    tasks_goals: WalkToGoals | LookAtGoals,
-    policy_fn: Callable[[CombatState, WalkToGoals | LookAtGoals], jax.Array],
+    tasks_goals: NamedTuple,
+    success_fn: Callable[[CombatState, NamedTuple], jax.Array],
+    policy_fn: Callable[[CombatState, NamedTuple], jax.Array],
     key: jax.Array,
     max_ticks: int,
     *,
@@ -406,7 +267,9 @@ def run_episode(
 ) -> EpisodeResult:
     """Run ``max_ticks`` decision ticks on every lane and record the first tick the goal holds.
 
-    ``policy_fn(combat, goals)`` returns int32[B, 12] factors. A lane counts as a success only
+    ``tasks_goals`` is one skill's goals (a NamedTuple with ``horizon_ticks``, e.g. ``WalkToGoals``) and
+    ``success_fn(combat, goals)`` that skill's test (e.g. ``WalkToTasks.success``), so the runner knows no
+    skill. ``policy_fn(combat, goals)`` returns int32[B, 12] factors. A lane counts as a success only
     at ticks no later than its ``horizon_ticks``. With ``carry=None`` every lane resets at the
     default spawn (``DEFAULT_SPAWN_XZ``, yaw 0, the other entity at ``DEFAULT_OTHER_XYZ``), so
     the goals must be sampled from that spawn. Pass a carry from ``env.reset`` otherwise.
@@ -414,12 +277,6 @@ def run_episode(
 
     if isinstance(max_ticks, bool) or not isinstance(max_ticks, int) or max_ticks < 1:
         raise ValueError(f"max_ticks must be a positive int, got {max_ticks!r}")
-    if isinstance(tasks_goals, WalkToGoals):
-        success_fn = WalkToTasks.success
-    elif isinstance(tasks_goals, LookAtGoals):
-        success_fn = LookAtTasks.success
-    else:
-        raise TypeError("tasks_goals must be WalkToGoals or LookAtGoals")
 
     reset_key, step_key = jax.random.split(key)
     if carry is None:

@@ -191,7 +191,8 @@ Then TRAINING_PLAN's C-steps run on the generalist instead of on per-verb bodies
 Status (2026-10-18, late):
 - The generalist is built (`model/generalist.py`, README 2.13).
 - A1 passes: 3.56 ms p95 at batch 8 at load about 10 (15.08 ms at load 53 to 75 was the load).
-- A2's two teachers exist (`teaching/teachers.py`), and so do its flat tasks (`tasks/simple_tasks.py`).
+- A2's two teachers exist (`neural_skills/walk_to/teacher.py`, `neural_skills/look_at/teacher.py`), and so do its
+  flat tasks (`tasks/simple_tasks.py`, with each skill's `task.py`).
 - The observation adapter is built (README 2.14). The teachers pass T1, T2 and T3, and walk_to passes T4 live (README
   2.15). The teachers are v2, which read what the student sees (README 2.11), and the head's offset from the body is
   in the self token.

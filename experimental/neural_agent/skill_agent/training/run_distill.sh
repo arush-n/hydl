@@ -1,0 +1,21 @@
+#!/bin/bash
+# One DAgger run of the shared generalist (distill.py) at nice 10 on the CPU, as every A2 run so far (README 2.16).
+# Usage: run_distill.sh <run name> <iterations> <lanes> <steps> <eval lanes> [distill options, e.g. --look-direction]
+# Writes report.json, params.npz and log.txt (the start line records the commit and the options, and the load) to
+# agent_skills/training_runs/skill_agent_a2/<run name>/, which is private and never staged, and refuses a name that
+# exists. The skills' train.sh scripts (../neural_skills/<skill>/train.sh) call it with their stage's size and options.
+set -euo pipefail
+ROOT=$(cd "$(dirname "$0")/../../../.." && pwd)
+cd "$ROOT"
+NAME=$1 ITERATIONS=$2 LANES=$3 STEPS=$4 EVAL_LANES=$5
+shift 5
+OUT=agent_skills/training_runs/skill_agent_a2/$NAME
+if [ -e "$OUT" ]; then echo "refusing: $OUT exists" >&2; exit 2; fi
+mkdir -p "$OUT"
+export PYTHONPATH=$ROOT:$ROOT/HytaleRL/hytalegym JAX_PLATFORMS=cpu
+{ echo "start $(date -u +%FT%TZ) head $(git rev-parse --short HEAD) options: $*"; uptime; } > "$OUT/log.txt"
+nice -n 10 .venv/bin/python -u -m experimental.neural_agent.skill_agent.training.distill \
+    --iterations "$ITERATIONS" --lanes "$LANES" --steps "$STEPS" --seed 0 --eval-seed 77001 --eval-lanes "$EVAL_LANES" \
+    --out "$OUT/report.json" --params-out "$OUT/params.npz" "$@" > /dev/null 2>> "$OUT/log.txt"
+{ echo "end $(date -u +%FT%TZ)"; uptime; } >> "$OUT/log.txt"
+echo "done: $OUT"

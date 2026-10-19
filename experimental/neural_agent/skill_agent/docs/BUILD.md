@@ -98,14 +98,22 @@ experimental/neural_agent/skill_agent/
     generalist.py       the request-conditioned generalist (docs/ARCHITECTURE_RESEARCH.md)
     observation_adapter.py
                         the legal observation as the trunk's token sets
-  teaching/             scripted teachers and their certificates (docs/TRAINING_PLAN.md 2c)
+  neural_skills/        one folder per neural skill (2026-10-19): its plan, teacher, task and launchers
+    README.md           the index: every catalogue skill, its status and what it waits on
+    train_generalist.sh the generalist's current stage (its size and options), run by every train.sh
+    walk_to/, look_at/  README.md, TRAINING.md, teacher.py, task.py, certify.sh, train.sh, evaluate.sh
+    come_here/, track/, follow/, step_and_hop/, go_around/
+                        planned: README.md and TRAINING.md only
+  teaching/             what scripted teachers share, and their certificates (docs/TRAINING_PLAN.md 2c)
     teachers.py, certificates.py, certify_live.py
-  tasks/                the episodes skills are trained and measured on
-    simple_tasks.py     flat npc_walk episodes for walk_to and look_at
+  tasks/                the flat task world and the episode runner
+    simple_tasks.py     flat npc_walk episodes, shared by the simple skills
   training/             data and trainers
     traces.py           native NPC trace ingestion (A7)
     bc_dataset.py, bc_smoke.py
                         the behaviour-cloning dataset and its smoke (B2)
+    distill.py, bars.py, run_distill.sh
+                        DAgger into the generalist (A2), its bars, its launcher
   bench/                per-tick latency, the 30 Hz gate
     bench_tick.py, bench_bodies.py, bench_generalist.py
   docs/                 this document, TRAINING_PLAN.md, ARCHITECTURE_RESEARCH.md, FIDELITY.md, AGENT_BRIEF.md

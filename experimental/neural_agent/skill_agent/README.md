@@ -36,8 +36,9 @@ Import a module by its subfolder: `from experimental.neural_agent.skill_agent.ru
 | [`contract/`](contract/README.md) | What a skill is and what it speaks: the gen-7 surface, the catalogue's verb contracts, the request protocol, the resolver. |
 | [`runtime/`](runtime/README.md) | Running skills: the registry, the combiner, programs, the combiner on S_t, the simulator head adapter, the parity and joint checks. |
 | [`model/`](model/README.md) | The networks: the token-set trunk, per-verb adapters, the request-conditioned generalist, the legal-observation adapter. |
-| [`teaching/`](teaching/README.md) | Scripted teachers and their certificates. |
-| [`tasks/`](tasks/README.md) | The episodes skills are trained and measured on. |
+| [`neural_skills/`](neural_skills/README.md) | One folder per neural skill: its plan, its teacher and task, and the scripts that certify, train and score it (2026-10-19); the index of every catalogue skill and what it waits on. |
+| [`teaching/`](teaching/README.md) | What every scripted teacher shares (the registry, the observed-state rule) and the teacher certificates. |
+| [`tasks/`](tasks/README.md) | The flat task world skills are trained and measured on, and the episode runner. |
 | [`training/`](training/README.md) | Native traces, the behaviour-cloning dataset, the trainers. |
 | [`bench/`](bench/README.md) | Per-tick latency benches (the 30 Hz gate). |
 | [`docs/`](docs/README.md) | The design record: `BUILD.md` (the plan), `TRAINING_PLAN.md`, `ARCHITECTURE_RESEARCH.md`, `FIDELITY.md`, `AGENT_BRIEF.md`. |
@@ -614,7 +615,7 @@ field. Two verbs that end with the same outcome class can still be told apart: a
 Stand-in bodies report their contract's progress names and, on done, the success label.
 [test: test_progress_signals_follow_the_done_texts_family; test_a_done_status_carries_the_bodys_termination_signal_and_a_foreign_signal_is_refused; every verb in test_sa_execute_all]
 
-### 2.11 Scripted teachers for the simple track (`teaching/teachers.py`, 2026-10-18)
+### 2.11 Scripted teachers for the simple track (`neural_skills/*/teacher.py`, `teaching/teachers.py`, 2026-10-18)
 
 **What they are.** Pure JAX functions of the simulator's full state and the request. They return choices on the gym's
 12 heads plus a done flag, for every lane at once (TRAINING_PLAN 2d). They will label the student's data.
@@ -661,7 +662,7 @@ margin is `WALK_TO_V3_STOP_MARGIN_BLOCKS` = 0.25, a negative margin is refused, 
 version (v3 when m > 0). At 0 the function is v2 exactly, and the registry stays at v2 until a student shows that v3
 helps. [test: test_walk_stop_margin_walks_on_inside_the_radius_until_the_margin, test_walk_stop_margin_is_at_most_half_the_radius]
 
-### 2.12 Flat tasks with the NPC body (`tasks/simple_tasks.py`, 2026-10-18)
+### 2.12 Flat tasks with the NPC body (`tasks/simple_tasks.py`, `neural_skills/*/task.py`, 2026-10-18)
 
 **What it is:**
 - `make_flat_npc_environment` builds the arsenal environment on a flat world with `npc_walk`, the body the bridge
@@ -814,10 +815,10 @@ full simulator state, but they only label; the student never sees that state.
 
 **What is held out.** Two argument regions are never trained on: walk targets in the rear-left quadrant of the spawn
 body (bearing 180 to 270 degrees), and look-only points 25 to 40 degrees to the left of the body (a "both" lane is
-held out by its walk target). Look-only offsets span 40 degrees either side (`tasks/simple_tasks.py:80`), so the look
-region is the left edge of the range while the right edge is trained: it asks for extrapolation on one side. The
-evaluation runs the student and the teachers on the same seeds, seen and held out, and reports success per mode, walk
-pace (within 5 %), radius and illegal decisions. [test: test_sa_distill.py, 24 tests]
+held out by its walk target). Look-only offsets span 40 degrees either side (`neural_skills/look_at/task.py:18`), so
+the look region is the left edge of the range while the right edge is trained: it asks for extrapolation on one side.
+The evaluation runs the student and the teachers on the same seeds, seen and held out, and reports success per mode,
+walk pace (within 5 %), radius and illegal decisions. [test: test_sa_distill.py, 24 tests]
 
 **Options and held success (2026-10-18, late).** Both options are off by default, and off they reproduce A2 exactly
 (an A/B against the trainer at dcec3d9: the same losses, dataset, parameters and evaluation):
@@ -828,7 +829,7 @@ pace (within 5 %), radius and illegal decisions. [test: test_sa_distill.py, 24 t
   body frame turned to the head's yaw, then pitched up by the head's pitch (`training/distill.py:229`). A target the
   head faces reads (1, 0, 0), so the input shrinks toward forward as the look closes, while the body-frame vector
   stays where it started. The head angles are the absolute ones `LookAtTasks.success` judges
-  (`tasks/simple_tasks.py:391`).
+  (`neural_skills/look_at/task.py:88`).
 
 The evaluation reports held success, on target `HOLD_TICKS` = 5 ticks in a row with the first of them inside the
 horizon, beside the first hit, and the owner chose held success for A2's bars (2026-10-18). The report (schema v2)
@@ -867,8 +868,9 @@ every walk and look bin of the same episodes):
   equals the closest approach to the 90th percentile, after a median 90 ticks parked. One was still closing at the
   horizon. Small radii miss most (0.74 below 0.83 blocks, against 0.93 and 0.95 above), and run misses least (0.95,
   against walk 0.87 and sneak 0.80). The 97 missed walks of the "both" lanes look the same. The teacher stops exactly
-  at the edge (`teaching/teachers.py:117`, v2's margin is 0), so a student whose stop is a few centimetres off lands outside about half
-  the time, and it acts by argmax (`training/distill.py:498`), so a parked agent repeats its choice every tick.
+  at the edge (`neural_skills/walk_to/teacher.py:74`, v2's margin is 0), so a student whose stop is a few centimetres
+  off lands outside about half the time, and it acts by argmax (`training/distill.py:498`), so a parked agent repeats
+  its choice every tick.
 - **Missed looks end near the target but outside the 3 degrees,** a median 5.2 degrees off in yaw and 3.2 in pitch,
   as often short of the target as past it: imprecision, not a bias. Near targets miss most (0.55 at 2 to 4.7 blocks,
   0.74 beyond), and so do steep ones (0.56 and 0.58 beyond 15 degrees of pitch either way, 0.77 and 0.85 within).
@@ -941,8 +943,9 @@ from 9b9169e; 11 minutes at load 4 to 12). Held success on evaluation seed 77001
 - The teachers hold the look in only 0.875 of the fresh walk-while-looking lanes, so that mode is near the teachers'
   own ceiling; going past it is RL's job (A4). One training seed per variant (TRAINING_NEEDS 16).
 
-**Next, for the owner's approval:** C' at two more training seeds; T4 live for walk_to v3 and look_at; then the first
-versioned release of the generalist, with regression tests.
+**Training is paused (owner, 2026-10-19).** When it resumes, next for the owner's approval: C' at two more training
+seeds; T4 live for walk_to v3 and look_at; then the first versioned release of the generalist, with regression tests. Each skill's plan is in its folder
+(`neural_skills/<skill>/TRAINING.md`).
 
 **Before the run.** A 2-iteration smoke (32 lanes, 50 steps per iteration, 10,191 samples) ran end to end with 0
 illegal decisions. Its student was untrained by design: walk 0.23 and look 0.0, against the teachers' 1.0 and 1.0.

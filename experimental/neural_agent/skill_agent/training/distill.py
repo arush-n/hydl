@@ -1,8 +1,9 @@
 """DAgger distillation of the request-conditioned generalist: walk_to and look_at from two scripted teachers.
 
-Two scripted teachers (``teaching/teachers.py``) label every state the student visits, so the student learns on its own
-state distribution (DAgger, Ross, Gordon and Bagnell 2011). Each lane of a batched flat-world episode
-(``tasks/simple_tasks.py``) runs one mode: ``walk`` (walk_to only), ``look`` (look_at only) or ``both``.
+Two scripted teachers (``neural_skills/walk_to/teacher.py``, ``neural_skills/look_at/teacher.py``) label every state
+the student visits, so the student learns on its own state distribution (DAgger, Ross, Gordon and Bagnell 2011). Each
+lane of a batched flat-world episode (``tasks/simple_tasks.py``, with the goals of each skill's ``task.py``) runs one
+mode: ``walk`` (walk_to only), ``look`` (look_at only) or ``both``.
 
 Requests (``model/generalist.py``) are rebuilt at every decision from the world goals and the agent's own pose (its
 position and body yaw). The resolver's job is done here, which is legal: the agent knows its own pose. The teachers read
@@ -61,14 +62,16 @@ from experimental.neural_agent.skill_agent.model.generalist import (
     init_generalist,
 )
 from experimental.neural_agent.skill_agent.model.observation_adapter import legal_tokens
-from experimental.neural_agent.skill_agent.tasks import simple_tasks as st
-from experimental.neural_agent.skill_agent.teaching.teachers import (
-    TEACHERS,
-    look_at_choices,
-    state_for,
-    walk_to_choices,
-    walk_to_version,
+from experimental.neural_agent.skill_agent.neural_skills.look_at.task import (
+    LOOK_DISTANCE_RANGE,
+    LookAtGoals,
+    LookAtTasks,
 )
+from experimental.neural_agent.skill_agent.neural_skills.look_at.teacher import look_at_choices
+from experimental.neural_agent.skill_agent.neural_skills.walk_to.task import WalkToGoals, WalkToTasks
+from experimental.neural_agent.skill_agent.neural_skills.walk_to.teacher import walk_to_choices, walk_to_version
+from experimental.neural_agent.skill_agent.tasks import simple_tasks as st
+from experimental.neural_agent.skill_agent.teaching.teachers import TEACHERS, state_for
 from hytalegym.jax.combat.observation.v3.policy.layout import (
     ARSENAL_POLICY_ACTION_HEAD_NAMES as HEAD_NAMES,
 )
@@ -147,8 +150,8 @@ class DistillConfig:
 class Episodes(NamedTuple):
     """The goals of B lanes. ``horizon`` is the decisions each lane runs: the max over its active goals."""
 
-    walk: st.WalkToGoals
-    look: st.LookAtGoals
+    walk: WalkToGoals
+    look: LookAtGoals
     mode: jax.Array  # int32[B]: WALK, LOOK or BOTH
     walk_active: jax.Array  # bool[B]
     look_active: jax.Array  # bool[B]
@@ -301,7 +304,7 @@ def _place_both_looks(key: jax.Array, walk_bearing: jax.Array) -> jax.Array:
                            minval=-BOTH_LOOK_PITCH_DEGREES, maxval=BOTH_LOOK_PITCH_DEGREES)
     )
     distance = jax.random.uniform(key_distance, (batch,), dtype=jnp.float32,
-                                  minval=st.LOOK_DISTANCE_RANGE[0], maxval=st.LOOK_DISTANCE_RANGE[1])
+                                  minval=LOOK_DISTANCE_RANGE[0], maxval=LOOK_DISTANCE_RANGE[1])
     horizontal = distance * jnp.cos(pitch)
     direction = jnp.stack(
         [-jnp.sin(yaw) * horizontal, distance * jnp.sin(pitch), -jnp.cos(yaw) * horizontal], axis=1
@@ -310,19 +313,19 @@ def _place_both_looks(key: jax.Array, walk_bearing: jax.Array) -> jax.Array:
 
 
 def _sample_looks(key: jax.Array, walk_xz: jax.Array, spawn_yaw: jax.Array, both: jax.Array, *,
-                  held_out: bool) -> st.LookAtGoals:
+                  held_out: bool) -> LookAtGoals:
     batch = both.shape[0]
     eye = jnp.asarray(EYE_XYZ, dtype=jnp.float32)
     walk_bearing = _facing(walk_xz[:, 0] - eye[0], walk_xz[:, 1] - eye[2])
 
-    def draw(step_key: jax.Array) -> st.LookAtGoals:
+    def draw(step_key: jax.Array) -> LookAtGoals:
         key_sampled, key_placed = jax.random.split(step_key)
-        sampled = st.LookAtTasks.sample(key_sampled, batch, body_yaw_degrees=spawn_yaw)
+        sampled = LookAtTasks.sample(key_sampled, batch, body_yaw_degrees=spawn_yaw)
         placed = _place_both_looks(key_placed, walk_bearing)
         target = jnp.where(both[:, None], placed, sampled.target_xyz)
-        return st.LookAtGoals(target, sampled.tolerance_degrees, sampled.horizon_ticks)
+        return LookAtGoals(target, sampled.tolerance_degrees, sampled.horizon_ticks)
 
-    def accept(goals: st.LookAtGoals) -> jax.Array:
+    def accept(goals: LookAtGoals) -> jax.Array:
         held = _in_look_held_out(goals.target_xyz, spawn_yaw)
         # A 'both' lane's look is placed at the walk bearing, so only the walk target holds it out (module docstring).
         return (held | both) if held_out else ~held
@@ -330,7 +333,7 @@ def _sample_looks(key: jax.Array, walk_xz: jax.Array, spawn_yaw: jax.Array, both
     return _resample(draw, accept, key)
 
 
-def make_episodes(walk: st.WalkToGoals, look: st.LookAtGoals, mode: jax.Array, spawn_yaw: jax.Array) -> Episodes:
+def make_episodes(walk: WalkToGoals, look: LookAtGoals, mode: jax.Array, spawn_yaw: jax.Array) -> Episodes:
     walk_active = (mode == WALK) | (mode == BOTH)
     look_active = (mode == LOOK) | (mode == BOTH)
     horizon = jnp.maximum(
@@ -351,11 +354,11 @@ def sample_episodes(key: jax.Array, mode: jax.Array, *, held_out: bool = False) 
     key_yaw, key_walk, key_look = jax.random.split(key, 3)
     spawn_yaw = jax.random.uniform(key_yaw, (batch,), dtype=jnp.float32, minval=-180.0, maxval=180.0)
 
-    def walk_accept(goals: st.WalkToGoals) -> jax.Array:
+    def walk_accept(goals: WalkToGoals) -> jax.Array:
         rear_left = _in_rear_left(goals.target_xz, spawn_yaw)
         return rear_left if held_out else ~rear_left
 
-    walk = _resample(lambda step_key: st.WalkToTasks.sample(step_key, batch), walk_accept, key_walk)
+    walk = _resample(lambda step_key: WalkToTasks.sample(step_key, batch), walk_accept, key_walk)
     look = _sample_looks(key_look, walk.target_xz, spawn_yaw, mode == BOTH, held_out=held_out)
     return make_episodes(walk, look, mode, spawn_yaw)
 
@@ -448,7 +451,7 @@ def build_requests(episode: Episodes, position: jax.Array, yaw: jax.Array, ticks
 
 
 def _successes(combat: Any, episode: Episodes) -> tuple[jax.Array, jax.Array]:
-    return st.WalkToTasks.success(combat, episode.walk), st.LookAtTasks.success(combat, episode.look)
+    return WalkToTasks.success(combat, episode.walk), LookAtTasks.success(combat, episode.look)
 
 
 def teacher_labels(combat: Any, episode: Episodes, *, maximum_turn_degrees: float,
@@ -983,7 +986,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--params-out", type=Path)
     parser.add_argument("--walk-stop-margin", type=float, default=defaults.walk_stop_margin,
                         help="walk_to v3 when positive: it stops this many blocks inside the radius "
-                             "(teachers.WALK_TO_V3_STOP_MARGIN_BLOCKS is 0.25); 0 is walk_to v2")
+                             "(walk_to.teacher.WALK_TO_V3_STOP_MARGIN_BLOCKS is 0.25); 0 is walk_to v2")
     parser.add_argument("--look-direction", action="store_true",
                         help="look_at's request also carries the unit direction to its target (frame: --look-frame)")
     parser.add_argument("--look-frame", choices=("body", "head"), default=defaults.look_frame,
