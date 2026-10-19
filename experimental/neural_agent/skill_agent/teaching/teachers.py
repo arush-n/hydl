@@ -17,6 +17,14 @@ Conventions, each checked against the engine:
   direction ``d``: 1 forward, 2 forward-right, 3 right, and so on in 45-degree steps
   (``observation/v3/policy/actions.py``, ``apply_world_move_override``). The engine moves along the COMMANDED body
   yaw, the body yaw after this tick's body-yaw delta, so a walking teacher takes its direction in that frame.
+
+Which state a teacher reads (v2, 2026-10-18). The functions below steer from the commanded head and body yaw
+(``desired_yaw``, ``desired_pitch``, ``desired_body_yaw``). The engine's head and body follow a command over several
+ticks, and a student sees only where they actually point. Fed the raw state (v1), 28 % of the look teacher's yaw
+labels could not be predicted from what the student sees, and the student never completed a look (TRAINING_PLAN
+T5). The registered teachers (v2) are the same functions applied to ``observed_state(combat)``, whose commanded
+fields are the actual ones. In closed loop they succeed as v1 does. ``state_for(name, combat)`` applies the
+registered choice.
 """
 
 from __future__ import annotations
@@ -177,27 +185,39 @@ class TeacherSpec:
     kind: str = "scripted"
     version: str = "v1"
     certificate: object | None = None
+    state: str = "commanded"
+    """``commanded``: the raw state, steering from the desired head and body yaw; ``observed``: ``observed_state``."""
 
 
 TEACHERS: dict[str, TeacherSpec] = {
     "walk_to": TeacherSpec(
         verbs=("walk_to",),
-        reads=("position", "desired_body_yaw"),
+        reads=("position", "yaw"),
         parameters=("target_xz", "radius", "gait", "maximum_turn_degrees"),
+        version="v2",
+        state="observed",
     ),
     "look_at": TeacherSpec(
         verbs=("look_at",),
-        reads=(
-            "position",
-            "yaw",
-            "desired_yaw",
-            "desired_pitch",
-            "agent_head_yaw",
-            "agent_head_pitch",
-        ),
+        reads=("position", "yaw", "agent_head_yaw", "agent_head_pitch"),
         parameters=("target_point", "tolerance_degrees", "maximum_turn_degrees"),
+        version="v2",
+        state="observed",
     ),
 }
+
+
+def observed_state(combat: CombatState) -> CombatState:
+    """The state as a student sees it: the commanded head and body yaw replaced by where they actually point."""
+
+    return combat._replace(desired_yaw=combat.agent_head_yaw, desired_pitch=combat.agent_head_pitch,
+                           desired_body_yaw=combat.yaw[:, AGENT_ENTITY])
+
+
+def state_for(name: str, combat: CombatState) -> CombatState:
+    """The state the registered teacher ``name`` reads: ``observed_state(combat)`` or the raw state."""
+
+    return observed_state(combat) if TEACHERS[name].state == "observed" else combat
 
 
 __all__ = [
@@ -205,5 +225,7 @@ __all__ = [
     "TeacherOutput",
     "TeacherSpec",
     "look_at_choices",
+    "observed_state",
+    "state_for",
     "walk_to_choices",
 ]

@@ -199,6 +199,9 @@ Status (2026-10-18, late; `teaching/certificates.py`, README 2.15):
   kinematic minimum, 0 illegal decisions.
 - walk_to v1 passes T4 live: 24 of 24 on the 0.7.2 server against 24 of 24 simulated, 0 illegal
   (`teaching/certify_live.py`). look_at's T4 is not run yet. T5 and T6 need a student.
+- T5 for v1 fails by measurement: 28 % of look_at's yaw labels depend on the commanded head yaw, which the student
+  cannot see, and its student completed no look. v2 reads the observed state and passes T1 to T3 (walk_to 1.037 x
+  the minimum, look_at median 13 ticks, 0 illegal). A2 measures T5 for v2.
 - A2's trainer is built (`training/distill.py`, README 2.16), and its two prep changes are in: the head's offset from
   the body in the self token, and training batches without the token types the flat world never fills (a step about
   ten times faster at the same loss). The A2 run is next.
@@ -229,7 +232,8 @@ Each teacher is one entry in a registry, as skills are in `runtime/library.py`. 
 
 **Settings, and how they are chosen.**
 - *What it may see:* the full state by default. It is restricted when T5 shows the student cannot follow: search_for's
-  teacher may not know a hidden target's position, so it scans from the last-seen position instead.
+  teacher may not know a hidden target's position, so it scans from the last-seen position instead. Applied
+  2026-10-18: walk_to and look_at v2 read the actual head and body yaw, not the commanded ones (README 2.11).
 - *The request:* it reads the same request as the student (target, pace, radius, entity), so every label belongs to
   one request.
 - *Parameters* (waypoint distance, jump trigger, aim lead, attack spacing): tuned on development worlds only, judged by

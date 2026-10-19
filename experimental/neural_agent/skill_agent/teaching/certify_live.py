@@ -1,10 +1,10 @@
 """T4 for the walk_to teacher: the scripted teacher in closed loop on the LIVE 0.7.2 server, paired with the simulator.
 
 Per episode: reset the native env, read the agent's start pose from the native actor rows, draw a goal (3 to 15 blocks,
-random direction, run gait, radius 1.0), then on every tick feed the teacher the native position and the commanded body
-yaw (tracked from the body-yaw deltas sent) and send its factors. Records success, ticks to success, legality under the
-native mask, and the path. The same start pose and goal then run through the simulator's teacher (simple_tasks, flat
-npc_walk, profile 0) for the paired comparison. Writes one JSON.
+random direction, run gait, radius 1.0), then on every tick feed the registered teacher (v2: the observed state) the
+native position and body yaw and send its factors. v1 read the commanded body yaw, tracked from the deltas sent. Records
+success, ticks to success, legality under the native mask, and the path. The same start pose and goal then run through
+the simulator's teacher (simple_tasks, flat npc_walk, profile 0) for the paired comparison. Writes one JSON.
 
 Run it as the --then step of a private bridge, on a port of your own (the peer session uses 5556 and 5558)::
 
@@ -13,8 +13,9 @@ Run it as the --then step of a private bridge, on a port of your own (the peer s
         --then "bash -c 'PYTHONPATH=$PWD:$PWD/HytaleRL/hytalegym JAX_PLATFORMS=cpu HYTALERL_SERVER_VERSION=0.7.2 \
         nice -n 10 .venv/bin/python -u -m experimental.neural_agent.skill_agent.teaching.certify_live OUT.json 24'"
 
-First result (2026-10-18, jar 460054A8): 24 of 24 native, 24 of 24 simulated, 0 illegal decisions; native finished a
-median 2 ticks sooner because some live ticks ran longer than 1/30 s under load (README 2.15).
+First result, walk_to v1 (2026-10-18, jar 460054A8): 24 of 24 native, 24 of 24 simulated, 0 illegal decisions; native
+finished a median 2 ticks sooner because some live ticks ran longer than 1/30 s under load (README 2.15). v2 has not
+run live.
 """
 
 from __future__ import annotations
@@ -29,17 +30,15 @@ import jax.numpy as jnp
 import numpy as np
 
 from experimental.neural_agent.skill_agent.tasks import simple_tasks as st
-from experimental.neural_agent.skill_agent.teaching.teachers import walk_to_choices
+from experimental.neural_agent.skill_agent.teaching.teachers import TEACHERS, state_for, walk_to_choices
 from hytalegym.envs.hytale_env import HytaleEnv
 from hytalegym.jax.combat import AGENT_ENTITY, ARSENAL_POLICY_ACTION_HEAD_SIZES
 from hytalegym.jax.combat.native.evidence import acquire_combat_native_evidence_leases
-from hytalegym.jax.combat.observation.v3.policy.look_deltas import look_delta_values
 
 PORT = 5570
 EPISODES = int(sys.argv[2]) if len(sys.argv) > 2 else 24
 OUT = sys.argv[1]
 RADIUS, GAIT, SPEED = 1.0, 2, 5.0  # run
-YAW_TABLE = np.asarray(look_delta_values(9), dtype=np.float64)
 
 
 def native_pose(env):
@@ -47,10 +46,11 @@ def native_pose(env):
     return np.asarray(actor["position"], dtype=np.float64), float(actor["yaw_degrees"]), actor.get("head_yaw_degrees")
 
 
-def teacher_factors(position, commanded_yaw, target_xz):
+def teacher_factors(position, body_yaw, target_xz):
+    assert TEACHERS["walk_to"].state == "observed", "this replay feeds the observed state (v2)"
     pos = np.zeros((1, 2, 3), dtype=np.float32)
     pos[0, AGENT_ENTITY] = position
-    combat = types.SimpleNamespace(position=jnp.asarray(pos), desired_body_yaw=jnp.asarray([commanded_yaw], jnp.float32))
+    combat = types.SimpleNamespace(position=jnp.asarray(pos), desired_body_yaw=jnp.asarray([body_yaw], jnp.float32))
     out = walk_to_choices(combat, jnp.asarray([target_xz], jnp.float32), jnp.asarray([RADIUS], jnp.float32),
                           jnp.asarray([GAIT], jnp.int32), maximum_turn_degrees=45.0)
     return np.asarray(out.factors[0], dtype=np.int64), bool(out.done[0])
@@ -63,11 +63,10 @@ def native_episode(env, seed, rng):
     angle = rng.uniform(0.0, 2.0 * np.pi)
     target = start[[0, 2]] + distance * np.array([np.sin(angle), np.cos(angle)])
     horizon = int(np.ceil(distance / SPEED * 1.5 * 30)) + 30
-    commanded = body_yaw
     path, illegal, success_tick = [start.tolist()], 0, -1
     for tick in range(1, horizon + 1):
-        position, _, _ = native_pose(env)
-        factors, done = teacher_factors(position, commanded, target)
+        position, native_yaw, _ = native_pose(env)
+        factors, done = teacher_factors(position, native_yaw, target)
         if done:
             success_tick = tick - 1
             break
@@ -76,7 +75,6 @@ def native_episode(env, seed, rng):
             sizes = ARSENAL_POLICY_ACTION_HEAD_SIZES
             offsets = np.cumsum([0, *sizes[:-1]])
             illegal += int(not all(mask[offsets[h] + factors[h]] for h in range(len(sizes))))
-        commanded += float(YAW_TABLE[factors[6]])
         _, _, terminated, truncated, info = env.step(factors)
         path.append(native_pose(env)[0].tolist())
         if terminated or truncated:
@@ -94,7 +92,8 @@ def sim_episode(env, start, body_yaw, target, horizon):
                       jnp.asarray([[start[0], start[1], start[2] - 40.0]], jnp.float32))  # the other entity far away
     for tick in range(1, horizon + 1):
         combat = carry.runtime.combat
-        out = walk_to_choices(combat, jnp.asarray([target], jnp.float32), jnp.asarray([RADIUS], jnp.float32),
+        out = walk_to_choices(state_for("walk_to", combat), jnp.asarray([target], jnp.float32),
+                              jnp.asarray([RADIUS], jnp.float32),
                               jnp.asarray([GAIT], jnp.int32), maximum_turn_degrees=45.0)
         if bool(out.done[0]):
             return tick - 1

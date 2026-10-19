@@ -632,7 +632,7 @@ Stand-in bodies report their contract's progress names and, on done, the success
 - no illegal decision on either.
 
 This is T1 and T3 of the certificate on a small sample, not the full certificate.
-[test: test_sa_teachers.py, 13 tests; the open-loop factors are decoded by the engine's own decoder]
+[test: test_sa_teachers.py, 14 tests; the open-loop factors are decoded by the engine's own decoder]
 
 **Learned while building them:**
 - The look codebook is regenerated for each `maximum_turn_degrees`, not scaled, so a teacher quantises against the
@@ -640,6 +640,19 @@ This is T1 and T3 of the certificate on a small sample, not the full certificate
 - The 5-bin pitch head steps ±1° or ±45°, so pitch overshoots by up to 21.5° before settling.
 - Done is per tick. A head swinging through the target can be "done" for one tick (1 of 64 lanes), so a data pipeline
   needs done for k consecutive ticks.
+
+**v2: the teachers read what the student sees (2026-10-18, late; TRAINING_PLAN T5).** Both functions steer from the
+commanded head and body yaw, and the engine's head and body follow a command over several ticks. Measured on 96 lanes
+along the v1 teacher's own trajectories:
+- the commanded head yaw is more than 1 degree from the actual one on 29 % of look ticks (p90 45 degrees);
+- 28 % of the yaw labels differ from what the same teacher would choose from the actual head yaw. Pitch differs on
+  0.6 %, the compass on 0.8 % and the body yaw on 2.6 %;
+- so the student, which sees only the actual head, met labels it could not predict, and never completed a look (2.16).
+
+v2 applies the same functions to `observed_state(combat)`, whose commanded fields are the actual ones, and the
+registry marks both teachers `version="v2"`, `state="observed"`. `state_for(name, combat)` is how the certificate
+harness, the trainer and the live replay apply the registered teacher. In closed loop, v2 does what v1 does: walk 1.0,
+look 1.0, look while walking 0.91, each held for 5 ticks (96 lanes). [test: test_observed_state_replaces_exactly_the_commanded_head_and_body_yaw]
 
 ### 2.12 Flat tasks with the NPC body (`tasks/simple_tasks.py`, 2026-10-18)
 
@@ -742,6 +755,12 @@ The CLI is `python -m experimental.neural_agent.skill_agent.teaching.certificate
 |---|---|---|---|---|
 | walk_to v1 | 1,024 / 1,024 (Wilson [0.9963, 1]) | median 1.0004 x the minimum, p90 1.006 | pace within 5 % on all 1,002 steady lanes; 0 illegal of 207,561 decisions | none; done never blinks |
 | look_at v1 | 1,024 / 1,024 | median 13 ticks, p95 20 (no bar: the codebook sets the pace) | tolerance at done on all lanes; 0 illegal of 92,160 | none |
+| walk_to v2 | 1,024 / 1,024 | median 1.037 x the minimum, p90 1.18 | pace within 5 % on all 1,015 steady lanes; 0 illegal of 207,561 decisions | none |
+| look_at v2 | 1,024 / 1,024 | median 13 ticks, p95 21 | tolerance at done on all lanes; 0 illegal of 92,160 | none |
+
+v1 failed T5 by measurement (2.11): its labels depended on the commanded head yaw, which the student cannot see.
+v2 (2026-10-18, late) passes T1 to T3. It walks 3.7 % slower at the median than v1, because it steers from the
+lagging actual body yaw. Certificates: `agent_skills/training_runs/skill_agent_a2/certificates/` (private).
 
 **What they do not show:**
 - On a flat world with point goals, the scripted teachers are essentially perfect, so T1 cannot separate them, and
@@ -788,7 +807,10 @@ illegal decisions. [test: test_sa_distill.py, 9 tests]
 
 **Status: built; the two prep changes are in; A2 has not run.** A 2-iteration smoke (32 lanes, 50 steps per iteration,
 10,191 samples) ran end to end with 0 illegal decisions, before the changes below. Its student was untrained by
-design: walk 0.23 and look 0.0, against the teachers' 1.0 and 1.0. [test: test_sa_distill.py, 11 tests]
+design: walk 0.23 and look 0.0, against the teachers' 1.0 and 1.0. [test: test_sa_distill.py, 12 tests]
+- **The teachers are v2** (2.11). With the head offset in but v1's labels, the student still completed no look
+  (2 iterations x 32 lanes x 200 steps: walk 0.23, look 0.00). With v2's labels, the same smoke reaches walk 0.68 and
+  look 0.10 seen, 0.55 and 0.10 held out. That is still far from the bars at this size, but the student now learns.
 - **The head's offset from the body is in the self token** (`SelfToken.head_yaw_offset`, 13 features, 2026-10-18
   late). Without it, look_at could not tell when its gaze was on target: the self token carried the body yaw, and the
   head moves up to 45 degrees away from it. The adapter reads the head yaw from the self row's sin and cos (body 90 and

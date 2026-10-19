@@ -194,7 +194,8 @@ Status (2026-10-18, late):
 - A2's two teachers exist (`teaching/teachers.py`), and so do its flat tasks (`tasks/simple_tasks.py`).
 - The observation adapter is built (README 2.14). The teachers pass T1, T2 and T3, and walk_to passes T4 live (README
   2.15). A2's trainer is built (`training/distill.py`, README 2.16) and the owner approved the run ("ok continue");
-  the head's offset from the body is now in the self token, so the run is next.
+  the head's offset from the body is now in the self token, and the teachers are v2, which read what the student
+  sees (README 2.11), so the run is next.
 
 ## 5. Decisions for the owner (answered 2026-10-18, late; docs/BUILD.md section 0)
 

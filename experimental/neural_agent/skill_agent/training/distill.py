@@ -61,7 +61,12 @@ from experimental.neural_agent.skill_agent.model.generalist import (
 )
 from experimental.neural_agent.skill_agent.model.observation_adapter import legal_tokens
 from experimental.neural_agent.skill_agent.tasks import simple_tasks as st
-from experimental.neural_agent.skill_agent.teaching.teachers import look_at_choices, walk_to_choices
+from experimental.neural_agent.skill_agent.teaching.teachers import (
+    TEACHERS,
+    look_at_choices,
+    state_for,
+    walk_to_choices,
+)
 from hytalegym.jax.combat.observation.v3.policy.layout import (
     ARSENAL_POLICY_ACTION_HEAD_NAMES as HEAD_NAMES,
 )
@@ -392,14 +397,15 @@ def _successes(combat: Any, episode: Episodes) -> tuple[jax.Array, jax.Array]:
 
 
 def teacher_labels(combat: Any, episode: Episodes, *, maximum_turn_degrees: float) -> Labels:
-    """The two teachers' labels: walk heads from walk_to_choices, gaze heads from look_at_choices, neutral elsewhere."""
+    """The two registered teachers' labels (``teachers.state_for``: v2 reads what the student sees): walk heads from
+    walk_to_choices, gaze heads from look_at_choices, neutral elsewhere."""
 
     walk = walk_to_choices(
-        combat, episode.walk.target_xz, episode.walk.radius, episode.walk.gait,
+        state_for("walk_to", combat), episode.walk.target_xz, episode.walk.radius, episode.walk.gait,
         maximum_turn_degrees=maximum_turn_degrees,
     )
     look = look_at_choices(
-        combat, episode.look.target_xyz, episode.look.tolerance_degrees,
+        state_for("look_at", combat), episode.look.target_xyz, episode.look.tolerance_degrees,
         maximum_turn_degrees=maximum_turn_degrees,
     )
     walk_on = episode.walk_active[:, None] & jnp.asarray(WALK_HEADS)[None, :]
@@ -909,6 +915,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "heads": list(HEAD_NAMES),
         "walk_heads": [int(i) for i in np.flatnonzero(WALK_HEADS)],
         "gaze_heads": [int(i) for i in np.flatnonzero(GAZE_HEADS)],
+        "teachers": {name: {"version": TEACHERS[name].version, "state": TEACHERS[name].state}
+                     for name in ("walk_to", "look_at")},
         "held_out_rules": {
             "walk_rear_left_bearing_degrees": list(REAR_LEFT_DEGREES),
             "look_yaw_offset_degrees": list(LOOK_HELD_OUT_DEGREES),

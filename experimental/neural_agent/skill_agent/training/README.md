@@ -8,7 +8,7 @@ checkpoints) stays under `agent_skills/training_runs/` and is never staged.
 | `traces.py` | 222 | Native NPC trace ingestion: recorded `NpcTraceFrame` batches as arrays with a documented schema (A7). |
 | `bc_dataset.py` | 751 | The behaviour-cloning dataset from those traces on the gen-7 surface; the compass labelled in the commanded body frame (v4); the self token's head yaw offset (v5). |
 | `bc_smoke.py` | 235 | B2's smoke: a tiny behaviour-cloning body held out by world, and the trained body run through the combiner. |
-| `distill.py` | 953 | DAgger distillation of the request-conditioned generalist: walk_to and look_at from the two scripted teachers, with held-out argument regions and a report of student against teacher (A2; README 2.16). |
+| `distill.py` | 961 | DAgger distillation of the request-conditioned generalist: walk_to and look_at from the two scripted teachers, with held-out argument regions and a report of student against teacher (A2; README 2.16). |
 
 Run:
 

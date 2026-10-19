@@ -46,6 +46,7 @@ from experimental.neural_agent.skill_agent.teaching.teachers import (
     TEACHERS,
     TeacherOutput,
     look_at_choices,
+    state_for,
     walk_to_choices,
 )
 from hytalegym.jax.combat.observation.v3.policy.layout import ARSENAL_POLICY_ACTION_HEAD_SIZES
@@ -123,13 +124,15 @@ def _look_gap(combat, goals):
 
 def _walk_teacher(combat, goals) -> TeacherOutput:
     return walk_to_choices(
-        combat, goals.target_xz, goals.radius, goals.gait, maximum_turn_degrees=MAXIMUM_TURN_DEGREES
+        state_for("walk_to", combat), goals.target_xz, goals.radius, goals.gait,
+        maximum_turn_degrees=MAXIMUM_TURN_DEGREES,
     )
 
 
 def _look_teacher(combat, goals) -> TeacherOutput:
     return look_at_choices(
-        combat, goals.target_xyz, goals.tolerance_degrees, maximum_turn_degrees=MAXIMUM_TURN_DEGREES
+        state_for("look_at", combat), goals.target_xyz, goals.tolerance_degrees,
+        maximum_turn_degrees=MAXIMUM_TURN_DEGREES,
     )
 
 
@@ -561,6 +564,7 @@ def _certificate(name: str, seeds, episodes: int, *, date: str, policy_name: str
         "teacher": {
             "name": name,
             "version": spec.version,
+            "state": spec.state,
             "kind": spec.kind,
             "verbs": list(spec.verbs),
             "reads": list(spec.reads),

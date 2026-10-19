@@ -6,9 +6,9 @@ obedience, T4 the live replay, T5 whether a student can follow it, T7 failure so
 
 | Module | Lines | What it holds |
 |---|---:|---|
-| `teachers.py` | 209 | The scripted walk_to and look_at teachers and the `TEACHERS` registry; the compass in the commanded body frame. |
-| `certificates.py` | 716 | `certify_walk_to`, `certify_look_at`: T1, T2, T3 and T7-lite over seeded batches of simulated episodes; the CLI writes the certificate as JSON. |
-| `certify_live.py` | 139 | T4 for walk_to: the teacher in closed loop on the live 0.7.2 server (bridge port 5570), paired with the simulator from the same start and goal. |
+| `teachers.py` | 231 | The scripted walk_to and look_at teachers and the `TEACHERS` registry; the compass in the commanded body frame. The registered teachers (v2) read `observed_state`: the actual head and body yaw, what a student sees. |
+| `certificates.py` | 720 | `certify_walk_to`, `certify_look_at`: T1, T2, T3 and T7-lite over seeded batches of simulated episodes; the CLI writes the certificate as JSON. |
+| `certify_live.py` | 138 | T4 for walk_to: the teacher in closed loop on the live 0.7.2 server (bridge port 5570), paired with the simulator from the same start and goal. |
 
 Run (the live command, through the 0.7.2 launcher, is in `certify_live.py`'s docstring):
 
