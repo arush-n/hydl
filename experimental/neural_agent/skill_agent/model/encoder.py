@@ -40,15 +40,31 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from experimental.neural_agent.skill_agent.contract.surface import TOKEN_TYPES as SURFACE_TOKEN_TYPES
+from experimental.neural_agent.skill_agent.contract.surface import TOKEN_SCHEMA_V1, TOKEN_SCHEMAS
 
-TRUNK_TYPES: tuple[tuple[str, type], ...] = tuple(
-    (name, SURFACE_TOKEN_TYPES[name])
-    for name in ("entity", "block_candidate", "inventory_slot", "geometry", "self", "kit")
-)
-"""The token types the trunk reads, in its sequence order: (name in ``surface.TOKEN_TYPES``, record class)."""
+TRUNK_TYPE_NAMES: tuple[str, ...] = ("entity", "block_candidate", "inventory_slot", "geometry", "self", "kit")
+"""The token types the trunk reads, in its sequence order, under every token schema."""
 
-assert all(cls.FEATURES[-1] == "marked" for _, cls in TRUNK_TYPES), "each token's last feature must be 'marked'"
+
+def trunk_types(schema: str = TOKEN_SCHEMA_V1) -> tuple[tuple[str, type], ...]:
+    """The trunk's token types under ``schema`` (``surface.TOKEN_SCHEMAS``): (name, record class) in sequence order."""
+
+    types = TOKEN_SCHEMAS[schema]
+    return tuple((name, types[name]) for name in TRUNK_TYPE_NAMES)
+
+
+def token_widths(schema: str = TOKEN_SCHEMA_V1) -> tuple[tuple[str, int], ...]:
+    """``EncoderConfig.token_types`` for ``schema``: a trunk reads v2 tokens with
+    ``EncoderConfig(token_types=token_widths(TOKEN_SCHEMA_V2))``."""
+
+    return tuple((name, len(cls.FEATURES)) for name, cls in trunk_types(schema))
+
+
+TRUNK_TYPES: tuple[tuple[str, type], ...] = trunk_types(TOKEN_SCHEMA_V1)
+"""The token types the trunk reads under ``skill_tokens_v1``, in its sequence order: (name, record class)."""
+
+assert all(cls.FEATURES[-1] == "marked" for schema in TOKEN_SCHEMAS for _, cls in trunk_types(schema)), \
+    "each token's last feature must be 'marked'"
 
 _LAYER_NORM_EPSILON: float = 1e-5
 
@@ -419,6 +435,7 @@ def stack_batch(
 
 __all__ = [
     "TRUNK_TYPES",
+    "TRUNK_TYPE_NAMES",
     "AttentionParams",
     "BlockParams",
     "DenseParams",
@@ -434,4 +451,6 @@ __all__ = [
     "pack_tokens",
     "parameter_count",
     "stack_batch",
+    "token_widths",
+    "trunk_types",
 ]

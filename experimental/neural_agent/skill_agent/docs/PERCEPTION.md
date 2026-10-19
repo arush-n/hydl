@@ -1,8 +1,9 @@
 # The skill layer's perception: an open content schema (design, 2026-10-19)
 
-**Status: accepted by the owner on 2026-10-19, with the decisions of section 8. Build step 1 is done: the registry
-(`perception/registry.py`) holds the items, blocks, gather types, creatures, attitudes and description vectors, built
-and tested; the v2 token types come next.** Owner rulings that frame it (2026-10-19): the
+**Status: accepted by the owner on 2026-10-19, with the decisions of section 8. Build steps 1 and 2 are done: the
+registry (`perception/registry.py`) holds the items, blocks, gather types, creatures, attitudes and description
+vectors; the v2 token types stand beside v1 (`contract/surface.py`, section 4 "As built") and the trunk reads them;
+the v2 adapter comes next.** Owner rulings that frame it (2026-10-19): the
 perception schema comes before the working spine; the layers are discrete components finished independently and
 combined later, so this is the skill layer's own input contract; and the architecture must stay open to mods and new
 game features ("large enough for anything").
@@ -113,6 +114,27 @@ damage, slows movement) instead of five names; the material class.
 **self**: as today, plus the held item's kind and powers, which the agent knows.
 
 **kit, light, route**: unchanged.
+
+**As built** (step 2, 2026-10-19; `contract/surface.py`, schema `skill_tokens_v2`): entity 89 features, block
+candidate 71, inventory slot 74, self 36; geometry (14) and kit (15) keep v1's. Each content token holds its v1 state,
+the registry's property row (pinned in the contract: 14 creature, 15 block and 21 item properties, checked against
+the registry by a test), a 32-number description vector, 8 reserve features, `known` (its id is in the registry) and
+`marked` last; ids stay fields. The entity adds its facing, its attack phase (the observation's five) and progress,
+its attitude toward the agent (no bit set when unknown, as for another player), `player`, and its maximum health
+over the agent's; the self token adds the agent's maximum health and the held item's property row. The trunk reads
+them with `EncoderConfig(token_types=token_widths(TOKEN_SCHEMA_V2))` (`model/encoder.py`). Three refinements of the
+proposal above:
+
+1. An inventory tool's powers per gather family are dropped. A family list is a closed vocabulary, which a mod's new
+   gather type would break. A tool's worth shows where a decision needs it, in the block candidate's relations (the
+   best carried and the held tool's power and quality margin against that block), and its description vector tells
+   a pickaxe from an axe.
+2. Geometry keeps v1's five fluid names until fluids enter the registry.
+3. What an entity holds is a kind (unknown, nothing, block, tool, weapon, armor, consumable, other), unknown until the
+   observation publishes held items.
+
+v1 is unchanged: its surface JSON for both layouts, its widths and the trunk's default configuration are equal to
+those before step 2. The v2 schema's JSON export comes with the asks of the simulator layer (step 4).
 
 ## 5. What the adapter does
 

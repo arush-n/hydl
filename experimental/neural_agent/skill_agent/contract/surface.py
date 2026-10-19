@@ -54,6 +54,16 @@ features in the order of ``FEATURES``; identifiers (entity handles, block kinds,
 are fields, not features, because they enter a network through an embedding or the resolver.
 Every token has ``marked``: the instructed target is marked in its set (requirement 2 of
 ``SKILL_LIBRARY.md`` section 7).
+
+Token schemas
+-------------
+``skill_tokens_v1`` (``TOKEN_TYPES``) is the schema the A2 reference runs were trained on; it does not change.
+``skill_tokens_v2`` (``TOKEN_TYPES_V2``; ``docs/PERCEPTION.md`` section 4) describes content by its properties and
+relations: an entity, block candidate or inventory slot carries its kind's property row and description vector from
+the content registry (``perception/registry.py``, looked up by role, block or item id, which stay fields), the
+relations a decision compares (an entity's attitude toward the agent, the agent's tools against a block), and
+``RESERVE_WIDTH`` spare features. The property rows are pinned here (``CREATURE_PROPERTIES``, ``ITEM_PROPERTIES``,
+``BLOCK_PROPERTIES``), so a change to the registry's rows is a new schema, not a silent change of width.
 """
 
 from __future__ import annotations
@@ -587,6 +597,254 @@ TOKEN_TYPES: Mapping[str, type] = {
 """Token type name -> record class."""
 
 
+# ---- Token schema v2 ----
+
+TOKEN_SCHEMA_V1: str = "skill_tokens_v1"
+TOKEN_SCHEMA_V2: str = "skill_tokens_v2"
+
+ATTITUDES: tuple[str, ...] = ("ignore", "hostile", "neutral", "friendly", "revered")
+"""An entity's attitude toward the agent, in the engine's order (``perception/registry.py``, ``ATTITUDES``)."""
+ATTACK_PHASES: tuple[str, ...] = ("idle", "windup", "sweep", "recovery", "cooldown")
+"""An entity's attack phase as the observation publishes it (``target_phase_*``, the gym's
+``observation/v1/schema/contract.py``)."""
+HELD_KINDS: tuple[str, ...] = ("unknown", "nothing", "block", "tool", "weapon", "armor", "consumable", "other")
+"""What an entity holds; ``unknown`` until the observation can publish held items legally."""
+CONTAINERS: tuple[str, ...] = ("storage", "armor", "hotbar", "utility", "tools", "backpack")
+"""The gym's inventory containers, in id order (``jax/combat/inventory/schema/contract.py``)."""
+DESCRIPTION_WIDTH: int = 32
+"""Numbers per description vector (owner, 2026-10-19: description vectors now; PERCEPTION.md section 9 step 5, the
+per-tick cost, sets the final width)."""
+RESERVE_WIDTH: int = 8
+"""Spare features per content token, zero until a later version assigns them (PERCEPTION.md principle 6)."""
+
+CREATURE_PROPERTIES: tuple[str, ...] = (
+    "non_gameplay", "max_health", "walks", "flies", "swims", "walk_speed", "fly_speed", "swim_speed", "height",
+    "width", "eye_height", "attack_distance", "tameable", "trades",
+)
+ITEM_PROPERTIES: tuple[str, ...] = (
+    "block", "tool", "weapon", "armor", "consumable", "utility", "furniture", "non_gameplay", "quality", "item_level",
+    "max_stack_log2", "max_durability_log10", "armor_head", "armor_chest", "armor_legs", "armor_hands", "armor_health",
+    "armor_physical", "armor_projectile", "tool_best_power", "tool_gather_types",
+)
+BLOCK_PROPERTIES: tuple[str, ...] = (
+    "breakable", "unbreakable", "breaking_quality", "drops", "solid", "opaque", "partly_transparent", "cube", "door",
+    "stateful", "usable", "collision_effect", "light", "needs_support", "stackable",
+)
+"""The registry's property rows as ``skill_tokens_v2`` reads them (``perception/registry.py``: ``CREATURE_FEATURES``,
+``ITEM_FEATURES``, ``BLOCK_FEATURES``; a test checks they agree)."""
+
+_DESCRIPTION = tuple(f"description_{index}" for index in range(DESCRIPTION_WIDTH))
+_RESERVE = tuple(f"reserve_{index}" for index in range(RESERVE_WIDTH))
+
+
+def _values(value: Any, length: int, name: str) -> tuple[float, ...]:
+    """``length`` finite numbers; ``None`` (an unknown row) is zeros."""
+
+    items = (0.0,) * length if value is None else tuple(value)
+    if len(items) != length:
+        raise ValueError(f"{name} must have {length} values, got {len(items)}")
+    return tuple(_number(item, f"{name}[{index}]") for index, item in enumerate(items))
+
+
+@dataclass(frozen=True)
+class EntityTokenV2:
+    """A creature or person (schema v2): its state in the agent's frame, its attitude toward the agent, its kind's
+    properties and description from the registry by ``role_id``, and what it holds.
+
+    ``yaw`` is its facing relative to the agent's body yaw, in radians. ``attitude`` is ``None`` (no bit set) when
+    not known, as for another player. ``health_ratio`` is log10 of its maximum health over the agent's, halved and
+    clipped to [-1, 1]. ``known`` says ``role_id`` is in the registry; ``None`` rows are zeros.
+    """
+
+    handle: int
+    role_id: str
+    position: tuple[float, float, float]
+    velocity: tuple[float, float, float]
+    visible: bool
+    last_seen_age_ticks: int
+    health_fraction: float
+    alive: bool
+    yaw: float
+    attack_phase: str
+    attack_progress: float
+    attitude: str | None
+    player: bool
+    known: bool
+    health_ratio: float
+    held: str = "unknown"
+    properties: tuple[float, ...] | None = None
+    description: tuple[float, ...] | None = None
+    marked: bool = False
+
+    FEATURES = ("forward", "right", "up", "v_forward", "v_right", "v_up", "visible", "last_seen_age",
+                "health_fraction", "alive", "yaw_sin", "yaw_cos", *(f"phase_{phase}" for phase in ATTACK_PHASES),
+                "attack_progress", *(f"attitude_{attitude}" for attitude in ATTITUDES), "player", "known",
+                "health_ratio", *(f"kind_{name}" for name in CREATURE_PROPERTIES),
+                *(f"held_{kind}" for kind in HELD_KINDS), *_DESCRIPTION, *_RESERVE, "marked")
+
+    def __post_init__(self) -> None:
+        name = "EntityTokenV2"
+        object.__setattr__(self, "handle", _count(self.handle, f"{name}.handle"))
+        if not isinstance(self.role_id, str):
+            raise TypeError(f"{name}.role_id must be a str, got {type(self.role_id).__name__}")
+        object.__setattr__(self, "position", _vector(self.position, f"{name}.position"))
+        object.__setattr__(self, "velocity", _vector(self.velocity, f"{name}.velocity"))
+        for flag in ("visible", "alive", "player", "known", "marked"):
+            _flag(getattr(self, flag), f"{name}.{flag}")
+        object.__setattr__(self, "last_seen_age_ticks", _count(self.last_seen_age_ticks, f"{name}.last_seen_age_ticks"))
+        object.__setattr__(self, "health_fraction", _number(self.health_fraction, f"{name}.health_fraction", 0.0, 1.0))
+        object.__setattr__(self, "yaw", _number(self.yaw, f"{name}.yaw", -math.pi, math.pi))
+        _member(self.attack_phase, ATTACK_PHASES, f"{name}.attack_phase")
+        object.__setattr__(self, "attack_progress", _number(self.attack_progress, f"{name}.attack_progress", 0.0, 1.0))
+        if self.attitude is not None:
+            _member(self.attitude, ATTITUDES, f"{name}.attitude")
+        object.__setattr__(self, "health_ratio", _number(self.health_ratio, f"{name}.health_ratio", -1.0, 1.0))
+        _member(self.held, HELD_KINDS, f"{name}.held")
+        object.__setattr__(self, "properties", _values(self.properties, len(CREATURE_PROPERTIES), f"{name}.properties"))
+        object.__setattr__(self, "description", _values(self.description, DESCRIPTION_WIDTH, f"{name}.description"))
+
+    def features(self) -> tuple[float, ...]:
+        age = min(self.last_seen_age_ticks, TICKS_SATURATION) / TICKS_SATURATION
+        return (*self.position, *self.velocity, float(self.visible), age, self.health_fraction, float(self.alive),
+                math.sin(self.yaw), math.cos(self.yaw), *_one_hot(self.attack_phase, ATTACK_PHASES),
+                self.attack_progress, *_one_hot(self.attitude, ATTITUDES), float(self.player), float(self.known),
+                self.health_ratio, *self.properties, *_one_hot(self.held, HELD_KINDS), *self.description,
+                *(0.0,) * RESERVE_WIDTH, float(self.marked))
+
+
+@dataclass(frozen=True)
+class BlockCandidateTokenV2:
+    """A block the agent can act on (schema v2): where it is, the face, its properties and description from the
+    registry by ``block_id``, and how the agent's tools fare against it.
+
+    The relations compare the agent's own tools (their ``Tool.Specs``) with the block's breaking rule:
+    ``best_power`` is the highest power a carried tool has against the block's gather type and ``held_power`` the
+    held item's; each ``*_quality_margin`` is that tool's quality for the gather type minus the quality the block asks,
+    over 5 and clipped to [-1, 1], and -1 when no tool applies.
+    """
+
+    cell: tuple[int, int, int]
+    offset: tuple[float, float, float]
+    face: str
+    block_id: str
+    known: bool
+    best_power: float = 0.0
+    best_quality_margin: float = -1.0
+    held_power: float = 0.0
+    held_quality_margin: float = -1.0
+    properties: tuple[float, ...] | None = None
+    description: tuple[float, ...] | None = None
+    marked: bool = False
+
+    FEATURES = ("forward", "right", "up", *(f"face_{face}" for face in FACES), "known",
+                *(f"block_{name}" for name in BLOCK_PROPERTIES), "best_power", "best_quality_margin", "held_power",
+                "held_quality_margin", *_DESCRIPTION, *_RESERVE, "marked")
+
+    def __post_init__(self) -> None:
+        name = "BlockCandidateTokenV2"
+        object.__setattr__(self, "cell", _cell(self.cell, f"{name}.cell"))
+        object.__setattr__(self, "offset", _vector(self.offset, f"{name}.offset"))
+        _member(self.face, FACES, f"{name}.face")
+        if not isinstance(self.block_id, str):
+            raise TypeError(f"{name}.block_id must be a str, got {type(self.block_id).__name__}")
+        _flag(self.known, f"{name}.known")
+        _flag(self.marked, f"{name}.marked")
+        for power in ("best_power", "held_power"):
+            object.__setattr__(self, power, _number(getattr(self, power), f"{name}.{power}", 0.0))
+        for margin in ("best_quality_margin", "held_quality_margin"):
+            object.__setattr__(self, margin, _number(getattr(self, margin), f"{name}.{margin}", -1.0, 1.0))
+        object.__setattr__(self, "properties", _values(self.properties, len(BLOCK_PROPERTIES), f"{name}.properties"))
+        object.__setattr__(self, "description", _values(self.description, DESCRIPTION_WIDTH, f"{name}.description"))
+
+    def features(self) -> tuple[float, ...]:
+        return (*self.offset, *_one_hot(self.face, FACES), float(self.known), *self.properties, self.best_power,
+                self.best_quality_margin, self.held_power, self.held_quality_margin, *self.description,
+                *(0.0,) * RESERVE_WIDTH, float(self.marked))
+
+
+@dataclass(frozen=True)
+class InventorySlotTokenV2:
+    """One inventory slot (schema v2): its container and place, stack and wear, whether it is held, and the item's
+    properties and description from the registry by ``item_id`` (``""`` is empty). ``quantity_fraction`` is the
+    observation's ``quantity_log2_fraction``."""
+
+    container: str
+    slot_fraction: float
+    item_id: str
+    quantity_fraction: float
+    durability: float
+    held: bool
+    known: bool
+    properties: tuple[float, ...] | None = None
+    description: tuple[float, ...] | None = None
+    marked: bool = False
+
+    FEATURES = (*(f"container_{container}" for container in CONTAINERS), "slot_fraction", "quantity", "durability",
+                "empty", "held", "known", *(f"item_{name}" for name in ITEM_PROPERTIES), *_DESCRIPTION, *_RESERVE,
+                "marked")
+
+    def __post_init__(self) -> None:
+        name = "InventorySlotTokenV2"
+        _member(self.container, CONTAINERS, f"{name}.container")
+        if not isinstance(self.item_id, str):
+            raise TypeError(f"{name}.item_id must be a str, got {type(self.item_id).__name__}")
+        for fraction in ("slot_fraction", "quantity_fraction", "durability"):
+            object.__setattr__(self, fraction, _number(getattr(self, fraction), f"{name}.{fraction}", 0.0, 1.0))
+        for flag in ("held", "known", "marked"):
+            _flag(getattr(self, flag), f"{name}.{flag}")
+        object.__setattr__(self, "properties", _values(self.properties, len(ITEM_PROPERTIES), f"{name}.properties"))
+        object.__setattr__(self, "description", _values(self.description, DESCRIPTION_WIDTH, f"{name}.description"))
+
+    def features(self) -> tuple[float, ...]:
+        return (*_one_hot(self.container, CONTAINERS), self.slot_fraction, self.quantity_fraction, self.durability,
+                float(self.item_id == ""), float(self.held), float(self.known), *self.properties, *self.description,
+                *(0.0,) * RESERVE_WIDTH, float(self.marked))
+
+
+@dataclass(frozen=True)
+class SelfTokenV2:
+    """The agent itself (schema v2): a v1 ``SelfToken`` (``base``, whose ``marked`` it keeps), the agent's maximum
+    health (log10 over 4, the registry's scale) and the held item's properties from the registry, which the agent
+    knows; ``holds`` is false and the row zeros when the hands are empty or the item is unknown."""
+
+    base: SelfToken
+    max_health: float
+    holds: bool
+    held_properties: tuple[float, ...] | None = None
+
+    FEATURES = (*SelfToken.FEATURES[:-1], "max_health", "holds", *(f"held_{name}" for name in ITEM_PROPERTIES),
+                "marked")
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.base, SelfToken):
+            raise TypeError(f"SelfTokenV2.base must be a SelfToken, got {type(self.base).__name__}")
+        object.__setattr__(self, "max_health", _number(self.max_health, "SelfTokenV2.max_health", 0.0))
+        _flag(self.holds, "SelfTokenV2.holds")
+        object.__setattr__(self, "held_properties",
+                           _values(self.held_properties, len(ITEM_PROPERTIES), "SelfTokenV2.held_properties"))
+
+    def features(self) -> tuple[float, ...]:
+        return (*self.base.features()[:-1], self.max_health, float(self.holds), *self.held_properties,
+                float(self.base.marked))
+
+
+TOKEN_TYPES_V2: Mapping[str, type] = {
+    "entity": EntityTokenV2,
+    "block_candidate": BlockCandidateTokenV2,
+    "inventory_slot": InventorySlotTokenV2,
+    "geometry": GeometryToken,
+    "light": LightToken,
+    "self": SelfTokenV2,
+    "kit": KitToken,
+    "route": RouteToken,
+}
+"""Token type name -> record class under ``skill_tokens_v2``. Geometry, light, kit and route are v1's; geometry gains
+fluid properties when fluids enter the registry."""
+
+TOKEN_SCHEMAS: Mapping[str, Mapping[str, type]] = {TOKEN_SCHEMA_V1: TOKEN_TYPES, TOKEN_SCHEMA_V2: TOKEN_TYPES_V2}
+"""Token schema id -> its token types."""
+
+
 # ---- JSON export ----
 
 
@@ -636,6 +894,12 @@ def surface_from_dict(mapping: Mapping[str, Any]) -> tuple[HeadSpec, ...]:
 
 
 __all__ = [
+    "ATTACK_PHASES",
+    "ATTITUDES",
+    "BLOCK_PROPERTIES",
+    "CONTAINERS",
+    "CREATURE_PROPERTIES",
+    "DESCRIPTION_WIDTH",
     "DURATION_BUCKET_TICKS",
     "ENTITY_ROLES",
     "FACES",
@@ -643,23 +907,34 @@ __all__ = [
     "GEN5_DODGE_CHOICES",
     "GEN5_HEADS",
     "GEN7_NEW_HEADS",
+    "HELD_KINDS",
+    "ITEM_PROPERTIES",
     "LAYOUT_NAMES",
     "LOCOMOTION_HEAD",
     "MAX_HOLD_THRESHOLDS",
+    "RESERVE_WIDTH",
     "SCOPE_NAMES",
     "SIGNED_LOOK_HEADS",
     "TICK_SECONDS",
     "TICK_SECONDS_BY_LAYOUT",
+    "TOKEN_SCHEMAS",
+    "TOKEN_SCHEMA_V1",
+    "TOKEN_SCHEMA_V2",
     "TOKEN_TYPES",
+    "TOKEN_TYPES_V2",
     "BlockCandidateToken",
+    "BlockCandidateTokenV2",
     "EntityToken",
+    "EntityTokenV2",
     "GeometryToken",
     "HeadSpec",
     "InventorySlotToken",
+    "InventorySlotTokenV2",
     "KitToken",
     "LightToken",
     "RouteToken",
     "SelfToken",
+    "SelfTokenV2",
     "head_layout",
     "head_names",
     "head_sizes",
