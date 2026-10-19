@@ -191,6 +191,20 @@ stand in the short-tick regime the simulator's 30 Hz step assumes, and the nativ
 recorded as a known deviation. No lane is running. The swap waits on the publish gate (recertification's audit gate stops at
 perception; re-word the B claims and accept, or publish with the audit state recorded).
 
+Afternoon of 2026-10-19 (the Haiku limit lifted; the four lanes resumed from their transcripts): landed the per-line claim text
+mechanism (`7a260d2`: a 0.7 baseline record carries `claim_texts` keyed by the audit's claim constant, the 0.5 text and hashes
+never move), host contracts keyed per server version (#84, `8be0e7c`: the ExplosionUtils and DamageSystems digests and the
+mutable-block evidence and cells labels select a 0.5.7 or 0.7.2 entry by the profile; the 0.5.10 control is byte-identical;
+`STALE_CLAIM_TEXT_072` is enforced by `pins_for`), and recertification first-capture mode (`02540a4`: per-line fixture roots,
+0.7.2 under `fixtures/world/v0_7/`; compare or first_capture decided from four references, a partial set refused; the staged
+seed-570057 contract checked against its NPZ and the expected digests `9DCA3C71`/`408D5FB2`; the capacity report produced for
+the line; two stationary captures that must agree; the cascade derived last). Running: the collector's acceptance of the eleven
+0.7.2 pins (round one accepted nine with their re-worded claim text; round two takes explosion_dynamics, explosion_mutation and
+inventory after the #84 digests), and the hit-interrupt probe (#69, early receipts under analysis). Next, in order: the live
+first-capture run on 0.7.2 once the gate passes all eleven (launcher on 5556/25574, about 30 minutes; pre-checks pass: the three
+references absent, lease free, jar `460054A8`), then the 0.7.2 products and the suites' frozen v7, the pointer flips, and the
+stamp #79 and default flip #80 which wait for the owner's training. Nothing is pushed.
+
 ## 7. Decisions taken and still open (2026-10-18, evening)
 
 Resolved today under the owner's delegation ("manage the remaining commits the best way you think"):
