@@ -392,13 +392,16 @@ without the variable. Findings beyond the pins: `EntityScaleComponent` is a phys
 several (ad) "removed" members were signature changes; the explosion host contract is keyed to 0.5.7 digests. Phase 5's gate stays
 open until the ten audits are re-derived claim by claim.
 
-**Phase 5, classification of the ten failing audits (2026-10-19; FIDELITY-0.7.2.md section (al), classification addendum).** Four
-of ten classified before the Haiku weekly limit stopped the lanes: `explosion_dynamics` A (pin only; accepted, 2 of 11 verified),
-`doors` B on content (two new vertical door assets; the door mechanics identical), `explosion_mutation` B on one claim (block
-health stored per section, not per chunk map; the behaviour claims hold), `navigation` C (no claim false, three undecided). Six
-not classified: `perception`, `entity_geometry`, `actor_world_state`, `locomotion`, `crafting`, `mutable_blocks`. Evidence per
-claim in `tools/source_pins/evidence_072/`; the claim-level pin design that lets the next release line re-derive only changed
-methods is in `tools/source_pins/README.md`. The gate still stops at `perception`.
+**Phase 5, classification of the ten failing audits (2026-10-19; FIDELITY-0.7.2.md section (al), classification addendum and
+correction).** A 1 (`explosion_dynamics`, accepted as pin-only, 2 of 11 verified), B 6 (`perception`, `entity_geometry`,
+`locomotion`, `doors`, `mutable_blocks`, `explosion_mutation`), C 3 (`navigation`, `actor_world_state`, `crafting`). Genuine 0.7.2
+changes among the B claims: block health per `BlockHealthSection` with the write path `BlockOperations.setBlock`, entity scale
+made physical, the `MovementStates` extra byte, the content censuses (doors, projected-distance declarations, support census,
+falling blocks); claims already false on the 0.5.10 control are gen-5 test artifacts (`DeathComponent` exclusion, 25
+`InteractionType`, `WorldChunk.breakBlock`). Every claim's verdict is in `worldgen/source_pin_baselines_072.json` and
+`tools/source_pins/evidence_072/`; the claim-level pin design is in `tools/source_pins/README.md`. The gate still stops at
+`perception`; next are the C leaves (the lanes stopped at the Haiku weekly limit, which resets 2026-10-23), then the B claims
+re-worded for 0.7.2 and the constructs the genuine changes need (block health reset on write is design-only today).
 
 **Phase 4 stubs, offline design pass (2026-10-18; `sim/gen7/mechanics/DESIGNS-072.md`).** The thirteen unimplemented switches
 now have a design record each (authored 0.7.2 facts with their class or asset, the hook target, the state needed, the receipt and a

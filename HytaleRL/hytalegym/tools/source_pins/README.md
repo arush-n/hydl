@@ -71,12 +71,27 @@ reports were written by the classification lanes and read, not re-derived, by th
 | doors | B, content | 10 / 0 / 1, plus the census | 33 vertical door assets on 0.7.2 against the audit's literal 31 (horizontal 15 matches); the door mechanics are identical on both jars; the double-door fallback spans two reshaped methods | fail closed |
 | explosion_mutation | B, one claim | 16 / 1 / 7 | block health is stored per `BlockHealthSection`, not in a `BlockHealthChunk` map; the destroyed predicate, the damage scale and the radius boundary hold; undecided: the loaded-chunk test, the soft-block force scale, the support cascade, the drop stack, the bridge publication claims | fail closed |
 | navigation | C | 50 / 0 / 3 | no claim false; undecided: the native trace stage and two repo-side artifact claims that only a live run decides | fail closed |
-| perception, entity_geometry, actor_world_state, locomotion, crafting, mutable_blocks | not classified | | the lanes stopped at the Haiku weekly limit (resets 2026-10-23); `mutable_blocks_census_072.txt` and `mutable_blocks_classpins_072.txt` keep that lane's census (78 pinned classes: 19 unchanged, 58 changed, 1 absent) | fail closed |
+| perception | B, content | 0 / 1 / 7 | 17 `UseProjectedDistance` declarations on 0.7.2 against the audit's 11 (3 expected absent, 9 new, no value change on the common paths); the selectors, the LOS hit and cache paths, the channel and light classes and the repo-side contracts are not re-derived (the lane stopped at the Haiku limit) | fail closed (the gate's first stop) |
+| entity_geometry | B | 6 / 3 / 7 | `EntityScaleBoundingBoxSystem.tick` sets the box scale from `EntityScaleComponent` each tick (absent on the control: entity scale is physical on 0.7.2); the spatial query excludes `Intangible` only, with zero `DeathComponent` references on both jars (that exclusion claim was stale on the control too); rotation semantics, the collision system, the transport schema and ordering hold; the entity LOS endpoint and the double-application rule are undecided | fail closed |
+| actor_world_state | C | 0 / 0 / 7 | fall, breathing, controller medium, submersion, drop and stationary traversal unread (the lane stopped) | fail closed |
+| locomotion | B, protocol | 2 / 1 / 6 | `MovementStates` keeps its 23 booleans and adds `public byte extraJumpsUsed` on 0.7.2 (a 24th field outside the 23-bit mask); the sprint multiplier 1.273 and the Default gameplay config hold; walk steering, the sprint fallback 1.65 and the repo producer are undecided | fail closed |
+| mutable_blocks | B | 1 / 5 / 9 | `WorldChunk.setBlock` is gone (the write path is `BlockOperations.setBlock`, which calls `BlockHealthModule.onBlockReplaced`); block health lives in `BlockHealthSection`; the embedded support census differs in 6 fields (resolved rows 5823 to 6216), 11 falling-block assets against 2, 29 `InteractionType` constants against the claimed 25 (26 on the control); the destroyed predicate holds; `block_health_reset_on_write` is a design-only switch today (stub module, no Hook); `mutable_blocks_classpins_072.txt` keeps the class census (78 pinned: 19 unchanged, 58 changed, 1 absent) | fail closed |
+| crafting | C | 0 / 0 / 7 | the 0.7.2 `isValidBenchForRecipe` is the player's known-recipe test, not the bench-match predicate the audit cites, so the bench gate was not located; the recipe corpus was not recounted | fail closed |
 
-What B means for the simulator: `doors` is a content difference (two door assets the 0.5.7 census
-lacks), and `explosion_mutation` is a storage claim in the audit's contract text; neither names a
-behaviour the surrogate reproduces wrongly, and both need the claim re-worded for 0.7.2 before the
-audit can be accepted. The gate stops at `perception` until that audit is classified.
+Final count (the collector lane, 2026-10-19 00:31 CDT): A 1, B 6, C 3. What the B verdicts are.
+Genuine 0.7.2 changes, each a candidate for simulator work: block health stored per
+`BlockHealthSection` and cleared through `BlockOperations.setBlock` (`WorldChunk.setBlock` is gone),
+entity scale made physical by `EntityScaleBoundingBoxSystem`, the `MovementStates` extra byte, and
+the content censuses (doors 33 against 31, projected-distance declarations 17 against 11, the
+support census in 6 fields, 11 falling-block assets against 2). Claims that were already false on
+the 0.5.10 control, so gen-5 test artifacts rather than 0.7.2 drift: the `DeathComponent`
+exclusion, the 25 `InteractionType` constants (26 on the control, 29 on 0.7.2), and
+`WorldChunk.breakBlock` (absent on the control). Each claim's verdict and evidence is also in
+`source_pin_baselines_072.json` (`open_gaps` for B and C, `confirmed_on_072` for A), and
+`evidence_072/EVIDENCE.md` is the consolidated record, one block per claim. The verifier still
+stops at `perception`, the first audit, so 0 of 11 pass end to end while 2 of 11 carry a semantic
+baseline. Next: the C leaves (the lanes stopped at the Haiku weekly limit, which resets
+2026-10-23), then each B claim re-worded for 0.7.2 and the constructs the genuine changes need.
 
 ## Why whole-class digests make every refactor a failure
 
@@ -108,8 +123,8 @@ the set of method digests in its closure. On a new release line:
 Known limits of method-level pins: a claim can rely on a callee outside its list (the closure
 depth must be recorded per claim), and a wrapper chain such as `performBlockDamage` into
 `damageSingleBlock` needs every link listed. The per-claim method lists built in the 2026-10-19
-pass (`evidence_072/claim_methods.json`: doors, explosion_dynamics, explosion_mutation) are the
-input for that design.
+pass (`evidence_072/claim_methods.json`: 149 claim lines across the ten audits, 102 with at least
+one class-method token) are the input for that design.
 
 ## Addendum from the claim-level pass (audits_classify)
 
@@ -121,4 +136,4 @@ input for that design.
   expectations before pinning.
 - The per-claim method list built from the ten failing audits covers 102 of 149 claim lines with at
   least one class-method token; the rest are open (C) or repo-side. The full list is in the lane's
-  scratch (audits_classify/claim_methods.json). It is an input for the claim-level design, not a pin.
+  `evidence_072/claim_methods.json`. It is an input for the claim-level design, not a pin.

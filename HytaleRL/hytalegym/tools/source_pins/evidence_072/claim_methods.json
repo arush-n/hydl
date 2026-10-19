@@ -1,4 +1,106 @@
 {
+ "actor_world_state": [
+  {
+   "claim": "fall_state.* (owner, accumulate, reset, npc_landing_gate, npc_landing_speed, player_boundary)",
+   "locator": "LivingEntity.currentFallDistance; MotionControllerWalk.computeNewFallSpeed (changed on 0.7.2, previous pass)",
+   "methods": [
+    "LivingEntity.currentFallDistance",
+    "MotionControllerWalk.computeNewFallSpeed"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "breathing_state.* (sample interval, point TargetUtil.getLook_position, default_can_breathe, head_occlusion, event_override, classification, component_fields)",
+   "locator": "TargetUtil.getLook (changed on 0.7.2, previous pass), BreathingCheckEvent, DamageSystems$BreathingSystem",
+   "methods": [
+    "TargetUtil.getLook"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "compiled_provider_boundary.*",
+   "locator": "repo-side provider",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "controller_medium.* (SensorInWater to activeMotionController.inWater; floor sample; predicate fluid id not empty)",
+   "locator": "SensorInWater, MotionControllerBase.inWater",
+   "methods": [
+    "MotionControllerBase.inWater"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "submersion.* (WorldUtil.getPackedMaterialAndFluidAtPosition; fill height Fluid.getMaxFluidLevel; boundary)",
+   "locator": "WorldUtil (now takes ChunkStore; 0.5.7 took Ref and ComponentAccessor, previous pass)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "drop.* (MotionControllerWalk.findDropBlockCollision; entity AABB; negative y; first collision times max distance)",
+   "locator": "MotionControllerWalk.findDropBlockCollision (changed on 0.7.2, previous pass)",
+   "methods": [
+    "MotionControllerWalk.findDropBlockCollision"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "stationary_traversal.* (CollisionModule.validatePosition, BoxBlockIntersectionEvaluator.intersectBoxComputeOnGround, detail boxes, filler root offset, clearance)",
+   "locator": "CollisionConfig.canCollide, CollisionModule (changed on 0.7.2, previous pass)",
+   "methods": [
+    "CollisionConfig.canCollide"
+   ],
+   "verdict": "C"
+  }
+ ],
+ "crafting": [
+  {
+   "claim": "recipe_identity.* (String asset key; BenchRecipeRegistry and CraftRecipeAction java file:line citations)",
+   "locator": "old decompile file:line citations, not bytecode",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "bench_gate.* (window attachment; execution_predicate; fieldcraft; page types)",
+   "locator": "bench-match predicate not located (see note)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "execution_boundary.* (player_requirement assert; non_player_output; certificate)",
+   "locator": "CraftingManager.craftItem and giveOutput",
+   "methods": [
+    "CraftingManager.craftItem"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "learning.* (PlayerConfigData codecs; execution key; interaction key; unverified consistency)",
+   "locator": "PlayerConfigData, LearnRecipeInteraction",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "craftable_count.* (simulator counts; native writes zero)",
+   "locator": "repo-side simulator (BaseBuilderTask.java and NativeEnvironmentSession.java file:line)",
+   "methods": [
+    "BaseBuilderTask.java",
+    "NativeEnvironmentSession.java"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "inventory_boundary.* (getInputMaterials clone; resource selectors; simple input priority; crafted stack; pickup priority; overflow)",
+   "locator": "CraftingManager.getInputMaterials, getOutputItemStack; InventoryUtils.moveItem, smartMoveItem, getSectionById (changed, previous pass); SimpleItemContainer.addO",
+   "methods": [
+    "CraftingManager.getInputMaterials",
+    "InventoryUtils.moveItem",
+    "SimpleItemContainer.addOrDropItemStack"
+   ],
+   "verdict": "C"
+  }
+ ],
  "doors": [
   {
    "claim": "vertical_transition.side_test (dot(block_to_actor, yaw_normal) < 0)",
@@ -27,7 +129,7 @@
   },
   {
    "claim": "vertical_transition.open (classified as closed)",
-   "locator": "DoorBlockUtils$DoorState.fromBlockState: null gives CLOSED; any string other than OpenDoorOut or OpenDoorIn falls to CLOSED (0.7.2 offsets 0-4, 33-34)",
+   "locator": "DoorBlockUtils$DoorState.fromBlockState: null gives CLOSED; any string other than OpenDoorOut or OpenDoorIn falls to CLOSED (raw offsets 4 and 7 for the null ca",
    "methods": [
     "DoorBlockUtils$DoorState.fromBlockState"
    ],
@@ -47,7 +149,7 @@
   },
   {
    "claim": "double_door.partner_offset (java_int(base_hitbox_max_x)*2-1)",
-   "locator": "DoorInteraction.getDoubleDoor, identical instructions on both jars: BlockBoundingBoxes ... Box.getMax().x, d2i, iconst_2, imul, iconst_1, isub (offsets 40-45)",
+   "locator": "DoorInteraction.getDoubleDoor, identical instructions on both jars: BlockBoundingBoxes ... Box.getMax().x, d2i, iconst_2, imul, iconst_1, isub (dump index 40-45",
    "methods": [
     "Box.getMax",
     "DoorInteraction.getDoubleDoor"
@@ -84,6 +186,119 @@
    "locator": "the surrogate does not model these; 0.7.2 still has the horizontal door (Door_Horizontal, 15 assets), soft-block break (lambda breakSoftBlocksInHitbox in DoorIn",
    "methods": [],
    "verdict": "A"
+  }
+ ],
+ "entity_geometry": [
+  {
+   "claim": "physical_bounds.semantics (current rotation-adjusted local AABB per entity)",
+   "locator": "ModelSystems$UpdateBoundingBox",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "physical_bounds.producer (ModelSystems.UpdateBoundingBox)",
+   "locator": "ModelSystems$UpdateBoundingBox",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "collision_eligibility.system (TangiableEntitySpatialSystem)",
+   "locator": "TangiableEntitySpatialSystem",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "collision_eligibility.required (TransformComponent, BoundingBox)",
+   "locator": "TangiableEntitySpatialSystem.<clinit>",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "collision_eligibility.excluded (Intangible, DeathComponent)",
+   "locator": "TangiableEntitySpatialSystem.<clinit>",
+   "methods": [],
+   "verdict": "B"
+  },
+  {
+   "claim": "perception_endpoint.owner (PositionCache)",
+   "locator": "PositionCache.testLineOfSightEntity",
+   "methods": [
+    "PositionCache.testLineOfSightEntity"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "perception_endpoint.model_present (Model.eyeHeight)",
+   "locator": "PositionCache.testLineOfSightEntity",
+   "methods": [
+    "PositionCache.testLineOfSightEntity"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "perception_endpoint.model_absent (BoundingBox.center)",
+   "locator": "PositionCache.testLineOfSightEntity",
+   "methods": [
+    "PositionCache.testLineOfSightEntity"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "perception_endpoint.entity_body_blocks_los (false)",
+   "locator": "PositionCache.testLineOfSightEntity",
+   "methods": [
+    "PositionCache.testLineOfSightEntity"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "scale_boundary.EntityScaleComponent (diagnostic_display_network_scale)",
+   "locator": "EntityScaleBoundingBoxSystem.tick",
+   "methods": [
+    "EntityScaleBoundingBoxSystem.tick"
+   ],
+   "verdict": "B"
+  },
+  {
+   "claim": "scale_boundary.physical_scale_application (already_reflected_in_BoundingBox)",
+   "locator": "EntityScaleBoundingBoxSystem.tick",
+   "methods": [
+    "EntityScaleBoundingBoxSystem.tick"
+   ],
+   "verdict": "B"
+  },
+  {
+   "claim": "scale_boundary.double_application_forbidden (true)",
+   "locator": "EntityScaleBoundingBoxSystem.resolveBoxScale",
+   "methods": [
+    "EntityScaleBoundingBoxSystem.resolveBoxScale"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "transport.schema (hytalerl_privileged_npc_snapshot_v2)",
+   "locator": "hytale-plugin-0.7.2 PrivilegedNpcSnapshot.java:17",
+   "methods": [
+    "PrivilegedNpcSnapshot.java"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "transport.ordering (uuid_lexicographic_aligned_spatial_and_geometry_rows)",
+   "locator": "hytale-plugin-0.7.2 PrivilegedNpcSnapshot.java:79-82",
+   "methods": [
+    "PrivilegedNpcSnapshot.java"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "transport.missing_or_invalid (physical_scene_unavailable_fail_closed)",
+   "locator": "hytale-plugin-0.7.2 PrivilegedNpcSnapshot.java, SnapshotCodec.java",
+   "methods": [
+    "PrivilegedNpcSnapshot.java",
+    "SnapshotCodec.java"
+   ],
+   "verdict": "C"
   }
  ],
  "explosion_dynamics": [
@@ -236,7 +451,7 @@
   },
   {
    "claim": "mutation.destroy (remove block health, then WorldChunk.breakBlock)",
-   "locator": "0.7.2 destroy is performBlockBreak then BlockOperations.setBlock(EMPTY) (damageSingleBlock offsets 726-773); BlockOperations.setBlock calls BlockHealthModule.on",
+   "locator": "0.7.2 destroy is performBlockBreak then BlockOperations.setBlock(EMPTY) (damageSingleBlock dump index 726-773 (keybody)); BlockOperations.setBlock calls BlockHe",
    "methods": [
     "BlockHealthModule.onBlockReplaced",
     "BlockOperations.setBlock",
@@ -276,7 +491,7 @@
   },
   {
    "claim": "drops.resolution (BlockHarvestUtils.getDrops then ItemComponent.generateItemDrops)",
-   "locator": "damageSingleBlock calls getDrops(BlockType,int,String,String) then BlockHarvestUtils.spawnDrops, which calls ItemComponent.generateItemDrops (offsets 793-870 an",
+   "locator": "damageSingleBlock calls getDrops(BlockType,int,String,String) then BlockHarvestUtils.spawnDrops, which calls ItemComponent.generateItemDrops (dump index 793-870",
    "methods": [
     "BlockHarvestUtils.spawnDrops",
     "ItemComponent.generateItemDrops"
@@ -311,6 +526,637 @@
     "ExplosionMutationCodec.java",
     "NativeExplosionMutationProbe.java"
    ],
+   "verdict": "C"
+  }
+ ],
+ "locomotion": [
+  {
+   "claim": "movement_state_observation.protocol (MovementStates_23_ordered_boolean_fields)",
+   "locator": "com.hypixel.hytale.protocol.MovementStates",
+   "methods": [],
+   "verdict": "B"
+  },
+  {
+   "claim": "movement_state_observation.component / npc_update / bridge_transport / availability / client_transition_boundary",
+   "locator": "MovementStatesComponent, MovementStatesSystem, bridge codec",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "npc_walk_movement_state_producer.* (publication, source_order, run_threshold, configuration, player_sprint_boundary, external_fields, invalid)",
+   "locator": "repo producer (jax/world) citing Role.updateMovementState and MovementStatesSystem",
+   "methods": [
+    "Role.updateMovementState"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "walk_steering.* (source, turn, maximum_turn, epsilon, otherwise, movement_stop, builder_defaults_degrees)",
+   "locator": "MotionControllerWalk.computeHeading; BuilderMotionControllerWalk",
+   "methods": [
+    "MotionControllerWalk.computeHeading"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "sprint.installed_gameplay_config (Default)",
+   "locator": "Assets.zip 0.7.2 Server/GameplayConfigs/Default.json",
+   "methods": [
+    "Assets.zip",
+    "Default.json"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "sprint.installed_forward_sprint_multiplier (1.273)",
+   "locator": "Assets.zip 0.7.2 Server/Entity/MovementConfig/Default.json",
+   "methods": [
+    "Assets.zip",
+    "Default.json"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "sprint.master_fallback_forward_sprint_multiplier (1.65)",
+   "locator": "MovementConfig class default (not a float literal in the 0.7.2 server bytecode, per the analysis agent)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "sprint.npc_walk_controller / player_config_selection / server_stamina_scope / transition_physics_location / native_npc_oracle (and the keys after native_npc_oracle)",
+   "locator": "not re-derived in this pass",
+   "methods": [],
+   "verdict": "C"
+  }
+ ],
+ "mutable_blocks": [
+  {
+   "claim": "health.storage (BlockHealthChunk sparse absolute-position map; missing entry = full health)",
+   "locator": "BlockHarvestUtils.damageSingleBlock",
+   "methods": [
+    "BlockHarvestUtils.damageSingleBlock"
+   ],
+   "verdict": "B"
+  },
+  {
+   "claim": "health.destroyed (health < 0 or closeToZero)",
+   "locator": "BlockHealth.isDestroyed(float) (0.7.2)",
+   "methods": [
+    "BlockHealth.isDestroyed"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "health.damage (current minus resolved normalised damage)",
+   "locator": "BlockHealthSection.damage(III,F,Instant)",
+   "methods": [
+    "BlockHealthSection.damage"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "health.repair (delay 5.0 s, rate 0.1 per s, threshold, tick amount, full removes entry)",
+   "locator": "BlockHealthSystems$Tick (0.7.2)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "mutation.world (WorldChunk.setBlock)",
+   "locator": "WorldChunk (0.7.2) and BlockOperations.setBlock",
+   "methods": [
+    "BlockOperations.setBlock"
+   ],
+   "verdict": "B"
+  },
+  {
+   "claim": "mutation.break (BlockHarvestUtils)",
+   "locator": "BlockHarvestUtils.performBlockBreak, naturallyRemoveBlock",
+   "methods": [
+    "BlockHarvestUtils.performBlockBreak"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "mutation.place (BlockPlaceUtils)",
+   "locator": "BlockPlaceUtils",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "mutation.first_run (side effect before interaction runtime wait)",
+   "locator": "BlockHarvestUtils / BlockPlaceUtils",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "mutation_outcome_certifier (player_free_effects, bridge_helper, synthetic_player_fixture, certifies, does_not_certify, give_item, run_root_interaction)",
+   "locator": "bridge and repo contracts",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "resolved_item_interactions.trigger_vocabulary (all_25_InteractionType_values)",
+   "locator": "com.hypixel.hytale.protocol.InteractionType",
+   "methods": [],
+   "verdict": "B"
+  },
+  {
+   "claim": "resolved_item_interactions (active_item_resolution, equipped_resolution, game_modes, root_rules, chain, contract_sha256)",
+   "locator": "repo and bridge contracts",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "tick procedures and the remaining health-API claims (BlockHealthSystems Tick, ReplicateChanges, PlaceBlockEventSystem, EnsureSection, LoadPacket, MigrateBlockHealthChunk)",
+   "locator": "BlockHealthSystems (not dumped)",
+   "methods": [],
+   "verdict": "C"
+  }
+ ],
+ "navigation": [
+  {
+   "claim": "astar.source",
+   "locator": "AStarBase.computePath",
+   "methods": [
+    "AStarBase.computePath"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.limits.maximum_path_length",
+   "locator": "BuilderBodyMotionFindBase.readConfig; AStarBase.computePath",
+   "methods": [
+    "AStarBase.computePath",
+    "BuilderBodyMotionFindBase.readConfig"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.limits.open_nodes",
+   "locator": "BuilderBodyMotionFindBase.readConfig; AStarBase.computePath",
+   "methods": [
+    "AStarBase.computePath",
+    "BuilderBodyMotionFindBase.readConfig"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.limits.total_nodes",
+   "locator": "BuilderBodyMotionFindBase.readConfig; AStarBase.computePath",
+   "methods": [
+    "AStarBase.computePath",
+    "BuilderBodyMotionFindBase.readConfig"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.limits.limit_check (after_all_eight_successors_of_one_node)",
+   "locator": "AStarBase.computePath",
+   "methods": [
+    "AStarBase.computePath"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.limits.storage_headroom_per_limit (8)",
+   "locator": "SearchDirections.create / createDirections / countSteps; MotionControllerWalk.is2D",
+   "methods": [
+    "MotionControllerWalk.is2D",
+    "SearchDirections.create"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.astar_base_field_limits.open_nodes (80)",
+   "locator": "AStarBase.<init>()",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.astar_base_field_limits.total_nodes (400)",
+   "locator": "AStarBase.<init>()",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.runtime_default_nodes_per_tick (50)",
+   "locator": "BuilderBodyMotionFindBase.readConfig; BodyMotionFindBase.continuePathFinder",
+   "methods": [
+    "BodyMotionFindBase.continuePathFinder",
+    "BuilderBodyMotionFindBase.readConfig"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.runtime_default_build_optimised_path (True)",
+   "locator": "BuilderBodyMotionFindBase.readConfig; AStarBase.<init>()",
+   "methods": [
+    "BuilderBodyMotionFindBase.readConfig"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.installed_asset_limit_overrides (0)",
+   "locator": "0.7.2 Assets.zip JSON members",
+   "methods": [
+    "Assets.zip"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.goal_estimate (Vector3d.distance_double_then_float)",
+   "locator": "BodyMotionFind.estimateToGoal(AStarBase,Vector3d,MotionController)",
+   "methods": [
+    "BodyMotionFind.estimateToGoal"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.grid.fractional_bits (1)",
+   "locator": "AStarBase.INDEX_FRACTIONAL_BITS; positionToIndex",
+   "methods": [
+    "AStarBase.INDEX_FRACTIONAL_BITS"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.grid.position_bits (11)",
+   "locator": "AStarBase.POSITION_BITS; indexFromXYZ",
+   "methods": [
+    "AStarBase.POSITION_BITS"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.grid.position_offset (1024)",
+   "locator": "AStarBase.POSITION_OFFSET; initComputePath",
+   "methods": [
+    "AStarBase.POSITION_OFFSET"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.grid.position_mask (2047)",
+   "locator": "AStarBase.POSITION_MASK; indexFromXYZ",
+   "methods": [
+    "AStarBase.POSITION_MASK"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.successor (MotionController.probeMove)",
+   "locator": "AStarBase.computePath",
+   "methods": [
+    "AStarBase.computePath"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.open (descending_total_cost_pop_end)",
+   "locator": "AStarBase.addOpenNode(AStarNode,long); AStarBase.computePath",
+   "methods": [
+    "AStarBase.addOpenNode",
+    "AStarBase.computePath"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.equal_total_cost (strict_less_insert_scan_lifo)",
+   "locator": "AStarBase.addOpenNode(AStarNode,long)",
+   "methods": [
+    "AStarBase.addOpenNode"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.cost (travel_cost_plus_evaluator_estimate)",
+   "locator": "AStarNode.initWithPredecessor; AStarBase.addOpenNode(6-arg)",
+   "methods": [
+    "AStarBase.addOpenNode",
+    "AStarNode.initWithPredecessor"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.step_cost (AStarBase.measureWalkCost -> MotionControllerBase.waypointDistance)",
+   "locator": "AStarBase.addOrUpdateNode; measureWalkCost; MotionControllerBase.waypointDistance",
+   "methods": [
+    "AStarBase.addOrUpdateNode",
+    "MotionControllerBase.waypointDistance"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.step_cost_projection (runtime_component_selector_axis_mask)",
+   "locator": "MotionControllerBase.waypointDistanceSquared(Vector3dc,Vector3dc)",
+   "methods": [
+    "MotionControllerBase.waypointDistanceSquared"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.native_edge_capture (MotionControllerWalk.probeMove_return_distance)",
+   "locator": "MotionControllerWalk.probeMove; AStarBase.computePath",
+   "methods": [
+    "AStarBase.computePath",
+    "MotionControllerWalk.probeMove"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.body_motion_find_estimate (euclidean_distance_to_target)",
+   "locator": "BodyMotionFind.estimateToGoal",
+   "methods": [
+    "BodyMotionFind.estimateToGoal"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.limit_order (after_all_eight_successors_of_one_node)",
+   "locator": "AStarBase.computePath",
+   "methods": [
+    "AStarBase.computePath"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.progress (7 values in this order)",
+   "locator": "AStarBase$Progress",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.native_probe.pathfinder (AStarWithTarget)",
+   "locator": "bridge NavigationProbeCapture",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.native_probe.goal (exact_half_cell_position_index)",
+   "locator": "NavigationProbeCapture.java:426; AStarWithTarget.initComputePath",
+   "methods": [
+    "AStarWithTarget.initComputePath",
+    "NavigationProbeCapture.java"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.native_probe.optimized_build_path (False)",
+   "locator": "NavigationProbeCapture.java:460",
+   "methods": [
+    "NavigationProbeCapture.java"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.native_probe.result (full_predecessor_chain)",
+   "locator": "NavigationProbeCapture.java (result loop after the sample loop)",
+   "methods": [
+    "NavigationProbeCapture.java"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.native_probe.bounded_samples (32)",
+   "locator": "NativeNavigationPathProbe.java:35",
+   "methods": [
+    "NativeNavigationPathProbe.java"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "astar.native_probe.ordinary_rollout_overhead (none_opt_in_request_only)",
+   "locator": "ClientHandler.java:250, 785-807",
+   "methods": [
+    "ClientHandler.java"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "path_follower.rejection_weight_default (3.0)",
+   "locator": "PathFollower.<init>(); BuilderBodyMotionFindBase.readConfig",
+   "methods": [
+    "BuilderBodyMotionFindBase.readConfig"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "path_follower.exact_reached_distance_squared (1.0000000000000002e-10)",
+   "locator": "PathFollower.updateCurrentTarget",
+   "methods": [
+    "PathFollower.updateCurrentTarget"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "path_follower.near_reached_distance_squared (0.01)",
+   "locator": "PathFollower.updateCurrentTarget",
+   "methods": [
+    "PathFollower.updateCurrentTarget"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "path_follower.advance (negative_projected_dot_or_distance_short_circuit)",
+   "locator": "PathFollower.updateCurrentTarget",
+   "methods": [
+    "PathFollower.updateCurrentTarget"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "path_follower.smoothing (ProbeMoveData.canMoveTo)",
+   "locator": "PathFollower.smoothPath -> PathFollower.canMoveTo -> ProbeMoveData.canMoveTo",
+   "methods": [
+    "PathFollower.canMoveTo",
+    "PathFollower.smoothPath",
+    "ProbeMoveData.canMoveTo"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "path_follower.native_trace.active_motion (Role.getLastBodySteeringMotion -> BodyMotion.findWrappedBodyMotion(BodyMotionFindBase))",
+   "locator": "Role.getLastBodySteeringMotion; Instruction.getBodyMotion; BodyMotion.getSteeringMotion; BodyMotion.findWrappedBodyMotion",
+   "methods": [
+    "BodyMotion.findWrappedBodyMotion",
+    "BodyMotion.getSteeringMotion",
+    "Instruction.getBodyMotion",
+    "Role.getLastBodySteeringMotion"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "path_follower.native_trace.waypoints (IWaypoint position and length)",
+   "locator": "IWaypoint",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "path_follower.native_trace.steering (translation and max distance)",
+   "locator": "Steering",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "path_follower.native_trace.component_selector (Role.getActiveMotionController().getComponentSelector)",
+   "locator": "Role.getActiveMotionController; MotionController.getComponentSelector",
+   "methods": [
+    "MotionController.getComponentSelector",
+    "Role.getActiveMotionController"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "path_follower.native_trace.stage (after_avoidance_before_steering)",
+   "locator": "MotionControllerBase.steer/steer0/computeMove; Role.blendAvoidance; BodyMotionFindBase.computeSteering",
+   "methods": [
+    "BodyMotionFindBase.computeSteering",
+    "MotionControllerBase.steer",
+    "Role.blendAvoidance"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "path_follower.fixture.role (Trork_Brawler)",
+   "locator": "0.7.2 Assets.zip Server/NPC/Roles/Intelligent/Faction/Trork/Trork_Brawler.json",
+   "methods": [
+    "Assets.zip",
+    "Trork_Brawler.json"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "path_follower.fixture.state (Chase.Attack)",
+   "locator": "Template_Trork_Melee.json",
+   "methods": [
+    "Template_Trork_Melee.json"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "path_follower.fixture.motion (Intelligent_Chase_BodyMotion_Seek)",
+   "locator": "Component_Instruction_Intelligent_Chase.json",
+   "methods": [
+    "Component_Instruction_Intelligent_Chase.json"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "path_follower.fixture.sight_range (15)",
+   "locator": "Template_Trork_Melee.json",
+   "methods": [
+    "Template_Trork_Melee.json"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "path_follower.fixture.hearing_range (8)",
+   "locator": "Template_Trork_Melee.json",
+   "methods": [
+    "Template_Trork_Melee.json"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "path_follower.fixture.attack_target_range (4)",
+   "locator": "Template_Trork_Melee.json",
+   "methods": [
+    "Template_Trork_Melee.json"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "path_lifecycle.owner (BodyMotionFindBase_and_BodyMotionFindWithTarget)",
+   "locator": "BodyMotionFindWithTarget.mustRecomputePath; BodyMotionFindBase.mustRecomputePath",
+   "methods": [
+    "BodyMotionFindBase.mustRecomputePath",
+    "BodyMotionFindWithTarget.mustRecomputePath"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "path_lifecycle.replan_triggers (controller_obstructed, avoid_block_damage_changed, force_recompute_flag, target_moved_beyond_authored_distance, target_cone_condition)",
+   "locator": "BodyMotionFindBase.mustRecomputePath; BodyMotionFindBase.computeSteering; BodyMotionFindWithTarget.mustRecomputePath",
+   "methods": [
+    "BodyMotionFindBase.computeSteering",
+    "BodyMotionFindBase.mustRecomputePath",
+    "BodyMotionFindWithTarget.mustRecomputePath"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "region_adapter_boundary.accepted_edges (native_MotionControllerWalk_probeMove)",
+   "locator": "MotionControllerWalk.probeMove; repo region/traversal.py:614",
+   "methods": [
+    "MotionControllerWalk.probeMove"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "region_adapter_boundary.rejected_probe_positions_stored (False)",
+   "locator": "repo artifact writer (region/traversal.py)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "region_adapter_boundary.full_astar_equivalence (requires_T8_node_for_node_fixture)",
+   "locator": "native_navigation.py contract scope",
+   "methods": [],
+   "verdict": "C"
+  }
+ ],
+ "perception": [
+  {
+   "claim": "projected_distance_declarations (the authored set of UseProjectedDistance declarations, expected 11 by EXPECTED_PROJECTED_DISTANCE_DECLARATIONS)",
+   "locator": "Assets.zip 0.7.2 via the audit's own _projected_distance_declarations",
+   "methods": [
+    "Assets.zip"
+   ],
+   "verdict": "B"
+  },
+  {
+   "claim": "projected_distance_values_boolean",
+   "locator": "payload check",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "effective_component_selectors (default_and_walk, fly, dive, use_projected_distance_false)",
+   "locator": "MotionControllerBase, MotionControllerWalk, MotionControllerFly, MotionControllerDive component selectors",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "component_selector_contract.*",
+   "locator": "MotionController selector path",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "los_contract.perception.unloaded_chunk (blocked)",
+   "locator": "PositionCache lambda$hasLineOfSightInternal$0 (0.7.2)",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "los_contract.hit_confirmation.* and los_contract.cache.*",
+   "locator": "HorizontalSelector.RuntimeSelector.tick, HitDetectionExecutor.LineOfSightProvider, PositionCache",
+   "methods": [
+    "HitDetectionExecutor.LineOfSightProvider",
+    "HorizontalSelector.RuntimeSelector"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "chunk_perception_channels.* (heightmap getHeight, environment getEnvironment, tint getTint, sky light, block light RGB)",
+   "locator": "ChunkStore, BlockSection, ChunkLightData, ChunkLightingManager, FloodLightCalculation",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "native_perception_channel_capture, native_region_light_capture, native_los_evidence_capture, section_aggregates, region_delta",
+   "locator": "repo-side contract functions (worldgen)",
+   "methods": [],
    "verdict": "C"
   }
  ]
