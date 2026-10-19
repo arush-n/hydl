@@ -150,174 +150,183 @@ The twenty seeds of `region-library-pilot-v2` were recaptured on 0.7.2 with `rec
 
 ## Recertifying a server line
 
-`hytalegym/hytalegym/worldgen/region/recertification.py` (schema `hytalerl_world_evidence_recertification_v12`) stages the bridge-bound world evidence of one server line against one Region library: the seed-570057 projection, the stationary traversal, the traversal-graph library (built natively from the live bridge), the navigation and walk probes, and nine world-action probes. It stages only. A run publishes nothing (`publication.automatic` is false, `recertification.py:472`). It takes the native-evidence lease for its listener, so one run at a time drives a listener.
+`hytalegym/hytalegym/worldgen/region/recertification.py` (schema `hytalerl_world_evidence_recertification_v12`) stages the bridge-bound world evidence of one server line against one Region library: the seed-570057 projection, the stationary traversal, the traversal-graph library (built natively from the live bridge), the navigation and walk probes, and nine world-action probes. It stages only. A run publishes nothing (`publication.automatic` is false, `recertification.py` L544). It holds the native-evidence lease for its listener, so one run at a time drives a listener.
 
-Line numbers are for `recertification.py` after the region-library change of 2026-10-19. Status is as of 2026-10-19.
+Line numbers are for `recertification.py` after the first-capture change of 2026-10-19. Status is as of 2026-10-19.
 
-Current state: on 0.7.2 the run stops at its first gate (audit 1, perception). Three more steps stop it once the audits pass (B1 to B3 below), and B4 and B5 may stop it later. Nothing from a 0.7.2 run is promoted.
+Current state:
+
+- 0.5.7: compare mode, unchanged. All four references exist, so the run is the same as before. The cascade output is byte-identical before and after the change. The real 0.5 dry run stops at the bridge-identity check, because no 0.5 bridge build exists on this machine (see "Dry runs").
+- 0.7.2: first-capture mode, implemented and tested with synthetic fixtures (no server). A real 0.7.2 run has not been made. The source-pin gate stops it first: at the committed pins (HEAD 7a260d2) at audit 1 (perception); at the audit lane's uncommitted working-tree pins at audit 6 (mutable_blocks). See "Dry runs".
+
+### Per-line fixture root
+
+`world_fixture_root()` (`hytalegym/hytalegym/server_versions/__init__.py`) returns the recorded World evidence folder of a line. The 0.5 line reads `hytalegym/tests/fidelity/fixtures/world/`, unchanged. A line whose `ServerProfile.world_fixture_root` is set reads that subfolder: 0.7.2 reads `hytalegym/tests/fidelity/fixtures/world/v0_7/`. The folder does not exist yet, so a 0.7.2 run treats every reference as absent.
+
+Routed readers (each opens a file under the fixture folder, and each now calls the helper; 0.5 paths are byte-identical):
+
+- `hytalegym/hytalegym/worldgen/region/recertification.py` (`fixture_root`)
+- `hytalegym/tests/worldgen/test_region_recertification.py`, `test_native_world_recordings.py`, `test_region_state_change_use.py`
+- `hytalegym/tests/jax/world/navigation/test_navigation_native_recording.py`, `hytalegym/tests/jax/world/region/test_region_library.py`, `hytalegym/tests/jax/combat/arsenal/tests/agents/ppo/test_training.py`
+- `hytalegym/tests/sim/gen5_live.py` (the crafting recording; a 0.5 script)
+
+Not routed, because they are records and not readers: `hytalegym/hytalegym/sim/common/content/adapters.py` (the `SWAP_PLAN` row for the crafting catalog) and `hytalegym/hytalegym/sim/common/content/redirects.json` (generated from `SWAP_PLAN`), and the metadata names in `hytalegym/worldgen/native_traversal.py` and `hytalegym/jax/world/navigation/__init__.py`. The arena and console tests that name `region-library-pilot-v2` read the Region library folder, not the fixtures.
+
+### Reference modes
+
+The run decides its mode from four references of the line (`_reference_mode`, def L1026):
+
+1. the projection contract, `fixture_root/native_region_seed_projection_contract.json`;
+2. the stationary recording, `fixture_root/native_traversal_projection_v2_recording.json`;
+3. the capacity report, `_world_capacity_report`: `artifacts/worldgen/world-token-capacity-v4.json` for 0.5, `artifacts/worldgen/region-library-pilot-v2-072/world-token-capacity.json` for 0.7.2;
+4. the traversal manifest, `<library>/traversal-v2/traversal-manifest.json`.
+
+- All four present: `compare`. The run is the same as before. The cascade is written before the listener, the candidates are relabelled from the frozen fixtures, and the stationary and graph steps compare against them.
+- None present: `first_capture`. The run captures its own references, as described below.
+- Some present: refused with `partial World reference set for this line; missing: ...`. A run never compares some references and captures the others.
+
+First capture, in order (the report carries `reference_mode: first_capture` and a `first_capture` block):
+
+1. The gate, bridge identity and mode decision run as before (L206-263). The run requires `--seed-projection-contract` and `--seed-projection-npz`; without them it stops before the listener.
+2. The Region library is checked against the line's expected digest, `ServerProfile.region_library_sha256` (0.7.2: `9DCA3C71...DAAB95`). A different library stops the run before the listener (`_require_expected_library`, L269).
+3. The listener is checked (L281). No cascade is written yet.
+4. The staged projection contract is staged (`_first_capture_projection_contract`, def L1067). It must be for seed 570057 and for the bridge; its reference digest must equal `ServerProfile.seed_projection_sha256` (0.7.2: `408D5FB2...D1104D`); and `require_snapshot_projection` must accept the staged NPZ. The contract is then copied to `stage/fixtures/`. The projection reference therefore comes from the staged line contract, not from the 0.5.7 fixture.
+5. The seed-570057 region projection is compared with that contract (`region_seed_projection`, as in compare mode).
+6. The capacity report is produced for the line (`world_token_capacity`, `tests/fidelity/surrogate_world_token_benchmark.py` on the Region library, no server): `stage/world-token-capacity.json`.
+7. The stationary traversal is captured twice (`stationary_traversal_1` and `stationary_traversal_2`, `--recording-directory stage/stationary-N`). Neither has `--expect-recording`. After both finish, `_require_stationary_repeat_stable` requires the reported fields (except `captured_at_utc`, the artifact and the report digest), each artifact's sha256, and the arrays to agree (floats within 1e-12) before anything is staged.
+8. The traversal graph library is built natively (`region_traversal_graphs`), with no `--expect-manifest`.
+9. The navigation and walk probes and the nine world-action probes run as in compare mode.
+10. The cascade is written last, reading the staged `stage/traversal-v2/traversal-manifest.json` (`derive_contract_cascade(..., traversal_manifest=...)`).
+11. The loaders and the graph's bridge check run, and the report is written with the 19 candidate rows (the 18 compare rows plus `world_capacity_report`).
+
+The first capture uses expected digests only in this mode. In compare mode no digest is checked, as before.
 
 ### Inputs
 
 | Input | Value | Read by |
 |---|---|---|
 | Server line | `HYTALERL_SERVER_VERSION=0.7.2`; unset means 0.5.7 | `server_profile()` (`hytalegym/server_versions/`) |
-| Installed server jar | `/Users/arush/Library/Application Support/Hytale/install/release/package/game/latest/Server/HytaleServer.jar`, sha256 `23f71f03763422ce7c04df191db49cd0e7d87d43b12baad75c43fdc202410aff` (the build the 0.7.2 audits read) | `--server-jar`; `world_source_pin_staleness_report` (`source_pins.py:159`) |
+| Installed server jar | `/Users/arush/Library/Application Support/Hytale/install/release/package/game/latest/Server/HytaleServer.jar`, sha256 `23f71f03763422ce7c04df191db49cd0e7d87d43b12baad75c43fdc202410aff` | `--server-jar`; `world_source_pin_staleness_report` (`source_pins.py:159`) |
 | Installed Assets.zip | `/Users/arush/Library/Application Support/Hytale/install/release/package/game/latest/Assets.zip`, sha256 `ee8f8d5b332874eb928144726077fa66f80c117a5412017a5cde6fce2d9bb2a0` (3.9 GB) | `--assets`; the audits that take it (`source_pins.py:20-75`) |
-| Pinned bridge | `hytale-plugin-0.7.2/build/libs/HytaleRLBridge072-0.1.0.jar`, sha256 `460054A8E7508FE5E205AD527AFB08474B61626EE5C2212FC2A484ECFCCAD88D` (pin: `hytalegym/hytalegym/server_versions/v0_7.py`) | `--expected-bridge-sha256` (required); the deployed file must hash to it (L219-234) |
-| Deployed bridge | the copy the live server loaded. With `tools/launch_bridge_072.py` that is `<run dir>/mods/HytaleRLBridge072-0.1.0.jar` | `--deployed-bridge`. Without it the default is an APPDATA path under `Server/mods`, a Windows install path (`_default_deployed_bridge`, L922), so pass it on macOS |
-| Live listener | bridge TCP `127.0.0.1:5556` (`--host`, `--port`), already listening | `_require_listener` (L247, def L940). The CLI has no game-port flag; the game UDP port, 25574, is set when the server starts |
-| Native-evidence lease | `HytaleRL/.codex-local/native-world-recertification-127_0_0_1-5556.lock` (the `.json` signal exists only while a run holds it) | `acquire_native_evidence_lease` (L109); a run refuses when another holds it (`native evidence already active`) |
-| Control seed | `--control-seed N`: a positive int32, not 570057. Omitted, a random one is drawn and recorded as `random_interposed_control_seed` | L249; `_control_seed` (L957), `_random_control_seed` (L950) |
-| Region library | 0.7.2: `artifacts/worldgen/region-library-pilot-v2-072/` (manifest sha256 `c30459089c7f2c682ca411e5a8d9c46f81a8fa69eb39d2c82f9041310c2a8243`). 0.5.7: `artifacts/worldgen/region-library-pilot-v2/` (manifest sha256 `9b2fcfcecc98d1e8f8bee535fce1fc8fe86f08976ed81fdf6da6cbf526980903`) | `--region-library DIR`; default by server line (`_default_region_library`, L903) |
-| Expected library digest | 0.7.2 `9dca3c71d43a2c3bf4be6aff6e2bd24d2f6608c8be01d1687a0b259f06daab95` (chunk API `cb82867f...`, split `inherited_seed_labels_v1`). 0.5.7 `f0ea0526ac1ee6184fc575c085607ee7b3f9843d78b0d4f806fff15b51c8616c` | recorded in `contract-cascade.json` (`identities.region_library`); the loader checks the manifest's own digest (the cascade loads it at L809) |
-| Seed-570057 projection reference | 0.7.2 `408D5FB2DAA797E767AEE23248C6591FC226E1FE764C6258353D60FE49D1104D` (the staged NPZ and `world-evidence-history/460054A8/fixtures/native_region_seed_projection_contract.json` agree). 0.5.7 `DB4B9B85E0B40FF1D65827B2A0E1545651301D3B5CC52DF6D8A713E472F8F708` (`fixtures/world/native_region_seed_projection_contract.json`) | `require_snapshot_projection` (`stability.py:248`) |
-| Frozen references | 0.5.7 `hytalegym/tests/fidelity/fixtures/world/` (`fixture_root`, L150) | `build_evidence_candidates` (L261, def L729) |
-| Capacity report | `artifacts/worldgen/world-token-capacity-v4.json` (0.5.7, L270). No 0.7.2 report is staged | stationary step |
-| Traversal library | none to read; the run builds `traversal-v2` from the library's NPZs | region_traversal_graphs step (`native_region_traversal_graph_compare.py`) |
+| Pinned bridge | `hytale-plugin-0.7.2/build/libs/HytaleRLBridge072-0.1.0.jar`, sha256 `460054A8E7508FE5E205AD527AFB08474B61626EE5C2212FC2A484ECFCCAD88D` (pin: `v0_7.py`) | `--expected-bridge-sha256` (required); the deployed file must hash to it |
+| Deployed bridge | the copy the live server loaded. With `tools/launch_bridge_072.py` that is `<run dir>/mods/HytaleRLBridge072-0.1.0.jar` | `--deployed-bridge`. The default is an APPDATA path, a Windows install path, so pass it on macOS |
+| Live listener | bridge TCP `127.0.0.1:5556` (`--host`, `--port`), already listening | `_require_listener` (def L1228). The CLI has no game-port flag; the game UDP port, 25574, is set when the server starts |
+| Native-evidence lease | `HytaleRL/.codex-local/native-world-recertification-127_0_0_1-5556.lock` (the `.json` signal exists only while a run holds it) | `acquire_native_evidence_lease` (L126); a run refuses when another holds it |
+| Control seed | `--control-seed N`: a positive int32, not 570057. Omitted, a random one is drawn and recorded | `_control_seed`, `_random_control_seed` |
+| Region library | 0.7.2: `artifacts/worldgen/region-library-pilot-v2-072/` (manifest sha256 `c30459089c7f2c682ca411e5a8d9c46f81a8fa69eb39d2c82f9041310c2a8243`). 0.5.7: `artifacts/worldgen/region-library-pilot-v2/` | `--region-library DIR`; default by server line (`_default_region_library`, def L999) |
+| Expected library digest | 0.7.2 `9DCA3C71D43A2C3BF4BE6AFF6E2BD24D2F6608C8BE01D1687A0B259F06DAAB95` (`ServerProfile.region_library_sha256`); 0.5.7 unchecked | first capture only (`_require_expected_library`) |
+| Seed-570057 projection reference | 0.7.2 `408D5FB2DAA797E767AEE23248C6591FC226E1FE764C6258353D60FE49D1104D` (`ServerProfile.seed_projection_sha256`). The staged contract is `artifacts/worldgen/world-evidence-history/460054A8/fixtures/native_region_seed_projection_contract.json` (cap 6). 0.5.7 `DB4B9B85...` (fixtures, compare mode) | first capture: `--seed-projection-contract` (checked against `--seed-projection-npz`, the staged `artifacts/worldgen/region_0.7.2_seed_570057.npz`) |
+| Frozen references (compare mode only) | `hytalegym/tests/fidelity/fixtures/world/` (0.5) | `build_evidence_candidates` |
+| Traversal library | none to read; the run builds `traversal-v2` from the library's NPZs | `region_traversal_graphs` (`native_region_traversal_graph_compare.py`) |
 | Python and Java | `/Users/arush/hydl/.venv/bin/python` (3.12); `java` on PATH (OpenJDK 25.0.2 here) | every step; `launch_bridge_072.py` |
 
-Set `APPDATA="/Users/arush/Library/Application Support"` for every gate run on this Mac. The crafting audit's argparse default reads `APPDATA` only (`hytalegym/tests/fidelity/surrogate_crafting_source_audit.py:494-512`), so without it the recertification test fails at that audit.
+Set `APPDATA="/Users/arush/Library/Application Support"` for every gate run on this Mac. The source-pin lane now gives the audit subprocesses a placeholder APPDATA, so the crafting audit no longer needs it, but the test process and any direct run still benefit from it.
 
 ### Outputs
 
-The stage directory must be absent or empty (or reused with `--resume`), and it must lie outside `fixture_root` and the library's `traversal-v2` (`_prepare_stage`, L172, def L874). Keep it under the scratch folder.
+The stage directory must be absent or empty (or reused with `--resume`), and it must lie outside `fixture_root` and the library's `traversal-v2` (`_prepare_stage`). Keep it under the scratch folder.
 
 - `source-pin-staleness.json` on a pass, or `source-pin-staleness-failure.json` on a failure.
 - `contract-cascade.json`: relationships, identities and dependency order.
 - `native_region_candidate_seed_570057.npz` and `native_region_difference.json`: the seed-570057 projection capture and its difference report.
-- `fixtures/`: the 13 candidate JSON fixtures (the `publication.targets` in the manifest), the stationary traversal artifact `native_traversal_projection_v2_recording.npz`, and the candidate projection contract.
-- `traversal-v2/`: `graphs/` (one `.traversal.npz` and one row `.json` per library entry, 40 files for 20 seeds), `traversal-manifest.json`, `native-traversal-recording.json`. Total 42 files, the same shape as the 0.5.7 folder.
-- `recertification-manifest.json` (written at L544): `status` `validated_candidate_not_published`, 18 candidate rows with sha256, 14 publication targets (13 JSON plus the traversal directory), `publication.automatic` false.
+- `fixtures/`: the candidate JSON fixtures (the `publication.targets` in the manifest). In compare mode these are relabelled from the 0.5 fixtures. In first capture the only file is the staged projection contract.
+- First capture only: `stationary-1/` and `stationary-2/` (each a JSON and an NPZ), `world-token-capacity.json`.
+- `traversal-v2/`: `graphs/` (one `.traversal.npz` and one row `.json` per library entry, 40 files for 20 seeds), `traversal-manifest.json`, `native-traversal-recording.json`. Total 42 files.
+- `recertification-manifest.json`: `status` `validated_candidate_not_published`, the candidate rows with sha256 (18 in compare mode, 19 in first capture), the publication targets, `publication.automatic` false. First capture adds `reference_mode` and a `first_capture` block (the file hashes of the staged contract, the stationary pair and the capacity report, and the two expected digests).
 
-Nothing is written under `artifacts/worldgen/world-evidence-history/`, under `hytalegym/tests/fidelity/fixtures/world/`, or in a library folder.
+Nothing is written under `artifacts/worldgen/world-evidence-history/`, under the fixture folder, or in a library folder.
 
 ### What promote means here
 
-Promotion is a manual copy. No tracked code does it: a search of `hytalegym/`, `arena/` and `console/` for the fixed paths, the receipt schema and copy calls found no writer to these paths (the console's copy calls move agent evidence). The private `agent_skills/` tree, at the repository root, is out of bounds for this lane and was not searched. `recertification.py` keeps it separate on purpose (`publication.reason`, L473-476). No tracked code reads the receipt schema `hytalerl_world_evidence_publication_v1` (same search); the receipts are hand-written (`world-evidence-history/5A54A8F5/publication-v12.json` is the model).
+Promotion is a manual copy into the line's own folders. No tracked code does it: a search of `hytalegym/`, `arena/` and `console/` for the fixed paths, the receipt schema and copy calls found no writer to these paths (the console's copy calls move agent evidence). The private `agent_skills/` tree, at the repository root, is out of bounds for this lane and was not searched. `recertification.py` keeps promotion separate on purpose (`publication.reason`).
 
-The evidence that tests and the sim read as "current" sits at two fixed paths:
+For 0.7.2 (a new line, so nothing is overwritten and there is no superseded set to preserve):
 
-1. The 13 JSON fixtures in `hytalegym/tests/fidelity/fixtures/world/`, under their names in the candidate manifest's `publication.targets`.
-2. The traversal directory `artifacts/worldgen/<library>/traversal-v2/` (42 files).
+1. `hytalegym/tests/fidelity/fixtures/world/v0_7/`: the 13 JSON targets under their names in `publication.targets`, and the stationary artifact `native_traversal_projection_v2_recording.npz`.
+2. `artifacts/worldgen/region-library-pilot-v2-072/traversal-v2/`: the 42 candidate files.
+3. `artifacts/worldgen/region-library-pilot-v2-072/world-token-capacity.json`: the candidate capacity report (first capture).
 
-The stationary NPZ arrays stay as they are. The v12 publication recorded `stationary_npz_arrays_unchanged: true`.
+The 0.5 set is not touched: it stays at the fixture root and in `world-evidence-history/5A54A8F5/`. Pointers and defaults stay as they are; the swap (README step 4) is an owner decision. Write a receipt `publication-vN.json` in the line's history folder, and update the local STATUS files.
 
-Manual steps, owner only, in order:
+Rollback for 0.7.2: remove the three added locations. They are new, so nothing else is restored. Deleting them needs an owner yes.
 
-1. Review the candidate (the checks under "Before promotion").
-2. Preserve the superseded set in `artifacts/worldgen/world-evidence-history/<bridge8>/` before the fixed paths change (the history README). For 0.5.7 that set already exists in `world-evidence-history/5A54A8F5/` (`fixtures/` holds the 13 JSON plus the stationary NPZ, `traversal-v2/` the 42 files, and the v12 manifest and publication receipt).
-3. Copy the 13 JSON into `hytalegym/tests/fidelity/fixtures/world/` and replace the library's `traversal-v2/` with the candidate's 42 files.
-4. Write `publication-vN.json` in the new bridge's history folder, and update the local STATUS files (`world-evidence-history/STATUS.md`, `fixtures/world/STATUS.md`, the library STATUS).
-5. Promotion does not change pointers or digests. Those are the swap (README step 4), an owner decision.
-
-Rollback: copy the preserved files from `world-evidence-history/<bridge8>/` back over the fixed paths. `hytalegym/tests/**` is git-ignored, so git cannot restore those files.
-
-Who reads the fixed paths:
-
-- Tests (names found by grep): `tests/worldgen/test_region_recertification.py` (`_FIXTURES`, L37), `tests/worldgen/test_native_world_recordings.py`, `tests/worldgen/test_region_state_change_use.py`, `tests/jax/world/navigation/test_navigation_native_recording.py`, `tests/jax/world/region/test_region_library.py`, `arena/tests/test_region_library_pin.py` and `console/tests/test_scene_cache.py` (both name the 0.5.7 library folder).
-- Code: `hytalegym/worldgen/native_traversal.py:564` (names the stationary recording), `hytalegym/jax/world/navigation/__init__.py:485` (names the navigation recording), `hytalegym/sim/common/content/adapters.py:714` and `hytalegym/sim/common/content/redirects.json:1366` (the crafting catalog recording).
-- Pointers, changed only at the swap: `hytalegym/jax/world/tokens/__init__.py:87-96` (the 0.5.7 library and traversal manifests by fixed path), `hytalegym/sim/common/bench.py:62-63`, `hytalegym/jax/evaluation/_contracts.py:72-79` (the pins `F0EA0526...` and the capture bridge `1644DC99...`, read by the frozen Arsenal suites), and `hytalegym/worldgen/region/stability.py:33-35` (the 0.5 bridge pin `7700D112...`).
-- Not a reader: `hytalegym/jax/world/region/provider.py` selects a library by its semantic digest under `HYTALERL_WORLD_ARTIFACT_ROOT` (L30, L233). It does not read these paths.
-
-Layout hazard (B6): the 13 fixture paths have no per-line folder. Copying 0.7.2 JSON there makes every 0.5.7 reader above read 0.7.2 evidence at once. The owner must choose a layout (per-line folders, or a cut-over at the swap) before any copy.
+Who reads the promoted 0.7.2 evidence: the routed readers, when run with `HYTALERL_SERVER_VERSION=0.7.2`. The sim and the JAX world tokens read the Region library by fixed path (`hytalegym/jax/world/tokens/__init__.py:87-96`, `hytalegym/sim/common/bench.py:62-63`), and those pointers stay on 0.5 until the swap. `hytalegym/jax/world/region/provider.py` selects a library by its digest and does not read these paths.
 
 ### Gates, in order
 
 Line numbers are in `recertification.py` unless a file is named.
 
-1. Lease, L109: `acquire_native_evidence_lease` for host and port, purpose `world_recertification`. Refuses when another run holds the listener.
-2. Stage, L172 (`_prepare_stage`, L874): outside the published roots; absent or empty unless `--resume`.
-3. Paths, L158-170: the deployed bridge, the assets and the server jar defaults.
-4. Source pins, L185 (`verify_installed_world_source_pins`, `source_pins.py:80`): 11 audits in `_AUDITS` (`source_pins.py:20`), perception first. The first audit whose semantic hash does not match raises (`source_pins.py:133-138`). The except block at L190 writes the failure file and re-raises.
-5. Installed build (`source_pins.py:159`): the server's release line must equal the profile's certified version, and each audit's server sha must equal the installed jar.
-6. Bridge identity, L219-234: the line's pin (`current_native_evidence_jar_sha256`) must equal `--expected-bridge-sha256`, and the deployed file's sha must equal both.
-7. Contract cascade, L245 (`derive_contract_cascade`, def L777): loads the region library (L809) and the traversal library (L810), checks the relationships, writes `contract-cascade.json`.
-8. Listener, L247 (`_require_listener`): a TCP connect to host and port.
-9. Control seed, L249.
-10. Candidates, L261 (`build_evidence_candidates`, def L729): relabels the frozen projection contract (L746-747) and recording (L765-766) to the bridge and the version, and checks `require_evidence_bridge`.
-11. Live compares, each `check=True` so a failure stops the run, in this order (L276-357): `region_seed_projection` (L278, `tests/fidelity/native_region_capture_compare.py`, checks the projection with `require_snapshot_projection`); `stationary_traversal` (L303); `region_traversal_graphs` (L320, `tests/fidelity/native_region_traversal_graph_compare.py`, which captures one graph per library entry and writes the traversal manifest through `create_region_traversal_graph_library`, `traversal_library.py:183`); `native_navigation_paths` and `native_walk_probe_subset` (L336, `_navigation_probe_commands` def L555); nine world-action probes (L346, `_world_action_probe_commands` def L612).
-12. Loaders, L374-375: `RegionArtifactLibrary.load` and `RegionTraversalGraphLibrary.load`. The graph's `native_evidence_jar_sha256` must equal the expected bridge (L379-380).
-13. Report, L544: `recertification-manifest.json`.
+1. Lease: `recapture_world_evidence` acquires the listener's lease (purpose `world_recertification`). It refuses when another run holds the listener.
+2. Stage: `_prepare_stage`, outside the published roots; absent or empty unless `--resume`.
+3. Paths: the deployed bridge, the assets and the server jar defaults (L171-192).
+4. Source pins, L206 (`verify_installed_world_source_pins`, `source_pins.py:80`): 11 audits in `_AUDITS` (`source_pins.py:20`), perception first. The first audit whose semantic hash misses raises (`source_pins.py:133-138`). The except block writes the failure file and re-raises.
+5. Installed build (`source_pins.py:159`): the release line must equal the profile's certified version, and each audit's server sha must equal the installed jar.
+6. Bridge identity, L229-254: the line's pin must equal `--expected-bridge-sha256`, and the deployed file's sha must equal both.
+7. Mode decision, L258 (`_reference_mode`); first capture also needs the two projection inputs, and the library digest check (L269).
+8. Cascade: compare mode writes it before the listener (L271). First capture defers it to step 13.
+9. Listener, L281.
+10. Candidates, L296-313: compare relabels the frozen fixtures (`build_evidence_candidates`); first capture stages the projection contract (`_first_capture_projection_contract`).
+11. Live compares, each `check=True`, in order (L330-386): `region_seed_projection`; `world_token_capacity` (first capture only); `stationary_traversal` (compare) or two captures (first capture); `region_traversal_graphs` (with `--expect-manifest` in compare only); the navigation probes; the nine world-action probes.
+12. First capture only: `_require_stationary_repeat_stable` (L428), then the cascade (L427-446).
+13. Loaders, L446 and after: `RegionArtifactLibrary.load` and `RegionTraversalGraphLibrary.load`; the graph's `native_evidence_jar_sha256` must equal the expected bridge.
+14. Report, L637: `recertification-manifest.json`.
 
-### Duration from the 0.5.7 history
+### Duration
 
-No start time is recorded. These are local (CDT) file times in the history folders, from the source-pin report (written when the gate exits) to the candidate manifest:
+The 0.5.7 history (file times, local CDT, from the source-pin report to the candidate manifest, since no start time is recorded): `D954BD79` 12 min 44 s; `1C063331` 24 min 31 s; `5A54A8F5` (v12) 23 min 23 s. The graph step inside them is about 8 minutes (compile 423.6 s plus native capture 68.6 s for 20 artifacts).
 
-- `D954BD79` (2026-08-06): 19:26:33 to 19:39:17, 12 min 44 s.
-- `1C063331` (2026-08-03): 14:09:34 to 14:34:05, 24 min 31 s.
-- `5A54A8F5` (2026-08-01, v12): 00:53:33 to 01:16:56, 23 min 23 s. Its publication receipt followed at 01:21:23 (`publication-v12.json`).
-- The graph step inside the 5A54A8F5 run (`traversal-v2/native-traversal-recording.json`): 20 artifacts, compile 423.6 s plus native capture 68.6 s, about 8 minutes.
+First capture adds the capacity benchmark (measured 2026-10-19 on the 0.7.2 library: 43 s real time, exit 0, 20 seeds, JAX CPU) and the second stationary capture. The second capture is not timed on the 0.7.2 bridge. Planning figure: 25 to 35 minutes from the gate to the manifest, plus up to 180 s for the server to boot.
 
-Planning figure: 15 to 25 minutes from the gate to the manifest, plus up to 180 s for the server to boot (the launcher's `--ready-timeout`). The gate's own duration is not recorded.
+### Dry runs (2026-10-19)
 
-### Keyed and hand-maintained constants on this path
+- 0.7.2 (first-capture inputs given, so the gate is the first stop): `HYTALERL_SERVER_VERSION=0.7.2`, pinned bridge via `--deployed-bridge`, `--expected-bridge-sha256 460054A8...CAD88D`, `--port 5556`, `--control-seed 481374900`, `--seed-projection-contract .../460054A8/fixtures/native_region_seed_projection_contract.json`, `--seed-projection-npz artifacts/worldgen/region_0.7.2_seed_570057.npz`. No server was launched. Result: Final run (20:35 UTC, the final code): `RuntimeError: World source-pin audit failed (mutable_blocks): mutable block sources differ from Hytale 0.5.7`, exit 1, raised by the gate's verify call (L206). The stage holds `source-pin-staleness-failure.json` only. The gate passed perception, actor_world_state, locomotion, navigation and doors, because the audit lane's working-tree pins (`hytalegym/hytalegym/worldgen/source_pin_baselines_072.json`, modified and uncommitted) now pin them. The committed pins (HEAD 7a260d2) pin only inventory and explosion_dynamics, so there the gate stops at perception. The first-capture inputs were parsed; the gate stopped the run before they were checked. Before the audit lane's working-tree pins (20:27 UTC, same code except the report line), the stop was perception.
+- 0.5.7 (the real 0.5 install, `v0.5` Assets and server jar, `--expected-bridge-sha256 7700D112...8D7B`): the gate passes on the 0.5.10 control. The run then stops at the bridge-identity check, because no 0.5 bridge build is on this machine. Result: `RuntimeError: deployed bridge differs from canonical world evidence: observed=460054A8E7508FE5E205AD527AFB08474B61626EE5C2212FC2A484ECFCCAD88D expected=7700D112F8BCE9A6AFFE5EEB765867E83138F67070FA82408D08E5AB948F8D7B`, exit 1, raised at L253 after the change (L232 before; the same message, moved by the helpers added above it). The gate passed on the 0.5.10 control, and the stage holds `source-pin-staleness.json` only. The same line appeared before the change.
 
-Keyed by the region-library change (one place): the library folder (`_default_region_library`, L903; `ServerProfile.region_library`, set for 0.7.2 in `v0_7.py`; the 0.5 line keeps `region-library-pilot-v2`). `derive_contract_cascade` takes `region_root`. The arsenal evidence bridge is already keyed to the line.
+### Blockers and what changed
 
-Still hand-maintained:
+The earlier blockers (the cascade before the traversal library, the 0.5.7 projection reference, the absent expected manifest, the 0.5.7 stationary recording, the 0.5.7 capacity report, the single-line fixture paths) are answered by first capture: the staged 0.7.2 contract, the repeat check, the deferred cascade, the produced capacity report, and the per-line folders.
 
-- `_TARGET_SEED = 570057` (L40). A 0.7.2 NPZ for it is staged (`artifacts/worldgen/region_0.7.2_seed_570057.npz`), but it is not a library member.
-- `"570058"` in `_navigation_probe_commands` (L602). It is a library selection key, not a seed.
-- The 0.5.7 fixture folder (`fixture_root`, L150) and the 13 fixture names (B2, B4, B6).
-- The capacity report path (L270), which is 0.5.7 (B5).
-- `_default_deployed_bridge` (L922), an APPDATA Windows path.
-- No expected library digest is checked on this path; the cascade records one.
-- Swap items outside the path: the pins listed under "Who reads the fixed paths".
+Still open, and not for this change:
 
-### 0.7.2 dry run, 2026-10-19
+- The 0.7.2 audits: the gate stops at the first unpinned audit. At the committed pins that is perception; the audit lane's uncommitted working-tree pins move it to mutable_blocks (explosion_mutation is also unpinned there).
+- The first-capture native steps have not run on the 0.7.2 bridge. A live run is the first real test of the deferred cascade and of the two stationary captures.
+- The capacity report from the tracked producer is schema `hytalerl_world_token_capacity_benchmark_v1`. The 0.5.7 artifact is `v2`. The stationary compare reads only the fields both share (`library_semantic_sha256`, `artifact_seeds`, `natural_crops.exception_cell_counts`, `report_semantic_sha256`).
+- Promotion and the swap are owner decisions.
 
-Script: `/Users/arush/.claude/jobs/31947bd7/tmp/recert_072/scripts/dryrun_072.sh`; log `.../recert_072/dryrun.log`. Command: `HYTALERL_SERVER_VERSION=0.7.2`, `python -m hytalegym.worldgen.region.recertification <stage> --port 5556 --deployed-bridge hytale-plugin-0.7.2/build/libs/HytaleRLBridge072-0.1.0.jar --expected-bridge-sha256 460054A8...CAD88D --assets <Assets.zip> --server-jar <HytaleServer.jar> --control-seed 481374900`. No server was launched and no port was used; the lease was taken and released.
-
-Result: the run exits 1 at L185 with
-
-    RuntimeError: World source-pin audit failed (perception): installed LOS inputs differ from the 0.5.7 baseline
-
-The stage holds only `source-pin-staleness-failure.json`. No library was loaded, because the library and the cascade come after the gate.
-
-### Blockers after the audits pass
-
-Checked on 2026-10-19 unless marked otherwise.
-
-- B1 (confirmed by running the code): under `HYTALERL_SERVER_VERSION=0.7.2` the default folder is `region-library-pilot-v2-072`, and the cascade (L245, traversal load L810) raises `FileNotFoundError` for `region-library-pilot-v2-072/traversal-v2/traversal-manifest.json`. The traversal library is built later, in the graph step, so a first 0.7.2 run cannot pass the cascade.
-- B2 (confirmed by running `require_snapshot_projection` on the staged NPZ): the candidate projection contract keeps the 0.5.7 reference `DB4B9B85...`, because only the bridge and the version are relabelled (L746-747). The staged 0.7.2 seed-570057 NPZ projects to `408D5FB2...`, and `require_snapshot_projection` raises `Region seed-projection digest changed` (`stability.py:248`). A live 0.7.2 capture gives the same digest (FIDELITY (aj)). The candidate's fluid-only cap is also the 0.5.7 value, 4; the 0.7.2 contract uses 6.
-- B3 (inferred, not run): the graph step passes `--expect-manifest` (L332) at the absent 0.7.2 `traversal-manifest.json`. The compare loads it only after capturing all 20 graphs (`native_region_traversal_graph_compare.py:164-170`), so the first 0.7.2 build would fail after about 8 minutes of captures. The loader is the one that raised in B1.
-- B4 (inferred, not run): the stationary step (`--expect-recording`, L315) requires the live report and arrays to equal the relabelled 0.5.7 recording (`surrogate_traversal_native_compare.py:148-149`, `_require_recording_matches` in that script, L421-470: stable fields, artifact hash, each array within 1e-12). The 0.7.2 terrain differs (FIDELITY (aj): 5,927 cells on seed 570057), so this should fail.
-- B5 (not checked): the stationary step takes the 0.5.7 capacity report (L270). No 0.7.2 report is staged.
-- B6 (owner decision): the single-line fixture paths (see "What promote means here").
-- Design (owner decision): the candidate builder reuses 0.5.7 references by design (`test_candidate_repin_retains_reference_arrays_and_changes_only_evidence`). A new line needs references from its own first capture. The options are a first-capture mode (references and graph expectations from the run itself, as `recapture_region.py` builds its v2 contract, with the 0.5.7 path unchanged) or 0.7.2 reference recordings staged by hand first. B1 and B3 need an order change or a flag either way.
-
-### Live-run plan, after the audits pass
+### Live-run plan (first capture, after the audits pass)
 
 Coordinator checks before the run:
 
 1. `verify_installed_world_source_pins` passes for the 0.7.2 install, meaning the audit lane has accepted the 0.7.2 pins.
-2. B1, B2 and B3 are resolved by an owner decision. Otherwise the run stops at the cascade, the projection, or after about 8 minutes at the graph step. B4 and B5 may stop it at the stationary step.
+2. `artifacts/worldgen/region-library-pilot-v2-072/traversal-v2/`, `world-token-capacity.json` and `hytalegym/tests/fidelity/fixtures/world/v0_7/` are absent. Otherwise the mode is `compare` or the partial refusal applies.
 3. The 5556 lease is free: no `native-world-recertification-127_0_0_1-5556.json` and no lock holder (`lsof`). Nothing listens on 5556 or on UDP 25574.
 4. `hytale-plugin-0.7.2/build/libs/HytaleRLBridge072-0.1.0.jar` hashes to `460054A8...CAD88D`. The launcher copies it into the run directory.
 5. `<run>` and `<stage>` are new, empty, absolute directories under `/Users/arush/.claude/jobs/31947bd7/tmp/recert_072/`.
 
-Command. The launcher starts the server, runs the recertification as `--then`, and stops the server. Replace `<run>` and `<stage>` with absolute paths. Write no `$VARIABLES`, because `--then` is split with `shlex`, not a shell. Add `--control-seed N` for a repeatable run.
+Command. The launcher starts the server, runs the recertification as `--then`, and stops the server. Replace `<run>` and `<stage>`. Write no `$VARIABLES`, because `--then` is split with `shlex`. Add `--control-seed N` for a repeatable run.
 
     cd /Users/arush/hydl/HytaleRL/hytale-plugin-0.7.2
-    env HYTALERL_SERVER_VERSION=0.7.2 APPDATA="/Users/arush/Library/Application Support" PYTHONPATH=/Users/arush/hydl/HytaleRL/hytalegym /Users/arush/hydl/.venv/bin/python tools/launch_bridge_072.py --run-dir <run> --bridge-port 5556 --game-port 25574 --then-timeout 3600 --then "/Users/arush/hydl/.venv/bin/python -m hytalegym.worldgen.region.recertification <stage> --port 5556 --deployed-bridge <run>/mods/HytaleRLBridge072-0.1.0.jar --expected-bridge-sha256 460054A8E7508FE5E205AD527AFB08474B61626EE5C2212FC2A484ECFCCAD88D --assets '/Users/arush/Library/Application Support/Hytale/install/release/package/game/latest/Assets.zip' --server-jar '/Users/arush/Library/Application Support/Hytale/install/release/package/game/latest/Server/HytaleServer.jar'"
+    env HYTALERL_SERVER_VERSION=0.7.2 APPDATA="/Users/arush/Library/Application Support" PYTHONPATH=/Users/arush/hydl/HytaleRL/hytalegym /Users/arush/hydl/.venv/bin/python tools/launch_bridge_072.py --run-dir <run> --bridge-port 5556 --game-port 25574 --then-timeout 5400 --then "/Users/arush/hydl/.venv/bin/python -m hytalegym.worldgen.region.recertification <stage> --port 5556 --deployed-bridge <run>/mods/HytaleRLBridge072-0.1.0.jar --expected-bridge-sha256 460054A8E7508FE5E205AD527AFB08474B61626EE5C2212FC2A484ECFCCAD88D --assets '/Users/arush/Library/Application Support/Hytale/install/release/package/game/latest/Assets.zip' --server-jar '/Users/arush/Library/Application Support/Hytale/install/release/package/game/latest/Server/HytaleServer.jar' --seed-projection-contract /Users/arush/hydl/HytaleRL/artifacts/worldgen/world-evidence-history/460054A8/fixtures/native_region_seed_projection_contract.json --seed-projection-npz /Users/arush/hydl/HytaleRL/artifacts/worldgen/region_0.7.2_seed_570057.npz"
 
 The launcher's default game port is 25572, so `--game-port 25574` is required. Its `--then` exit code is recorded in `<run>/launch-report.json`.
 
-Expected duration: up to 180 s to boot, then about 15 to 25 minutes (the planning figure above), so the 3600 s `--then-timeout` leaves room.
+Expected duration: up to 180 s to boot, then about 25 to 35 minutes (the planning figure above), so the `--then-timeout` is 5400 s.
 
-While it runs: the 0.7.2 server holds 5556 and 25574 (`<run>/server.log` shows `Bridge server listening on`). The run holds the 5556 lease, which appears as `.codex-local/native-world-recertification-127_0_0_1-5556.json` until exit. Its child processes join the lease through the environment token.
+While it runs: the 0.7.2 server holds 5556 and 25574 (`<run>/server.log` shows `Bridge server listening on`). The run holds the 5556 lease, which appears as `.codex-local/native-world-recertification-127_0_0_1-5556.json` until exit.
 
-Writes: `<run>` (`server.log`, `launch-report.json`, `mods/`, `universe/`), `<stage>` (the Outputs list), and the lease signal `.json` under `HytaleRL/.codex-local/`, removed at exit (the `.lock` file stays). Nothing under `artifacts/worldgen/` or `hytalegym/tests/fidelity/fixtures/world/` is written.
+Writes: `<run>` (`server.log`, `launch-report.json`, `mods/`, `universe/`), `<stage>` (the Outputs list), and the lease signal, removed at exit. Nothing under `artifacts/worldgen/` or the fixture folder is written.
 
-### Before promotion
+Checks before promotion:
 
 1. `<run>/launch-report.json`: `ready` true, `then_exit_code` 0, `error` null.
-2. `recertification-manifest.json`: `status` `validated_candidate_not_published`, 18 candidate rows. Recompute each row's sha256 from the file in the stage.
-3. `source-pin-staleness.json`: 11 audits, and the report's semantic sha256 equal to the accepted 0.7.2 pins.
-4. `contract-cascade.json`: every relationship true. `identities.region_library` equals `9DCA3C71...DAAB95` (the cascade uppercases). `identities.traversal_library` equals the semantic sha256 of the new traversal manifest.
-5. `traversal-v2/traversal-manifest.json`: `native_evidence_jar_sha256` `460054A8...`, `source_region_library_semantic_sha256` `9DCA3C71...`, `graph_count` 20. `native-traversal-recording.json`: `artifact_count` 20, `full_edge_census` true.
-6. `native_region_difference.json` and the compare logs: the seed-projection check passes, the fluid-only changed cells are within the contract cap, and the other differing cells are zero. The 0.5.7 publications recorded exactly this (5A54A8F5: three fluid-only cells, zero other).
-7. A second independent run or control for the same bridge, as the 0.5.7 publications used (5A54A8F5: control seed 1148448982, a separate seed from the target). The owner decides whether one run is enough.
-8. The stage is outside the fixed paths, and `git status` shows no new tracked change from the run.
+2. `recertification-manifest.json`: `reference_mode` `first_capture`; 19 candidate rows; recompute each row's sha256 from the file in the stage.
+3. `first_capture` block: the contract hash equals the staged 460054A8 contract; the two stationary artifact hashes are recorded; `region_library_sha256` and `projection_reference_sha256` equal the two expected digests.
+4. `stationary-1/` and `stationary-2/`: the reported fields agree (only `captured_at_utc` differs) and the arrays agree within 1e-12.
+5. `contract-cascade.json`: every relationship true; `identities.region_library` equals `9DCA3C71...DAAB95` (the cascade uppercases); `identities.traversal_library` equals the semantic sha256 of `traversal-v2/traversal-manifest.json`.
+6. `traversal-v2/traversal-manifest.json`: `native_evidence_jar_sha256` `460054A8...`, `source_region_library_semantic_sha256` `9DCA3C71...`, `graph_count` 20. `native-traversal-recording.json`: `artifact_count` 20, `full_edge_census` true.
+7. `native_region_difference.json` and the compare logs: the seed-projection check passes; the fluid-only changed cells are within the contract cap (6); the other differing cells are zero.
+8. `world-token-capacity.json`: `library_semantic_sha256` `9DCA3C71...`, `artifact_seeds` of length 20.
+9. A second independent run or control for the same bridge, as the 0.5.7 publications used (5A54A8F5: control seed 1148448982). The owner decides whether one run is enough.
+10. The stage is outside the fixed paths, and `git status` shows no new tracked change from the run.
 
-Then the owner decides the layout (B6), the swap (README steps 3 to 5), and the promotion itself. Promotion writes shared state, so it needs an explicit owner yes.
+Then the owner decides the promotion (the three 0.7.2 locations above) and the swap (README steps 3 to 5). Promotion writes shared state, so it needs an explicit owner yes.

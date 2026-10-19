@@ -17,4 +17,8 @@ PROFILE = ServerProfile(
     crafting_recipe_count=2_047,
     checkpoint_rulesets=("0.5.7",),
     region_library="region-library-pilot-v2-072",
+    world_fixture_root="v0_7",
+    world_capacity_report="region-library-pilot-v2-072/world-token-capacity.json",
+    region_library_sha256="9DCA3C71D43A2C3BF4BE6AFF6E2BD24D2F6608C8BE01D1687A0B259F06DAAB95",
+    seed_projection_sha256="408D5FB2DAA797E767AEE23248C6591FC226E1FE764C6258353D60FE49D1104D",
 )

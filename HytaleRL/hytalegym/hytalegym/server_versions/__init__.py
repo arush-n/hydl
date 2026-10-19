@@ -20,6 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from importlib import import_module
 import os
+from pathlib import Path
 
 SERVER_VERSION_ENV = "HYTALERL_SERVER_VERSION"
 DEFAULT_SERVER_VERSION = "0.5.7"
@@ -48,6 +49,16 @@ class ServerProfile:
     # Folder under artifacts/worldgen holding the Region library that world
     # evidence recertification reads. None keeps the 0.5 pilot folder.
     region_library: str | None = None
+    # Subfolder of tests/fidelity/fixtures/world holding this line's recorded
+    # World evidence. None keeps the 0.5 root.
+    world_fixture_root: str | None = None
+    # Capacity report of the line's Region library, relative to artifacts/worldgen.
+    # None keeps the 0.5 report.
+    world_capacity_report: str | None = None
+    # Expected semantic SHA-256 of the line's Region library, and expected projection
+    # digest of the recertification target seed. None means unchecked.
+    region_library_sha256: str | None = None
+    seed_projection_sha256: str | None = None
 
 
 def release_line(version: object) -> tuple[int, int] | None:
@@ -81,6 +92,30 @@ def server_profile(version: str | None = None) -> ServerProfile:
     return import_module(_MODULES[line]).PROFILE
 
 
+_WORLD_FIXTURE_ROOT = Path("tests") / "fidelity" / "fixtures" / "world"
+
+
+def world_fixture_root(
+    hytalegym_root: str | Path | None = None,
+    version: str | None = None,
+) -> Path:
+    """Return the recorded World evidence folder of a server line.
+
+    ``hytalegym_root`` is the directory that holds ``tests/`` (default: the checkout
+    this module lives in). The 0.5 line reads the root itself; a line that names
+    ``world_fixture_root`` reads that subfolder.
+    """
+
+    base = (
+        Path(__file__).resolve().parents[2]
+        if hytalegym_root is None
+        else Path(hytalegym_root)
+    )
+    root = base / _WORLD_FIXTURE_ROOT
+    folder = server_profile(version).world_fixture_root
+    return root if folder is None else root / folder
+
+
 def checkpoint_runs_on_server(checkpoint_version: object, server_version: object) -> bool:
     """Return whether native evaluation may run a checkpoint on a server.
 
@@ -105,4 +140,5 @@ __all__ = [
     "is_supported_server_version",
     "release_line",
     "server_profile",
+    "world_fixture_root",
 ]

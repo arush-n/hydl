@@ -15,7 +15,9 @@ import subprocess
 import sys
 from typing import Any, Mapping, Sequence
 
-from hytalegym.server_versions import server_profile
+import numpy as np
+
+from hytalegym.server_versions import server_profile, world_fixture_root
 from hytalegym.worldgen.native_lease import (
     NativeEvidenceLease,
     acquire_native_evidence_lease,
@@ -26,6 +28,7 @@ from hytalegym.worldgen.source_pins import (
 )
 from hytalegym.worldgen.surrogate import default_hytale_assets_path
 from hytalegym.worldgen.region.library import RegionArtifactLibrary
+from hytalegym.worldgen.region.snapshot import NativeRegionSnapshot
 from hytalegym.worldgen.region.stability import (
     current_native_evidence_jar_sha256,
     load_region_seed_projection_contract,
@@ -61,6 +64,16 @@ def main() -> None:
         help="directory holding the Region manifest.json (default: by server line)",
     )
     parser.add_argument(
+        "--seed-projection-contract",
+        type=Path,
+        help="first capture only: the staged v2 projection contract for seed 570057",
+    )
+    parser.add_argument(
+        "--seed-projection-npz",
+        type=Path,
+        help="first capture only: the staged NPZ that the contract must reproduce",
+    )
+    parser.add_argument(
         "--resume",
         action="store_true",
         help="reuse a prior candidate stage after all identity gates pass",
@@ -78,6 +91,8 @@ def main() -> None:
         assets=args.assets,
         server_jar=args.server_jar,
         region_library=args.region_library,
+        seed_projection_contract=args.seed_projection_contract,
+        seed_projection_npz=args.seed_projection_npz,
         resume=args.resume,
     )
     print(f"WORLD_EVIDENCE_RECERTIFICATION_CANDIDATE={report_path}")
@@ -96,6 +111,8 @@ def recapture_world_evidence(
     assets: str | Path | None = None,
     server_jar: str | Path | None = None,
     region_library: str | Path | None = None,
+    seed_projection_contract: str | Path | None = None,
+    seed_projection_npz: str | Path | None = None,
     resume: bool = False,
 ) -> Path:
     """Capture a complete candidate without mutating published evidence."""
@@ -127,6 +144,8 @@ def recapture_world_evidence(
             progress_lease=lease,
             resume=resume,
             region_library=region_library,
+            seed_projection_contract=seed_projection_contract,
+            seed_projection_npz=seed_projection_npz,
         )
 
 
@@ -144,10 +163,12 @@ def _recapture_world_evidence_unlocked(
     resume: bool,
     expected_bridge_sha256: str | None = None,
     region_library: str | Path | None = None,
+    seed_projection_contract: str | Path | None = None,
+    seed_projection_npz: str | Path | None = None,
 ) -> Path:
     root = repository_root
     package_root = root / "hytalegym"
-    fixture_root = package_root / "tests" / "fidelity" / "fixtures" / "world"
+    fixture_root = world_fixture_root(package_root)
     region_root = (
         Path(region_library).resolve()
         if region_library is not None
@@ -234,16 +255,29 @@ def _recapture_world_evidence_unlocked(
             f"observed={observed_bridge} expected={expected_bridge}"
         )
 
-    _update_recertification_progress(
-        progress_lease,
-        phase="contract_cascade",
-        phase_status="running",
+    reference_mode = _reference_mode(
+        fixture_root,
+        region_root,
+        _world_capacity_report(root),
     )
+    if reference_mode == "first_capture":
+        if seed_projection_contract is None or seed_projection_npz is None:
+            raise RuntimeError(
+                "a first capture of this line needs --seed-projection-contract "
+                "and --seed-projection-npz"
+            )
+        _require_expected_library(region_root / "manifest.json")
     cascade_path = stage / "contract-cascade.json"
-    _write_json(
-        cascade_path,
-        derive_contract_cascade(root, expected_bridge, region_root=region_root),
-    )
+    if reference_mode == "compare":
+        _update_recertification_progress(
+            progress_lease,
+            phase="contract_cascade",
+            phase_status="running",
+        )
+        _write_json(
+            cascade_path,
+            derive_contract_cascade(root, expected_bridge, region_root=region_root),
+        )
     _require_listener(host, port)
 
     selected_control = (
@@ -258,17 +292,37 @@ def _recapture_world_evidence_unlocked(
         raise RuntimeError(
             "source-pin report lacks the installed Hytale implementation version"
         )
-    projection_contract, traversal_recording = build_evidence_candidates(
-        fixture_root,
-        candidate_fixtures,
-        bridge_sha256=expected_bridge,
-        captured_at_utc=datetime.now(UTC).date().isoformat(),
-        server_version=installed_version,
-    )
+    if reference_mode == "compare":
+        projection_contract, traversal_recording = build_evidence_candidates(
+            fixture_root,
+            candidate_fixtures,
+            bridge_sha256=expected_bridge,
+            captured_at_utc=datetime.now(UTC).date().isoformat(),
+            server_version=installed_version,
+        )
+        stationary_artifact = candidate_fixtures / _STATIONARY_ARTIFACT
+    else:
+        projection_contract = _first_capture_projection_contract(
+            seed_projection_contract,
+            seed_projection_npz,
+            bridge_sha256=expected_bridge,
+            destination=candidate_fixtures,
+        )
+        traversal_recording = stage / "stationary-1" / _STATIONARY_RECORDING
+        stationary_artifact = stage / "stationary-1" / _STATIONARY_ARTIFACT
 
     region_manifest = region_root / "manifest.json"
-    capacity_report = root / "artifacts" / "worldgen" / "world-token-capacity-v4.json"
+    capacity_report = (
+        _world_capacity_report(root)
+        if reference_mode == "compare"
+        else stage / "world-token-capacity.json"
+    )
     expected_graph_manifest = graph_root / "traversal-manifest.json"
+    graph_expectation = (
+        ("--expect-manifest", str(expected_graph_manifest))
+        if reference_mode == "compare"
+        else ()
+    )
     graph_candidate = stage / "traversal-v2"
     scripts = package_root / "tests" / "fidelity"
     candidate_region = stage / f"native_region_candidate_seed_{_TARGET_SEED}.npz"
@@ -299,22 +353,22 @@ def _recapture_world_evidence_unlocked(
                 str(difference_report),
             ),
         ),
-        (
-            "stationary_traversal",
-            (
-                sys.executable,
-                str(scripts / "surrogate_traversal_native_compare.py"),
-                str(region_manifest),
-                str(capacity_report),
-                "--host",
-                host,
-                "--port",
-                str(port),
-                "--deployed-bridge",
-                str(bridge),
-                "--expect-recording",
-                str(traversal_recording),
+        *(
+            _capacity_command(scripts, region_manifest, capacity_report)
+            if reference_mode == "first_capture"
+            else ()
+        ),
+        *_stationary_commands(
+            scripts,
+            region_manifest,
+            capacity_report,
+            host=host,
+            port=port,
+            bridge=bridge,
+            expected_recording=(
+                traversal_recording if reference_mode == "compare" else None
             ),
+            stage=stage,
         ),
         (
             "region_traversal_graphs",
@@ -329,8 +383,7 @@ def _recapture_world_evidence_unlocked(
                 str(port),
                 "--deployed-bridge",
                 str(bridge),
-                "--expect-manifest",
-                str(expected_graph_manifest),
+                *graph_expectation,
             ),
         ),
         *_navigation_probe_commands(
@@ -371,6 +424,25 @@ def _recapture_world_evidence_unlocked(
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         )
 
+    if reference_mode == "first_capture":
+        _require_stationary_repeat_stable(
+            stage / "stationary-1" / _STATIONARY_RECORDING,
+            stage / "stationary-2" / _STATIONARY_RECORDING,
+        )
+        _update_recertification_progress(
+            progress_lease,
+            phase="contract_cascade",
+            phase_status="running",
+        )
+        _write_json(
+            cascade_path,
+            derive_contract_cascade(
+                root,
+                expected_bridge,
+                region_root=region_root,
+                traversal_manifest=graph_candidate / "traversal-manifest.json",
+            ),
+        )
     library = RegionArtifactLibrary.load(region_manifest)
     graphs = RegionTraversalGraphLibrary.load(
         graph_candidate / "traversal-manifest.json",
@@ -416,7 +488,7 @@ def _recapture_world_evidence_unlocked(
             ),
             "stationary_traversal_artifact": _candidate_row(
                 stage,
-                candidate_fixtures / "native_traversal_projection_v2_recording.npz",
+                stationary_artifact,
             ),
             "region_snapshot": _candidate_row(stage, candidate_region),
             "traversal_manifest": _candidate_row(
@@ -541,6 +613,27 @@ def _recapture_world_evidence_unlocked(
             },
         },
     }
+    if reference_mode == "first_capture":
+        report["reference_mode"] = reference_mode
+        report["candidates"]["world_capacity_report"] = _candidate_row(
+            stage,
+            capacity_report,
+        )
+        report["publication"]["targets"]["world_capacity_report"] = (
+            capacity_report.relative_to(stage).as_posix()
+        )
+        report["first_capture"] = {
+            "projection_contract_file_sha256": _file_sha256(projection_contract),
+            "projection_reference_sha256": load_region_seed_projection_contract(
+                projection_contract
+            ).reference_seed_projection_sha256,
+            "region_library_sha256": server_profile().region_library_sha256,
+            "stationary_repeat_file_sha256": [
+                _file_sha256(stage / "stationary-1" / _STATIONARY_ARTIFACT),
+                _file_sha256(stage / "stationary-2" / _STATIONARY_ARTIFACT),
+            ],
+            "capacity_report_file_sha256": _file_sha256(capacity_report),
+        }
     destination = stage / "recertification-manifest.json"
     _write_json(destination, report)
     _update_recertification_progress(
@@ -779,6 +872,7 @@ def derive_contract_cascade(
     bridge_sha256: str,
     *,
     region_root: str | Path | None = None,
+    traversal_manifest: str | Path | None = None,
 ) -> dict[str, object]:
     """Re-derive the current cross-lane contract chain without publishing."""
 
@@ -808,7 +902,9 @@ def derive_contract_cascade(
     )
     region = RegionArtifactLibrary.load(region_folder / "manifest.json")
     traversal = RegionTraversalGraphLibrary.load(
-        region_folder / "traversal-v2" / "traversal-manifest.json",
+        region_folder / "traversal-v2" / "traversal-manifest.json"
+        if traversal_manifest is None
+        else Path(traversal_manifest),
         region,
     )
     world_token = world_geometry_token_contract_sha256().upper()
@@ -908,6 +1004,198 @@ def _default_region_library(repository_root: Path) -> Path:
 
     folder = server_profile().region_library or "region-library-pilot-v2"
     return repository_root / "artifacts" / "worldgen" / folder
+
+
+_PROJECTION_CONTRACT = "native_region_seed_projection_contract.json"
+_STATIONARY_RECORDING = "native_traversal_projection_v2_recording.json"
+_STATIONARY_ARTIFACT = "native_traversal_projection_v2_recording.npz"
+_STATIONARY_IGNORED = frozenset(
+    {"artifact", "artifact_sha256", "captured_at_utc", "report_semantic_sha256"}
+)
+
+
+def _world_capacity_report(repository_root: Path) -> Path:
+    """Return the line's world-token capacity report (0.5: the v4 report in artifacts)."""
+
+    name = server_profile().world_capacity_report
+    return repository_root / "artifacts" / "worldgen" / (
+        "world-token-capacity-v4.json" if name is None else name
+    )
+
+
+def _reference_mode(
+    fixture_root: Path,
+    region_root: Path,
+    capacity_report: Path,
+) -> str:
+    """Return "compare" when the line has all its references, "first_capture" when none.
+
+    A partial set is refused, so a run never compares some references and
+    captures the others.
+    """
+
+    present = {
+        "projection contract": (fixture_root / _PROJECTION_CONTRACT).is_file(),
+        "stationary recording": (fixture_root / _STATIONARY_RECORDING).is_file(),
+        "capacity report": capacity_report.is_file(),
+        "traversal manifest": (
+            region_root / "traversal-v2" / "traversal-manifest.json"
+        ).is_file(),
+    }
+    if all(present.values()):
+        return "compare"
+    if not any(present.values()):
+        return "first_capture"
+    missing = ", ".join(name for name, found in present.items() if not found)
+    raise RuntimeError(f"partial World reference set for this line; missing: {missing}")
+
+
+def _require_expected_library(manifest: Path) -> None:
+    """Refuse a first capture on a Region library that is not the line's expected one."""
+
+    expected = server_profile().region_library_sha256
+    if expected is None:
+        return
+    observed = RegionArtifactLibrary.load(manifest).semantic_sha256.upper()
+    if observed != expected:
+        raise RuntimeError(
+            "Region library differs from the line's expected digest: "
+            f"observed={observed} expected={expected}"
+        )
+
+
+def _first_capture_projection_contract(
+    contract: str | Path | None,
+    snapshot: str | Path | None,
+    *,
+    bridge_sha256: str,
+    destination: Path,
+) -> Path:
+    """Stage the line's seed-570057 projection reference after checking it against its NPZ."""
+
+    if contract is None or snapshot is None:
+        raise RuntimeError(
+            "a first capture of this line needs --seed-projection-contract "
+            "and --seed-projection-npz"
+        )
+    source = Path(contract)
+    projection = load_region_seed_projection_contract(source)
+    projection.require_evidence_bridge(bridge_sha256)
+    if projection.seed != _TARGET_SEED:
+        raise RuntimeError("staged projection contract is not for the target seed")
+    expected = server_profile().seed_projection_sha256
+    if expected is not None and (
+        projection.reference_seed_projection_sha256 != expected
+    ):
+        raise RuntimeError(
+            "staged projection contract differs from the line's expected digest: "
+            f"observed={projection.reference_seed_projection_sha256} expected={expected}"
+        )
+    projection.require_snapshot_projection(
+        NativeRegionSnapshot.load(Path(snapshot)),
+        context="staged seed-570057 NPZ",
+    )
+    target = destination / _PROJECTION_CONTRACT
+    shutil.copy2(source, target)
+    if _file_sha256(target) != _file_sha256(source):
+        raise RuntimeError("staged projection contract copy changed bytes")
+    return target
+
+
+def _require_stationary_repeat_stable(first: Path, second: Path) -> None:
+    """Two captures of the line's stationary traversal must agree before one is staged."""
+
+    first_report = _read_json(first)
+    second_report = _read_json(second)
+
+    def comparable(report: dict[str, Any]) -> dict[str, Any]:
+        return {key: value for key, value in report.items() if key not in _STATIONARY_IGNORED}
+
+    if comparable(first_report) != comparable(second_report):
+        raise RuntimeError("stationary traversal captures disagree in their reported fields")
+    first_artifact = first.parent / str(first_report["artifact"])
+    second_artifact = second.parent / str(second_report["artifact"])
+    for artifact, report in ((first_artifact, first_report), (second_artifact, second_report)):
+        if _file_sha256(artifact) != report["artifact_sha256"]:
+            raise RuntimeError(f"stationary traversal artifact hash changed: {artifact.name}")
+    with np.load(first_artifact, allow_pickle=False) as left_arrays, np.load(
+        second_artifact,
+        allow_pickle=False,
+    ) as right_arrays:
+        if set(left_arrays.files) != set(right_arrays.files):
+            raise RuntimeError("stationary traversal captures disagree in their array fields")
+        for name in left_arrays.files:
+            left = left_arrays[name]
+            right = right_arrays[name]
+            if left.shape != right.shape or left.dtype != right.dtype:
+                raise RuntimeError(f"stationary traversal captures disagree in shape: {name}")
+            if np.issubdtype(left.dtype, np.floating):
+                if not np.allclose(left, right, rtol=0.0, atol=1.0e-12, equal_nan=True):
+                    raise RuntimeError(f"stationary traversal captures disagree: {name}")
+            elif not np.array_equal(left, right):
+                raise RuntimeError(f"stationary traversal captures disagree: {name}")
+
+
+def _capacity_command(
+    scripts: Path,
+    manifest: Path,
+    output: Path,
+) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """Produce the line's world-token capacity report from its Region library."""
+
+    return (
+        (
+            "world_token_capacity",
+            (
+                sys.executable,
+                str(scripts / "surrogate_world_token_benchmark.py"),
+                str(manifest),
+                "--output",
+                str(output),
+            ),
+        ),
+    )
+
+
+def _stationary_commands(
+    scripts: Path,
+    manifest: Path,
+    capacity_report: Path,
+    *,
+    host: str,
+    port: int,
+    bridge: Path,
+    expected_recording: Path | None,
+    stage: Path,
+) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """Compare against the frozen recording, or capture twice for the repeat check."""
+
+    common = (
+        sys.executable,
+        str(scripts / "surrogate_traversal_native_compare.py"),
+        str(manifest),
+        str(capacity_report),
+        "--host",
+        host,
+        "--port",
+        str(port),
+        "--deployed-bridge",
+        str(bridge),
+    )
+    if expected_recording is not None:
+        return (
+            (
+                "stationary_traversal",
+                (*common, "--expect-recording", str(expected_recording)),
+            ),
+        )
+    return tuple(
+        (
+            f"stationary_traversal_{index}",
+            (*common, "--recording-directory", str(stage / f"stationary-{index}")),
+        )
+        for index in (1, 2)
+    )
 
 
 def _repository_root() -> Path:
