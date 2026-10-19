@@ -327,6 +327,12 @@ First capture adds the capacity benchmark (measured 2026-10-19 on the 0.7.2 libr
   world-token identity from the traversal manifest beside the Region library (absent until promotion, once the pointer
   keyed by profile landed mid-run). Fixed by the exported `HYTALERL_TRAVERSAL_MANIFEST` above and the tokens module's
   override and intermediate state (task #89).
+- Run 3 (18:39 to 18:54, pointers keyed and the override exported): the same captures, the graphs, navigation, walk and
+  seven world-action probes including crafting and item interaction; stopped at the block-use probe, whose typed synthetic
+  place and break requests carry no `expected_candidate_generation_sha256` and `expected_selected_semantic_sha256`, which
+  the current typed transport (v5, on both bridges) requires; the bridge fails closed with
+  `native_policy_world_action_evidence_required`. The 0.5.7 fixture predates that rule. A repair lane binds the expectations
+  from the world-action capture channel in the block-use and capabilities probes.
 
 ### Blockers and what changed
 
