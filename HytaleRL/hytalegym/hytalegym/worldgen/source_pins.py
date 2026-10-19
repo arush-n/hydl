@@ -11,7 +11,7 @@ import sys
 from typing import Mapping
 from zipfile import BadZipFile, ZipFile
 
-from hytalegym.server_versions import server_profile
+from hytalegym.server_versions import SERVER_VERSION_ENV, server_profile
 
 
 SOURCE_PIN_STALENESS_SCHEMA = "hytalerl_world_source_pin_staleness_v10"
@@ -98,6 +98,13 @@ def verify_installed_world_source_pins(
             f"installed HytaleServer.jar is unavailable: {server_path}"
         )
 
+    # The audits key their host contracts by HYTALERL_SERVER_VERSION (server_profile), so they run under the
+    # audited JAR's own version rather than the caller's environment (2026-10-19: run without the variable
+    # against a 0.7.2 install, explosion_mutation failed on the 0.5.7 host digest before the staleness report
+    # could name the real mismatch). The report below still checks the caller's profile against the install.
+    installed_version = str(
+        installed_hytale_server_identity(server_path)["implementation_version"]
+    )
     reports: dict[str, dict[str, object]] = {}
     for name, script_name, uses_assets in _AUDITS:
         script = scripts / script_name
@@ -114,7 +121,11 @@ def verify_installed_world_source_pins(
         completed = subprocess.run(
             command,
             cwd=scripts.parents[1],
-            env=_source_audit_environment(scripts.parents[1], asset_path),
+            env=_source_audit_environment(
+                scripts.parents[1],
+                asset_path,
+                server_version=installed_version,
+            ),
             capture_output=True,
             text=True,
             check=False,
@@ -140,8 +151,16 @@ def verify_installed_world_source_pins(
     return world_source_pin_staleness_report(server_path, reports)
 
 
-def _source_audit_environment(project_root: Path, assets: Path | None = None) -> dict[str, str]:
+def _source_audit_environment(
+    project_root: Path,
+    assets: Path | None = None,
+    *,
+    server_version: str | None = None,
+) -> dict[str, str]:
     """Keep the package root absolute when audit subprocesses change cwd.
+
+    ``server_version`` (the audited JAR's implementation version) is exported as ``HYTALERL_SERVER_VERSION`` so
+    the audits select the host contracts of the line they audit.
 
     The audits evaluate their ``--assets`` argparse default from ``HYTALE_ASSETS_ZIP`` (or ``APPDATA``) before
     the command line is parsed, so a host without either variable fails inside argparse even though the gate
@@ -156,6 +175,8 @@ def _source_audit_environment(project_root: Path, assets: Path | None = None) ->
         # The crafting audit's argparse default reads APPDATA alone (2026-10-19, the recertification dry run):
         # a placeholder directory keeps that default computable; the gate passes --assets explicitly anyway.
         environment.setdefault("APPDATA", str(assets.parent))
+    if server_version is not None:
+        environment[SERVER_VERSION_ENV] = server_version
     return environment
 
 
