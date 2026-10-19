@@ -361,6 +361,16 @@ command (`tools/worldgen/README.md` is the runbook). Against the 0.5.7 capture t
 5,927 cells, so the recapture is needed, not optional. Open for the owner: the swap (README steps 1 to 5) and the rebuild of path
 tables, suites, biome table and horizons, whose generators this lane could not reach or find.
 
+**Phase 5, second pass on the source-pin audits (2026-10-18; FIDELITY-0.7.2.md section (al)).** 1 of 11 verified (inventory: section
+IDs, class mapping, getters, active slots and capacity byte-identical on 0.7.2; caveat recorded, the transport label says v1 while both
+bridges emit v2), 10 fail closed with their open gaps named per audit in `worldgen/source_pin_baselines_072.json`. The gate still stops at
+perception (`installed LOS inputs differ from the 0.5.7 baseline`). New: `tools/source_pins/rebaseline.py` (observe, candidate, accept,
+changed) with `tools/source_pins/README.md` as the runbook, and the gate now passes the installed `Assets.zip` to its audit subprocesses
+as `HYTALE_ASSETS_ZIP`, because the audits evaluate their `--assets` default from it before parsing and failed inside argparse on a host
+without the variable. Findings beyond the pins: `EntityScaleComponent` is a physical input on 0.7.2 (`EntityScaleBoundingBoxSystem`);
+several (ad) "removed" members were signature changes; the explosion host contract is keyed to 0.5.7 digests. Phase 5's gate stays
+open until the ten audits are re-derived claim by claim.
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the

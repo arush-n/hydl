@@ -10,7 +10,13 @@
     "server_jar_sha256": "23f71f03763422ce7c04df191db49cd0e7d87d43b12baad75c43fdc202410aff"
   },
   "recorded_from": "live-free offline read of the installed 0.7.2 Server/HytaleServer.jar and Assets.zip",
-  "status": "observed; no semantic baseline is verified (every audit has open gaps)",
+  "status": "observed; semantic baseline verified for 1 of 11 audits (inventory, with a recorded caveat); the other 10 fail closed, each with the open gaps named in its entry",
+  "notes": [
+    "Body-change counts are javap bodies with column whitespace collapsed, keyed by method signature (tools/source_pins/rebaseline.py changed). The phase-5 counts of 2026-10-18 were not whitespace-normalised: PositionCache showed 40 changed of 53 common methods, and 17 of 54 after normalisation (the 54 include <clinit>).",
+    "Verified means the audit's source claims were read against the 0.7.2 bytecode or bridge code, not that the script's hash was recorded. verified_claims and caveats name the evidence; confirmed_on_072 lists what was read on a fail-closed audit.",
+    "Several phase-5 'removed' entries were signature changes: ExplosionUtils.performExplosion (Rotation3f added), WorldUtil.getPackedMaterialAndFluidAtPosition and findFluidBlock (ChunkStore parameter). BlockHarvestUtils.performBlockDamage has three overloads on 0.7.2 and Rotation.add keeps its instance overload.",
+    "Gate hazard, not a 0.7.2 finding: the crafting audit reads APPDATA in its argparse default, and the gate sets neither APPDATA nor HYTALE_ASSETS_ZIP, so on macOS the crafting audit raises under the gate once the earlier audits pass (the observe tool sets a placeholder APPDATA)."
+  ],
   "audits": {
     "perception": {
       "EXPECTED_SERVER_SHA256": "23f71f03763422ce7c04df191db49cd0e7d87d43b12baad75c43fdc202410aff",
@@ -44,9 +50,13 @@
         "com/hypixel/hytale/server/npc/role/support/PositionCache.class": "9a12cfab97d768548472854e7908458bda82c77b9ef106a243861dd5c44ebc3e"
       },
       "open_gaps": [
-        "LocalCachedChunkAccessor.class absent on 0.7.2 (0.5.7 pin); the claimed unloaded-chunk LOS rule (unloaded_chunk: blocked) is not re-derived.",
-        "PositionCache.hasLineOfSight body changed (17 of 84 bodies; fields +3 -2; methods +16 -9; getRole, processEntitiesInRange, processNPCsInRange, processPlayersInRange removed).",
-        "2 of 26 pinned classes are byte-identical; 23 changed and 1 (LocalCachedChunkAccessor) absent."
+        "Unloaded-chunk LOS (claim unloaded_chunk: blocked): LocalCachedChunkAccessor is absent on 0.7.2 with no moved copy. The rule now runs through PositionCache$LineOfSightBuffer.resolveSection (inner class, not pinned). A loaded column with no BlockSection takes the null-section branch of lambda$hasLineOfSightInternal$1, which is not re-derived.",
+        "Entity-body LOS (entity_body_blocks_los: false) rests on PositionCache.testLineOfSightEntity, changed on 0.7.2 and not re-derived. hasLineOfSight reads a cached roleIndex field where 0.5.7 called role.getRoleIndex().",
+        "Channel and light contracts (getHeight, getTint, sky and block light readiness, ChunkLightingManager, FloodLightCalculation, ChunkStore initialisation) sit on pinned classes that changed: 2 of 26 byte-identical to the 0.5.7 pin, 1 absent, 103 changed bodies in 806 common methods. Not re-derived.",
+        "The projected-distance declarations have no recorded 0.7.2 value, so the audit's matches_0_5_7_baseline is false even with a semantic hash recorded. The verifier does not read that flag."
+      ],
+      "confirmed_on_072": [
+        "Unloaded start column returns false (blocked) in PositionCache lambda$hasLineOfSightInternal$0: resolveSection returns false, then the lambda returns false (0.5.7: getChunkIfInMemory == null returns false)."
       ]
     },
     "actor_world_state": {
@@ -72,9 +82,9 @@
         "com/hypixel/hytale/server/npc/movement/controllers/MotionControllerWalk.class": "b8bb0c895bef7e0b3530ca0f8c6b16f3460d970aa5e130d25393ffa46b776efe"
       },
       "open_gaps": [
-        "WorldUtil.getPackedMaterialAndFluidAtPosition removed; findFarthestEmptySpaceAbove/Below and findFluidBlock re-signatured to ChunkStore.",
-        "CollisionConfig.canCollide body changed (3 of 65); MotionControllerWalk.findDropBlockCollision body changed (22 of 166 bodies).",
-        "13 of 17 pinned classes differ."
+        "Submersion: WorldUtil.getPackedMaterialAndFluidAtPosition, findFarthestEmptySpaceAbove/Below and findFluidBlock are re-signatured to take ChunkStore directly (0.5.7: Ref plus ComponentAccessor). LivingEntity.getPackedMaterialAndFluidAtBreathingHeight changed (1 body). The fill-height and breathing reads are not re-derived.",
+        "Fall state: MotionControllerWalk.computeNewFallSpeed, computeMove, executeMove and findDropBlockCollision changed on 0.7.2; the fall-accumulation and landing claims are not re-derived.",
+        "Collision: CollisionConfig.canCollide (3 bodies), CollisionModule.processCollision and validatePosition changed. 37 changed bodies in 17 pinned classes (4 byte-identical to the 0.5.7 pin)."
       ]
     },
     "locomotion": {
@@ -114,10 +124,10 @@
         "Server/NPC/Roles/_Core/Tests/Motion/Test_Dive_Flee.json": "e2a278ccc7e00a5ea571fac88dcbcdb4aa856a37ac115f9c74a0df0bd2c44cf0"
       },
       "open_gaps": [
-        "MovementStates gains extraJumpsUsed (byte) after the 23 booleans (boolean order unchanged); codec moved to MemorySegment/ReadCursor (toObject, requireBounds).",
-        "MovementConfig gains MaxSlopeAngleDegrees 30 and MaxWallAngleDegrees 15 (MovementConfig.toPacket changed); the simulator models neither.",
-        "MotionControllerWalk changed (fields +3; methods +11 -2; 22 of 166 bodies); ClientFeature loses 6 fields.",
-        "14 of 22 pinned classes differ; 6 of 7 pinned assets differ; Test_Dive_Stationary.json added (dive roles 5 -> 6)."
+        "MovementStates gains extraJumpsUsed (byte) after the 23 booleans, and its codec moved to MemorySegment/ReadCursor (toObject, requireBounds). The extra-jump state has no constant in the audited set; not re-derived.",
+        "MovementConfig gains MaxSlopeAngleDegrees 30 and MaxWallAngleDegrees 15 (MovementConfig.toPacket changed). The previous lane found no reader in the 0.7.2 server (FIDELITY (l)); not re-derived here.",
+        "Pinned assets: 6 of 7 differ from the 0.5.7 pins. MovementConfig/Default.json gains the two keys; the transcribed values are unchanged per FIDELITY (b), not re-read by this lane. Test_Dive_Stationary.json is added (dive roles 5 -> 6), a non-hash expectation with no recorded 0.7.2 value.",
+        "MotionControllerWalk and ClientFeature changed: 203 changed bodies in 22 pinned classes (8 byte-identical to the 0.5.7 pin)."
       ]
     },
     "navigation": {
@@ -150,9 +160,9 @@
         "Server/NPC/Roles/_Core/Components/Instructions/Combat/Component_Instruction_Target_Adjusted_Attack_Melee.json": "45c63f868649ddae79cf600a52d19e30faa65092bd8f617b3a3b81c5ef66b165"
       },
       "open_gaps": [
-        "AStarBase.computePath body changed; the 0.5.7 limits (path 200, open 200, total 900) and the lookup order are not re-derived.",
-        "Component_Instruction_Intelligent_Chase gains DesiredAltitudeWeight (value -1), read by MotionControllerWalk and BodyMotionFindBase; its effect on the Trork chase is not measured.",
-        "12 of 18 pinned classes differ. Template_Trork_Melee.json gains MemoriesKillRange and MemoriesUnlockedBy (additive)."
+        "AStarBase.computePath changed and now returns AStarBase$Progress. The 200 / 200 / 900 limits are instance fields (maxPathLength, openNodesLimit, totalNodesLimit) set outside computePath; the limits, lookup order and open-list order are not re-derived.",
+        "Component_Instruction_Intelligent_Chase gains DesiredAltitudeWeight (default -1), read by MotionControllerWalk and BodyMotionFindBase. Its effect on the Trork chase is neither measured nor re-derived.",
+        "The four trace assets moved (Faction/ and Instructions/Combat/ paths); the trace pins are recorded at the 0.7.2 paths by the previous lane. Template_Trork_Melee.json gains MemoriesKillRange and MemoriesUnlockedBy. 49 changed bodies in 18 pinned classes (6 byte-identical)."
       ]
     },
     "doors": {
@@ -178,8 +188,11 @@
         "Server/Item/RootInteractions/Door/Door_Horizontal.json": "26ee6d5e7a5c1bffe3828dc38bf539d4ba7c6e4ac218883f5f9cfda229ae0c60"
       },
       "open_gaps": [
-        "DoorInteraction restructured: checkDoor, canOpenDoor, checkForDoubleDoor, isHorizontalDoor, isInFrontOfDoor and the OPEN/CLOSE_DOOR_IN/OUT constants removed (fields -4, methods -12; 3 of 15 bodies changed); the vertical-transition and double-door claims are not re-derived.",
-        "BlockAccessor.class absent on 0.7.2; Rotation.add removed; Of 6 pinned classes, 1 is byte-identical, 4 changed and 1 (BlockAccessor) absent. 9 of 9 door assets are byte-identical."
+        "DoorInteraction lost canOpenDoor, isHorizontalDoor, isInFrontOfDoor and DoorInteraction$DoorState. checkDoor now returns DoorBlockUtils$DoorState (DoorBlockUtils is new on 0.7.2 and unpinned), and checkForDoubleDoor takes DoorBlockUtils$DoorState parameters (same shape). The vertical-transition and double-door claims depend on these and are not re-derived.",
+        "BlockAccessor.class is absent on 0.7.2. Rotation.add(Rotation, Rotation) is removed (the instance add(Rotation) and toInverse remain; toInverse changed). FillerBlockUtil has 3 changed bodies and 21 added methods. 1 of 6 pinned classes is byte-identical to the 0.5.7 pin."
+      ],
+      "confirmed_on_072": [
+        "All 9 pinned door assets in Assets.zip are byte-identical to the 0.5.7 pins (counted from the installed archive)."
       ]
     },
     "mutable_blocks": {
@@ -266,8 +279,9 @@
         "com/hypixel/hytale/builtin/triggervolumes/effect/builtin/RunRootInteractionEffect.class": "c85b7ab9455be51f7ba4670339ed4faa4b1c56186b945482ff067a5b24534d12"
       },
       "open_gaps": [
-        "BlockHealthModule$BlockHealthSystem.class absent on 0.7.2; WorldChunk.setBlock removed (a claimed placement path).",
-        "Of 78 pinned classes, 19 are byte-identical, 58 changed and 1 (BlockHealthSystem) absent (BlockType: 160 methods added, 154 removed); the asset census and tick-procedure pins are not recorded for 0.7.2."
+        "BlockHealthModule$BlockHealthSystem is absent. The block-health work moved to BlockHealthSystems (Tick, ReplicateChanges, PlaceBlockEventSystem, EnsureSection, LoadPacket, MigrateBlockHealthChunk) and a new BlockHealthSection. The tick-procedure claim is not re-derived.",
+        "WorldChunk.setBlock is removed (0 overloads on 0.7.2): a claimed placement path.",
+        "342 changed bodies in 78 pinned classes (19 byte-identical to the 0.5.7 pin, 1 absent). The asset census and tick-procedure pins are not recorded for 0.7.2."
       ]
     },
     "explosion_mutation": {
@@ -291,8 +305,9 @@
         "Server/Item/Items/Recipe/Recipe_Book_Magic_Air.json": "02660eb8b65af7a16608c6e0f481d8a27ccae9d8da2ebac2ac3894fea6e321e5"
       },
       "open_gaps": [
-        "ExplosionUtils.performExplosion and BlockHarvestUtils.performBlockDamage removed (claimed explosion paths); DEBUG_SHAPES removed.",
-        "BlockHealthChunk fields +4 -1, methods +1 -14; BlockHealth fields +3 -2; the claimed health layout is not re-derived. 12 of 12 pinned classes differ."
+        "ExplosionUtils.performExplosion is re-signatured (Rotation3f added), not removed. Its phase order is confirmed for explosion_dynamics; the mutation claims that run through it are not re-derived.",
+        "BlockHarvestUtils.performBlockDamage is present with 3 overloads (2 on 0.5.7); the overload used by the claimed explosion path is not re-derived.",
+        "BlockHealthChunk lost damageBlock, getBlockHealth, repairBlock, makeBlockFragile, removeBlock, isBlockFragile and createBlockDamagePackets by name (the block-health API moved). DEBUG_SHAPES is replaced by a debugShapes() method that reads SelectInteraction.SHOW_VISUAL_DEBUG. 165 changed bodies in 12 pinned classes (0 byte-identical)."
       ]
     },
     "explosion_dynamics": {
@@ -303,8 +318,14 @@
         "com/hypixel/hytale/server/core/modules/entity/damage/DamageSystems.class": "619a73604c012c13c02b550a65a40e8d50e802b9e9c9e395e539cf7bf65751ff"
       },
       "open_gaps": [
-        "ExplosionUtils.performExplosion removed (the claimed phase order lives on it); processTargetEntity and processTargetBlocks bodies changed (4 of 23).",
-        "The raw-damage and Math.round claims are not re-derived. 2 of 2 pinned classes differ (DamageSystems: no member or body change)."
+        "The host contract (hytalegym/hytalegym/worldgen/native_explosion_dynamics.py and native_explosion_ordering.py) carries the 0.5.7 ExplosionUtils digest as source_class_sha256 and the 0.5.7 DamageSystems digest. The installed classes differ, so the payload names a stale identity. The script cannot express a 0.7.2 identity without re-keying that contract, which this lane does not do.",
+        "processTargetEntity changed beyond the audited claims: the damage cause comes from config entityDamageCauseId (a null cause skips the hit; 0.5.7 used DamageCause.ENVIRONMENT), and a zero-length knockback direction falls back to (0,1,0). The native fixture sets knockback false, so this is not measured here.",
+        "wire_order (UUID text ascending) is not re-derived."
+      ],
+      "confirmed_on_072": [
+        "Phase order blocks, then entities, then effects: ExplosionUtils.performExplosion (0.7.2) calls processTargetBlocks, then processTargetEntities when damageEntities is set, then performExplosionEffects. The debug spheres sit behind debugShapes().",
+        "Raw damage entityDamage*pow(1-d/entityDamageRadius, entityDamageFalloff): unchanged in processTargetEntity (the changed bytecode follows the positive-damage test).",
+        "Math.round before health subtraction: DamageSystems$ApplyDamage.handle invokes Math.round(F)I, and its normalised body is identical on both jars (the class is not pinned)."
       ]
     },
     "crafting": {
@@ -337,23 +358,30 @@
         "com/hypixel/hytale/server/core/entity/entities/player/data/PlayerConfigData.class": "e90b0006def06258b573b7358e864ea55fcbfab527f605a38faba902fa9873ef"
       },
       "open_gaps": [
-        "CraftingManager.craftItem body changed (9 of 52 bodies); benchHasRequiredAugmentTags and resolveCraftQuantity added.",
-        "CraftingRecipe methods +11 -9; MaterialQuantity methods +11 -9; ProcessingBenchBlock slot sets now ShortSet (fields +2 -2).",
-        "Recipe corpus 1,947 -> 2,047 (410 + 1,637 assets) is an (a) expectation; 16 of 24 pinned classes differ."
+        "CraftingManager: craftItem, isValidBenchForRecipe, getBenchTierLevel, queueCraft, tick, finishTierUpgrade and getContainersAroundBench changed (9 changed bodies; benchHasRequiredAugmentTags and resolveCraftQuantity added). The bench-gate and craft-quantity claims depend on these. The live crafting measurements (FIDELITY (s), (t), (v), (ab), (ac), (ae)) cover tiers, memories, timed and processing crafts but are not mapped to these claims.",
+        "CraftRecipeAction codec (toObject, getRecipeId, getQuantity, serialize) changed; InventoryUtils.moveItem, smartMoveItem and getSectionById changed (pickup-priority claim); ItemStack constructors and with* methods changed (crafted-stack claim); MaterialQuantity has 9 methods removed and 11 added (inventory-boundary claim).",
+        "The recipe corpus 1,947 -> 2,047 is an expectation with no recorded 0.7.2 value (EXPECTED_ASSET_METRICS). 16 of 24 pinned classes differ; 66 changed bodies in 574 common methods."
       ]
     },
     "inventory": {
       "EXPECTED_SERVER_SHA256": "23f71f03763422ce7c04df191db49cd0e7d87d43b12baad75c43fdc202410aff",
-      "EXPECTED_SEMANTIC_SHA256": null,
+      "EXPECTED_SEMANTIC_SHA256": "c73af47795dedc9180a5e800cd133bf242f904550f6b22386a841abc55947e48",
       "CLASS_SHA256": {
         "com/hypixel/hytale/server/core/inventory/Inventory.class": "ea0bbb3cd81880bbe4267d403365c8908641523253c3b3816af4f649993250b4",
         "com/hypixel/hytale/server/core/inventory/InventoryComponent.class": "27fff18c35148cf1cb5d2b558a34e8896e3228ba53a21129c94f8627ec7f3cb8",
         "com/hypixel/hytale/server/core/inventory/ItemStack.class": "eddd71681db28b929cf3bb43ee063345d116c0e812546a28839187675d5f7c24",
         "com/hypixel/hytale/server/core/inventory/container/ItemContainer.class": "89246746c731b24a1e71749a3485bfe294995a421e5990da1803c3a1bc2cb709"
       },
-      "open_gaps": [
-        "InventoryComponent adds DUMMY_SECTION_ID -10, ABILITIES_SECTION_ID -11, RUNE_BAG_SECTION_ID -12 (ABILITIES_LINES 2); the six-container transport (-2, -3, -1, -5, -8, -9) omits them.",
-        "ItemStack.fromPacket removed; 17 of 64 ItemStack bodies changed. Inventory.getActive* and ItemContainer.getCapacity are byte-identical in body. 4 of 4 pinned classes differ in bytes."
+      "open_gaps": [],
+      "verified_claims": [
+        "containers: section IDs -2 storage, -3 armor, -1 hotbar, -5 utility, -8 tools, -9 backpack are unchanged (javap -constants on InventoryComponent, both jars); getComponentTypeById maps each of the six to the same class as on 0.5.7 (0.7.2 tableswitch -12..-1, 0.5.7 -9..-1); <clinit> (EVERYTHING) is identical. 0.7.2 adds -10 DUMMY (no component), -11 AbilitySlots and -12 RuneBag.",
+        "item and slot reads: ItemStack.getItemId, getQuantity, getDurability, getMaxDurability and getMetadata, Inventory.getActiveHotbarSlot, getActiveUtilitySlot and getActiveToolsSlot have identical normalised bodies on both jars; ItemContainer.getCapacity is abstract and its implementations (SimpleItemContainer, CombinedItemContainer, EmptyItemContainer, FetchedItemContainer, ItemStackItemContainer, DelegateItemContainer) are identical.",
+        "bridge (0.7.2 port, read only): observation/NativeInventoryFrame.java:35-44 SECTION_IDS = -2,-3,-1,-5,-8,-9 in the audit's order and requires all six (:55-62); observation/NativeInventoryCapture.java:20 reports inventory_unavailable, :34-36 reads the three active slots, :61 uses Short.toUnsignedInt(getCapacity()), :65 skips empty stacks, :74 reports metadata presence only; quantity is an int with a positive check (NativeInventoryFrame.java:237).",
+        "mutation paths changed on 0.7.2 (ItemStack.isStackableWith, equals, hashCode, with*; ItemContainer.internal_moveItemStackFromSlot, internal_sortItems) are outside the telemetry; the boundary claims (no mutation or transaction semantics, no metadata payload) still describe the telemetry."
+      ],
+      "caveats": [
+        "transport.schema names hytalerl_native_inventory_v1, but both bridges emit hytalerl_native_inventory_v2 (hytale-plugin/.../observation/NativeInventoryFrame.java:24 and hytale-plugin-0.7.2/.../observation/NativeInventoryFrame.java:24). The static text is in the hashed payload and in the 0.5.7 pin. It is not a 0.7.2 build property; correcting it re-pins the 0.5 line too. Recorded anyway; revert this entry to null if the schema is to be corrected first.",
+        "The three 0.7.2 containers (abilities, rune bag, dummy) are outside the six-container telemetry; runes remain a stub (FIDELITY #69)."
       ]
     },
     "entity_geometry": {
@@ -367,8 +395,13 @@
         "com/hypixel/hytale/server/npc/role/support/PositionCache.class": "9a12cfab97d768548472854e7908458bda82c77b9ef106a243861dd5c44ebc3e"
       },
       "open_gaps": [
-        "BoundingBox stores unscaledBox, scale and scaledDetailBoxes (fields +3); applyRotation, setBoundingBox and getDetailBoxes changed (7 of 16 bodies); the claimed rotation-adjusted AABB is not re-derived.",
-        "PositionCache changed as in perception (hasLineOfSight among 17 of 84 bodies); the claimed entity LOS rule (entity_body_blocks_los: False) is not re-derived. 3 of 5 pinned classes are identical."
+        "scale_boundary does not hold on 0.7.2: EntityScaleBoundingBoxSystem (absent on 0.5.7) calls BoundingBox.setScale(EntityScaleComponent.getScale / Model.getScale) each tick, so EntityScaleComponent now changes the physical box and the 'diagnostic_display_network_scale' label is false for this build. No gen-7 overlay or jax module applies entity scale to a box.",
+        "perception_endpoint (entity_body_blocks_los: false) rests on PositionCache.testLineOfSightEntity, which changed; not re-derived (shared with perception).",
+        "BoundingBox: 7 of 12 common methods changed (scale, unscaledBox and scaledDetailBoxes added); 24 changed bodies in 5 pinned classes (3 byte-identical to the 0.5.7 pin). The transport schema (hytalerl_privileged_npc_snapshot_v2) is a bridge contract and was not re-read."
+      ],
+      "confirmed_on_072": [
+        "Rotation-adjusted box at unit scale: ModelSystems$UpdateBoundingBox has identical bodies on both jars, and BoundingBox.applyRotation writes unscaledBox then rescales (the identity at scale 1).",
+        "TangiableEntitySpatialSystem: no changed bodies on 0.7.2 (4 common methods)."
       ]
     }
   }

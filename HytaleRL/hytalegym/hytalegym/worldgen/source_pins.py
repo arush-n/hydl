@@ -114,7 +114,7 @@ def verify_installed_world_source_pins(
         completed = subprocess.run(
             command,
             cwd=scripts.parents[1],
-            env=_source_audit_environment(scripts.parents[1]),
+            env=_source_audit_environment(scripts.parents[1], asset_path),
             capture_output=True,
             text=True,
             check=False,
@@ -140,11 +140,19 @@ def verify_installed_world_source_pins(
     return world_source_pin_staleness_report(server_path, reports)
 
 
-def _source_audit_environment(project_root: Path) -> dict[str, str]:
-    """Keep the package root absolute when audit subprocesses change cwd."""
+def _source_audit_environment(project_root: Path, assets: Path | None = None) -> dict[str, str]:
+    """Keep the package root absolute when audit subprocesses change cwd.
+
+    The audits evaluate their ``--assets`` argparse default from ``HYTALE_ASSETS_ZIP`` (or ``APPDATA``) before
+    the command line is parsed, so a host without either variable fails inside argparse even though the gate
+    passes ``--assets``; the gate names the installed archive here (2026-10-18: on macOS the first audit that takes
+    ``--assets`` failed this way before any comparison ran).
+    """
 
     environment = os.environ.copy()
     environment["PYTHONPATH"] = str(project_root.resolve())
+    if assets is not None:
+        environment.setdefault("HYTALE_ASSETS_ZIP", str(assets))
     return environment
 
 

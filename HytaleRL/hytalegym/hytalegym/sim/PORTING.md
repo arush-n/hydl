@@ -73,7 +73,10 @@ Each step ends with its gate, a command with a pass bar.
   twelve untracked worldgen tests failed on exactly that (receipts under the session's `test_fixtures/`). Republish
   those artefacts once the pin settles, not after every bridge commit; until then read those failures as staleness.
 - Five more untracked tests need `HYTALE_ASSETS_ZIP` (or `APPDATA`) set to the install's `Assets.zip`; without it
-  they fail on the asset lookup before reaching any bridge code.
+  they fail on the asset lookup before reaching any bridge code. The source-pin gate (`worldgen/source_pins.py`) passes the installed
+  archive to its audit subprocesses as `HYTALE_ASSETS_ZIP` since 2026-10-18, because the audits evaluate their `--assets`
+  default from that variable before parsing and failed inside argparse on a host without it; `tools/source_pins/README.md`
+  is the audit runbook.
 - Several construct builders at once share four files: `sim/gen7/overlay.py`, `sim/common/profile.py`,
   `sim/gen7/mechanics/__init__.py` and `tests/sim/test_constructs.py`. Lock protocol (2026-10-18): before editing any of them,
   create `sim/gen7/.overlay.lock` containing your lane name (fail if it exists: `set -o noclobber`); edit, run
