@@ -71,6 +71,26 @@ def _port_free(port: int, kind: int) -> bool:
     return True
 
 
+def _wait_for_ports(bridge_port: int, game_port: int, timeout: float = 180.0) -> bool:
+    """Wait until the launcher's own bind probes pass.
+
+    The bridge TCP port stays in TIME_WAIT for 2*MSL after a server-side close
+    (30 s here: sysctl net.inet.tcp.msl is 15000). The launcher probes that port
+    without SO_REUSEADDR, so a launch made right after another one fails with
+    EADDRINUSE. A bounded wait avoids that failure.
+    """
+
+    deadline = time.monotonic() + timeout
+    while not (
+        _port_free(bridge_port, socket.SOCK_STREAM)
+        and _port_free(game_port, socket.SOCK_DGRAM)
+    ):
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(2.0)
+    return True
+
+
 def _run_launch(
     *,
     name: str,
@@ -102,6 +122,11 @@ def _run_launch(
         "--then",
         shlex.join(then),
     ]
+    if not _wait_for_ports(bridge_port, game_port):
+        print(
+            f"warning: ports {bridge_port}/{game_port} still busy before the {name} launch",
+            file=sys.stderr,
+        )
     env = dict(os.environ)
     env["HYTALERL_SERVER_VERSION"] = version
     env["PYTHONDONTWRITEBYTECODE"] = "1"
@@ -279,11 +304,22 @@ def main(argv: list[str] | None = None) -> int:
             "up to N non-damaging fluid-only cells, and compare with it"
         ),
     )
+    parser.add_argument(
+        "--core-min-chunk-x",
+        type=int,
+        help=(
+            "capture this core (with --core-min-chunk-z) instead of the server's default; "
+            "the compare script always uses the server's default core"
+        ),
+    )
+    parser.add_argument("--core-min-chunk-z", type=int)
     args = parser.parse_args(argv)
     if args.seed_projection_contract is not None and args.fluid_only_cap is not None:
         parser.error("--seed-projection-contract and --fluid-only-cap are alternatives")
     if args.fluid_only_cap is not None and args.fluid_only_cap < 0:
         parser.error("--fluid-only-cap must be non-negative")
+    if (args.core_min_chunk_x is None) != (args.core_min_chunk_z is None):
+        parser.error("--core-min-chunk-x and --core-min-chunk-z must be given together")
 
     from hytalegym.server_versions import server_profile
 
@@ -350,6 +386,13 @@ def main(argv: list[str] | None = None) -> int:
         "--output",
         str(output),
     ]
+    if args.core_min_chunk_x is not None:
+        capture_then += [
+            "--core-min-chunk-x",
+            str(args.core_min_chunk_x),
+            "--core-min-chunk-z",
+            str(args.core_min_chunk_z),
+        ]
     if args.preflight_only:
         if not args.skip_capture:
             print("capture command: " + shlex.join(capture_then))
