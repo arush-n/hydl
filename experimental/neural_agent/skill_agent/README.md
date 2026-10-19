@@ -801,13 +801,60 @@ full simulator state, but they only label; the student never sees that state.
   binary cross-entropy of each request's done logit.
 
 **What is held out.** Two argument regions are never trained on: walk targets in the rear-left quadrant of the spawn
-body (bearing 180 to 270 degrees) and look points 25 to 40 degrees off the body. The evaluation runs the student and
-the teachers on the same seeds, seen and held out, and reports success per mode, walk pace (within 5 %), radius and
-illegal decisions. [test: test_sa_distill.py, 9 tests]
+body (bearing 180 to 270 degrees), and look-only points 25 to 40 degrees to the left of the body (a "both" lane is
+held out by its walk target). Look-only offsets span 40 degrees either side (`tasks/simple_tasks.py:80`), so the look
+region is the left edge of the range while the right edge is trained: it asks for extrapolation on one side. The
+evaluation runs the student and the teachers on the same seeds, seen and held out, and reports success per mode, walk
+pace (within 5 %), radius and illegal decisions. [test: test_sa_distill.py, 12 tests]
 
-**Status: built; the two prep changes are in; A2 has not run.** A 2-iteration smoke (32 lanes, 50 steps per iteration,
-10,191 samples) ran end to end with 0 illegal decisions, before the changes below. Its student was untrained by
-design: walk 0.23 and look 0.0, against the teachers' 1.0 and 1.0. [test: test_sa_distill.py, 12 tests]
+**Status: A2 ran, and it does not pass (2026-10-18, late).** 6 iterations x 128 lanes x 2,000 steps, 123,398 samples,
+56 minutes at load 13 to 70, from e4a0833 with no local changes; the evidence is private
+(`agent_skills/training_runs/skill_agent_a2/a2_6x128x2000_e4a0833/`). The student made no illegal decision (0 of
+79,669). The evaluation runs seed 77001 on 256 lanes, about 85 per mode, so each rate is good to about 8 points at
+95 %. "Held" is the certificates' rule (2.15): on target 5 ticks in a row.
+
+| student (teachers) | walk only | look only | both | both: walk, look |
+|---|---|---|---|---|
+| seen, first hit | 0.837 (1.000) | 0.871 (1.000) | 0.682 (0.918) | 0.812, 0.847 |
+| seen, held | 0.837 (1.000) | 0.776 (1.000) | 0.565 (0.906) | |
+| held out, first hit | 0.837 (1.000) | 0.576 (1.000) | 0.741 (0.965) | 0.871, 0.871 |
+| held out, held | 0.837 (1.000) | 0.459 (1.000) | 0.588 (0.871) | |
+
+- **E4 passes.** Pace is within 5 % on 96.7 % of the 151 steady seen lanes (99.3 % of 149 held out), and every
+  success is inside its radius.
+- **T5 fails in every mode.** The teachers lead by 16.3 points on walk, 12.9 on look (within the noise of the
+  10-point bar) and 23.5 on both.
+- **Held out, walk and both pass and look fails:** walk is 1.00 of its seen rate, both 1.09, look 0.66.
+- **Composition is not what fails.** The both rate is the product of its parts (0.812 x 0.847 = 0.688 against
+  0.682): walking and looking together cost nothing beyond each part's own misses.
+- Against the smoke with v2 labels (2 iterations x 32 lanes x 200 steps): walk 0.68 to 0.84, look 0.10 to 0.87.
+
+**Why it falls short.** A breakdown on fresh episodes (seed 91001, 768 lanes per region; the teachers score 1.00 in
+every walk and look bin of the same episodes):
+- **Every missed walk parks just outside its radius.** 64 of the 66 walk-only misses stop within half a block of the
+  edge, a median 0.02 blocks short (quartiles 0.01 and 0.04), and never move again: the distance at the horizon
+  equals the closest approach to the 90th percentile, after a median 90 ticks parked. One was still closing at the
+  horizon. Small radii miss most (0.74 below 0.83 blocks, against 0.93 and 0.95 above), and run misses least (0.95,
+  against walk 0.87 and sneak 0.80). The 97 missed walks of the "both" lanes look the same. The teacher stops exactly
+  at the edge (`teaching/teachers.py:106`), so a student whose stop is a few centimetres off lands outside about half
+  the time, and it acts by argmax (`training/distill.py:442`), so a parked agent repeats its choice every tick.
+- **Missed looks end near the target but outside the 3 degrees,** a median 5.2 degrees off in yaw and 3.2 in pitch,
+  as often short of the target as past it: imprecision, not a bias. Near targets miss most (0.55 at 2 to 4.7 blocks,
+  0.74 beyond), and so do steep ones (0.56 and 0.58 beyond 15 degrees of pitch either way, 0.77 and 0.85 within).
+  The held-out band falls off away from the trained range: 0.67 at 25 to 32.5 degrees left, where its trained mirror
+  on the right scores 0.68, and 0.44 at 32.5 to 40.
+- **Inferred, not yet tested:** both misses need a fine comparison that the request's encoding makes hard. Targets
+  arrive as body-frame positions over 16 blocks (`training/distill.py:101`), so a 2 cm stopping error is about 0.001
+  of an input and a 3 degree gaze error at 2 blocks about 0.007, and the look request's direction group is empty
+  (`training/distill.py:97`).
+
+**Next, each one change at A2's size and seeds, for the owner's approval:** walk_to v3 stops a margin inside the
+radius (certified first), and the look request carries the unit direction to its target. The evaluation also scores
+the hold rule, so a look that sweeps through no longer counts.
+
+**Before the run.** A 2-iteration smoke (32 lanes, 50 steps per iteration, 10,191 samples) ran end to end with 0
+illegal decisions. Its student was untrained by design: walk 0.23 and look 0.0, against the teachers' 1.0 and 1.0.
+Then came these changes:
 - **The teachers are v2** (2.11). With the head offset in but v1's labels, the student still completed no look
   (2 iterations x 32 lanes x 200 steps: walk 0.23, look 0.00). With v2's labels, the same smoke reaches walk 0.68 and
   look 0.10 seen, 0.55 and 0.10 held out. That is still far from the bars at this size, but the student now learns.

@@ -193,9 +193,14 @@ Status (2026-10-18, late):
 - A1 passes: 3.56 ms p95 at batch 8 at load about 10 (15.08 ms at load 53 to 75 was the load).
 - A2's two teachers exist (`teaching/teachers.py`), and so do its flat tasks (`tasks/simple_tasks.py`).
 - The observation adapter is built (README 2.14). The teachers pass T1, T2 and T3, and walk_to passes T4 live (README
-  2.15). A2's trainer is built (`training/distill.py`, README 2.16) and the owner approved the run ("ok continue");
-  the head's offset from the body is now in the self token, and the teachers are v2, which read what the student
-  sees (README 2.11), so the run is next.
+  2.15). The teachers are v2, which read what the student sees (README 2.11), and the head's offset from the body is
+  in the self token.
+- A2 ran and does not pass (README 2.16; 6 iterations x 128 lanes x 2,000 steps, approved with "ok continue"). E4
+  passes, and so do held-out walk and both. T5 fails in every mode (the teachers lead by 13 to 24 points), and so does
+  the held-out look (0.66 of seen). Each part falls short on its own, and together they cost nothing more (both =
+  walk x look). Missed walks park a few centimetres outside the radius, and missed looks end about 5 degrees off. The
+  next changes, one at a time: a stopping margin in walk_to (v3), and the direction to the target in the look
+  request.
 
 ## 5. Decisions for the owner (answered 2026-10-18, late; docs/BUILD.md section 0)
 

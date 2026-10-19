@@ -192,6 +192,10 @@ What each check catches:
 - T5 catches a teacher that relies on information the student never has. For example, it walks straight to a target
   hidden behind a wall (the imitation gap). The fix is to show the teacher less, or to give the student the memory
   that would let it infer the same thing (the belief's last-seen position).
+- T5 also catches a teacher whose decision sits exactly on the success boundary. walk_to stops the moment it is inside
+  the radius, so a student a few centimetres off parks just outside and, acting by argmax on a state that no longer
+  changes, never restarts (A2: 64 of 66 missed walks, a median 0.02 blocks short; README 2.16). The proposed fix,
+  not yet tested, is a margin: the teacher acts well inside the bar it is judged by.
 - T6 makes DAgger's labels trustworthy in the places the student actually drifts to.
 
 Status (2026-10-18, late; `teaching/certificates.py`, README 2.15):
@@ -201,10 +205,12 @@ Status (2026-10-18, late; `teaching/certificates.py`, README 2.15):
   (`teaching/certify_live.py`). look_at's T4 is not run yet. T5 and T6 need a student.
 - T5 for v1 fails by measurement: 28 % of look_at's yaw labels depend on the commanded head yaw, which the student
   cannot see, and its student completed no look. v2 reads the observed state and passes T1 to T3 (walk_to 1.037 x
-  the minimum, look_at median 13 ticks, 0 illegal). A2 measures T5 for v2.
-- A2's trainer is built (`training/distill.py`, README 2.16), and its two prep changes are in: the head's offset from
-  the body in the self token, and training batches without the token types the flat world never fills (a step about
-  ten times faster at the same loss). The A2 run is next.
+  the minimum, look_at median 13 ticks, 0 illegal).
+- T5 for v2 fails in A2 (README 2.16): the teachers lead the student by 16.3 points on walk, 12.9 on look and 23.5 on
+  both. The labels no longer depend on hidden state (v2 reads only observable fields); the misses sit at the two
+  decision boundaries instead. Missed walks park a median 0.02 blocks outside the radius, and missed looks end a
+  median 5.2 degrees off against a 3 degree tolerance. The next changes, one at a time: walk_to v3 with a stopping
+  margin, and a look request that carries the direction to its target.
 
 A teacher need not be perfect, because stage 3's practice can go past it. But a systematic teacher error is copied
 into the student, which is why nothing teaches before its certificate.
