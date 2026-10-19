@@ -2008,3 +2008,281 @@ Inferred: that the reopen and recharge split follows the engine tick period (an 
 That the 1-minute load sets the native tick period, and so the claim+10 / claim+11 and 27-to-29 / 30-tick splits. The short-tick block had load starts of 2.97 to 5.96; the long-tick block had 3.10 to 4.88; the (af) runs have no load header to test. The "idle" label is also wrong: the load was 3 to 7 throughout. A direct test would sample the load per tick, or vary a controlled background job while the engine tick period is recorded. The guard verdict "stands" is the next most fragile claim, since it depends on which regime the fidelity target assumes.
 
 Coordinator decision (2026-10-19). Both constants stay: the guard reopen at 0.35 s and the kunai bank at 1.0 s. The simulator steps at the owner's nominal 30 Hz (`sim/gen7/profile.py` `step_duration`, 1/30 s nominal and loaded), which is the short-tick regime of this measurement: every one of the 15 runs with a mean engine tick below 0.0365 s reopened the guard at claim+11, and both bank runs recharged at claim4+30, which are exactly the counts the two constructs produce at 1/30 s. The earlier reopen under long ticks is the native timer counting real seconds across slower engine ticks, which a fixed-tick simulator cannot reproduce without modelling the tick period itself; it is recorded as a known deviation on rows 5d and 5f of `sim/gen7/mechanics_072.md`, not as a constant change. The (af) wording "load jitter" is superseded by "tick-period dependence": the lane's own claim most likely wrong is that load sets the tick period, and nothing here separates the two. Task #78 closes; receipts stay in the job folder (27 valid receipts under `timing_idle_78/receipts/`, 187 KB each, not tracked), with the per-run tables above as the durable record.
+
+## (an) Hit interrupt, stun and flinch on native 0.7.2 (task #69, 2026-10-19; receipts `~/.claude/jobs/31947bd7/tmp/probes_69/hit_interrupt/receipts/`)
+
+**Coordinator's summary (2026-10-19, 18:10; six probe rounds, receipts under `probes_69/hit_interrupt/`).** Measured on
+native 0.7.2: `Hit_Interrupt_Eligible` is refreshed on an eligible NPC about every 7 to 8 engine ticks (0.265 to 0.267 s;
+asset timer 0.25 s), both on an NPC-role learner body and on a Skeleton_Fighter target under native AI; a hit on a
+non-eligible target produces `Red_Flash` 0.2 s only, and the learner's iron-sword hits land 14 ticks apart (0.480 to 0.482 s).
+Not measured, resting on the asset values: every eligible-hit row (stun 0.7 s, flinch 0.5 s with horizontal speed 0, the
+Recent_Reaction slots 4.0 s, Recovery_Pending 2.0 s, Enraged 8 s, Protected_Attack 8 s) and the blocked second hit inside the
+flinch. Why: on 0.7.2 only player weapon items (54) and two ability projectiles reference the flagged damage rows, no NPC attack
+does, so the chain can only be exercised by the learner's own weapon; and under the learner-row harness the target carries no
+`Eligible` until a target-side profile is set (then from tick 38), at which point the gen-5 v3 observation decoder, which
+knows no `Hit_Interrupt_*` status (none compiled by the 0.5.7 arsenal profile, nor `Red_Flash`), fails closed on the unknown
+status of any observed actor (`decode.py:726-727`, `evidence.py:860-868`; failure bits 128 and 4, empty ability head), so the
+learner cannot swing. Consequences for the construct (`hit_interrupt`, DESIGNS-072 row 1): first declare the eight statuses
+in the gen-7 status table so the decoder knows them (the same fix lets a 0.7.2 checkpoint run live against any NPC that
+carries them), then model the trigger and timers listed under "What the construct must model"; the eligible-hit rows are
+measured after that with the learner-row harness and a target-side profile. The probe's harness defect of round 1 (it traced
+the learner body, not the opponent) is corrected in its scratch scripts; nothing in the repository changed.
+
+**Status (2026-10-19, 17:13 local).** Live receipts: four runs with a Trork_Brawler opponent (the probe's npc_role was the learner body, not the opponent), and one verification run with a passive Skeleton_Fighter opponent traced through a scratch harness fix (no repository edits). The opponent did not carry Hit_Interrupt_Eligible, so the eligible-target rows remain NOT MEASURED. The learner's ability mask emptied at tick 26 in the Skeleton-body runs because the learner body gained the native-only Hit_Interrupt_Eligible status (fail-closed; see Round 2). The Recovery_Pending claim is UNTESTED. The four-scenario batch is staged but NOT started; it waits for the coordinator's go and a decision on the target configuration (Round 2).
+
+### Setup
+
+- Bridge: `hytale-plugin-0.7.2/build/libs/HytaleRLBridge072-0.1.0.jar`, sha256 `460054a8e7508fe5e205ad527afb08474b61626ee5c2212fc2a484ecfccad88d` (equals the pin in `hytalegym/server_versions/v0_7.py`, case-insensitive). [confirmed]
+- Session 1 (held, pid 38304, 14:42 to 14:59): used for three load-aborted attempts only; stopped by SIGTERM to the launcher (stop-command). [confirmed]
+- Session 2 (the window run, 15:08 to 15:36): `scripts/window_then_runs.sh` waited for the 1-minute load below 6.0 (open at 15:08:28, load 2.17) and then ran `tools/launch_bridge_072.py --run-dir <scratch>/bridge_run_b1 --bridge-port 5558 --game-port 25576 --ready-timeout 300 --then "/bin/bash scripts/runs_on_bridge.sh" --then-timeout 9000`. READY; the four runs ran as the then-command; the launcher stopped the server by itself after the command (stop_mode `stop-command`, server_exit_code 0, then_exit_code 0; `bridge_run_b1/launch-report.json`). lsof on TCP 5558 and UDP 25576 is empty (checked 15:43); no related process is left. [confirmed]
+- Runner: `scripts/runs_on_bridge.sh` is `batch_rest2.sh` with a 120-minute deadline on new attempts. Start gate below 6.0; `scripts/run_probe.sh` aborts a probe above 8.0 (SIGTERM, rc 143) and the attempt is retried. [confirmed]
+- Client thread limit (`OMP_NUM_THREADS=1`, `XLA_FLAGS=--xla_cpu_multi_thread_eigen=false`) was set for session 2. The probe still used about 250 percent CPU, so it had no measurable effect on the load. [measured]
+- Frame alignment (all four receipts): NPC trace frame k is env tick k+2; 299 of 299 frame deltas equal the env per-step deltas exactly. Env tick 1 has no trace frame. [confirmed]
+- Receipt size: about 263 MB each (the NPC trace carries full per-frame state).
+
+Load log (1-minute; receipt headers and `logs/load_watch.txt`):
+
+| run | start (1, 5, 15 min) | end | outcome |
+|---|---|---|---|
+| s570057 Skeleton_Fighter (session 1, 3 attempts) | 6.34, 5.88, 4.97 at 14:46:53, 14:49:14, 14:53:41 | aborted at 8.35, 8.95, 9.10 (14:48:23, 14:51:34, 14:57:12) | no receipt |
+| s570057 Skeleton_Fighter (session 2) | 2.24 [2.24, 6.14, 6.97] | [3.06, 4.50, 6.00] at 15:13:00 | rc 0 |
+| s913771 Skeleton_Fighter (session 2) | [3.22, 4.51, 6.00] | [5.46, 5.25, 5.93] at 15:17:37 | rc 0 |
+| s570057 Goblin_Scrapper (session 2) | attempt 1 aborted at 8.83 (15:21:53, rc 143); attempt 2 [5.74, 6.30, 6.24] | [4.98, 5.73, 6.01] at 15:31:19 | rc 0 |
+| s913771 Goblin_Scrapper (session 2) | [4.98, 5.72, 6.01] | [4.46, 5.72, 5.97] at 15:36:03 | rc 0 |
+
+### Who is the target (confirmed in the receipts)
+
+- The NPC trace follows the learner's body. In all four runs the trace uuid equals `native_policy_actor_identity` (the learner), and the body's role is `--target-role` (Skeleton_Fighter or Goblin_Scrapper). [confirmed: `npc_uuid` in the trace header, `info.native_policy_actor_identity`]
+- The opponent is a Trork_Brawler: `info.target_role` and `combat_target_role` = Trork_Brawler; `environment_parameters` has `combat_target_role: Trork_Brawler` and `task_id: kill_trork`; `info.native_policy_actor_identities` lists [learner, Trork]. [confirmed]
+- The probe's assumption that the opponent is the `--target-role` NPC is wrong. The eligibility gate therefore applies to the learner's body (which is refreshed), not to the entity that is hit. [confirmed by the four receipts]
+
+### Live results (four receipts; per-tick values from the receipts)
+
+Tick-level, seed 570057 Skeleton_Fighter (env tick; the other three runs match on the hit ticks):
+
+| env tick | learner request | learner active slot | applied legal | target health | target status | learner-body Hit_Interrupt_Eligible refresh | engine dt (s) |
+|---|---|---|---|---|---|---|---|
+| 1 | yes | 0 | True | 61 | - | | 0.03398 |
+| 9 | | 0 | True | 51 | Red_Flash=0.2000 | | 0.03439 |
+| 10 | | 0 | True | 51 | Red_Flash=0.1656 | | 0.03437 |
+| 14 | | -1 | True | 51 | Red_Flash=0.0260 | | 0.03505 |
+| 15 | yes | 0 | True | 51 | - | | 0.03333 |
+| 23 | | 0 | True | 41 | Red_Flash=0.2000 | | 0.03333 |
+| 28 | | -1 | False | 41 | Red_Flash=0.0267 | | 0.03503 |
+| 29 | yes | -1 | False | 41 | - | | 0.03333 |
+| 34 | | -1 | False | 41 | - | yes | 0.03452 |
+| 300 | | -1 | False | 41 | - | | 0.03503 |
+
+Per run (all four): learner requests at env ticks 1, 15 and 29; the first two are legal; the third is refused by the mask (applied_legal False from tick 27; the ability head's legal list is empty from tick 26; `native_ability_reject_reason` is empty; cause not identified). Target hits at ticks 9 and 23, each 10 damage (health 61, 51, 41; max 61). The target's `Red_Flash` counts down in engine seconds (0.2000 at the hit, gone by the next swing). No other status ever appears on the target. The target's state stays `Idle.Default` with attack phase 0, so it never attacks.
+
+| run | hit 1 to hit 2 (engine ticks) | engine seconds | learner-body Eligible refresh gap | notes |
+|---|---|---|---|---|
+| s570057 Skeleton_Fighter | 14 | 0.4820 | 8 ticks (first t34, last t298, 34 refreshes) | SignatureEnergy steps at t9 and t23 |
+| s913771 Skeleton_Fighter | 14 | 0.4824 | 8 ticks | same |
+| s570057 Goblin_Scrapper | 14 | 0.4823 | 8 ticks | SignatureEnergy also steps at t29 (no target hit; not explained) |
+| s913771 Goblin_Scrapper | 14 | 0.4811 | 8 ticks | same as the previous row |
+
+- Learner body: `Hit_Interrupt_Eligible` is applied and refreshed every 8 ticks (value 0.725 just before each refresh, 1.0 after; the asset refreshes every 0.25 s). It is never hit (no Red_Flash on the body) and never attacks (no `attack_action_active` transitions). [measured]
+- The learner's `resource_values[3]` (SignatureEnergy) steps by 1 at each target hit: the on-hit gain goes to the source. [measured]
+- Mean engine tick over 300 ticks: 0.03421 s, so 14 ticks is 0.479 s at the mean. [measured]
+
+### Native rows against gen-5 (round 4, native-AI duel)
+
+Labels: [native-duel] = FIDELITY 5a configuration (native Goblin_Scrapper agent, Skeleton_Fighter target, hit_interrupt_duel, combat_target_active True, no learner profile), receipts `receipts_native/duel_native_570057.json` and `duel_native_913771.json`; [learner] = earlier learner-row runs; [asset] = 0.7.2 asset reading; [code] = gen-5 code read.
+
+| row | native 0.7.2 | gen-5 (code) | difference |
+|---|---|---|---|
+| R1 first accepted hit on an eligible NPC (flagged sword) | NOT MEASURED for a flagged hit. [native-duel] club hit (unflagged) at step 42 (570057) and 43 (913771): Red_Flash 0.2 countdown; Eligible 0.92 to 0.97 at the hit; NO Stunned, NO Flinch, NO Recent_Reaction slot | damage and knockback only | none on club hits; the flagged R1 needs a flagged sword on an eligible target, which no harness produced |
+| R2 hit while Flinch is active | NOT MEASURED for a flagged hit. [native-duel] club hit 10 steps after the first (0.379 s and 0.350 s, inside the 0.5 s window) landed normally: 58 to 46 (570057, step 52), 58 to 45 (913771, step 53), because no flinch was applied | damage only | none observed |
+| R3 second accepted hit (A set, B empty) | NOT REACHED: no reaction slot written by club hits | damage only | not measured |
+| R4 third accepted hit (A and B set) to Recovery_Pending 2 s | NOT REACHED | damage only | not measured |
+| R5 Flinch ends with Recovery_Pending set, Enraged absent, to Enraged 8 s | NOT REACHED (no Recovery_Pending) | none | not measured |
+| R6 hit while Recovery_Pending or Enraged | NOT REACHED | damage only | not measured |
+| R7 NPC attack starts while Enraged to Protected_Attack 8 s | NOT REACHED (no Enraged). Target attacks at steps 59, 126, 165 (570057) and 60, 94, 141 (913771) were unmarked (no Protected_Attack) | none | not measured on an Enraged NPC |
+| R8 Eligible on an engaged eligible NPC | MEASURED [native-duel]: present from step 40 (570057) and 41 (913771), before the first hit; refreshed every 7 to 8 steps, mean 0.265 s and 0.267 s engine time; value 0.92 to 0.97 at the hits | none | native timer confirmed |
+| R9 hit on a non-eligible opponent | MEASURED earlier [learner] (Trork_Brawler, Red_Flash only) | damage only | none |
+| R10 NPC attack start while Stunned (0.7 s) | NOT REACHED (no Stunned). The target's first attack (step 59 and 60) was not stunned | no stun; start allowed | not measured |
+
+**Per hit, native-duel** (engine seconds from the engine_mean_delta_seconds per step):
+
+| seed | hit step | Eligible before the hit | Red_Flash at hit | Stunned / Flinch / Recent | spacing from previous hit | gate |
+|---|---|---|---|---|---|---|
+| 570057 | 42 | Eligible 0.9225 at 42 (present from 40) | 0.2000 | none / none / none | first | not reached (club unflagged) |
+| 570057 | 52 | refreshed at 47, 54 (gap 7 to 8) | 0.2000 | none / none / none | 10 steps, 0.3786 s (inside a 0.5 s flinch) | not blocked (no flinch) |
+| 570057 | 123 | refreshed through 123 | 0.2000 | none / none / none | 71 steps, 2.6237 s (after 0.5 s flinch and 0.7 s stun; inside 4 s Recent) | not reached |
+| 570057 | 133 | refreshed | 0.2000 | none / none / none | 10 steps, 0.377 s (inside flinch) | not blocked |
+| 913771 | 43 | Eligible 0.9667 at 42 (present from 41) | 0.2000 | none / none / none | first | not reached |
+| 913771 | 53 | refreshed at 48, 56 | 0.2000 | none / none / none | 10 steps, 0.3502 s (inside flinch) | not blocked |
+| 913771 | 125 | refreshed | 0.2000 | none / none / none | 72 steps, 2.6732 s | not reached |
+| 913771 | 135 | refreshed | 0.2000 | none / none / none | 10 steps, 0.3693 s | not blocked |
+
+- Harness: the native agent decides its own attacks. The duel has no hit control, so spacing cannot be chosen. The second-hit-in-flinch case happened by itself at 10 steps. No second hit at a chosen spacing was possible.
+- Native agent: Goblin_Scrapper club swings. Its attack_executing windows were steps 27 to 70 and 108 to 153 (570057), and 28 to 74 and 110 to 141 (913771).
+- Episode end: the run stopped at step 165 (570057) and 141 (913771) with the target alive (24 and 20 health). The three Skeleton hits on the agent (15 to 18 each, about 50 and 45) exceed the agent's max health 36, so the agent died.
+
+**CONFIRMED (round 4):**
+- The trace is the target: the roster uuid equals the trace header uuid, role Skeleton_Fighter.
+- Eligible is present before the first hit (steps 40 and 41) and refreshed every 7 to 8 steps.
+- Club hits produce Red_Flash only: no Stunned, Flinch, Recent_Reaction, Recovery_Pending, Enraged or Protected_Attack.
+- NPC club interactions (npc_roles.json: Goblin_Scrapper_Club_Swing_Left_Right, Skeleton_Fighter_Club_Swing_Down, Goblin_Scrapper_Club_Swing_Left_Right_Down) have parent_chain [] and no DamageEntityParent_Hit_Interrupt reference; they carry only the Protected_Attack hooks.
+- The 5a harness is not in tests/fidelity. It is the phase4b scratch driver `phase4b/scratch/probe_duel.py` (the FIDELITY 5a receipts are `phase4b/receipts/duel_duel3.json`); this round uses the same configuration in `scripts/duel_native_trace.py`.
+
+**INFERRED (round 4):**
+- The club hits do not enter the gate because they are not flagged. The static reading agrees, but no flagged hit was run on the native target to isolate it.
+- A flagged sword hit on this Eligible target would produce the 0.5 s Flinch and the Stunned and Recent slots (asset values; unmeasured).
+- The learner-row harness suppresses the target's Eligible (round 3 and the passive run). Unknown mechanism.
+
+**Claim most likely wrong (round 4):** that the native-AI duel can host flagged hits on an eligible target. Club swings are not flagged, so the native duel measures the eligible state and no interrupt chain. The flagged sword has no harness that reaches an eligible target yet (the learner-row run suppresses the target's Eligible).
+
+### Recovery_Pending claim: verdict
+
+- The check requested: the engine time from hit 1 to hit 2 and whether `Hit_Interrupt_Flinch` is still present on the second `Red_Flash`. Measured: 14 engine ticks, 0.4811 to 0.4824 s, in all four runs. `Hit_Interrupt_Flinch` is absent at hit 2 because the target is not eligible, and no Hit_Interrupt status ever appears on it.
+- Verdict: UNTESTED. The claim needs an eligible target. At 0.481 to 0.482 s, a second eligible hit would fall inside a 0.5 s flinch, so the gate would block it, and the third hit would only fill slot B. That reading is consistent with the spacing, but it is inferred from the asset durations and not measured.
+- In this harness at most two hits happen per run, because the third request is refused.
+- Spacing run (`--swing-period 20` against Skeleton_Fighter, seed 570057): NOT ADDED. The condition for adding it (the claim holds) is not met. With the present configuration the run would again hit a Trork_Brawler, so it could not test the gate.
+
+### What the construct must model (seconds; ticks at 1/30 s; asset values)
+
+- State per target (float seconds beside the mechanics state): eligible 1.0 (Overwrite; 30 ticks; refreshed every 0.25 s, about 8 ticks at the measured tick), flinch 0.5 (Ignore; 15), stunned 0.7 (Overwrite; 21), recent_a and recent_b 4.0 (Ignore; 120; each slot set once), recovery_pending 2.0 (Ignore; 60; only while eligible and not enraged), enraged 8.0 (Overwrite; 240), protected_attack 8.0 (Ignore; 240; only while enraged), eligibility refresh timer 0.25.
+- Trigger: a hit that passes `DamageEntity` on an eligible target with no flinch, enraged or recovery_pending. The gen-5 acceptance proxy (applied, not blocked, not invulnerable) is an inference (see below).
+- Effects of an accepted hit, in order: cancel the target's Attack-tagged root; stunned 0.7 s; flinch 0.5 s with horizontal speed 0 (gravity and knockback remain); record the reaction: A if empty, else B if empty, else clear A and B and set recovery_pending 2.0 s.
+- Enraged rule: each tick, if recovery_pending is set and neither flinch nor enraged is set, set enraged 8.0 s.
+- Protected attack: an NPC attack that starts while enraged gets protected_attack 8.0 s; its finish clears enraged and protected_attack. The gate does not read protected_attack.
+- Live fact the construct must respect: a hit on the non-eligible target produces Red_Flash only (0.2 s, counting down in engine seconds).
+
+### Effect and gate rules (asset reads, `assets_extract/072/Server`)
+
+- `DamageEntityParent` = DamageEntity, Next `DamageEntityParent_On_Hit` (applies Red_Flash to the target, clears the regeneration potions). [confirmed]
+- `DamageEntityParent_Hit_Interrupt` = Parent `DamageEntityParent`, Next `..._On_Hit`. [confirmed]
+- The gate (`DamageEntityParent_Hit_Interrupt_On_Hit.json`): after `DamageEntityParent_On_Hit`, the target must have `Hit_Interrupt_Eligible`, and none of Flinch, Enraged, Recovery_Pending. Then, in order: Cancel_Attack (Interrupt, Target, RequiredTag Attack), Apply_Stun (Stunned on the target), ApplyEffect Flinch, Record_Reaction. [confirmed]
+- `Record_Reaction`: if A and B are both present, clear both and apply Recovery_Pending; else apply A if A is absent, else B. [confirmed]
+- Effect durations and overlap: Eligible 1.0 (Overwrite); Flinch 0.5 (Ignore; HorizontalSpeedMultiplier 0); Stunned 0.7 (Overwrite); Recent_Reaction_A and B 4.0 (Ignore); Recovery_Pending 2.0 (Ignore; applies only while Eligible is present and Enraged absent); Enraged 8 (Overwrite); Protected_Attack 8.0 (Ignore; applies only while Enraged). [confirmed]
+- NPC instruction `Component_Instruction_Hit_Interrupt.json`: refreshes Eligible when absent or the 0.25 s timer has stopped; plays the flinch animation; applies Enraged under the rule above. [confirmed; the 8-tick refresh is measured]
+- Protected_Attack readers: Begin (`Hit_Interrupt_Begin_Protected_Attack`) is referenced by 13 NPC attack roots (`npc_root:`), Finish by 38 NPC attack interactions (`npc_interaction:`), in `sim/gen7/data/npc_roles.json`. [static; gen-7 table only, not the full install]
+- Asset rows (static, `sim/gen7/data/weapons.json`): 31 rows have `parent_chain` `[DamageEntityParent, DamageEntityParent_Hit_Interrupt]`: Sword 6, Battleaxe 5, Daggers 9, Mace 7, Abilities 4. [confirmed]
+
+### Gen-5 reading (code, no engine edits)
+
+- `resolve_damage_events` (`jax/combat/mechanics/runtime/kernel.py:98-533`) writes health, stamina on a block, guard breaks, the on-hit resource and healing (lines 404-445), and knockback outputs (446-466); it returns `(result_state, result_health, resolution)` (533). It writes no status. `DamageEvents` has no status field (`mechanics/schema/types.py:168-190`). It reads status flags only for invulnerability and ignore-knockback (lines 278-288, 452). [confirmed]
+- `active_operation_interrupted_by` (`jax/combat/arsenal/programs/interaction_rules.py:56-100`) takes the incoming root of the same actor. No runtime consumer reads a damage event or target-side state. [confirmed by code read]
+- `status_modifiers` (`mechanics/runtime/access.py:197-208`) returns flags and the product of speed multipliers; consumers are `statuses.py:573` and `arsenal/runtime.py:1046`. No hit path writes a speed multiplier. [confirmed; whether it reaches NPC motion is not read]
+
+### Stays unmeasured
+
+- Every eligible-target row (R1 to R7). The harness never hits an eligible target, because the opponent is the task's Trork_Brawler.
+- The third swing: refused by the mask from tick 26 in every run (cause not identified).
+- Protected_Attack and NPC attack starts (R7, R10): the Trork never attacks and the learner body never attacks.
+- Hit-to-hit timing for an eligible target (the Recovery_Pending claim).
+- Blocked hits (guard): whether `DamageEntity` succeeds, which decides whether the gate runs on a blocked hit.
+- Knockback while flinching, and whether `HorizontalSpeedMultiplier` 0 stops NPC motion in the native engine.
+- Other weapons and abilities: not run.
+
+### Confirmed versus inferred
+
+Confirmed (from the receipts or files named in the text): bridge sha256 equals the pin; both sessions' launch, READY and stop records; ports free at 15:43; 31 rows and their families; effect durations and overlap rules; the gate and Record_Reaction rules; the trace follows the learner body (uuid equality, npc_role and combat_target_role in the info); the opponent is Trork_Brawler; the target gets Red_Flash only (0.2 s, countdown in engine seconds) and no Hit_Interrupt status; hit-to-hit interval 14 ticks, 0.481 to 0.482 s; the learner-body Eligible refresh every 8 ticks; the third request refused from tick 26 (mask empty, reject reason empty); frame alignment k+2 (299/299 exact); gen-5 kernel writes no status.
+
+Inferred (not confirmed by a receipt): that `combat_target_status` lists every active status on the target (so a Hit_Interrupt status on the target would appear there); the gate's acceptance test for the construct (DamageEntity success, not applied_damage > 0); that a second eligible hit at 0.481 to 0.482 s would fall inside the 0.5 s flinch; that the thread limit did not change native ticks (the native tick is server-side); the eligibility closure from my traversal of `npc_roles.json` (Skeleton_Fighter and Goblin_Scrapper reach the instruction; Trork_Brawler, Trork_Unarmed and Kweebec_Razorleaf do not); that the SignatureEnergy step at t29 in the Goblin runs is unrelated to a hit (no target health change).
+
+### Claim most likely wrong
+
+That the probe measures the opponent. The probe's `--target-role` names the learner's body (the traced entity), and the opponent is a Trork_Brawler from the task. Confirmed by the receipts, so the design's first-run check ("a damage row on the target") passes only because the target is the Trork, and the Hit_Interrupt chain on an eligible target was never tested. The remaining most-fragile claim is that a second eligible hit at 14 ticks lands inside the flinch. It is untested.
+
+### Resume and the fix (outside this lane; no repository edits made)
+
+1. The harness must set the opponent's role to the eligible role (`combat_target_role` in the environment, or the equivalent) and trace the target entity (`native_policy_actor_identities[1]`) rather than the learner body. Until then the eligible-target rows cannot be measured.
+2. The third request is refused from tick 26. Find the mask gate (the ability head's legal list is empty) before expecting three hits.
+3. After the fix, rerun the four scenarios with the same session scripts (`scripts/window_then_runs.sh`, the 150-minute window; `scripts/analyze.py` with `-I`), then decide the spacing run (`--swing-period 20`, seed 570057).
+
+### Round 2: harness fix, verification run, mask gate (2026-10-19, 15:53 to 17:13)
+
+**Harness fix (scratch only).** `scripts/hit_interrupt_fixed.py` wraps the repo probe unchanged and replaces its `native_env`: `npc_role=None` (the learner body takes the default agent role) and `combat_target_role=--target-role` (the opponent). The receipt gains an `opponent_fix` block. The trace selection is unchanged: `NativeActorLifecycleTrace.start` by role, which is now unique to the opponent.
+
+**Where the option lives.** `hytalegym/envs/hytale_env.py:120` `npc_role` (the learner body); `:121` `combat_target_role` (the opponent; requires kill_trork and a native backend, `:171-179`); `:123` `combat_target_active` (default True); `:167` default `npc_role` = `matchup.agent_role` (Kweebec_Razorleaf for kill_trork, from `hytalegym/rulesets/hytale_0_5_7/kweebec_razorleaf_vs_trork_brawler_v9.json`); `:412` and `:414` the reset options. The repo probe passed the opponent role as `npc_role`: `tests/fidelity/combat/gen7_probes/hit_interrupt.py:120` and `_gen7_probe_common.py:167`; the probe's `combat_target_active=False` default is `_gen7_probe_common.py:151`.
+
+**Verification run (one run, 40 steps, seed 570057, Skeleton_Fighter opponent, passive).** Receipt: `receipts_fixed/hit_interrupt_Skeleton_Fighter_seed570057_swings3_v570057_skel.json`.
+- Traced uuid a9741cd0 equals `native_policy_actor_identities[1]`; trace role Skeleton_Fighter; learner body Kweebec_Razorleaf (`info.npc_role`); `combat_target_role` Skeleton_Fighter; target distance 2.5.
+- Target health 70, then 60 at t9, 50 at t23, 40 at t37. Red_Flash 0.2 on each hit, counting down in engine seconds.
+- Hit spacing 14 ticks each: t9 to t23 is 0.4798 s; t23 to t37 is 0.4797 s of engine time.
+- `Hit_Interrupt_Eligible` on the opponent: never (no trace events; `combat_target_status` shows Red_Flash only). Flinch, Stunned, Recovery and Enraged: never.
+- Learner observation valid on every record; every `applied_legal` True; the third request at t29 is legal, and the hit at t37 is claim + 8.
+
+**Cause of the third-swing refusal (step 4).** Confirmed chain, Skeleton-body runs:
+1. The learner body gains the native-only status `Hit_Interrupt_Eligible` at tick 26 (`info.native_agent_status` first shows it at t26). At t26 `learner_v3_failure_bits` goes 0 to 128, `learner_v3_mechanics_failure_bits` goes 0 to 4, and `learner_v3_observation_valid` goes False; it stays so.
+2. `hytalegym/jax/combat/observation/v3/native/codec/decode.py:726-727`: a native status with no compiled program (or a different `infinite` flag) sets `unknown = True`. The JAX side never mentions `Hit_Interrupt` (grep count 0).
+3. `native/evidence.py:860` (`statuses, unknown_status = _statuses(...)`) and `:867-868` (`mechanics_failure |= _UNKNOWN_STATUS_FAILURE`); `_UNKNOWN_STATUS_FAILURE = MECHANICS_FAILURE_INVALID_STATE` (`native/evidence.py:126-130`; value 4 is `mechanics/schema/contract.py:111`).
+4. `observation/v3/schema/contract.py:126`: `OBSERVATION_FAILURE_MECHANICS = 1 << 7` (128).
+5. `observation/v3/encoding/encoder.py:659` `valid = failure_bits == 0`, then `:666` `legal = evidence.ability_legal & valid[:, None, None]`. With `valid` False every ability head is empty, which is the empty `ability_none_plus_slots` set from t26.
+Also checked and not the cause: the per-slot charges (`iron_sword` loadout: capacity 1, refill time 0, cooldown 0) and `resource_available` (all True). The projected legality is ANDed at `native/evidence.py:429-434`.
+Confirmed: the failure transition coincides with the body's Eligible at t26, and the Kweebec-body run never fails and its third request is legal.
+Inferred: `_statuses` walks every present actor (`enumerate(actors)`), so an Eligible status on the opponent should trip the same gate for the learner. Not yet tested.
+
+**Eligibility on 0.7.2 (asset reading).** Roles whose reference closure reaches `Component_Instruction_Hit_Interrupt` in `sim/gen7/data/npc_roles.json` include Skeleton_Fighter and Goblin_Scrapper (my traversal). Live, a passive Skeleton carries no Eligible, so picking another role does not change a passive opponent.
+
+**Eligible target with native AI.** `fidelity_fixture` = `hit_interrupt_duel` requires `combat_target_role` and `combat_target_active=true` (`hytale-plugin-0.7.2/.../environment/EnvironmentOptions.java:731-734`), and makes the target hostile through `overrideAttitude` (`.../nativebackend/NativeEnvironmentSession.java:8339-8346`). It should give the target Eligible from engagement (the FIDELITY 5a duel saw this), but the inferred gate above would then empty the learner's mask.
+
+**Decision needed.**
+- A: one 40-step verification with `fidelity_fixture=hit_interrupt_duel`, `combat_target_active=True`, Skeleton_Fighter opponent, Kweebec body. It tests Eligible on the target and whether the learner gate trips.
+- B: if the gate trips, omit the `Hit_Interrupt_*` statuses from the learner's native status catalog (the `_omitted_native_statuses` pattern at `native/evidence.py:218`). This changes the learner's observation semantics, so it needs approval.
+- C: a passive four-scenario batch gives only the non-eligible control and cannot test the claim.
+
+**State.** Batch not started. Recovery_Pending claim UNTESTED. Spacing run not added. Verification window opened at 15:51:57 (load 5.23); the run ended at 15:53:05 (load 7.17); the launcher stopped the server (rc 0).
+
+### Round 3: option A (duel, Goblin body), Option B prep (2026-10-19, 17:26 local)
+
+**Option A ran with a body deviation.** The Kweebec body is refused at reset when `combat_target_active` is True: `Native behavior matchup is not mutually hostile: Kweebec_Razorleaf->Skeleton_Fighter=IGNORE, Skeleton_Fighter->Kweebec_Razorleaf=HOSTILE` (attempt 1, 17:16:15, rc 1, no receipt). The FIDELITY 5a duel used a Goblin_Scrapper agent, which is natively HOSTILE to Skeleton_Fighter. The run therefore used body Goblin_Scrapper (`FIX_BODY_ROLE`), a Skeleton_Fighter opponent, `combat_target_active` True and `fidelity_fixture` hit_interrupt_duel, 40 steps. Receipt: `receipts_fixed/hit_interrupt_Skeleton_Fighter_seed570057_swings3_duelgob570057.json`. Attempt 1 was watchdog-aborted at 8.65 (17:17:29, boot and compile spike); attempt 2 ran (17:18:50, load 3.57).
+- Traced uuid = `native_policy_actor_identities[1]` (the opponent); trace role Skeleton_Fighter.
+- Opponent `Hit_Interrupt_Eligible`: NEVER. Trace has no Hit_Interrupt events; `combat_target_status` shows Red_Flash only (t9 to t14, t23 to t28). Opponent health 70, 60 (t9), 50 (t23). No attack transitions; no change to learner defense values.
+- Learner body (Goblin) `Hit_Interrupt_Eligible`: from t26 (1.0), refreshed at t34 (1.0), 8-tick interval as in the earlier runs.
+- Learner fail-closed gate: `learner_v3_failure_bits` 0 to 128 and `learner_v3_mechanics_failure_bits` 0 to 4 at t26, `learner_v3_observation_valid` False; failure bits 192 from t28. Ability head empty from t26; third request refused from t27. The trigger is the learner body's own Eligible, not the opponent.
+- Conclusion: the opponent does not carry Eligible under the learner-row harness, passive or active. The learner body does, and its own Eligible trips the gate.
+
+**Correction to Round 2.** I had inferred that an Eligible status on the opponent would trip the learner gate. It does not: in the passive run the opponent's uncompiled `Red_Flash` never tripped it (learner observation valid on every tick while the opponent carried Red_Flash).
+
+**Option B prep (reading only, no edits).**
+- Decoder path: `_status_programs(loadout)` at `hytalegym/jax/combat/observation/v3/native/codec/decode.py:615` builds the table from the loadout's `event_mask`, `event_f32`, `event_i32`, `event_flags`, keyed by `EI_STATUS_ID`. It is called at `native/evidence.py:208` with `self.config.loadout`, the learner's authored AbilityLoadout. The unknown test is `decode.py:726-727` (`program is None or program.infinite != raw["infinite"]`), and the key is `semantic_id(effect_id)` (`hytalegym/jax/combat/contracts/semantic.py:6`, 31-bit FNV-1a).
+- Content profile that builds the loadout: the 0.5.7 arsenal profile, `hytalegym/jax/combat/arsenal/profiles/hytale_0_5_7.py` (`hytale_0_5_7_loadouts` at line 654; event writers reference `EI_STATUS_ID` in the same file). Gen-7 does not supply a status table.
+- Compiled check: the iron_sword loadout compiles 3 status programs; none of the eight Hit_Interrupt ids nor Red_Flash is among them.
+- Gen-7 grep count: `grep -rn Hit_Interrupt hytalegym/sim/gen7 --include=*.py` = 5 lines in 2 files (`overlay.py` hook metadata and the design-only stub `mechanics/hit_interrupt.py`). No status compiler in `sim/gen7` (no StatusProgram, status_program, compile_status, EI_STATUS_ID or event_i32). So gen-7 compiles no Hit_Interrupt_* status today.
+- 0.7.2 status assets (`assets_extract/072/Server/Entity/Effects/Status/`):
+  - Hit_Interrupt_Eligible: Duration 1.0, Overwrite, Debuff false.
+  - Hit_Interrupt_Flinch: Duration 0.5, Ignore, ApplicationEffects HorizontalSpeedMultiplier 0, Debuff false.
+  - Hit_Interrupt_Stunned: Duration 0.7, Overwrite, Infinite false, Debuff false.
+  - Hit_Interrupt_Recent_Reaction_A: Duration 4.0, Ignore, Debuff false.
+  - Hit_Interrupt_Recent_Reaction_B: Duration 4.0, Ignore, Debuff false.
+  - Hit_Interrupt_Recovery_Pending: Duration 2.0, Ignore, ApplyConditions HasEffect Eligible and HasEffect Enraged Inverse, Debuff false.
+  - Hit_Interrupt_Enraged: Duration 8, Overwrite, ApplicationEffects Particles NPC_Interrupt_Immunity on Head.
+  - Hit_Interrupt_Protected_Attack: Duration 8.0, Ignore, ApplyConditions HasEffect Enraged, Debuff false.
+
+**State.** Batch and spacing run on hold; no batch started. Bridge stopped by the window script (see ports check). Recovery_Pending claim UNTESTED.
+
+### Round 5: learner-row run with a target-side profile (2026-10-19, 17:52)
+
+**Setup.** Kweebec_Razorleaf learner body (default), iron_sword learner profile, passive target (`combat_target_active` False; the duel fixture is refused with a Kweebec body), `learner_v3_target_profile` = iron_sword (the only 0.5.7 arsenal name that fits; no Skeleton or Goblin target profile exists, and the native role profiles cover only Feran, Kweebec and Trork). Skeleton_Fighter target traced. Seed 570057, 60 steps, 3 swings at period 14. Receipt: `receipts_fixed/hit_interrupt_Skeleton_Fighter_seed570057_swings3_tp570057_60.json`. Attempts: 17:37 (watchdog 10.22), 17:42 (watchdog 8.6 range), 17:45 (watchdog 9.52) were aborted; a relaunch at 17:49 was stopped by me; the run completed at 17:51:25 (pre-load 3.49), rc 0.
+
+**Result.**
+- Target hits at env ticks 9, 23 and 37 (70 to 60, 60 to 50, 50 to 40); Red_Flash 0.2 on each, counting down.
+- Target `Hit_Interrupt_Eligible`: none before tick 38. Added at tick 38 (trace: before 0.0, after 1.0, status_added), refreshed at 45, 52 and 59 (7-tick interval, value before 0.73 to 0.74).
+- Target state stayed Idle.Default with attack phase 0 for the whole run, so it made no attacks.
+- Learner gate: `learner_v3_failure_bits` 0 to 128 and `learner_v3_mechanics_failure_bits` 0 to 4 at tick 38; observation invalid; ability head [0] at tick 37, then empty from tick 38. The learner's own status stayed Immunity_Environmental=1.0 only. The new bit is the target's Eligible, appearing at the same tick.
+- Passive run without a target profile (verification, 40 steps, same hits at 9, 23, 37): the target never carried Eligible and the learner gate never tripped.
+
+**Decision (rule: continue only if Eligible is present before the first flagged hit).** Not met: Eligible appears at tick 38, after the first hit (tick 9), the second (tick 23) and the third (tick 37). The spacing runs (14 and 20 ticks, seed 570057; 14 ticks, seed 913771) were NOT run. A run with no Eligible on hits 1 and 2 cannot test the flinch window.
+
+**Rows.** R1 to R7 and R10 stay UNMEASURED for eligible hits (the eligible state arrives after the third hit). R8 is measured in the native-AI duel (round 4). The learner gate trips on a target Eligible in this run, which makes learner-row tests impossible once the target carries Eligible.
+
+### Round 6: flagged NPC attacks against the eligible target (final round, 2026-10-19, 18:06)
+
+**Static search (Assets.zip, all Server JSON, plus gen-7 npc_roles.json).** The 31 flagged damage rows (DamageEntityParent_Hit_Interrupt parent) are referenced only by 54 player weapon items (Server/Item/Items/Weapon, through InteractionVars parents) and by 2 ability projectile configs. No NPC role, NPC attack root (Server/Item/RootInteractions/NPCs, 369 files), NPC interaction or Server/NPC file references any flagged damage row, and no file references DamageEntityParent_Hit_Interrupt outside the weapon and ability folders. An NPC could still resolve a held item's InteractionVars by key at run time, so the static reading is not decisive: a live duel decides it.
+
+**Live candidates (native-AI duel, Skeleton_Fighter target, seeds 570057 and 913771).**
+- Trork_Brawler (battleaxe items with flagged parents): refused at reset, Trork->Skeleton IGNORE, Skeleton->Trork HOSTILE.
+- Feran_Sharptooth (sword items with flagged parents): refused at reset, Feran->Skeleton IGNORE, Skeleton->Feran HOSTILE.
+- Dungeon_Goblin_Mace (Goblin attitude group, Weapon_Mace_Scrap with flagged primary parents): reset passed on both seeds.
+
+**Dungeon_Goblin_Mace duel result.** Target Eligible present from step 40 on both seeds, refreshed every 7 to 8 steps. Target hits: 5 damage at steps 101 (570057) and 84 (913771); 50 Bludgeoning at 173 and 178 (570057), 156 and 161 (913771). The 50-damage hits are accompanied by a Club_Slam_Shockwave_Effect status on the target. Red_Flash appears on hits. No Stunned, Flinch, Recent_Reaction, Recovery_Pending, Enraged or Protected_Attack at any hit (verified over the full run). The target attacked the agent at steps 86, 115, 167 (570057) and 76, 111, 144 (913771) without any Stunned status.
+
+**Verdict.** No NPC attack that lands on the eligible Skeleton_Fighter target is flagged on 0.7.2. The flagged-weapon roles (Trork, Feran) are not natively hostile to the Skeleton, so their attacks cannot land in the duel. The one hostile candidate (Dungeon_Goblin_Mace) hits the target with unflagged NPC attacks, and the interrupt chain does not run. R1 to R7 and R10 therefore rest on the asset values, marked UNMEASURED for eligible hits. R8 stays measured in the native-AI duel (round 4).
+
+**CONFIRMED (round 6):** the flagged-row references listed above (Assets.zip scan); the three reset refusals or passes; the Dungeon mace duel shows no gate statuses over the full run; Eligible present before the first hit.
+**INFERRED (round 6):** the NPC attack roots resolve only unflagged NPC interactions at run time (the duel supports this for the mace only); Trork and Feran would be flagged if their attitudes allowed them to land (asset reading, not run).
+**Claim most likely wrong (round 6):** that a held weapon's flagged parent is reached by an NPC attack. Static reading suggested it could, but the one hostile candidate that holds a flagged mace did not reach the chain. The flagged-weapon NPCs that could reach the chain are not hostile to the Skeleton.
