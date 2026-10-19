@@ -38,6 +38,11 @@ Import the submodules, which are sorted into subfolders by purpose (each subfold
 * ``neural_skills.walk_to`` and ``neural_skills.look_at``: each skill's ``teacher``, ``task``, ``skill`` (its spec) and
   ``train`` (its own training strategy, which trains its own module).
 
+``perception``: what the skill layer perceives (``docs/PERCEPTION.md``).
+
+* ``perception.registry``: the content registry built from a server version's assets: items, blocks, gather
+  types, description vectors.
+
 ``teaching``: what scripted teachers share, and their certificates.
 
 * ``teaching.teachers``: the head layout, ``TeacherOutput``, the ``TEACHERS`` registry and the observed-state rule.

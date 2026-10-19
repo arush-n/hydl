@@ -1,7 +1,8 @@
 # The skill layer's perception: an open content schema (design, 2026-10-19)
 
-**Status: accepted by the owner on 2026-10-19, with the decisions of section 8; the build (section 9) has not
-started.** Owner rulings that frame it (2026-10-19): the
+**Status: accepted by the owner on 2026-10-19, with the decisions of section 8. Build step 1 is half done: the
+registry's items, blocks, gather types and description vectors are built and tested (`perception/registry.py`); its
+creatures come next.** Owner rulings that frame it (2026-10-19): the
 perception schema comes before the working spine; the layers are discrete components finished independently and
 combined later, so this is the skill layer's own input contract; and the architecture must stay open to mods and new
 game features ("large enough for anything").
