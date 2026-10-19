@@ -404,6 +404,13 @@ and `tools/source_pins/evidence_072/`. Next: re-word each B claim for 0.7.2 and 
 relies on all hold (the gate still stops at `perception`), then the constructs the genuine changes need: block health reset on a
 changing write (design-only today), the augment-tag bench gate, and entity scale once a simulator entity carries one.
 
+**Timing re-measurement, task #78 (2026-10-19; FIDELITY-0.7.2.md section (am)).** The guard reopen and the kunai bank were re-run
+in a low-load window on the pinned 0.7.2 bridge (24 guard runs, 2 bank runs; 1-minute load 3 to 7, never idle). The counts follow
+the engine tick period: with a mean tick below 0.0365 s every guard run reopened at claim+11 and both bank runs recharged at
+claim4+30, the values the constructs produce at the simulator's 1/30 s step; under longer ticks the native timer, counting real
+seconds, reopens a tick earlier. Decision: 0.35 s and 1.0 s stay; the tick-period dependence is recorded on rows 5d and 5f as a
+known deviation, and the (af) "load jitter" reading is superseded. No repository constant moved.
+
 **Phase 4 stubs, offline design pass (2026-10-18; `sim/gen7/mechanics/DESIGNS-072.md`).** The thirteen unimplemented switches
 now have a design record each (authored 0.7.2 facts with their class or asset, the hook target, the state needed, the receipt and a
 probe) and thirteen probes under `tests/fidelity/combat/gen7_probes/` that load and take the port pair as arguments. Facts that
