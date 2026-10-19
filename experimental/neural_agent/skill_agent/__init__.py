@@ -42,6 +42,8 @@ Import the submodules, which are sorted into subfolders by purpose (each subfold
 
 * ``perception.registry``: the content registry built from a server version's assets: items, blocks, gather
   types, creatures, attitudes, description vectors.
+* ``perception.adapter``: the legal observation as ``skill_tokens_v2`` token sets, and the registry lookups by
+  semantic id that fill their content.
 
 ``teaching``: what scripted teachers share, and their certificates.
 

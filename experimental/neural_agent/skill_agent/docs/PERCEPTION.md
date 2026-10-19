@@ -1,11 +1,12 @@
 # The skill layer's perception: an open content schema (design, 2026-10-19)
 
-**Status: accepted by the owner on 2026-10-19, with the decisions of section 8. Build steps 1, 2 and 4 are done: the
+**Status: accepted by the owner on 2026-10-19, with the decisions of section 8. Build steps 1 to 4 are done: the
 registry (`perception/registry.py`) holds the items, blocks, gather types, creatures, attitudes and description
 vectors; the v2 token types stand beside v1 (`contract/surface.py`, section 4 "As built") and the trunk reads them;
-the asks of the simulator layer are written (`PERCEPTION_ASKS.md`). The v2 adapter (step 3) comes next: the learner
-observation publishes few ids today (no inventory, no block candidates, no creature roles), so it fills what is
-published until the asks land.** Owner rulings that frame it (2026-10-19): the
+the v2 adapter (`perception/adapter.py`, section 5 "As built") fills them from the legal observation; the asks of the
+simulator layer are written (`PERCEPTION_ASKS.md`). The learner observation publishes few ids today (no inventory, no
+block candidates, no creature roles), so v2 content stays unknown until the asks land. Step 5, the per-tick cost,
+comes next.** Owner rulings that frame it (2026-10-19): the
 perception schema comes before the working spine; the layers are discrete components finished independently and
 combined later, so this is the skill layer's own input contract; and the architecture must stay open to mods and new
 game features ("large enough for anything").
@@ -151,6 +152,17 @@ the learner observation does not carry today; more than 16 entity rows. The adap
 itself. An attitude changed at run time (the engine's override, and
 friendship between NPCs spawned together) is state, not content; whether the observation publishes it is settled with
 the adapter.
+
+**As built** (step 3, 2026-10-19; `perception/adapter.py`): `legal_tokens_v2` takes the learner observation, the
+capacities and the body yaw, as the v1 adapter does. It fills the self token (v1's features; the maximum health and
+the held item stay 0, unpublished) and every published entity row (up to 16 today; a larger capacity leaves the rest
+invalid): position, velocity, visible, health, alive, its facing relative to the body, its attack phase and
+progress, with `known` 0 and what it holds `unknown`. Block candidates, inventory, geometry and kit stay invalid.
+`registry_tables` puts the registry on the device keyed by the gym's semantic ids (row 0 is the unknown row),
+`lookup` maps published ids to rows inside `jit`, and `tool_relations` gives the block candidate's relations; on the
+0.7.2 registry an iron pickaxe has power 0.25 against `Ore_Iron_Basalt` at margin 0, and 0.5 against `Rock_Stone` at
+margin 0.6. The tables refuse a registry whose rows or description width differ from the schema's, or whose ids
+collide.
 
 ## 6. Versioning
 
