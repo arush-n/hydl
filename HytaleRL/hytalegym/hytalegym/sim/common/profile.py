@@ -142,6 +142,10 @@ class Constructs:
     # bash from the first held tick) or "held_guard_fork" (gen 7: legal and admissible only while the guard is held and
     # active, FIDELITY section (x)). Owner: sim/gen7/mechanics/shield_bash_fork.py (row 5d).
     shield_bash_root: str = "plain_root"
+    # Head yaw at reset: "none" (HEAD: the reset zeroes both heads whatever the body yaw is) or "body_heading" (gen 7:
+    # an Arsenal reset given entity_yaw seeds agent_head_yaw and target_head_yaw from the stored body yaw). Owner:
+    # sim/gen7/mechanics/reset_head_heading.py (row 5g, FIDELITY section (ak)).
+    reset_head_heading: str = "none"
 
 
 @dataclass(frozen=True)

@@ -868,6 +868,14 @@ HOOKS = (
          "inputs.py compares HEAD JAX only)",
          "a guard fork root (the Iron Shield bash) is legal and admissible only while the guard is held and active "
          "(guard_active); gen 5 returns the original mask, which offers it from the held level (ticks 1 and 2 included)"),
+    Hook("reset_head_heading", "combat/arsenal/runtime.py", "reset_arsenal_batch",
+         f"{_MECHANICS}.reset_head_heading:construct", "reset_head_heading", "active", "5g",
+         "section (ak) on the live 0.7.2 bridge (seeds 570057 and 913771): a target spawned facing the agent (180 degrees) "
+         "has HeadRotation equal to its body yaw at tick 0 and keeps it with no input; the reset zeroed both heads. Render "
+         "test tests/sim/test_reset_head_heading.py: entity_yaw [0, 180] gives agent head 0 and target head 180 at tick 0, "
+         "and the returned observation equals observe_batch of the state; entity_yaw None and gen 5 are unchanged",
+         "an Arsenal reset given entity_yaw (entity-position path) seeds agent_head_yaw and target_head_yaw from the stored "
+         "body yaw (pitch unchanged) and rebuilds the returned observation from that state; gen 5 returns the original"),
 )
 
 OVERLAY = Overlay(

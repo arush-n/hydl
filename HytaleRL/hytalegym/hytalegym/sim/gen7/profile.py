@@ -64,6 +64,8 @@ PROFILE = SimProfile(
         shortbow_reset_ammo="native_zero",
         # Shield bash offer (section (x), row 5d): the 0.7.2 fork of the held guard is legal only while the guard is active.
         shield_bash_root="held_guard_fork",
+        # Head yaw at reset (section (ak), row 5g): both heads start on their body headings when the reset gets entity_yaw.
+        reset_head_heading="body_heading",
     ),
     # Owner ruling 2026-10-17: the agent operates at 30 Hz; one step duration.
     step_duration=StepDuration(nominal_seconds=1.0 / 30.0, loaded_seconds=1.0 / 30.0, timing_profile_count=1),

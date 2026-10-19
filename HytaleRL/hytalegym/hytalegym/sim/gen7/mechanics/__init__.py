@@ -46,6 +46,7 @@ CONSTRUCT_MODULES = {
     "ability_start_split": "ability_start_split",
     "shortbow_reset_ammo": "shortbow_reset_ammo",
     "shield_bash_root": "shield_bash_fork",
+    "reset_head_heading": "reset_head_heading",
 }
 
 

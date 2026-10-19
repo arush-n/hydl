@@ -352,6 +352,19 @@ only for a non-zero `entity_yaw`, which the arena, multi-actor and self-play res
 `Constructs.reset_head_heading` (`none` -> `body_heading`), a Hook on `reset_arsenal_batch` that seeds both heads from
 `entity_yaw` and is a no-op when none is given, so identity rows do not move. Next: a construct lane under the overlay lock.
 
+**Phase 4q, built (2026-10-18, gates finished 2026-10-19 00:13 CDT; FIDELITY-0.7.2.md section (ak), row 5g).**
+`Constructs.reset_head_heading` is `body_heading` on gen 7 and `none` on gen 5. `sim/gen7/mechanics/reset_head_heading.py` is
+wired as a Hook on `reset_arsenal_batch` (`sim/gen7/overlay.py` line 871): an Arsenal reset given `entity_yaw` on the
+entity-position path seeds `agent_head_yaw` and `target_head_yaw` from the stored body yaw and rebuilds the returned observation
+from that state with the rendered `observe_batch`; a reset without `entity_yaw`, and gen 5, return the original. Tests:
+`tests/sim/test_reset_head_heading.py` (10 tests; the lock-protocol set `46 passed in 143.28s (0:02:23)`, exit 0). Gates on the
+working tree: identity `4 passed in 826.78s (0:13:46)`, exit 0; quick `324 passed in 3644.10s (1:00:44)`, exit 0 (314 plus this
+lane's 10); rollout fingerprints equal to the committed identity values for batches 8 and 64. Open: the agent at a non-zero native
+spawn (unreachable natively; the agent case rests on the target measurement and on the pursuit precedent); the tick-1 head clamp
+in the simulator (not run); the geometry branch and the dynamic entity axis have no committed test (the dynamic axis was checked
+once in scratch with a 3-entity reset: heads 0 and 180, observation equal to the target-id rebuild); the muzzle and legal-sector
+consumers on a live learner row.
+
 **Phase 3 item 2, the Region recapture on 0.7.2 (2026-10-18; FIDELITY-0.7.2.md section (aj)).** Seed 570057 is captured on the
 pinned 0.7.2 bridge at 500 of 500 sections (`artifacts/worldgen/region_0.7.2_seed_570057.npz`, staged beside the 0.5.7 libraries, no
 swap). The exact-digest compare fails on this seed on 5 to 6 non-damaging fluid cells at one water edge while the dry seed projection
