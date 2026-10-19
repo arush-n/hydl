@@ -124,6 +124,25 @@ Waiting for a quiet machine: the stub measurement lanes in the DESIGNS-072.md 14
 The owner's: the library swap and the product rebuild after the recapture (`tools/worldgen/README.md` steps 1 to 5), the 43-row
 expectation in `test_region_runtime_provider` (#76: committed code gives 42, the arena session's uncommitted edit 32), the phase-6
 training ruling.
+
+Landed on the night of 2026-10-18 to 2026-10-19 (coordinator-verified, none pushed): `893d40b`, the head-heading construct (#75,
+section (ak), row 5g: an Arsenal reset given `entity_yaw` seeds both heads from the stored body yaw on the gen-7 render and
+rebuilds the observation with the rendered `observe_batch`; quick gate 324, identity 4, fingerprints unchanged); `0756aca` and
+`62253eb`, the classification of the failing source-pin audits (section (al) addendum and correction: A 1, explosion_dynamics
+accepted as pin-only so 2 of 11 carry a semantic baseline; B 6, perception, entity_geometry, locomotion, doors, mutable_blocks,
+explosion_mutation; C 3, navigation, actor_world_state, crafting; the genuine 0.7.2 changes are block health per section with the
+`BlockOperations.setBlock` write path, entity scale made physical, the `MovementStates` extra byte and the content censuses, while
+the `DeathComponent` exclusion, the 25 `InteractionType` constants and `WorldChunk.breakBlock` were already false on the 0.5.10
+control; every claim's verdict in `source_pin_baselines_072.json` and `tools/source_pins/evidence_072/`, the claim-level pin
+design in the runbook); `941d6bd`, the Region library loader made version-aware (section (aj) addendum: the chunk API certified
+per server version, the `inherited_seed_labels_v1` split method, the staged 0.7.2 library `9dca3c71…` loads and the provider
+selects it natively when traversal is not required; the task zoo follows the manifest's method; the swap README's step 3 names the
+repository generators). Fleet state: the Haiku weekly limit was reached at 00:13 CDT on 2026-10-19 (resets 2026-10-23, 20:00
+Chicago); five lanes stopped mid-work (the loader lane after its edits and gates, four claim lanes mid-analysis), the collector
+lane finished at 00:31, and no Haiku lane can run until the reset, so the remaining work (the C leaves of the audits, the 0.7.2
+traversal library, the inherited-labels writer, the stub measurements #69, the idle re-measurement #78) waits on the reset or on
+an owner ruling to use another model. Still the owner's: the publish gate (re-derive the audits or publish the 0.7.2 library with
+the audit state recorded), the arena-side zoo and horizon rules, the phase-6 stamp (#79) and default flip (#80).
 Committed earlier: the
 crafting oracle stage 3 (`274aaec`, timed bench crafts with probe events; pin `5FE609E2`), phase 4j (`a534e83`: the Trork
 target no longer gets a headless Player, which the PvP-off filter used to cancel the agent's damage; the iron combo and
