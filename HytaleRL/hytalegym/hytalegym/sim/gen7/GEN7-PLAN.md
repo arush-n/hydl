@@ -379,7 +379,7 @@ certifies the chunk API for the manifest's own server version (`certified_chunk_
 pinned in `CERTIFIED_CHUNK_API_SHA256`, other versions refused) and accepts `inherited_seed_labels_v1`, whose held-out labels come
 from the one sibling library with the recorded digest; the staged 0.7.2 manifest uses it (`9dca3c71…`), so the 20-seed 0.7.2
 library loads and the provider selects it natively when traversal is not required. Next in the chain: a 0.7.2 traversal library
-(recertification builds graphs natively and is gated by the audits), a writer for the inherited method, then path tables, zoo and
+(recertification builds graphs natively and is gated by the audits), a publish step that calls the writer (`inherit_split_from`, built the same night), then path tables, zoo and
 suites v7.
 
 **Phase 5, second pass on the source-pin audits (2026-10-18; FIDELITY-0.7.2.md section (al)).** 1 of 11 verified (inventory: section
