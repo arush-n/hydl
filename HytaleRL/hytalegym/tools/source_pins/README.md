@@ -32,7 +32,7 @@ verifier stops at the first failing audit and never reads an audit's
    digests still match, and an evidence line is given. An audit you did not verify
    keeps `EXPECTED_SEMANTIC_SHA256` null and names its gaps in `open_gaps`.
 5. Gate: run `tests/worldgen/test_source_pins.py` and
-   `tests/worldgen/test_source_pin_baselines.py` (16 tests), then the verifier. Do not
+   `tests/worldgen/test_source_pin_baselines.py` (23 tests), then the verifier. Do not
    edit the audit scripts' semantics or the 0.5 constants to make an audit pass.
 
 Pitfalls found on 0.7.2:
@@ -127,3 +127,49 @@ one class-method token) are the input for that design.
 - The per-claim method list (evidence_072/claim_methods.json, all ten audits) gives a class-method
   token for 254 of 469 claim rows; the rest are repo-side, bridge-side or not yet located, and
   mutable_blocks is the thinnest (63 of 203). It is an input for the claim-level design, not a pin.
+
+
+## Claim text per release line
+
+An audit hashes its claim text: its module `SOURCE_CONTRACT`, or a payload claim constant (perception's
+`PERCEPTION_CLAIMS`). The module text is the 0.5.7 line's and never changes. A claim that is false on a later
+line is re-worded for that line only, in `source_pin_baselines_072.json`, under the constant's name (2026-10-19).
+
+Rules:
+
+1. Per-line record. An audit's 0.7 record may carry `claim_texts`, an object keyed by constant name.
+   `pins_for` returns each entry under its name on the 0.7 line; the 0.5 line returns only its defaults and
+   never receives one. An audit with no entry hashes its module text.
+2. Same structure, re-worded wording. A recorded text has the constant's key structure: the same dictionary
+   keys at every depth, and each list's records have the constant's record shape. A list's length is data (a
+   census may grow), and every scalar (string, number, boolean, null) is wording that may change type. A claim
+   is never dropped or added at any depth. The check cannot see a whole list record removed or added (census
+   lists change length), so reviewers check list-record changes by hand.
+3. Stale text needs its override before a semantic pin stands. `STALE_CLAIM_TEXT_072` (in the gitignored
+   `tests/worldgen/test_source_pin_baselines.py`) names each audit whose module text states a claim false on
+   0.7.2, with the constants to override. A 0.7 semantic pin for one of them needs those constants in its
+   `claim_texts` first. `UNOVERRIDDEN_STALE_AT_RULE_072` is a ratchet: it lists the pins accepted before this
+   rule that still lack an override (inventory today: its `transport.schema` text says v1, and both bridges
+   emit v2). Recording that override changes inventory's observed 0.7 hash, so its semantic pin must be
+   re-accepted in the same step, and the set emptied in the test.
+4. Audit scripts change by one payload line, or by moving claim constants. Each payload carries
+   `"source_contract": pins.get("SOURCE_CONTRACT", SOURCE_CONTRACT)`. Perception's claims were inline in its
+   payload; they now sit in the module constant `PERCEPTION_CLAIMS` (content unchanged) and enter the payload as
+   `**pins.get("PERCEPTION_CLAIMS", PERCEPTION_CLAIMS)`. Nothing else in an audit changes.
+
+A fragment is the complete constant with every key present and the 0.7.2 wording in its leaves: for inventory,
+the `transport.schema` leaf reads `hytalerl_native_inventory_v2`. A partial object fails rule 2.
+
+Proof (2026-10-19, lane `contract_per_line`; each run's `summary.json` is in that lane's scratch folder, not in
+this repository):
+
+- Observe before and after the change, on both installs: all eleven semantic hashes identical on 0.5 and on
+  0.7, and the package JSON carries no `claim_texts`.
+- Positive checks, with scratch copies of the JSON read through a scratch interpreter that sets the loader's
+  path in its own process (`POINTED_072_JSON`; no tracked hook). In each, only the target audit's 0.7 hash
+  moved, and no 0.5 hash moved:
+  - explosion_mutation, one re-worded leaf (`damage.health`): `00ccd47d61fb` to `fe088ae5b861`.
+  - entity_geometry, its collector fragment: `237372ef1341` to `e3f58624b62b`.
+  - mutable_blocks, its collector fragment: `e465a47137e5` to `a97af2381a28`.
+  - perception, one re-worded `PERCEPTION_CLAIMS` leaf (`los_contract.perception.predicate`): `a86113082526` to `fb222a92d7a5`.
+- Tests: 16 before the change, 23 after (seven new rule tests).

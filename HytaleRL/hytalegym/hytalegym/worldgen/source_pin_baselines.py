@@ -4,7 +4,10 @@ Each audit keeps its 0.5.7 pins as module constants; those are the 0.5 line and 
 For the 0.7 line the pins come from ``source_pin_baselines_072.json`` (observed on the installed
 0.7.2 build). A pin with no recorded 0.7.2 value is compared as ``UNRECORDED`` (never equal), and a
 semantic baseline is recorded as ``null`` while the audit has open 0.7.2 gaps, so the audit fails
-closed. The release line comes from the audited server JAR's own manifest, not from the environment.
+closed. Claim text an audit hashes (its SOURCE_CONTRACT, or a payload claim constant) is re-worded per
+line under the record's ``claim_texts`` object, keyed by the module constant's name; a line with no entry
+hashes the module text. The release line comes from the audited server JAR's own manifest, not from the
+environment.
 """
 
 from __future__ import annotations
@@ -64,7 +67,8 @@ def pins_for(
 
     ``defaults`` maps each pin name to its 0.5.7 value. ``keyed`` names the pins that are
     dictionaries keyed by archive member; their unrecorded value is a sentinel dictionary that no
-    observed mapping equals.
+    observed mapping equals. On the 0.7 line the record's ``claim_texts`` entries are added under their
+    constant names (for example ``SOURCE_CONTRACT``); the 0.5 line never receives them.
     """
 
     line = server_jar_release_line(server_jar)
@@ -76,12 +80,14 @@ def pins_for(
             "record one in source_pin_baselines_072.json or add a release line"
         )
     recorded = _recorded_072().get(audit, {})
-    return {
+    pins = {
         name: recorded[name]
         if name in recorded
         else ({UNRECORDED: UNRECORDED} if name in keyed else UNRECORDED)
         for name in defaults
     }
+    pins.update(recorded.get("claim_texts", {}))
+    return pins
 
 
 __all__ = [
