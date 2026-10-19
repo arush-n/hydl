@@ -654,6 +654,13 @@ registry marks both teachers `version="v2"`, `state="observed"`. `state_for(name
 harness, the trainer and the live replay apply the registered teacher. In closed loop, v2 does what v1 does: walk 1.0,
 look 1.0, look while walking 0.91, each held for 5 ticks (96 lanes). [test: test_observed_state_replaces_exactly_the_commanded_head_and_body_yaw]
 
+**v3: walk_to stops a margin inside the radius (2026-10-18, late; opt-in).** v2 stops exactly on the edge, and its A2
+student parks a median 0.02 blocks outside it (2.16). `walk_to_choices(..., stop_margin_blocks=m)` walks on until the
+learner is m blocks inside the radius, or half the radius if that is less; `done` is still the radius rule. The A2
+margin is `WALK_TO_V3_STOP_MARGIN_BLOCKS` = 0.25, a negative margin is refused, and `walk_to_version(m)` names the
+version (v3 when m > 0). At 0 the function is v2 exactly, and the registry stays at v2 until a student shows that v3
+helps. [test: test_walk_stop_margin_walks_on_inside_the_radius_until_the_margin, test_walk_stop_margin_is_at_most_half_the_radius]
+
 ### 2.12 Flat tasks with the NPC body (`tasks/simple_tasks.py`, 2026-10-18)
 
 **What it is:**
@@ -747,7 +754,8 @@ JSON certificate (TRAINING_PLAN 2c):
 - T7-lite, failure classes and done hysteresis.
 
 The CLI is `python -m experimental.neural_agent.skill_agent.teaching.certificates --teacher walk_to --seeds
-77001,... --out PATH --date YYYY-MM-DD`. [test: test_sa_certificates.py, 7 tests; a deliberately idle teacher fails T1]
+77001,... --out PATH --date YYYY-MM-DD`, with `--walk-stop-margin 0.25` for walk_to v3 (2.11). [test:
+test_sa_certificates.py, 10 tests; a deliberately idle teacher fails T1]
 
 **First certificates (4 seeds x 256 episodes, flat `npc_walk`):**
 
@@ -757,10 +765,14 @@ The CLI is `python -m experimental.neural_agent.skill_agent.teaching.certificate
 | look_at v1 | 1,024 / 1,024 | median 13 ticks, p95 20 (no bar: the codebook sets the pace) | tolerance at done on all lanes; 0 illegal of 92,160 | none |
 | walk_to v2 | 1,024 / 1,024 | median 1.037 x the minimum, p90 1.18 | pace within 5 % on all 1,015 steady lanes; 0 illegal of 207,561 decisions | none |
 | look_at v2 | 1,024 / 1,024 | median 13 ticks, p95 21 | tolerance at done on all lanes; 0 illegal of 92,160 | none |
+| walk_to v3 (margin 0.25) | 1,024 / 1,024 | median 1.037 x the minimum, p90 1.18 | pace within 5 % on all 1,015 steady lanes; 0 illegal of 207,561 decisions | none |
 
 v1 failed T5 by measurement (2.11): its labels depended on the commanded head yaw, which the student cannot see.
 v2 (2026-10-18, late) passes T1 to T3. It walks 3.7 % slower at the median than v1, because it steers from the
-lagging actual body yaw. Certificates: `agent_skills/training_runs/skill_agent_a2/certificates/` (private).
+lagging actual body yaw. v3's checks equal v2's to the last digit, done signal included: the two walk the same path
+until the first tick inside the radius, where success and efficiency are measured, and the margin acts only after it.
+What the margin changes shows in its student (2.16). Certificates:
+`agent_skills/training_runs/skill_agent_a2/certificates/` (private).
 
 **What they do not show:**
 - On a flat world with point goals, the scripted teachers are essentially perfect, so T1 cannot separate them, and
@@ -805,13 +817,24 @@ body (bearing 180 to 270 degrees), and look-only points 25 to 40 degrees to the 
 held out by its walk target). Look-only offsets span 40 degrees either side (`tasks/simple_tasks.py:80`), so the look
 region is the left edge of the range while the right edge is trained: it asks for extrapolation on one side. The
 evaluation runs the student and the teachers on the same seeds, seen and held out, and reports success per mode, walk
-pace (within 5 %), radius and illegal decisions. [test: test_sa_distill.py, 12 tests]
+pace (within 5 %), radius and illegal decisions. [test: test_sa_distill.py, 17 tests]
+
+**Options and held success (2026-10-18, late).** Both options are off by default, and off they reproduce A2 exactly
+(an A/B against the trainer at dcec3d9: the same losses, dataset, parameters and evaluation):
+- `--walk-stop-margin M` labels the walks with walk_to v3 (2.11), which stops M blocks inside the radius;
+- `--look-direction` fills the look request's direction group with the unit body-frame vector from the eye to the
+  target (the walk request's stays empty).
+
+The evaluation reports held success, on target `HOLD_TICKS` = 5 ticks in a row with the first of them inside the
+horizon, beside the first hit, and the owner chose held success for A2's bars (2026-10-18). The report (schema v2)
+records both options and the walk teacher's version.
 
 **Status: A2 ran, and it does not pass (2026-10-18, late).** 6 iterations x 128 lanes x 2,000 steps, 123,398 samples,
 56 minutes at load 13 to 70, from e4a0833 with no local changes; the evidence is private
 (`agent_skills/training_runs/skill_agent_a2/a2_6x128x2000_e4a0833/`). The student made no illegal decision (0 of
 79,669). The evaluation runs seed 77001 on 256 lanes, about 85 per mode, so each rate is good to about 8 points at
-95 %. "Held" is the certificates' rule (2.15): on target 5 ticks in a row.
+95 %. "Held" means on target 5 ticks in a row, a stricter rule than the first hit that this evaluation and the
+certificates' T1 count (the certificates apply 5 ticks to the teacher's done signal, not to success).
 
 | student (teachers) | walk only | look only | both | both: walk, look |
 |---|---|---|---|---|
@@ -836,21 +859,22 @@ every walk and look bin of the same episodes):
   equals the closest approach to the 90th percentile, after a median 90 ticks parked. One was still closing at the
   horizon. Small radii miss most (0.74 below 0.83 blocks, against 0.93 and 0.95 above), and run misses least (0.95,
   against walk 0.87 and sneak 0.80). The 97 missed walks of the "both" lanes look the same. The teacher stops exactly
-  at the edge (`teaching/teachers.py:106`), so a student whose stop is a few centimetres off lands outside about half
-  the time, and it acts by argmax (`training/distill.py:442`), so a parked agent repeats its choice every tick.
+  at the edge (`teaching/teachers.py:117`, v2's margin is 0), so a student whose stop is a few centimetres off lands outside about half
+  the time, and it acts by argmax (`training/distill.py:470`), so a parked agent repeats its choice every tick.
 - **Missed looks end near the target but outside the 3 degrees,** a median 5.2 degrees off in yaw and 3.2 in pitch,
   as often short of the target as past it: imprecision, not a bias. Near targets miss most (0.55 at 2 to 4.7 blocks,
   0.74 beyond), and so do steep ones (0.56 and 0.58 beyond 15 degrees of pitch either way, 0.77 and 0.85 within).
   The held-out band falls off away from the trained range: 0.67 at 25 to 32.5 degrees left, where its trained mirror
   on the right scores 0.68, and 0.44 at 32.5 to 40.
 - **Inferred, not yet tested:** both misses need a fine comparison that the request's encoding makes hard. Targets
-  arrive as body-frame positions over 16 blocks (`training/distill.py:101`), so a 2 cm stopping error is about 0.001
+  arrive as body-frame positions over 16 blocks (`training/distill.py:105`), so a 2 cm stopping error is about 0.001
   of an input and a 3 degree gaze error at 2 blocks about 0.007, and the look request's direction group is empty
-  (`training/distill.py:97`).
+  (`training/distill.py:99`).
 
-**Next, each one change at A2's size and seeds, for the owner's approval:** walk_to v3 stops a margin inside the
-radius (certified first), and the look request carries the unit direction to its target. The evaluation also scores
-the hold rule, so a look that sweeps through no longer counts.
+**Next: two one-change runs at A2's size and seeds (approved by the owner, 2026-10-18), from the commit that adds the
+options above.** W runs with `--walk-stop-margin 0.25`: walk_to v3, certified first (2.15). L runs with
+`--look-direction`. Each is scored on held success against A2's held rows above, which the new evaluation reproduces
+exactly from A2's parameters (0 mismatches against its report and the independent hold check).
 
 **Before the run.** A 2-iteration smoke (32 lanes, 50 steps per iteration, 10,191 samples) ran end to end with 0
 illegal decisions. Its student was untrained by design: walk 0.23 and look 0.0, against the teachers' 1.0 and 1.0.

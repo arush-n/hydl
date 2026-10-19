@@ -59,6 +59,9 @@ COMPASS_DIRECTIONS = 8
 EYE_OFFSET = (0.0, 1.0, 0.0)
 #: The head window around the body, ruleset ``agent.head_yaw_min/max`` and ``head_pitch_min/max`` (+-45).
 HEAD_WINDOW_DEGREES = 45.0
+#: walk_to v3 stops this far inside the radius, or half the radius if that is less. v2 stops on the edge, and its A2
+#: student parks a median 0.02 blocks outside it (README 2.16).
+WALK_TO_V3_STOP_MARGIN_BLOCKS = 0.25
 
 
 class TeacherOutput(NamedTuple):
@@ -92,18 +95,26 @@ def walk_to_choices(
     gait: jax.Array,
     *,
     maximum_turn_degrees: float,
+    stop_margin_blocks: float = 0.0,
 ) -> TeacherOutput:
     """Walk the learner to ``target_xz`` at gait ``gait`` (1..4) and stop once inside ``radius``.
 
     Reads ``position[:, 0]`` and ``desired_body_yaw``. Writes the locomotion and body-yaw heads; the other heads stay
-    neutral. Once inside the radius the teacher is done: it idles with a neutral body steer.
+    neutral. Once inside the radius the teacher is done; once inside its stop radius it idles with a neutral body steer.
+    The stop radius is ``radius`` less ``stop_margin_blocks``, but never under half the radius: v3 walks on past the
+    edge, so a student whose stop is slightly off still stops inside. At 0 (v2, ``walk_to_version``) the two radii are
+    the same.
     """
 
+    if stop_margin_blocks < 0:
+        raise ValueError(f"stop_margin_blocks must be at least 0 (a stop inside the radius), got {stop_margin_blocks}")
     position = combat.position[:, AGENT_ENTITY]
     target = jnp.asarray(target_xz, dtype=jnp.float32)
     dx = target[:, 0] - position[:, 0]
     dz = target[:, 1] - position[:, 2]
-    done = jnp.hypot(dx, dz) <= radius
+    distance = jnp.hypot(dx, dz)
+    done = distance <= radius
+    stopped = distance <= jnp.maximum(radius - stop_margin_blocks, 0.5 * radius)
 
     # The body steers toward the target by one codebook step per tick. Travel uses the commanded body yaw, which
     # already includes that step, so the direction is taken in that frame.
@@ -115,10 +126,10 @@ def walk_to_choices(
     gait_choice = jnp.asarray(gait, dtype=jnp.int32)
     # Sprint only applies to forward travel; any other direction falls back to run.
     gait_choice = jnp.where((gait_choice == GAIT_SPRINT) & (direction != 1), GAIT_RUN, gait_choice)
-    locomotion = jnp.where(done, 0, (gait_choice - 1) * COMPASS_DIRECTIONS + direction)
+    locomotion = jnp.where(stopped, 0, (gait_choice - 1) * COMPASS_DIRECTIONS + direction)
 
     neutral = neutral_arsenal_policy_action_factors(position.shape[0])
-    body_index = jnp.where(done, neutral[:, BODY_YAW_HEAD], body_index)
+    body_index = jnp.where(stopped, neutral[:, BODY_YAW_HEAD], body_index)
     factors = neutral.at[:, LOCOMOTION_HEAD].set(locomotion).at[:, BODY_YAW_HEAD].set(body_index)
     return TeacherOutput(factors=factors, done=done)
 
@@ -220,12 +231,20 @@ def state_for(name: str, combat: CombatState) -> CombatState:
     return observed_state(combat) if TEACHERS[name].state == "observed" else combat
 
 
+def walk_to_version(stop_margin_blocks: float) -> str:
+    """The walk_to version a stop margin gives: v3 when it is positive, else the registered version."""
+
+    return "v3" if stop_margin_blocks > 0 else TEACHERS["walk_to"].version
+
+
 __all__ = [
     "TEACHERS",
+    "WALK_TO_V3_STOP_MARGIN_BLOCKS",
     "TeacherOutput",
     "TeacherSpec",
     "look_at_choices",
     "observed_state",
     "state_for",
     "walk_to_choices",
+    "walk_to_version",
 ]

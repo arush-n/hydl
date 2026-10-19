@@ -54,6 +54,7 @@ from experimental.neural_agent.skill_agent.model.encoder import (
 )
 from experimental.neural_agent.skill_agent.model.generalist import (
     ARG_FEATURES,
+    ARG_GROUPS,
     GeneralistConfig,
     GeneralistRequests,
     apply_generalist,
@@ -66,6 +67,7 @@ from experimental.neural_agent.skill_agent.teaching.teachers import (
     look_at_choices,
     state_for,
     walk_to_choices,
+    walk_to_version,
 )
 from hytalegym.jax.combat.observation.v3.policy.layout import (
     ARSENAL_POLICY_ACTION_HEAD_NAMES as HEAD_NAMES,
@@ -95,7 +97,9 @@ SPAWN_XZ = st.DEFAULT_SPAWN_XZ
 OTHER_XYZ = st.DEFAULT_OTHER_XYZ
 EYE_XYZ = st.DEFAULT_EYE_XYZ
 REQUEST_PRESENT = np.asarray([True, False, True, True, True, True])
-"""Which argument groups a request sets: position, scalars, mode, urgency and age; direction is absent."""
+"""Which argument groups a request sets: position, scalars, mode, urgency and age; direction is absent, unless
+``look_direction`` sets it on the look request (``_request_slots``)."""
+DIRECTION_GROUP = [name for name, _ in ARG_GROUPS].index("direction")
 MODE_PARALLEL = (1.0, 0.0, 0.0)
 URGENCY = 0.5
 POSITION_SCALE = 16.0
@@ -111,11 +115,13 @@ STEADY_CLEARANCE_BLOCKS = 2.0
 STEADY_HEADING_DEGREES = 10.0
 STEADY_MIN_TICKS = 10
 PACE_TOLERANCE = 0.05
+HOLD_TICKS = 5
+"""Consecutive decisions on target that make a held success (``_hold_update``)."""
 
 
 @dataclass(frozen=True)
 class DistillConfig:
-    """Everything that sizes a run. The defaults are the full run's; the CLI overrides the first four."""
+    """Everything that sizes a run. The defaults are the full run's; the CLI overrides the first four and last two."""
 
     iterations: int = 6
     lanes: int = 128
@@ -127,6 +133,8 @@ class DistillConfig:
     maximum_turn_degrees: float = 45.0
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
     generalist: GeneralistConfig = field(default_factory=lambda: DEFAULT_GENERALIST)
+    walk_stop_margin: float = 0.0  # walk_to v3 when positive: it stops this many blocks inside the radius
+    look_direction: bool = False  # look_at's request carries the unit body-frame direction to its target
 
 
 class Episodes(NamedTuple):
@@ -160,6 +168,10 @@ class Tick(NamedTuple):
 
 
 class Rollout(NamedTuple):
+    """One rollout's results. A hold is ``HOLD_TICKS`` consecutive decisions on target whose first tick is inside the
+    lane's horizon (``_hold_update``). The rollout stops at the batch's longest horizon, so a lane whose horizon is that
+    longest cannot complete a hold that starts in its last ``HOLD_TICKS - 1`` decisions."""
+
     walk_hit: np.ndarray  # int32[B]: the decision count at which walk_to first held, or -1
     look_hit: np.ndarray  # int32[B]: the same for look_at
     positions: np.ndarray  # float32[T+1, B, 2]: planar position before each decision, and after the last
@@ -169,6 +181,8 @@ class Rollout(NamedTuple):
     illegal: int  # executed factors outside the action mask, over those decisions
     teacher_illegal: int  # teacher labels outside the action mask, over those decisions
     samples: dict | None  # the dataset chunk for those decisions, when recording
+    walk_held: np.ndarray  # int32[B]: the decision count at which walk_to's hold completes, or -1
+    look_held: np.ndarray  # int32[B]: the same for look_at
 
 
 class Kernels(NamedTuple):
@@ -326,19 +340,24 @@ def sample_episodes(key: jax.Array, mode: jax.Array, *, held_out: bool = False) 
     return make_episodes(walk, look, mode, spawn_yaw)
 
 
-def _argument_row(position: jax.Array, scalars: jax.Array, ticks: jax.Array) -> jax.Array:
-    """One request's 15 argument features in ``ARG_GROUPS`` order: position, direction, scalars, mode, urgency, age."""
+def _argument_row(position: jax.Array, scalars: jax.Array, ticks: jax.Array,
+                  direction: jax.Array | None = None) -> jax.Array:
+    """One request's 15 argument features in ``ARG_GROUPS`` order: position, direction, scalars, mode, urgency, age.
+
+    The direction is zeros unless given.
+    """
 
     batch = position.shape[0]
+    if direction is None:
+        direction = jnp.zeros((batch, 3), dtype=jnp.float32)
     mode = jnp.broadcast_to(jnp.asarray(MODE_PARALLEL, dtype=jnp.float32), (batch, 3))
     urgency = jnp.full((batch, 1), URGENCY, dtype=jnp.float32)
     age = jnp.full((batch, 1), ticks / AGE_SCALE, dtype=jnp.float32)
-    return jnp.concatenate(
-        [position, jnp.zeros((batch, 3), dtype=jnp.float32), scalars, mode, urgency, age], axis=1
-    )
+    return jnp.concatenate([position, direction, scalars, mode, urgency, age], axis=1)
 
 
-def _request_slots(episode: Episodes, walk_args: jax.Array, look_args: jax.Array) -> GeneralistRequests:
+def _request_slots(episode: Episodes, walk_args: jax.Array, look_args: jax.Array, *,
+                   look_direction: bool = False) -> GeneralistRequests:
     batch = walk_args.shape[0]
     rest = REQUEST_SLOTS - 2
     valid = jnp.concatenate(
@@ -361,10 +380,13 @@ def _request_slots(episode: Episodes, walk_args: jax.Array, look_args: jax.Array
     verbs = jnp.asarray([WALK_VERB, LOOK_VERB] + [0] * rest, dtype=jnp.int32)
     scopes = jnp.asarray([SCOPE_NAMES.index("locomotion"), SCOPE_NAMES.index("gaze")] + [0] * rest, dtype=jnp.int32)
     pointers = jnp.full((batch, REQUEST_SLOTS), -1, dtype=jnp.int32)
+    present = valid[..., None] & jnp.asarray(REQUEST_PRESENT)
+    if look_direction:
+        present = present.at[:, 1, DIRECTION_GROUP].set(valid[:, 1])
     return GeneralistRequests(
         verb=jnp.broadcast_to(verbs, (batch, REQUEST_SLOTS)),
         args=args,
-        arg_present=valid[..., None] & jnp.asarray(REQUEST_PRESENT),
+        arg_present=present,
         entity_pointer=pointers,
         cell_pointer=pointers,
         scope=jnp.broadcast_to(scopes, (batch, REQUEST_SLOTS)),
@@ -372,12 +394,13 @@ def _request_slots(episode: Episodes, walk_args: jax.Array, look_args: jax.Array
     )
 
 
-def build_requests(episode: Episodes, position: jax.Array, yaw: jax.Array, ticks: jax.Array) -> GeneralistRequests:
+def build_requests(episode: Episodes, position: jax.Array, yaw: jax.Array, ticks: jax.Array, *,
+                   look_direction: bool = False) -> GeneralistRequests:
     """The request slots at one decision: walk_to in slot 0 and look_at in slot 1, from the agent's own pose.
 
     ``position`` is float32[B, 3] (the agent's position), ``yaw`` the body yaw in degrees, ``ticks`` the decisions taken
     since the episode started (the age feature). Positions are body-frame vectors over 16 blocks; the eye is the position
-    plus one block up.
+    plus one block up. With ``look_direction`` the look request's direction is the unit body-frame vector from the eye.
     """
 
     batch = position.shape[0]
@@ -388,21 +411,26 @@ def build_requests(episode: Episodes, position: jax.Array, yaw: jax.Array, ticks
     walk_scalars = jnp.stack([walk.gait.astype(jnp.float32) / GAIT_SCALE, walk.radius, zeros, zeros], axis=1)
     look_scalars = jnp.stack([look.tolerance_degrees / TOLERANCE_SCALE, zeros, zeros, zeros], axis=1)
     walk_args = _argument_row(_body_vector(to_walk, yaw) / POSITION_SCALE, walk_scalars, ticks)
-    look_args = _argument_row(_body_vector(to_look, yaw) / POSITION_SCALE, look_scalars, ticks)
-    return _request_slots(episode, walk_args, look_args)
+    look_body = _body_vector(to_look, yaw)
+    look_unit = None
+    if look_direction:
+        look_unit = look_body / jnp.maximum(jnp.linalg.norm(look_body, axis=1, keepdims=True), 1e-6)
+    look_args = _argument_row(look_body / POSITION_SCALE, look_scalars, ticks, look_unit)
+    return _request_slots(episode, walk_args, look_args, look_direction=look_direction)
 
 
 def _successes(combat: Any, episode: Episodes) -> tuple[jax.Array, jax.Array]:
     return st.WalkToTasks.success(combat, episode.walk), st.LookAtTasks.success(combat, episode.look)
 
 
-def teacher_labels(combat: Any, episode: Episodes, *, maximum_turn_degrees: float) -> Labels:
+def teacher_labels(combat: Any, episode: Episodes, *, maximum_turn_degrees: float,
+                   walk_stop_margin: float = 0.0) -> Labels:
     """The two registered teachers' labels (``teachers.state_for``: v2 reads what the student sees): walk heads from
-    walk_to_choices, gaze heads from look_at_choices, neutral elsewhere."""
+    walk_to_choices, gaze heads from look_at_choices, neutral elsewhere. ``walk_stop_margin`` > 0 is walk_to v3."""
 
     walk = walk_to_choices(
         state_for("walk_to", combat), episode.walk.target_xz, episode.walk.radius, episode.walk.gait,
-        maximum_turn_degrees=maximum_turn_degrees,
+        maximum_turn_degrees=maximum_turn_degrees, stop_margin_blocks=walk_stop_margin,
     )
     look = look_at_choices(
         state_for("look_at", combat), episode.look.target_xyz, episode.look.tolerance_degrees,
@@ -445,15 +473,17 @@ def student_factors(
 
 
 @functools.lru_cache(maxsize=None)
-def _kernels(encoder: EncoderConfig, generalist: GeneralistConfig, maximum_turn_degrees: float) -> Kernels:
+def _kernels(encoder: EncoderConfig, generalist: GeneralistConfig, maximum_turn_degrees: float, *,
+             walk_stop_margin: float = 0.0, look_direction: bool = False) -> Kernels:
     def student(params, action_mask, tokens, requests, walk_active, look_active):
         return student_factors(params, action_mask, tokens, requests, walk_active, look_active, encoder, generalist)
 
     return Kernels(
         tokens=jax.jit(lambda observation, yaw: legal_tokens(
             observation, capacities=bench_tick.CAPACITIES, body_yaw_degrees=yaw)),
-        requests=jax.jit(build_requests),
-        teacher=jax.jit(functools.partial(teacher_labels, maximum_turn_degrees=maximum_turn_degrees)),
+        requests=jax.jit(functools.partial(build_requests, look_direction=look_direction)),
+        teacher=jax.jit(functools.partial(
+            teacher_labels, maximum_turn_degrees=maximum_turn_degrees, walk_stop_margin=walk_stop_margin)),
         student=jax.jit(student),
         success=jax.jit(_successes),
     )
@@ -509,6 +539,17 @@ def _concat(chunks: Sequence[dict[str, np.ndarray]]) -> dict[str, np.ndarray]:
     return {key: np.concatenate([chunk[key] for chunk in chunks]) for key in chunks[0]}
 
 
+def _hold_update(streak: np.ndarray, held: np.ndarray, ok: np.ndarray, done_count: int, horizon: np.ndarray,
+                 active: np.ndarray, hold: int = HOLD_TICKS) -> tuple[np.ndarray, np.ndarray]:
+    """One decision's held-success update. ``streak`` counts consecutive on-target ticks; ``held`` takes ``done_count``
+    when an active lane's streak reaches ``hold`` at a tick at most ``horizon + hold - 1``, that is, when the streak's
+    first tick is inside the horizon. The hold may then finish up to ``hold - 1`` ticks after the horizon."""
+
+    streak = np.where(ok, streak + 1, 0)
+    held = np.where((held < 0) & active & (streak >= hold) & (done_count <= horizon + hold - 1), done_count, held)
+    return streak, held
+
+
 def _rollout(env, params, episode: Episodes, decide: Callable[[Tick], Any], kernels: Kernels, key: jax.Array,
              *, record: bool) -> Rollout:
     """Run every lane for its horizon: one neutral tick, then one decision per tick, the policy's choice executed.
@@ -533,6 +574,10 @@ def _rollout(env, params, episode: Episodes, decide: Callable[[Tick], Any], kern
     look_active = np.asarray(episode.look_active)
     walk_hit = np.full(batch, -1, dtype=np.int32)
     look_hit = np.full(batch, -1, dtype=np.int32)
+    walk_streak = np.zeros(batch, dtype=np.int32)
+    look_streak = np.zeros(batch, dtype=np.int32)
+    walk_held = np.full(batch, -1, dtype=np.int32)
+    look_held = np.full(batch, -1, dtype=np.int32)
     positions = np.zeros((ticks + 1, batch, 2), dtype=np.float32)
     yaws = np.zeros((ticks + 1, batch), dtype=np.float32)
     seconds = np.zeros((ticks, batch), dtype=np.float32)
@@ -573,9 +618,12 @@ def _rollout(env, params, episode: Episodes, decide: Callable[[Tick], Any], kern
                             done_count, walk_hit).astype(np.int32)
         look_hit = np.where((look_hit < 0) & look_active & look_ok & (done_count <= look_horizon),
                             done_count, look_hit).astype(np.int32)
+        walk_streak, walk_held = _hold_update(walk_streak, walk_held, walk_ok, done_count, walk_horizon, walk_active)
+        look_streak, look_held = _hold_update(look_streak, look_held, look_ok, done_count, look_horizon, look_active)
 
     samples = _concat(chunks) if record else None
-    return Rollout(walk_hit, look_hit, positions, yaws, seconds, decisions, illegal, teacher_illegal, samples)
+    return Rollout(walk_hit, look_hit, positions, yaws, seconds, decisions, illegal, teacher_illegal, samples,
+                   walk_held, look_held)
 
 
 def init_params(key: jax.Array, config: DistillConfig) -> dict:
@@ -656,7 +704,8 @@ def run_dagger(config: DistillConfig = DistillConfig()) -> DaggerResult:
     """Iterate DAgger: collect, aggregate, then ``config.steps`` Adam steps on the whole aggregate, per iteration."""
 
     env = _environment(config.lanes, config.maximum_turn_degrees)
-    kernels = _kernels(config.encoder, config.generalist, config.maximum_turn_degrees)
+    kernels = _kernels(config.encoder, config.generalist, config.maximum_turn_degrees,
+                       walk_stop_margin=config.walk_stop_margin, look_direction=config.look_direction)
     key, init_key = jax.random.split(jax.random.key(config.seed))
     params = init_params(init_key, config)
     optimizer = optax.adam(config.learning_rate)
@@ -767,24 +816,31 @@ def _summarise(episode: Episodes, rollout: Rollout) -> dict:
     mode = np.asarray(episode.mode)
     walk_ok = rollout.walk_hit >= 1
     look_ok = rollout.look_hit >= 1
+    walk_held = rollout.walk_held >= 1
+    look_held = rollout.look_held >= 1
 
-    def rate(values: np.ndarray, lanes: np.ndarray) -> dict:
-        count = int(lanes.sum())
-        return {"lanes": count, "success": float(values[lanes].mean()) if count else None}
+    def share(flags: np.ndarray, lanes: np.ndarray) -> float | None:
+        return float(flags[lanes].mean()) if lanes.any() else None
+
+    def rate(success: np.ndarray, held: np.ndarray, lanes: np.ndarray) -> dict:
+        return {"lanes": int(lanes.sum()), "success": share(success, lanes), "held": share(held, lanes)}
 
     both = mode == BOTH
-    both_summary = rate(walk_ok & look_ok, both)
-    both_summary["walk_success"] = rate(walk_ok, both)["success"]
-    both_summary["look_success"] = rate(look_ok, both)["success"]
+    both_summary = rate(walk_ok & look_ok, walk_held & look_held, both)
+    both_summary["walk_success"] = share(walk_ok, both)
+    both_summary["look_success"] = share(look_ok, both)
+    both_summary["walk_held"] = share(walk_held, both)
+    both_summary["look_held"] = share(look_held, both)
     return {
-        "walk_only": rate(walk_ok, mode == WALK),
-        "look_only": rate(look_ok, mode == LOOK),
+        "walk_only": rate(walk_ok, walk_held, mode == WALK),
+        "look_only": rate(look_ok, look_held, mode == LOOK),
         "both": both_summary,
         "walk_pace": _pace(episode, rollout),
         "walk_radius": _radius(episode, rollout),
         "decisions": rollout.decisions,
         "illegal_decisions": rollout.illegal,
         "teacher_label_illegal": rollout.teacher_illegal,
+        "hold_ticks": HOLD_TICKS,
     }
 
 
@@ -798,7 +854,7 @@ def evaluate(
     modes: Sequence[str] = MODES,
     config: DistillConfig = DistillConfig(),
 ) -> dict:
-    """Run ``policy`` on fresh episodes and report per-mode success, walk pace, radius and legality.
+    """Run ``policy`` on fresh episodes and report per-mode success, held success, walk pace, radius and legality.
 
     ``policy="student"`` runs the masked argmax; a callable takes a :class:`Tick` and returns int32[B, 12] factors (use
     ``teacher_policy`` for the teachers). Lanes take ``modes`` round-robin, so each mode gets an equal share. The same
@@ -812,7 +868,8 @@ def evaluate(
     chosen = np.asarray([MODES.index(name) for name in modes], dtype=np.int32)
     codes = chosen[np.arange(lanes) % len(chosen)]
     env = _environment(lanes, config.maximum_turn_degrees)
-    kernels = _kernels(config.encoder, config.generalist, config.maximum_turn_degrees)
+    kernels = _kernels(config.encoder, config.generalist, config.maximum_turn_degrees,
+                       walk_stop_margin=config.walk_stop_margin, look_direction=config.look_direction)
     key_goals, key_rollout = jax.random.split(jax.random.key(seed))
     episode = sample_episodes(key_goals, jnp.asarray(codes), held_out=held_out)
     decide = (lambda tick: tick.student) if isinstance(policy, str) else policy
@@ -892,9 +949,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--eval-lanes", type=int, default=256)
     parser.add_argument("--out", type=Path)
     parser.add_argument("--params-out", type=Path)
+    parser.add_argument("--walk-stop-margin", type=float, default=defaults.walk_stop_margin,
+                        help="walk_to v3 when positive: it stops this many blocks inside the radius "
+                             "(teachers.WALK_TO_V3_STOP_MARGIN_BLOCKS is 0.25); 0 is walk_to v2")
+    parser.add_argument("--look-direction", action="store_true",
+                        help="look_at's request also carries the unit body-frame direction to its target")
     args = parser.parse_args(argv)
+    if args.walk_stop_margin < 0:
+        parser.error("--walk-stop-margin must be at least 0: the stop is inside the radius")
 
-    config = DistillConfig(iterations=args.iterations, lanes=args.lanes, steps=args.steps, seed=args.seed)
+    config = DistillConfig(iterations=args.iterations, lanes=args.lanes, steps=args.steps, seed=args.seed,
+                           walk_stop_margin=args.walk_stop_margin, look_direction=args.look_direction)
     provenance = _provenance()
     started = time.perf_counter()
     result = run_dagger(config)
@@ -910,13 +975,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     samples = int(result.dataset["labels"].shape[0])
     bytes_per_sample = sum(value[0].nbytes for value in result.dataset.values()) if samples else 0
     report = {
-        "schema": "skill_agent_distill_v1",
+        "schema": "skill_agent_distill_v2",
         "config": dataclasses.asdict(config),
         "heads": list(HEAD_NAMES),
         "walk_heads": [int(i) for i in np.flatnonzero(WALK_HEADS)],
         "gaze_heads": [int(i) for i in np.flatnonzero(GAZE_HEADS)],
-        "teachers": {name: {"version": TEACHERS[name].version, "state": TEACHERS[name].state}
-                     for name in ("walk_to", "look_at")},
+        "teachers": {
+            "walk_to": {"version": walk_to_version(config.walk_stop_margin), "state": TEACHERS["walk_to"].state,
+                        "stop_margin_blocks": config.walk_stop_margin},
+            "look_at": {"version": TEACHERS["look_at"].version, "state": TEACHERS["look_at"].state},
+        },
         "held_out_rules": {
             "walk_rear_left_bearing_degrees": list(REAR_LEFT_DEGREES),
             "look_yaw_offset_degrees": list(LOOK_HELD_OUT_DEGREES),

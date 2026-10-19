@@ -48,6 +48,7 @@ from experimental.neural_agent.skill_agent.teaching.teachers import (
     look_at_choices,
     state_for,
     walk_to_choices,
+    walk_to_version,
 )
 from hytalegym.jax.combat.observation.v3.policy.layout import ARSENAL_POLICY_ACTION_HEAD_SIZES
 from hytalegym.jax.combat.types import (
@@ -122,10 +123,11 @@ def _look_gap(combat, goals):
     return jnp.stack([yaw_error, combat.agent_head_pitch - pitch_facing], axis=1)
 
 
-def _walk_teacher(combat, goals) -> TeacherOutput:
+def _walk_teacher(combat, goals, *, stop_margin_blocks: float = 0.0) -> TeacherOutput:
     return walk_to_choices(
         state_for("walk_to", combat), goals.target_xz, goals.radius, goals.gait,
         maximum_turn_degrees=MAXIMUM_TURN_DEGREES,
+        stop_margin_blocks=stop_margin_blocks,
     )
 
 
@@ -548,7 +550,9 @@ def _env_block(env, per_seed) -> dict:
     }
 
 
-def _certificate(name: str, seeds, episodes: int, *, date: str, policy_name: str, env, per_seed) -> dict:
+def _certificate(
+    name: str, seeds, episodes: int, *, date: str, policy_name: str, env, per_seed, stop_margin_blocks: float = 0.0
+) -> dict:
     spec = TEACHERS[name]
     t1 = _t1(per_seed)
     if name == "walk_to":
@@ -559,17 +563,21 @@ def _certificate(name: str, seeds, episodes: int, *, date: str, policy_name: str
         t2, t3 = _t2_look(per_seed), _t3_look(per_seed)
         overall = bool(t1["pass"] and t3["pass"])
         overall_rule = "T1 and T3 (T2 has no bar for look_at)"
+    teacher = {
+        "name": name,
+        "version": spec.version,
+        "state": spec.state,
+        "kind": spec.kind,
+        "verbs": list(spec.verbs),
+        "reads": list(spec.reads),
+        "parameters": list(spec.parameters),
+    }
+    if name == "walk_to":
+        teacher["version"] = walk_to_version(stop_margin_blocks)
+        teacher["stop_margin_blocks"] = stop_margin_blocks
     return {
         "scope": "T1, T2, T3 and T7 (light). T4, T5 and T6 are not measured here.",
-        "teacher": {
-            "name": name,
-            "version": spec.version,
-            "state": spec.state,
-            "kind": spec.kind,
-            "verbs": list(spec.verbs),
-            "reads": list(spec.reads),
-            "parameters": list(spec.parameters),
-        },
+        "teacher": teacher,
         "policy": policy_name,
         "date": date,
         "seeds": seeds,
@@ -589,12 +597,19 @@ def _write(cert: dict, out) -> None:
     path.write_text(json.dumps(cert, indent=2, allow_nan=False) + "\n")
 
 
-def _certify(name: str, seeds, episodes: int, *, date: str, out, policy) -> dict:
+def _certify(name: str, seeds, episodes: int, *, date: str, out, policy, stop_margin_blocks: float = 0.0) -> dict:
+    if name == "look_at" and stop_margin_blocks != 0:
+        raise ValueError("stop_margin_blocks is a walk_to option; look_at has no stop margin")
+    if policy is not None and stop_margin_blocks != 0:
+        raise ValueError("stop_margin_blocks runs the registered walk_to teacher; a custom policy replaces it")
     task = _TASKS[name]
     seeds = [int(seed) for seed in seeds]
     env = _environment(episodes)
     observe = jax.jit(functools.partial(_observe, task))
-    run_policy = jax.jit(task.teacher if policy is None else policy)
+    teacher = task.teacher
+    if name == "walk_to":
+        teacher = functools.partial(task.teacher, stop_margin_blocks=stop_margin_blocks)
+    run_policy = jax.jit(teacher if policy is None else policy)
     per_seed = []
     for seed in seeds:
         goals, trace = _run(env, task, observe, run_policy, seed)
@@ -607,6 +622,7 @@ def _certify(name: str, seeds, episodes: int, *, date: str, out, policy) -> dict
         policy_name="registered" if policy is None else "custom",
         env=_env_block(env, per_seed),
         per_seed=per_seed,
+        stop_margin_blocks=stop_margin_blocks,
     )
     if out is not None:
         _write(cert, out)
@@ -620,14 +636,20 @@ def certify_walk_to(
     date: str,
     out: str | Path | None = None,
     policy: Callable[[Any, Any], TeacherOutput] | None = None,
+    stop_margin_blocks: float = 0.0,
 ) -> dict:
     """Certificate for walk_to on flat npc_walk, one batched run per seed; written to ``out`` when given.
 
     ``policy(combat, goals)`` replaces the registered teacher. The tests use it for a broken teacher, and the
     certificate then records ``policy: custom``.
+
+    ``stop_margin_blocks`` runs the registered teacher with that stop margin: walk_to v3 if positive, v2 at 0.
+    A custom ``policy`` replaces the teacher, so the two cannot be combined.
     """
 
-    return _certify("walk_to", seeds, episodes_per_seed, date=date, out=out, policy=policy)
+    return _certify(
+        "walk_to", seeds, episodes_per_seed, date=date, out=out, policy=policy, stop_margin_blocks=stop_margin_blocks
+    )
 
 
 def certify_look_at(
@@ -705,10 +727,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--episodes", type=int, default=256, help="lanes per seed")
     parser.add_argument("--out", type=Path, default=None, help="write the certificate JSON to this path")
     parser.add_argument("--date", required=True, help="YYYY-MM-DD, written into the certificate")
+    parser.add_argument("--walk-stop-margin", type=float, default=0.0,
+                        help="walk_to only: stop this many blocks inside the radius (v3; 0.25 is the A2 margin)")
     args = parser.parse_args(argv)
+    if args.teacher == "look_at" and args.walk_stop_margin != 0:
+        parser.error("--walk-stop-margin is for walk_to only")
     seeds = [int(seed) for seed in args.seeds.split(",")]
-    certify = certify_walk_to if args.teacher == "walk_to" else certify_look_at
-    cert = certify(seeds, args.episodes, date=args.date, out=args.out)
+    if args.teacher == "walk_to":
+        cert = certify_walk_to(seeds, args.episodes, date=args.date, out=args.out,
+                               stop_margin_blocks=args.walk_stop_margin)
+    else:
+        cert = certify_look_at(seeds, args.episodes, date=args.date, out=args.out)
     for line in summary_lines(cert):
         print(line)
     if args.out is not None:

@@ -6,15 +6,15 @@ obedience, T4 the live replay, T5 whether a student can follow it, T7 failure so
 
 | Module | Lines | What it holds |
 |---|---:|---|
-| `teachers.py` | 231 | The scripted walk_to and look_at teachers and the `TEACHERS` registry; the compass in the commanded body frame. The registered teachers (v2) read `observed_state`: the actual head and body yaw, what a student sees. |
-| `certificates.py` | 720 | `certify_walk_to`, `certify_look_at`: T1, T2, T3 and T7-lite over seeded batches of simulated episodes; the CLI writes the certificate as JSON. |
+| `teachers.py` | 250 | The scripted walk_to and look_at teachers and the `TEACHERS` registry; the compass in the commanded body frame. The registered teachers (v2) read `observed_state`: the actual head and body yaw, what a student sees. walk_to v3 (opt-in, `stop_margin_blocks`) stops a margin inside the radius. |
+| `certificates.py` | 749 | `certify_walk_to`, `certify_look_at`: T1, T2, T3 and T7-lite over seeded batches of simulated episodes; the CLI writes the certificate as JSON (`--walk-stop-margin` for walk_to v3). |
 | `certify_live.py` | 138 | T4 for walk_to: the teacher in closed loop on the live 0.7.2 server (bridge port 5570), paired with the simulator from the same start and goal. |
 
 Run (the live command, through the 0.7.2 launcher, is in `certify_live.py`'s docstring):
 
 ```sh
 JAX_PLATFORMS=cpu .venv/bin/python -m experimental.neural_agent.skill_agent.teaching.certificates \
-    --teacher walk_to --seeds 77001 --episodes 256 --out PATH --date 2026-10-18
+    --teacher walk_to --seeds 77001 --episodes 256 --out PATH --date 2026-10-18 [--walk-stop-margin 0.25]
 ```
 
 Gates: `test_sa_teachers.py`, `test_sa_certificates.py`. `certify_live.py` needs the live server and has no unit
