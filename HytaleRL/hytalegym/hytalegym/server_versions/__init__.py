@@ -45,6 +45,9 @@ class ServerProfile:
     # Checkpoint ``hytale_version`` labels (simulator rulesets) that native
     # evaluation accepts on this line. None keeps the exact-version check.
     checkpoint_rulesets: tuple[str, ...] | None = None
+    # Folder under artifacts/worldgen holding the Region library that world
+    # evidence recertification reads. None keeps the 0.5 pilot folder.
+    region_library: str | None = None
 
 
 def release_line(version: object) -> tuple[int, int] | None:

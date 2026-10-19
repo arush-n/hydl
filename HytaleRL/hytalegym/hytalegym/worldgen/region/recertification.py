@@ -15,6 +15,7 @@ import subprocess
 import sys
 from typing import Any, Mapping, Sequence
 
+from hytalegym.server_versions import server_profile
 from hytalegym.worldgen.native_lease import (
     NativeEvidenceLease,
     acquire_native_evidence_lease,
@@ -55,6 +56,11 @@ def main() -> None:
     parser.add_argument("--assets", type=Path)
     parser.add_argument("--server-jar", type=Path)
     parser.add_argument(
+        "--region-library",
+        type=Path,
+        help="directory holding the Region manifest.json (default: by server line)",
+    )
+    parser.add_argument(
         "--resume",
         action="store_true",
         help="reuse a prior candidate stage after all identity gates pass",
@@ -71,6 +77,7 @@ def main() -> None:
         expected_bridge_sha256=args.expected_bridge_sha256,
         assets=args.assets,
         server_jar=args.server_jar,
+        region_library=args.region_library,
         resume=args.resume,
     )
     print(f"WORLD_EVIDENCE_RECERTIFICATION_CANDIDATE={report_path}")
@@ -88,6 +95,7 @@ def recapture_world_evidence(
     expected_bridge_sha256: str | None = None,
     assets: str | Path | None = None,
     server_jar: str | Path | None = None,
+    region_library: str | Path | None = None,
     resume: bool = False,
 ) -> Path:
     """Capture a complete candidate without mutating published evidence."""
@@ -118,6 +126,7 @@ def recapture_world_evidence(
             server_jar=server_jar,
             progress_lease=lease,
             resume=resume,
+            region_library=region_library,
         )
 
 
@@ -134,11 +143,16 @@ def _recapture_world_evidence_unlocked(
     progress_lease: NativeEvidenceLease,
     resume: bool,
     expected_bridge_sha256: str | None = None,
+    region_library: str | Path | None = None,
 ) -> Path:
     root = repository_root
     package_root = root / "hytalegym"
     fixture_root = package_root / "tests" / "fidelity" / "fixtures" / "world"
-    region_root = root / "artifacts" / "worldgen" / "region-library-pilot-v2"
+    region_root = (
+        Path(region_library).resolve()
+        if region_library is not None
+        else _default_region_library(root)
+    )
     graph_root = region_root / "traversal-v2"
     bridge = (
         Path(deployed_bridge).resolve()
@@ -228,7 +242,7 @@ def _recapture_world_evidence_unlocked(
     cascade_path = stage / "contract-cascade.json"
     _write_json(
         cascade_path,
-        derive_contract_cascade(root, expected_bridge),
+        derive_contract_cascade(root, expected_bridge, region_root=region_root),
     )
     _require_listener(host, port)
 
@@ -763,6 +777,8 @@ def build_evidence_candidates(
 def derive_contract_cascade(
     repository_root: str | Path,
     bridge_sha256: str,
+    *,
+    region_root: str | Path | None = None,
 ) -> dict[str, object]:
     """Re-derive the current cross-lane contract chain without publishing."""
 
@@ -787,16 +803,12 @@ def derive_contract_cascade(
 
     root = Path(repository_root).resolve()
     bridge = _sha256(bridge_sha256)
-    region = RegionArtifactLibrary.load(
-        root / "artifacts" / "worldgen" / "region-library-pilot-v2" / "manifest.json"
+    region_folder = (
+        _default_region_library(root) if region_root is None else Path(region_root)
     )
+    region = RegionArtifactLibrary.load(region_folder / "manifest.json")
     traversal = RegionTraversalGraphLibrary.load(
-        root
-        / "artifacts"
-        / "worldgen"
-        / "region-library-pilot-v2"
-        / "traversal-v2"
-        / "traversal-manifest.json",
+        region_folder / "traversal-v2" / "traversal-manifest.json",
         region,
     )
     world_token = world_geometry_token_contract_sha256().upper()
@@ -886,6 +898,16 @@ def _update_recertification_progress(
         phase_status=phase_status,
         detail=detail,
     )
+
+
+def _default_region_library(repository_root: Path) -> Path:
+    """Return the Region library folder of the active server line.
+
+    The 0.5 profile leaves ``region_library`` unset and keeps the 0.5 pilot.
+    """
+
+    folder = server_profile().region_library or "region-library-pilot-v2"
+    return repository_root / "artifacts" / "worldgen" / folder
 
 
 def _repository_root() -> Path:

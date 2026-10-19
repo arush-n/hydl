@@ -16,4 +16,5 @@ PROFILE = ServerProfile(
     ),
     crafting_recipe_count=2_047,
     checkpoint_rulesets=("0.5.7",),
+    region_library="region-library-pilot-v2-072",
 )
