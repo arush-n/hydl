@@ -1,9 +1,11 @@
 # The skill layer's perception: an open content schema (design, 2026-10-19)
 
-**Status: accepted by the owner on 2026-10-19, with the decisions of section 8. Build steps 1 and 2 are done: the
+**Status: accepted by the owner on 2026-10-19, with the decisions of section 8. Build steps 1, 2 and 4 are done: the
 registry (`perception/registry.py`) holds the items, blocks, gather types, creatures, attitudes and description
 vectors; the v2 token types stand beside v1 (`contract/surface.py`, section 4 "As built") and the trunk reads them;
-the v2 adapter comes next.** Owner rulings that frame it (2026-10-19): the
+the asks of the simulator layer are written (`PERCEPTION_ASKS.md`). The v2 adapter (step 3) comes next: the learner
+observation publishes few ids today (no inventory, no block candidates, no creature roles), so it fills what is
+published until the asks land.** Owner rulings that frame it (2026-10-19): the
 perception schema comes before the working spine; the layers are discrete components finished independently and
 combined later, so this is the skill layer's own input contract; and the architecture must stay open to mods and new
 game features ("large enough for anything").
@@ -142,9 +144,11 @@ It reads only the legal observation and the registry table, a constant. It fills
 inventory and geometry; gathers properties by id; and computes the relations (tool against block, threat against my
 health) inside the same jitted function. It never reads the simulator's state.
 
-**Asks of the simulator layer** (a contract request; that code is not this lane's): block candidates published with
-their block id; each entity's role id; an entity's held item id when a player could see it; per-cell fluid ids in
-geometry. The adapter maps each id to properties itself. An attitude changed at run time (the engine's override, and
+**Asks of the simulator layer** (a contract request; that code is not this lane's; written out with file references
+in `PERCEPTION_ASKS.md`, build step 4): block candidates published with their block id; each entity's role id; an
+entity's held item id when a player could see it; per-cell fluid ids in geometry; the agent's own inventory, which
+the learner observation does not carry today; more than 16 entity rows. The adapter maps each id to properties
+itself. An attitude changed at run time (the engine's override, and
 friendship between NPCs spawned together) is state, not content; whether the observation publishes it is settled with
 the adapter.
 
