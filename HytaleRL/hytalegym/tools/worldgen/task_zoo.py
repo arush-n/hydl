@@ -27,10 +27,12 @@ Rules. "Pinned" means the test asserts it. Everything else is inferred, a choice
   1. Terrains. Pinned: split "train" and a seed outside the reserved set. Inferred: the reserved
      set is the two seeds the test pins, because no tracked doc lists the audit seeds; GEN7-PLAN.md:431
      says audit worlds stay unseen. A seed is trainable only if its manifest label is "train" AND the
-     package's split rule (`sha256_rank_v1`, hytalegym/worldgen/region/library.py:26 and 532-535; re-implemented
-     here because importing the package loads jax) does not select it as held-out. The union is the
-     fail-closed choice: on 0.7.2 the labels and that rule disagree on six seeds, listed per suite under
-     `split_disagreements`. Terrains are keyed "seed_<seed>" and sorted by seed. Excluded entries are
+     package's split rule does not select it as held-out (`sha256_rank_v1` re-implemented here because
+     importing the package loads jax; under `inherited_seed_labels_v1` the loader certifies the labels
+     themselves, so the rule is the labels, 2026-10-19). The union is the fail-closed choice: a manifest
+     whose labels and rule disagree lists the seeds per suite under `split_disagreements` (the 0.7.2
+     library did on six seeds until it was restaged with the inherited method). Terrains are keyed
+     "seed_<seed>" and sorted by seed. Excluded entries are
      counted per suite under `excluded` (reserved, heldout, package_heldout), never listed.
   2. Families. Pinned: `pursuit_perception` (objective pursue, perception field_of_view). Inferred:
      `reach` (objective reach_point, no perception key) and `pursuit` (objective pursue, perception
@@ -94,15 +96,23 @@ FAMILIES = (
 
 
 SPLIT_METHOD = "sha256_rank_v1"  # hytalegym/worldgen/region/library.py:26
+INHERITED_SPLIT_METHOD = "inherited_seed_labels_v1"  # library.py: labels certified against the source library
 
 
 def package_heldout_seeds(manifest: dict[str, Any]) -> set[int]:
-    """Held-out seeds that the package's split rule selects from the semantic digests.
+    """Held-out seeds that the package's split rule selects for this manifest.
 
-    Re-implements `_split_rank` (library.py:532-535) and the sort in `create_region_artifact_library`:
-    the first `heldout_count` entries by (rank, semantic_sha256) are held out. The test checks it
-    against the 0.5.7 manifest labels.
+    `sha256_rank_v1`: re-implements `_split_rank` (library.py) and the sort in
+    `create_region_artifact_library`: the first `heldout_count` entries by (rank, semantic_sha256)
+    are held out. The test checks it against the 0.5.7 manifest labels. `inherited_seed_labels_v1`
+    (2026-10-19): the loader certifies the manifest's own labels against the source library, so the
+    rule is those labels. Any other method fails closed.
     """
+    method = manifest["split_contract"]["method"]
+    if method == INHERITED_SPLIT_METHOD:
+        return {int(entry["seed"]) for entry in manifest["entries"] if entry["split"] == "heldout"}
+    if method != SPLIT_METHOD:
+        raise ValueError(f"unsupported Region artifact split method {method!r}")
     salt = manifest["split_contract"]["salt_sha256"]
     ranked = sorted(
         manifest["entries"],

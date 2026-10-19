@@ -24,6 +24,7 @@ from hytalegym.worldgen.region.snapshot import (
 REGION_ARTIFACT_LIBRARY_SCHEMA = "hytalerl_region_artifact_library_v1"
 REGION_ARTIFACT_LIBRARY_VERSION = 1
 REGION_ARTIFACT_SPLIT_METHOD = "sha256_rank_v1"
+REGION_ARTIFACT_INHERITED_SPLIT_METHOD = "inherited_seed_labels_v1"
 REGION_ARTIFACT_AUTHORITY = "exact_frozen_native_artifact"
 REGION_ARTIFACT_RUNTIME_SOURCE = "artifact_only_no_seed_regeneration"
 
@@ -43,6 +44,9 @@ _MANIFEST_FIELDS = frozenset(
     }
 )
 _SPLIT_FIELDS = frozenset({"method", "salt_sha256"})
+_INHERITED_SPLIT_FIELDS = frozenset(
+    {"method", "salt_sha256", "source_library_semantic_sha256"}
+)
 _CAPTURE_FIELDS = frozenset(
     {
         "snapshot_schema",
@@ -136,8 +140,16 @@ class RegionArtifactLibrary:
             manifest["split_contract"],
             "split_contract",
         )
-        _require_fields(split_contract, _SPLIT_FIELDS, "split_contract")
-        if split_contract["method"] != REGION_ARTIFACT_SPLIT_METHOD:
+        split_method = split_contract.get("method")
+        if split_method == REGION_ARTIFACT_SPLIT_METHOD:
+            _require_fields(split_contract, _SPLIT_FIELDS, "split_contract")
+        elif split_method == REGION_ARTIFACT_INHERITED_SPLIT_METHOD:
+            _require_fields(
+                split_contract,
+                _INHERITED_SPLIT_FIELDS,
+                "split_contract",
+            )
+        else:
             raise ValueError("unsupported Region artifact split method")
         salt = _sha256(split_contract["salt_sha256"], "split salt")
 
@@ -147,7 +159,10 @@ class RegionArtifactLibrary:
         if not isinstance(raw_entries, list) or len(raw_entries) != count:
             raise ValueError("Region artifact entries differ from artifact_count")
         entries = tuple(_parse_entry(value) for value in raw_entries)
-        _validate_entries(entries, heldout_count, salt)
+        source_labels = None
+        if split_method == REGION_ARTIFACT_INHERITED_SPLIT_METHOD:
+            source_labels = _inherited_split_labels(source, split_contract, salt)
+        _validate_entries(entries, heldout_count, salt, source_labels)
         expected_digest = _manifest_digest(manifest)
         if _sha256(
             manifest["library_semantic_sha256"],
@@ -435,11 +450,11 @@ def _validate_capture_contract(value: Mapping[str, Any]) -> None:
         "same_world_confirmation_passes",
     ) != REGION_STABILITY_PASSES:
         raise ValueError("Region library confirmation pass count changed")
+    server_version = _nonempty(value["server_version"], "server_version")
     if value["chunk_api_sha256"] != _canonical_sha256(
-        certified_chunk_api_manifest()
+        certified_chunk_api_manifest(server_version)
     ):
         raise ValueError("Region library chunk API fingerprint changed")
-    _nonempty(value["server_version"], "server_version")
     _sha256(value["native_evidence_jar_sha256"], "native evidence bridge")
     _nonempty(value["worldgen_provider"], "worldgen_provider")
     _nonempty(value["worldgen_version"], "worldgen_version")
@@ -493,6 +508,7 @@ def _validate_entries(
     entries: tuple[RegionArtifactEntry, ...],
     heldout_count: int,
     salt: str,
+    source_labels: Mapping[int, str] | None = None,
 ) -> None:
     semantics = [entry.semantic_sha256 for entry in entries]
     if semantics != sorted(semantics):
@@ -505,22 +521,83 @@ def _validate_entries(
     identities = [(entry.seed, entry.core_min_chunk_xz) for entry in entries]
     if len(set(identities)) != len(entries):
         raise ValueError("Region artifact seed/core identities must be unique")
-    expected_heldout = set(
-        sorted(
-            semantics,
-            key=lambda semantic: (
-                _split_rank(salt, semantic),
-                semantic,
-            ),
-        )[:heldout_count]
-    )
+    if source_labels is None:
+        expected_heldout = set(
+            sorted(
+                semantics,
+                key=lambda semantic: (
+                    _split_rank(salt, semantic),
+                    semantic,
+                ),
+            )[:heldout_count]
+        )
+    else:
+        expected_heldout = _inherited_heldout(entries, source_labels)
     actual_heldout = {
         entry.semantic_sha256
         for entry in entries
         if entry.split == "heldout"
     }
-    if actual_heldout != expected_heldout:
+    if actual_heldout != expected_heldout or len(actual_heldout) != heldout_count:
         raise ValueError("Region artifact split assignment changed")
+
+
+def _inherited_heldout(
+    entries: tuple[RegionArtifactEntry, ...],
+    source_labels: Mapping[int, str],
+) -> set[str]:
+    seeds = [entry.seed for entry in entries]
+    if len(set(seeds)) != len(seeds) or set(seeds) != set(source_labels):
+        raise ValueError("Region artifact seeds differ from the split source")
+    return {
+        entry.semantic_sha256
+        for entry in entries
+        if source_labels[entry.seed] == "heldout"
+    }
+
+
+def _inherited_split_labels(
+    manifest_path: Path,
+    split_contract: Mapping[str, Any],
+    salt: str,
+) -> dict[int, str]:
+    """Return seed -> split from the sibling library the split contract names.
+
+    The sibling is found as the provider finds libraries: a sibling folder's
+    manifest whose ``library_semantic_sha256`` equals the recorded source digest.
+    Loading it re-checks that digest, so the labels are the ones it was built with.
+    """
+
+    digest = _sha256(
+        split_contract["source_library_semantic_sha256"],
+        "source library semantic SHA-256",
+    )
+    resolved = manifest_path.resolve()
+    matches = []
+    for candidate in sorted(resolved.parent.parent.glob("*/manifest.json")):
+        if candidate.resolve() == resolved:
+            continue
+        value = _load_json_object(candidate)
+        if (
+            value.get("schema") == REGION_ARTIFACT_LIBRARY_SCHEMA
+            and value.get("library_semantic_sha256") == digest
+        ):
+            matches.append(candidate)
+    if len(matches) != 1:
+        raise ValueError(
+            "Region artifact split source must be exactly one sibling library, "
+            f"found {len(matches)}"
+        )
+    source = RegionArtifactLibrary.load(matches[0], verify_artifacts=False)
+    source_split = source.manifest["split_contract"]
+    if source_split["method"] != REGION_ARTIFACT_SPLIT_METHOD:
+        raise ValueError("Region artifact split source must use sha256_rank_v1")
+    if _sha256(source_split["salt_sha256"], "split salt") != salt:
+        raise ValueError("Region artifact split salt differs from its source")
+    labels = {entry.seed: entry.split for entry in source.entries}
+    if len(labels) != len(source.entries):
+        raise ValueError("Region artifact split source seeds must be unique")
+    return labels
 
 
 def _manifest_digest(manifest: Mapping[str, Any]) -> str:

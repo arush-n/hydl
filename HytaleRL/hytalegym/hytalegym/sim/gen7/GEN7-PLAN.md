@@ -374,6 +374,14 @@ command (`tools/worldgen/README.md` is the runbook). Against the 0.5.7 capture t
 5,927 cells, so the recapture is needed, not optional. Open for the owner: the swap (README steps 1 to 5) and the rebuild of path
 tables, suites, biome table and horizons, whose generators this lane could not reach or find.
 
+**Phase 3 item 2, the loader (2026-10-19; FIDELITY-0.7.2.md section (aj), coordinator addendum).** `RegionArtifactLibrary.load`
+certifies the chunk API for the manifest's own server version (`certified_chunk_api_manifest(server_version)`, 0.5.7 and 0.7.2
+pinned in `CERTIFIED_CHUNK_API_SHA256`, other versions refused) and accepts `inherited_seed_labels_v1`, whose held-out labels come
+from the one sibling library with the recorded digest; the staged 0.7.2 manifest uses it (`9dca3c71…`), so the 20-seed 0.7.2
+library loads and the provider selects it natively when traversal is not required. Next in the chain: a 0.7.2 traversal library
+(recertification builds graphs natively and is gated by the audits), a writer for the inherited method, then path tables, zoo and
+suites v7.
+
 **Phase 5, second pass on the source-pin audits (2026-10-18; FIDELITY-0.7.2.md section (al)).** 1 of 11 verified (inventory: section
 IDs, class mapping, getters, active slots and capacity byte-identical on 0.7.2; caveat recorded, the transport label says v1 while both
 bridges emit v2), 10 fail closed with their open gaps named per audit in `worldgen/source_pin_baselines_072.json`. The gate still stops at

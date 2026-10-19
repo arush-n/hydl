@@ -164,10 +164,29 @@ class ChunkApiContract:
         return y * self.size_squared + z * self.size + x
 
 
-def certified_chunk_api_manifest() -> dict[str, Any]:
-    """Canonical expected output of Java's runtime-reflected API check."""
+# Pinned fingerprints (sha256 of the canonical JSON) of the certified chunk API
+# manifest, per server line. The lines differ only in ``server_version``. 0.5.7
+# is the original line; 0.7.2 is the main line.
+CERTIFIED_CHUNK_API_SHA256 = {
+    "0.5.7": "0d729f8a3cdd8d820132c8a47a2596a4fe7cbaf345aa21116f1235f03217aa1c",
+    "0.7.2": "cb82867feed8026fff12765a4e5ad6aabc1e5aeb9181e0c73e51e96a14aee91c",
+}
 
-    return dict(_EXPECTED_FIELDS)
+
+def certified_chunk_api_manifest(
+    server_version: str = HYTALE_SERVER_VERSION,
+) -> dict[str, Any]:
+    """Canonical expected output of Java's runtime-reflected API check.
+
+    Keyed by the exact certified server version. The no-argument call keeps
+    meaning 0.5.7, so callers that pass no version do not move.
+    """
+
+    if server_version not in CERTIFIED_CHUNK_API_SHA256:
+        raise UnsupportedChunkApiError(
+            f"no certified chunk API manifest for server version {server_version!r}"
+        )
+    return dict(_EXPECTED_FIELDS, server_version=server_version)
 
 
 def is_supported_hytale_05_release(value: object) -> bool:
