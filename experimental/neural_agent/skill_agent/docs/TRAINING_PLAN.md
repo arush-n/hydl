@@ -199,8 +199,9 @@ Status (2026-10-18, late; `teaching/certificates.py`, README 2.15):
   kinematic minimum, 0 illegal decisions.
 - walk_to v1 passes T4 live: 24 of 24 on the 0.7.2 server against 24 of 24 simulated, 0 illegal
   (`teaching/certify_live.py`). look_at's T4 is not run yet. T5 and T6 need a student.
-- A2's trainer is built (`training/distill.py`, README 2.16) and a smoke runs end to end. The A2 run waits on two
-  changes: the head's offset from the body in the self token, and dropping the token types the flat world never fills.
+- A2's trainer is built (`training/distill.py`, README 2.16), and its two prep changes are in: the head's offset from
+  the body in the self token, and training batches without the token types the flat world never fills (a step about
+  ten times faster at the same loss). The A2 run is next.
 
 A teacher need not be perfect, because stage 3's practice can go past it. But a systematic teacher error is copied
 into the student, which is why nothing teaches before its certificate.

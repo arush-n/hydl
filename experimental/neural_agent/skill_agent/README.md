@@ -536,6 +536,20 @@ So the compass was held back by its labels as well as by the data. Arena's own i
 (`arena/training/imitation/native_imitation.py`, `_compass_choice`), which is outside this folder and reported to the
 owner. `--arena-only` (`body_frame_compass=False`) keeps arena's labels exactly for the parity test.
 
+**The head's yaw offset joins the self token (v5, 2026-10-18 late).** The traces carry the head yaw, and the
+generalist needs it (2.16), so the cloning dataset carries it too. v5 equals v4 apart from that column. The control
+is v5 with the column zeroed: the same network and initial parameters. Held-out agreement, three seeds, offset /
+zeroed / baseline:
+
+| held out | compass | yaw | body yaw | pitch |
+|---|---|---|---|---|
+| generated world | 0.761 / 0.765 / 0.593 | 0.896 / 0.888 / 0.905 | 0.788 / 0.796 / 0.772 | 0.920 / 0.904 / 0.934 |
+| flat | 0.814 / 0.779 / 0.745 | 0.918 / 0.903 / 0.885 | 0.836 / 0.834 / 0.792 | 0.982 / 0.980 / 0.983 |
+
+On the flat world the offset helps the yaw head on every seed (+0.015) and the compass on every seed (+0.035, with a
+wide spread). On the generated world the differences sit inside the seed spread. The trained body still runs through
+the combiner with 0 mismatches. The v4 file no longer loads, because its self tokens are 12 wide.
+
 Known limit: the opponent's position comes from its true state even on the 0.4 % of rows where it is not
 perceptible. The legal observation mode would hide it.
 
@@ -681,7 +695,8 @@ run's 15.08 ms (load 53 to 75) was the load.
 
 **What it is.** `legal_tokens(observation, *, capacities, body_yaw_degrees)` turns the environment's legal observation
 into the trunk's token sets. It never reads the simulator state; the signature takes none.
-- *Self:* meters, grounded, body yaw, pitch and speed.
+- *Self:* meters, grounded, body yaw, the head's yaw offset from the body (read from the self row, whose yaw is
+  the head's), pitch and speed.
 - *Entity:* the opponent in slot 0 when the observation marks it perceptible.
 - *Other types:* empty for now (no blocks on the flat world; inventory and kit come later).
 
@@ -697,8 +712,9 @@ opponent changes them (the positive control). Perceptibility here means:
 - line of sight;
 - within 16 blocks planar and 24 blocks in 3-D.
 
-The pair path applies no field of view yet; the simulator lane is adding it as an opt-in.
-[test: test_sa_observation_adapter.py, 10 tests, mutation-checked]
+The pair path's field of view and sensor range are opt-in since c613d22 (docs/BUILD.md E12); the flat tasks leave
+them off.
+[test: test_sa_observation_adapter.py, 13 tests; the first 10 mutation-checked]
 
 **What the legal observation does not provide:**
 - roles other than hostile;
@@ -770,15 +786,18 @@ body (bearing 180 to 270 degrees) and look points 25 to 40 degrees off the body.
 the teachers on the same seeds, seen and held out, and reports success per mode, walk pace (within 5 %), radius and
 illegal decisions. [test: test_sa_distill.py, 9 tests]
 
-**Status: built, smoke only; A2 has not run.** A 2-iteration smoke (32 lanes, 50 steps per iteration, 10,191 samples)
-ran end to end with 0 illegal decisions. Its student is untrained by design: walk 0.23 and look 0.0, against the
-teachers' 1.0 and 1.0. Two changes come before the A2 run:
-- The student cannot see where its head points. The self token carries the body yaw but not the head's offset from
-  it, so look_at cannot tell when it is done (inferred from the token layout; the fix adds the offset to the self
-  token).
-- The stored batches carry the four token types the flat world never fills (block candidates, inventory, geometry,
-  kit). Dropping them is expected to make a training step several times faster at the same loss (to be measured when
-  the change lands).
+**Status: built; the two prep changes are in; A2 has not run.** A 2-iteration smoke (32 lanes, 50 steps per iteration,
+10,191 samples) ran end to end with 0 illegal decisions, before the changes below. Its student was untrained by
+design: walk 0.23 and look 0.0, against the teachers' 1.0 and 1.0. [test: test_sa_distill.py, 11 tests]
+- **The head's offset from the body is in the self token** (`SelfToken.head_yaw_offset`, 13 features, 2026-10-18
+  late). Without it, look_at could not tell when its gaze was on target: the self token carried the body yaw, and the
+  head moves up to 45 degrees away from it. The adapter reads the head yaw from the self row's sin and cos (body 90 and
+  head 45 give -pi/4) [test: test_sa_observation_adapter.py]; the cloning dataset reads it from the traces (v5).
+- **The training batches drop the four token types the flat world never fills.** The loss is unchanged (gap 0.0 on a
+  fixed batch; largest gradient gap 7.5e-9), and a step at batch 1024 takes 0.045 s instead of 0.43 s
+  (9.6 times faster; one process, interleaved, load about 15). [test: test_loss_and_gradients_do_not_change_when_the_empty_token_types_are_dropped]
+- **The report records its provenance:** the commit, uncommitted changes in this package, the command line, the load
+  at the start and end, and the field-of-view settings (off here).
 
 ## 3. For the agent building the gen-7 simulator
 

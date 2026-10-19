@@ -470,7 +470,12 @@ class LightToken:
 
 @dataclass(frozen=True)
 class SelfToken:
-    """The agent itself: resource meters as fractions, grounded, facing and speed."""
+    """The agent itself: resource meters as fractions, grounded, facing (body yaw), the head's yaw offset from the
+    body, pitch and speed.
+
+    ``head_yaw_offset`` is the head yaw minus the body yaw, wrapped to [-pi, pi], in radians. The engine keeps it within
+    +-pi/4, and look_at needs it: the body yaw alone cannot tell when the gaze is on target.
+    """
 
     health: float
     stamina: float
@@ -482,10 +487,11 @@ class SelfToken:
     yaw: float
     pitch: float
     speed: float
+    head_yaw_offset: float = 0.0
     marked: bool = False
 
     FEATURES = ("health", "stamina", "mana", "signature_energy", "oxygen", "held_durability", "grounded",
-                "yaw_sin", "yaw_cos", "pitch", "speed", "marked")
+                "yaw_sin", "yaw_cos", "pitch", "speed", "head_yaw_offset", "marked")
 
     def __post_init__(self) -> None:
         for name in ("health", "stamina", "mana", "signature_energy", "oxygen", "held_durability"):
@@ -494,12 +500,14 @@ class SelfToken:
         object.__setattr__(self, "yaw", _number(self.yaw, "SelfToken.yaw", -math.pi, math.pi))
         object.__setattr__(self, "pitch", _number(self.pitch, "SelfToken.pitch", -math.pi / 2, math.pi / 2))
         object.__setattr__(self, "speed", _number(self.speed, "SelfToken.speed", 0.0))
+        object.__setattr__(self, "head_yaw_offset",
+                           _number(self.head_yaw_offset, "SelfToken.head_yaw_offset", -math.pi, math.pi))
         _flag(self.marked, "SelfToken.marked")
 
     def features(self) -> tuple[float, ...]:
         return (self.health, self.stamina, self.mana, self.signature_energy, self.oxygen, self.held_durability,
                 float(self.grounded), math.sin(self.yaw), math.cos(self.yaw), self.pitch, self.speed,
-                float(self.marked))
+                self.head_yaw_offset, float(self.marked))
 
 
 @dataclass(frozen=True)

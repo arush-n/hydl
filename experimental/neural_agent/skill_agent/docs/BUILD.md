@@ -157,7 +157,7 @@ every gate run recorded in `experimental/neural_agent/docs/LEDGER.md` (append-on
 **Observation as token sets, legal only.** Entity tokens with a role (enemy, ally, animal, merchant,
 player) and relative position and velocity; block-candidate tokens with faces; inventory-slot tokens;
 geometry and light tokens; a self token with health, stamina, mana, signature energy, oxygen,
-durability, grounded, yaw and pitch; held-item kit tokens (combo windows, hold thresholds, charged
+durability, grounded, yaw, the head's yaw offset from the body, and pitch; held-item kit tokens (combo windows, hold thresholds, charged
 tiers, costs) straight from the catalogue; a route-hint token set (next waypoints). The instructed
 target is marked in the set, which is how one network points at any entity or cell. Field of view and
 the 0.7.2 line-of-sight rule apply; the privileged mode is never on for a result that counts.
@@ -376,7 +376,7 @@ The joint check matches at 512 ticks at a 200 ms and at the default 20 ms host b
 
 B2's observation, recorded as the owner asked (ruling 2026-10-17, "go ahead"). The cloned body reads three
 token types the body contract already carries:
-- **self** (`SelfToken`): health, meters, grounded, facing, speed;
+- **self** (`SelfToken`): health, meters, grounded, facing, speed, and since v5 the head's yaw offset from the body;
 - **entity** (`EntityToken`): the opponent, marked, with visible and last-seen age;
 - **geometry** (`GeometryToken`): up to 64 solid, fluid, climbable or damaging cells of the trace's 9x9x9 grid,
   nearest first.

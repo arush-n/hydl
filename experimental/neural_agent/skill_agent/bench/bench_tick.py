@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import random
 import sys
@@ -126,6 +127,7 @@ def _self_token(rng: random.Random, yaw: float) -> SelfToken:
         yaw=yaw,
         pitch=rng.uniform(-1.5, 1.5),
         speed=rng.uniform(0.0, 6.0),
+        head_yaw_offset=rng.uniform(-math.pi / 4, math.pi / 4),
     )
 
 

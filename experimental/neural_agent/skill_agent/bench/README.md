@@ -5,7 +5,7 @@ Run a bench on a quiet machine and record the load average with its numbers.
 
 | Module | Lines | What it times |
 |---|---:|---|
-| `bench_tick.py` | 332 | The resolver, the combiner and the encoder at batch 1, 8 and 64. |
+| `bench_tick.py` | 334 | The resolver, the combiner and the encoder at batch 1, 8 and 64. |
 | `bench_bodies.py` | 254 | Trained-shape bodies: the trunk inside every call against the trunk once per tick, and two batched layouts. |
 | `bench_generalist.py` | 194 | The generalist: the trunk once for all agents, then one generalist forward (proof A1). |
 

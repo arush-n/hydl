@@ -6,7 +6,7 @@ middle layer, and the resolver from a request's target to what a body sees. Noth
 
 | Module | Lines | What it holds |
 |---|---:|---|
-| `surface.py` | 668 | The gen-7 surface: the token types (entity, block candidate, inventory slot, geometry, self, kit) with their `FEATURES`, the 21 gen-7 action heads (the gym's 12 plus 9 planned) and the six scopes that partition them (A1). |
+| `surface.py` | 676 | The gen-7 surface: the token types (entity, block candidate, inventory slot, geometry, self, kit) with their `FEATURES`, the 21 gen-7 action heads (the gym's 12 plus 9 planned) and the six scopes that partition them (A1). |
 | `catalogue.py` | 822 | The catalogue parser: the private `SKILL_CATALOGUE.md` rows as typed records, verb contracts (argument schema, scope, progress, stop labels), descriptions and activity programs; a JSON dump (A2). |
 | `protocol.py` | 150 | The contracts lowered to the middle layer's request records (`experimental/neural_agent/requests.py`) and the check a request must pass (A3). |
 | `references.py` | 350 | The resolver: a request's world point, entity handle or cell and face as the agent-frame vector, the entity token index and the marked block candidate (A4). |

@@ -10,7 +10,7 @@ shape ``encoder.stack_batch`` returns and ``encoder.apply_encoder`` reads.
 Tokens filled
 -------------
 * ``self``: slot 0, valid for every agent. Health, the stamina, mana, signature-energy and oxygen meters, grounded,
-  yaw as sin and cos of the body yaw, pitch, and speed.
+  yaw as sin and cos of the body yaw, the head's yaw offset from the body, pitch, and speed.
 * ``entity``: slot 0 is the opponent, read from the observation's nearby-entity row (slot 0 of ``base.entity_f32``).
   It is valid exactly when the observation publishes that row. Slots 1 onward are invalid.
 * ``block_candidate``, ``inventory_slot``, ``geometry``, ``kit``: all invalid, features zero. The flat world has no
@@ -35,7 +35,8 @@ with yaw the body yaw in degrees.
   vector would be (4.95, 0.71, 0).
 * Two observation fields are in the HEAD frame, and the adapter reads neither for positions: the self row's yaw
   sin/cos (``observation/v1/runtime/encoder.py:323``; measured sin 0.707 at head 45) and the 24-value combat prefix
-  (``reset.py:485``, ``:513``).
+  (``reset.py:485``, ``:513``). The self row's sin and cos are the head yaw, so the adapter reads them for one thing
+  only: the self token's ``head_yaw_offset``, the head yaw minus the body yaw.
 * The body yaw is not published as a value anywhere in the observation. So the self token's yaw comes from the
   caller's ``body_yaw_degrees``: the agent's own heading, which the agent knows. This is the one input beyond the
   observation. Without it the self token would have to carry the head yaw, which is the wrong frame.
@@ -169,11 +170,14 @@ def _opponent_token(base) -> tuple[jax.Array, jax.Array]:
 
 
 def _self_token(observation: LearnerCombatObservationV3, body_yaw: jax.Array) -> jax.Array:
-    """The agent's features [B, 12] (``SelfToken.FEATURES`` order); yaw is the body yaw, supplied by the caller."""
+    """The agent's features [B, 13] (``SelfToken.FEATURES`` order); yaw is the body yaw, supplied by the caller."""
 
     row = observation.base.self_f32
     meters = observation.resource_f32[:, AGENT_ENTITY, :]
     yaw = jnp.deg2rad(body_yaw)
+    head = jnp.arctan2(row[:, _SELF_INDEX["yaw_sin"]], row[:, _SELF_INDEX["yaw_cos"]])  # the head yaw, radians
+    offset = head - yaw
+    head_yaw_offset = jnp.arctan2(jnp.sin(offset), jnp.cos(offset))  # wrapped to [-pi, pi]
     forward = row[:, _SELF_INDEX["forward_velocity"]]
     right = row[:, _SELF_INDEX["right_velocity"]]
     zeros = jnp.zeros_like(yaw)
@@ -194,6 +198,7 @@ def _self_token(observation: LearnerCombatObservationV3, body_yaw: jax.Array) ->
             jnp.cos(yaw),
             row[:, _SELF_INDEX["pitch"]] * (math.pi / 2.0),
             jnp.sqrt(forward * forward + right * right),
+            head_yaw_offset,
             zeros,  # marked
         ],
         axis=1,

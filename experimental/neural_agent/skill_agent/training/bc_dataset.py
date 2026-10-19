@@ -14,13 +14,14 @@ Rows
 
 Tokens, in the agent frame of the row's NPC (``contract/surface.py``; the frame is the one
 ``contract/references.py`` gives)
-    ``self_tokens`` float32[R, 1, 12], ``SelfToken.FEATURES`` order: health = health / max_health in [0, 1];
+    ``self_tokens`` float32[R, 1, 13], ``SelfToken.FEATURES`` order: health = health / max_health in [0, 1];
     stamina, mana, signature_energy and oxygen = the frame's actor_evidence ``resource_values`` over
     ``resource_maximums`` in the slots RESOURCE_STAMINA, RESOURCE_MANA, RESOURCE_SIGNATURE_ENERGY and
     RESOURCE_OXYGEN (``hytalegym/jax/combat/mechanics/schema/contract.py``), 0 where the maximum is 0, clipped to
     [0, 1] (``meter_features``); held_durability is 0.0, since the traces carry no such field; grounded =
     on_ground > 0.5; yaw_sin and yaw_cos of the body yaw wrapped to [-pi, pi]; pitch = the head pitch clipped to
-    [-pi/2, pi/2]; speed = hypot(vx, vz); marked = 0.
+    [-pi/2, pi/2]; speed = hypot(vx, vz); head_yaw_offset = the head yaw minus the body yaw, both in radians from the
+    state (head_yaw, body_yaw), wrapped to [-pi, pi]; marked = 0.
     ``entity_tokens`` float32[R, 1, 16], ``EntityToken.FEATURES`` order, for the opponent: role_enemy = 1 (every
     matchup is mutually hostile); position = the opponent's offset from this NPC in its frame (forward, right,
     up); velocity = the opponent's velocity rotated into that frame, not normalised; visible = the NPC's
@@ -72,8 +73,9 @@ Native jitter
 
 Storage
     ``save_npz`` and ``load_npz`` keep every field: the arrays, the per-trace tuples, ``head_names``, and the
-    receipt ``{"server_version": "0.7.2", "bridge_sha256": [...], "label_rules": [...], "observation": [...]}``
-    (the distinct bridge hashes, sorted; the observation token sets: self, entity and geometry).
+    receipt ``{"server_version": "0.7.2", "bridge_sha256": [...], "label_rules": [...], "observation": [...],
+    "features": {...}}`` (the distinct bridge hashes, sorted; the observation token sets: self, entity and geometry;
+    each set's feature names in order, so a reader can tell the dataset versions apart).
 
 CLI::
 
@@ -125,8 +127,8 @@ from hytalegym.worldgen import load_native_npc_trace_artifact
 SERVER_VERSION = "0.7.2"
 WORLDS: tuple[str, ...] = ("flat", "hytale_generator")
 MOVEMENT_EPSILON = 1.0e-6
-DEFAULT_OUT = DEFAULT_TRACE_ROOT / "bc_dataset_v4.npz"  # v4: compass in the body frame (v3: geometry, meters,
-# visibility; v2: body yaw; v1: arena's)
+DEFAULT_OUT = DEFAULT_TRACE_ROOT / "bc_dataset_v5.npz"  # v5: the self token's head_yaw_offset (v4: compass in the body
+# frame; v3: geometry, meters, visibility; v2: body yaw; v1: arena's)
 GEOMETRY_CAPACITY = 64
 """Geometry tokens per row: the candidate cells nearest the NPC (``geometry_features``)."""
 SCENARIO = re.compile(r"^(?P<matchup>.+)_(?P<world>flat|hytale_generator)_r(?P<repeat>\d+)$")
@@ -466,7 +468,7 @@ def label_frames(capture: Any, frames: Sequence[int] | np.ndarray, *,
 
 
 def token_features(own_state: Any, other_state: Any) -> tuple[np.ndarray, np.ndarray]:
-    """Self tokens [n, 12] of the NPC rows ``own_state`` and opponent entity tokens [n, 16] of ``other_state``.
+    """Self tokens [n, 13] of the NPC rows ``own_state`` and opponent entity tokens [n, 16] of ``other_state``.
 
     The formulas are the module docstring's, in the order of ``SelfToken.FEATURES`` and ``EntityToken.FEATURES``. The
     state holds neither the meters nor the visibility: those columns stay 0 here, and ``_trace_rows`` fills them.
@@ -483,6 +485,8 @@ def token_features(own_state: Any, other_state: Any) -> tuple[np.ndarray, np.nda
     self_tokens[:, _SELF["yaw_cos"]] = np.cos(wrapped)
     self_tokens[:, _SELF["pitch"]] = np.clip(own[:, _STATE["head_pitch"]], -np.pi / 2, np.pi / 2)
     self_tokens[:, _SELF["speed"]] = np.hypot(own[:, _STATE["vx"]], own[:, _STATE["vz"]])
+    head_offset = own[:, _STATE["head_yaw"]] - wrapped
+    self_tokens[:, _SELF["head_yaw_offset"]] = np.arctan2(np.sin(head_offset), np.cos(head_offset))
 
     entity_tokens = np.zeros((own.shape[0], len(ENTITY_FEATURES)))
     entity_tokens[:, _ENTITY["role_enemy"]] = 1.0
@@ -682,7 +686,9 @@ def build_dataset(root: str | Path = DEFAULT_TRACE_ROOT, *, body_yaw: bool = Tru
                  "label_rules": ["arena_native_npc_demonstrations",
                                  *(["body_yaw_from_body_steering"] if body_yaw else []),
                                  *(["compass_in_commanded_body_frame"] if body_frame_compass else [])],
-                 "observation": ["self", "entity", "geometry"]},
+                 "observation": ["self", "entity", "geometry"],
+                 "features": {"self": list(SELF_FEATURES), "entity": list(ENTITY_FEATURES),
+                              "geometry": list(GEOMETRY_FEATURES)}},
     )
 
 

@@ -32,6 +32,8 @@ import argparse
 import dataclasses
 import functools
 import json
+import os
+import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
@@ -46,7 +48,6 @@ import optax
 from experimental.neural_agent.skill_agent.bench import bench_tick
 from experimental.neural_agent.skill_agent.contract.surface import SCOPE_NAMES, scope_of
 from experimental.neural_agent.skill_agent.model.encoder import (
-    TRUNK_TYPES,
     EncoderConfig,
     apply_encoder,
     init_encoder,
@@ -580,21 +581,11 @@ def init_params(key: jax.Array, config: DistillConfig) -> dict:
 
 
 def _batch_tokens(batch: dict) -> dict:
-    """The token sets of a stored batch. Only entity and self are stored; the other trunk types are empty, as the
-    legal observation fills them (the flat world has no blocks, inventory, geometry or kit)."""
+    """The token sets of a stored batch: only entity and self, which are stored. The other trunk types are absent. The
+    encoder and the generalist read an absent type as no valid token, and the flat world fills none of them (no blocks,
+    inventory, geometry or kit). The loss equals the one with those four types zero-filled (test_sa_distill.py)."""
 
-    rows = batch["labels"].shape[0]
-    tokens = {}
-    for name, cls in TRUNK_TYPES:
-        if name in ("entity", "self"):
-            tokens[name] = (batch[name], batch[f"{name}_valid"])
-        else:
-            capacity = bench_tick.CAPACITIES[name]
-            tokens[name] = (
-                jnp.zeros((rows, capacity, len(cls.FEATURES)), dtype=jnp.float32),
-                jnp.zeros((rows, capacity), dtype=jnp.bool_),
-            )
-    return tokens
+    return {name: (batch[name], batch[f"{name}_valid"]) for name in ("entity", "self")}
 
 
 def loss_fn(params: dict, batch: dict, config: DistillConfig) -> jax.Array:
@@ -854,6 +845,36 @@ def _json_default(value: Any) -> Any:
     return str(value)
 
 
+def _git(*args: str) -> str | None:
+    """The stdout of ``git <args>`` run in this package's folder, or None when git cannot answer."""
+
+    try:
+        done = subprocess.run(["git", *args], cwd=Path(__file__).resolve().parent, capture_output=True, text=True,
+                              check=False)
+    except OSError:
+        return None
+    return done.stdout if done.returncode == 0 else None
+
+
+def _provenance() -> dict[str, Any]:
+    """What tells one report's run from another's: the commit, whether this package had uncommitted changes (the
+    shared tree always has some elsewhere), the command line, the load at the start (``main`` adds the end), and two
+    settings this trainer does not set, so E12 runs can be told apart. ``world_capabilities`` is the flat
+    environment's default (``tasks/simple_tasks.py``)."""
+
+    head = _git("rev-parse", "HEAD")
+    status = _git("status", "--porcelain", "--", str(Path(__file__).resolve().parents[1]))
+    return {
+        "base_commit": None if head is None else head.strip(),
+        "dirty": None if status is None else bool(status.strip()),
+        "argv": list(sys.argv),
+        "load_average": {"start": list(os.getloadavg()), "end": None},
+        "world_capabilities": "open_flat",
+        "view_sector_full_angle_radians": None,
+        "legal_observation_sensor_range": False,
+    }
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     defaults = DistillConfig()
     parser = argparse.ArgumentParser(description="DAgger distillation of walk_to and look_at into the generalist.")
@@ -868,6 +889,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     config = DistillConfig(iterations=args.iterations, lanes=args.lanes, steps=args.steps, seed=args.seed)
+    provenance = _provenance()
     started = time.perf_counter()
     result = run_dagger(config)
     evaluation = {}
@@ -878,6 +900,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "teacher": evaluate(result.params, seed=args.eval_seed, lanes=args.eval_lanes, held_out=held_out,
                                 policy=teacher_policy, config=config),
         }
+    provenance["load_average"]["end"] = list(os.getloadavg())
     samples = int(result.dataset["labels"].shape[0])
     bytes_per_sample = sum(value[0].nbytes for value in result.dataset.values()) if samples else 0
     report = {
@@ -897,6 +920,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         },
         "evaluation": evaluation,
         "seconds": round(time.perf_counter() - started, 1),
+        "provenance": provenance,
     }
     if args.params_out:
         save_params(args.params_out, result.params)
