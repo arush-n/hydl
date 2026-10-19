@@ -1,0 +1,317 @@
+{
+ "doors": [
+  {
+   "claim": "vertical_transition.side_test (dot(block_to_actor, yaw_normal) < 0)",
+   "locator": "0.7.2 DoorBlockUtils.isInFrontOfDoor(Vector3i,Rotation,Vector3d)Z; 0.5.10 DoorInteraction.isInFrontOfDoor; identical instruction sequence (sin/cos of yaw, direc",
+   "methods": [
+    "DoorBlockUtils.isInFrontOfDoor",
+    "DoorInteraction.isInFrontOfDoor"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "vertical_transition.closed_actor_front (OpenDoorIn)",
+   "locator": "DoorInteraction.interactWithBlock",
+   "methods": [
+    "DoorInteraction.interactWithBlock"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "vertical_transition.closed_actor_behind (OpenDoorOut)",
+   "locator": "DoorInteraction.interactWithBlock",
+   "methods": [
+    "DoorInteraction.interactWithBlock"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "vertical_transition.open (classified as closed)",
+   "locator": "DoorBlockUtils$DoorState.fromBlockState: null gives CLOSED; any string other than OpenDoorOut or OpenDoorIn falls to CLOSED (0.7.2 offsets 0-4, 33-34)",
+   "methods": [
+    "DoorBlockUtils$DoorState.fromBlockState"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "vertical_transition.enum_to_block_state (OPENED_OUT -> OpenDoorIn; OPENED_IN -> OpenDoorOut)",
+   "locator": "fromBlockState on both jars: lookupswitch keys 0 (OpenDoorOut, ldc 45) and 1 (OpenDoorIn, ldc 59) go to offsets 96 (OPENED_IN) and 102 (OPENED_OUT); the inverse",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "vertical_transition.closed_classification (any other state is closed)",
+   "locator": "fromBlockState default branch gives CLOSED on both jars",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "double_door.partner_offset (java_int(base_hitbox_max_x)*2-1)",
+   "locator": "DoorInteraction.getDoubleDoor, identical instructions on both jars: BlockBoundingBoxes ... Box.getMax().x, d2i, iconst_2, imul, iconst_1, isub (offsets 40-45)",
+   "methods": [
+    "Box.getMax",
+    "DoorInteraction.getDoubleDoor"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "double_door.partner_yaw (yaw + 180)",
+   "locator": "Rotation.flip",
+   "methods": [
+    "Rotation.flip"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "double_door.partner_requirements (same base hitbox; root not filler; opposite physical state)",
+   "locator": "DoorInteraction.getDoubleDoor",
+   "methods": [
+    "DoorInteraction.getDoubleDoor"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "double_door.fallback (both panels try opposite direction)",
+   "locator": "DoorInteraction.checkForDoubleDoor, DoorInteraction.checkDoor",
+   "methods": [
+    "DoorInteraction.checkDoor",
+    "DoorInteraction.checkForDoubleDoor"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "unsupported_surrogate_mechanics (horizontal door, soft block break and drop, animation and sound, lock and permission)",
+   "locator": "the surrogate does not model these; 0.7.2 still has the horizontal door (Door_Horizontal, 15 assets), soft-block break (lambda breakSoftBlocksInHitbox in DoorIn",
+   "methods": [],
+   "verdict": "A"
+  }
+ ],
+ "explosion_dynamics": [
+  {
+   "claim": "phase_order (blocks, then entities, then visual effects)",
+   "locator": "ExplosionUtils.performExplosion",
+   "methods": [
+    "ExplosionUtils.performExplosion"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "within_phase_order (hash_set_iteration_unspecified)",
+   "locator": "processTargetBlocks and processTargetEntities",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "raw_damage (entityDamage*pow(1-distance/entityDamageRadius,entityDamageFalloff))",
+   "locator": "ExplosionUtils.processTargetEntity",
+   "methods": [
+    "ExplosionUtils.processTargetEntity"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "health_application (Math.round(raw_damage) before health subtraction)",
+   "locator": "DamageSystems$ApplyDamage.handle (inner class, not hashed by the audit)",
+   "methods": [
+    "DamageSystems$ApplyDamage.handle"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "wire_order (UUID_text_ascending_serialization_only)",
+   "locator": "hytale-plugin-0.7.2 NativeExplosionCandidateProbe.java",
+   "methods": [
+    "NativeExplosionCandidateProbe.java"
+   ],
+   "verdict": "A"
+  }
+ ],
+ "explosion_mutation": [
+  {
+   "claim": "entrypoint.method (performExplosion/processTargetBlocks)",
+   "locator": "ExplosionUtils.performExplosion",
+   "methods": [
+    "ExplosionUtils.performExplosion"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "entrypoint.origin (floor each axis + 0.5)",
+   "locator": "ExplosionUtils.performExplosion",
+   "methods": [
+    "ExplosionUtils.performExplosion"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "entrypoint.entity_path (disabled)",
+   "locator": "performExplosion",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "entrypoint.block_path (enabled)",
+   "locator": "ExplosionUtils.processTargetBlocks",
+   "methods": [
+    "ExplosionUtils.processTargetBlocks"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "targeting.candidates (BlockSphereUtil.forEachBlock integer radius)",
+   "locator": "BlockSphereUtil",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "targeting.occlusion (TargetUtil.getTargetBlock first valid block on ray)",
+   "locator": "TargetUtil.getTargetBlock(ChunkStore,...) 0.7.2 = TargetBuffer + BlockIterator.iterate with accept predicate, same structure as 0.5.10 World overload",
+   "methods": [
+    "BlockIterator.iterate",
+    "TargetUtil.getTargetBlock"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "targeting.loaded_chunk (chunk reference present and valid)",
+   "locator": "ExplosionUtils.processTargetBlocks",
+   "methods": [
+    "ExplosionUtils.processTargetBlocks"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "targeting.duplicate_failed_hits (avoid set)",
+   "locator": "ExplosionUtils.processTargetBlocks",
+   "methods": [
+    "ExplosionUtils.processTargetBlocks"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "damage.scale (one_minus_pow(distance/radius, falloff))",
+   "locator": "ExplosionUtils.calculateBlockDamageScale(FFF)F",
+   "methods": [
+    "ExplosionUtils.calculateBlockDamageScale"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "damage.radius_boundary (zero scale at distance >= radius)",
+   "locator": "calculateBlockDamageScale",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "damage.application (BlockHarvestUtils.performBlockDamage)",
+   "locator": "0.5.10: 8-arg wrapper (passes iconst_0) into the 11-arg full body; 0.7.2: 9-arg (explosion passes iconst_1) -> 13-arg -> damageSingleBlock (982 instructions); t",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "damage.soft_block (damage one, force scale one)",
+   "locator": "BlockHarvestUtils.damageSingleBlock",
+   "methods": [
+    "BlockHarvestUtils.damageSingleBlock"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "damage.health (BlockHealthChunk sparse absolute-position map; destroyed = health < 0 or closeToZero)",
+   "locator": "0.5.10 full body calls BlockHealthModule.get().getBlockHealthChunkComponentType, BlockHealthChunk.getBlockHealth(Vector3i), damageBlock(Instant,...), isBlockFra",
+   "methods": [
+    "BlockHealth.isDestroyed",
+    "BlockHealth.setHealth",
+    "BlockHealthChunk.getBlockHealth",
+    "BlockHealthModule.get",
+    "BlockHealthSection.getHealth"
+   ],
+   "verdict": "B"
+  },
+  {
+   "claim": "damage.filler (filler offset resolved by FillerBlockUtil)",
+   "locator": "damage body",
+   "methods": [],
+   "verdict": "A"
+  },
+  {
+   "claim": "mutation.destroy (remove block health, then WorldChunk.breakBlock)",
+   "locator": "0.7.2 destroy is performBlockBreak then BlockOperations.setBlock(EMPTY) (damageSingleBlock offsets 726-773); BlockOperations.setBlock calls BlockHealthModule.on",
+   "methods": [
+    "BlockHealthModule.onBlockReplaced",
+    "BlockOperations.setBlock",
+    "WorldChunk.breakBlock"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "mutation.partial (retained sparse block health)",
+   "locator": "BlockHarvestUtils.damageSingleBlock",
+   "methods": [
+    "BlockHarvestUtils.damageSingleBlock"
+   ],
+   "verdict": "C"
+  },
+  {
+   "claim": "mutation.controlled_scope (loaded dry direct blocks, no filler, no support cascade)",
+   "locator": "repo fixture scope plus performBlockBreak and naturallyRemoveBlock (changed on 0.7.2); whether the 0.7.2 path cascades is not decided here",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "drops.settings (1028 + 2048 when random float exceeds drop chance)",
+   "locator": "ExplosionUtils.processTargetBlocks",
+   "methods": [
+    "ExplosionUtils.processTargetBlocks"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "drops.drop_chance_one (no suppression bit when chance is 1)",
+   "locator": "ExplosionUtils.processTargetBlocks",
+   "methods": [
+    "ExplosionUtils.processTargetBlocks"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "drops.resolution (BlockHarvestUtils.getDrops then ItemComponent.generateItemDrops)",
+   "locator": "damageSingleBlock calls getDrops(BlockType,int,String,String) then BlockHarvestUtils.spawnDrops, which calls ItemComponent.generateItemDrops (offsets 793-870 an",
+   "methods": [
+    "BlockHarvestUtils.spawnDrops",
+    "ItemComponent.generateItemDrops"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "drops.stack (ItemStack item, quantity, durability, metadata)",
+   "locator": "getDrops builds ItemStack(String,int) which delegates to ItemStack(String,int,BsonDocument null) on both jars (identical 6-instruction delegate); the 3-argument",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "drops.fixture (soft ItemId is Recipe_Book_Magic_Air)",
+   "locator": "Server/Item/Items/Recipe/Recipe_Book_Magic_Air.json in 0.7.2 Assets.zip",
+   "methods": [
+    "Assets.zip",
+    "Recipe_Book_Magic_Air.json"
+   ],
+   "verdict": "A"
+  },
+  {
+   "claim": "host_publication.contract (native_explosion_mutation_host_contract_sha256)",
+   "locator": "repo identity, not a server claim; no bytecode carries it",
+   "methods": [],
+   "verdict": "C"
+  },
+  {
+   "claim": "host_publication.evidence_phase / geometry_refresh / incomplete_after_execution / unsupported_or_overflow",
+   "locator": "bridge: ExplosionMutationCodec.java:136-137 packs resync_required from the probe; NativeExplosionMutationProbe.java:798-803 checks overflow == (total > capacity",
+   "methods": [
+    "ExplosionMutationCodec.java",
+    "NativeExplosionMutationProbe.java"
+   ],
+   "verdict": "C"
+  }
+ ]
+}

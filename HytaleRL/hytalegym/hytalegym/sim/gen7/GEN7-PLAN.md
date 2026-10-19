@@ -384,6 +384,14 @@ without the variable. Findings beyond the pins: `EntityScaleComponent` is a phys
 several (ad) "removed" members were signature changes; the explosion host contract is keyed to 0.5.7 digests. Phase 5's gate stays
 open until the ten audits are re-derived claim by claim.
 
+**Phase 5, classification of the ten failing audits (2026-10-19; FIDELITY-0.7.2.md section (al), classification addendum).** Four
+of ten classified before the Haiku weekly limit stopped the lanes: `explosion_dynamics` A (pin only; accepted, 2 of 11 verified),
+`doors` B on content (two new vertical door assets; the door mechanics identical), `explosion_mutation` B on one claim (block
+health stored per section, not per chunk map; the behaviour claims hold), `navigation` C (no claim false, three undecided). Six
+not classified: `perception`, `entity_geometry`, `actor_world_state`, `locomotion`, `crafting`, `mutable_blocks`. Evidence per
+claim in `tools/source_pins/evidence_072/`; the claim-level pin design that lets the next release line re-derive only changed
+methods is in `tools/source_pins/README.md`. The gate still stops at `perception`.
+
 **Phase 4 stubs, offline design pass (2026-10-18; `sim/gen7/mechanics/DESIGNS-072.md`).** The thirteen unimplemented switches
 now have a design record each (authored 0.7.2 facts with their class or asset, the hook target, the state needed, the receipt and a
 probe) and thirteen probes under `tests/fidelity/combat/gen7_probes/` that load and take the port pair as arguments. Facts that

@@ -1,0 +1,33 @@
+item JSON entries 3960 unique stems 3960 duplicate stems 0
+load errors 0 []
+TICK_ROWS 17
+  TICK Soil_Grass random=SpreadTo scheduled=None
+  TICK Soil_Grass_Burnt random=SpreadTo scheduled=None
+  TICK Soil_Grass_Burnt_Full random=SpreadTo scheduled=None
+  TICK Soil_Grass_Cold random=SpreadTo scheduled=None
+  TICK Soil_Grass_Cold_Full random=SpreadTo scheduled=None
+  TICK Soil_Grass_Deep random=SpreadTo scheduled=None
+  TICK Soil_Grass_Deep_Full random=SpreadTo scheduled=None
+  TICK Soil_Grass_Dry random=SpreadTo scheduled=None
+  TICK Soil_Grass_Dry_Full random=SpreadTo scheduled=None
+  TICK Soil_Grass_Full random=SpreadTo scheduled=None
+  TICK Soil_Grass_Sunny random=SpreadTo scheduled=None
+  TICK Soil_Grass_Sunny_Full random=SpreadTo scheduled=None
+  TICK Soil_Grass_Wet random=SpreadTo scheduled=None
+  TICK Soil_Grass_Wet_Full random=SpreadTo scheduled=None
+  TICK Soil_Leaves random=SpreadTo scheduled=None
+  TICK Soil_Leaves_Full random=SpreadTo scheduled=None
+  TICK Test_PlaceBlockProcedure random=PlaceBlock scheduled=None
+FALLING_ROWS 11
+  FALL {'asset_id': 'Cocoon_Spider_Cave', 'impact': 'Break', 'hitbox_collision_config': None, 'has_explosion_config': False, 'support_drop_type': 'Fall'}
+  FALL {'asset_id': 'Debug_Falling_Barrel', 'impact': 'Break', 'hitbox_collision_config': 'HardCollision', 'has_explosion_config': False, 'support_drop_type': 'Fall'}
+  FALL {'asset_id': 'Debug_Falling_Explosive', 'impact': 'Explode', 'hitbox_collision_config': 'HardCollision', 'has_explosion_config': True, 'support_drop_type': 'Fall'}
+  FALL {'asset_id': 'Furniture_Goblin_Pot_Loot', 'impact': 'Break', 'hitbox_collision_config': 'HardCollision', 'has_explosion_config': False, 'support_drop_type': 'Fall'}
+  FALL {'asset_id': 'Spider_Cocoon_Falling', 'impact': 'Break', 'hitbox_collision_config': None, 'has_explosion_config': False, 'support_drop_type': 'Fall'}
+  FALL {'asset_id': 'Survival_Trap_Grass', 'impact': 'Break', 'hitbox_collision_config': 'HardCollision', 'has_explosion_config': True, 'support_drop_type': 'Break'}
+  FALL {'asset_id': 'Throwable_Explosive_Barrel', 'impact': 'Explode', 'hitbox_collision_config': 'HardCollision', 'has_explosion_config': True, 'support_drop_type': 'Fall'}
+  FALL {'asset_id': 'Throwable_Explosive_Barrel_Gobliterator', 'impact': 'Explode', 'hitbox_collision_config': 'HardCollision', 'has_explosion_config': True, 'support_drop_type': 'Fall'}
+  FALL {'asset_id': 'Trap_Ancient_Platform', 'impact': 'Break', 'hitbox_collision_config': 'HardCollision', 'has_explosion_config': True, 'support_drop_type': 'Fall'}
+  FALL {'asset_id': 'Trap_Ice', 'impact': 'Break', 'hitbox_collision_config': 'HardCollision', 'has_explosion_config': True, 'support_drop_type': 'Break'}
+  FALL {'asset_id': 'Trap_Slate', 'impact': 'Break', 'hitbox_collision_config': 'HardCollision', 'has_explosion_config': True, 'support_drop_type': 'Break'}
+GATHER_TYPES_OBSERVED 22 ['Benches', 'Branches', 'Cloths', 'DungeonBlocks', 'GoblinMetal', 'Metals', 'OreAdamantite', 'OreCobalt', 'OreCopper', 'OreGold', 'OreIron', 'OreMithril', 'OreSilver', 'OreThorium', 'Pickaxe_Tier0', 'Rocks', 'SoftBlocks', 'SoftWoods', 'Soils', 'Unbreakable', 'VolcanicRocks', 'Woods']

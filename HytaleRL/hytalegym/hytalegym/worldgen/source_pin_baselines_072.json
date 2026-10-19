@@ -10,12 +10,13 @@
     "server_jar_sha256": "23f71f03763422ce7c04df191db49cd0e7d87d43b12baad75c43fdc202410aff"
   },
   "recorded_from": "live-free offline read of the installed 0.7.2 Server/HytaleServer.jar and Assets.zip",
-  "status": "observed; semantic baseline verified for 1 of 11 audits (inventory, with a recorded caveat); the other 10 fail closed, each with the open gaps named in its entry",
+  "status": "observed; semantic baseline verified for 2 of 11 audits (inventory with a recorded caveat; explosion_dynamics with recorded caveats); B for perception, locomotion, doors, explosion_mutation, mutable_blocks, entity_geometry; C for navigation, actor_world_state, crafting (open_gaps name each claim's verdict, evidence and, for B, the 0.7.2 behaviour and construct)",
   "notes": [
     "Body-change counts are javap bodies with column whitespace collapsed, keyed by method signature (tools/source_pins/rebaseline.py changed). The phase-5 counts of 2026-10-18 were not whitespace-normalised: PositionCache showed 40 changed of 53 common methods, and 17 of 54 after normalisation (the 54 include <clinit>).",
     "Verified means the audit's source claims were read against the 0.7.2 bytecode or bridge code, not that the script's hash was recorded. verified_claims and caveats name the evidence; confirmed_on_072 lists what was read on a fail-closed audit.",
     "Several phase-5 'removed' entries were signature changes: ExplosionUtils.performExplosion (Rotation3f added), WorldUtil.getPackedMaterialAndFluidAtPosition and findFluidBlock (ChunkStore parameter). BlockHarvestUtils.performBlockDamage has three overloads on 0.7.2 and Rotation.add keeps its instance overload.",
-    "Gate hazard, not a 0.7.2 finding: the crafting audit reads APPDATA in its argparse default, and the gate sets neither APPDATA nor HYTALE_ASSETS_ZIP, so on macOS the crafting audit raises under the gate once the earlier audits pass (the observe tool sets a placeholder APPDATA)."
+    "Gate hazard, not a 0.7.2 finding: the crafting audit reads APPDATA in its argparse default, and the gate sets neither APPDATA nor HYTALE_ASSETS_ZIP, so on macOS the crafting audit raises under the gate once the earlier audits pass (the observe tool sets a placeholder APPDATA).",
+    "2026-10-18 lane audits_classify: claim-level classification in open_gaps (B, C) and confirmed_on_072 (A). The four analysis agents for perception/entity_geometry, actor_world_state/locomotion, navigation/crafting and mutable_blocks stopped on the weekly API limit (resets 2026-10-23); their unfinished leaves are C by top-level key, and navigation's file was written before the stop. Previous-pass gap text is superseded; git history keeps it."
   ],
   "audits": {
     "perception": {
@@ -50,13 +51,17 @@
         "com/hypixel/hytale/server/npc/role/support/PositionCache.class": "9a12cfab97d768548472854e7908458bda82c77b9ef106a243861dd5c44ebc3e"
       },
       "open_gaps": [
-        "Unloaded-chunk LOS (claim unloaded_chunk: blocked): LocalCachedChunkAccessor is absent on 0.7.2 with no moved copy. The rule now runs through PositionCache$LineOfSightBuffer.resolveSection (inner class, not pinned). A loaded column with no BlockSection takes the null-section branch of lambda$hasLineOfSightInternal$1, which is not re-derived.",
-        "Entity-body LOS (entity_body_blocks_los: false) rests on PositionCache.testLineOfSightEntity, changed on 0.7.2 and not re-derived. hasLineOfSight reads a cached roleIndex field where 0.5.7 called role.getRoleIndex().",
-        "Channel and light contracts (getHeight, getTint, sky and block light readiness, ChunkLightingManager, FloodLightCalculation, ChunkStore initialisation) sit on pinned classes that changed: 2 of 26 byte-identical to the 0.5.7 pin, 1 absent, 103 changed bodies in 806 common methods. Not re-derived.",
-        "The projected-distance declarations have no recorded 0.7.2 value, so the audit's matches_0_5_7_baseline is false even with a semantic hash recorded. The verifier does not read that flag."
+        "projected_distance_declarations [B] Assets.zip 0.7.2 via the audit's own _projected_distance_declarations: 17 live declarations against 11 expected: 8 in common, 3 expected declarations absent (CAE_Goblin_Ogre.json, CAE_Skeleton_Praetorian.json under Balancing/Intelligent), 9 new (CAE_Bear_Voidtaken.json, Goblin_Dungeon/CAE_Dungeon_Feastmaster_Boss.json, Goblin_New/CAE_Goblin_Glutton.json, Undead/CAE_Skeleton_Elit...",
+        "projected_distance_values_boolean [C] payload check: the live values in the 17 entries were shown as True in the sample; the boolean test over all entries was not printed in this pass",
+        "effective_component_selectors [C] MotionControllerBase, MotionControllerWalk, MotionControllerFly, MotionControllerDive component selectors: not re-derived",
+        "component_selector_contract.* [C] MotionController selector path: not re-derived",
+        "los_contract.perception.unloaded_chunk [C] PositionCache lambda$hasLineOfSightInternal$0 (0.7.2): the previous pass confirmed this by reading the lambda; not re-read in this pass",
+        "los_contract.hit_confirmation.* and los_contract.cache.* [C] HorizontalSelector.RuntimeSelector.tick, HitDetectionExecutor.LineOfSightProvider, PositionCache: not re-derived",
+        "chunk_perception_channels.* [C] ChunkStore, BlockSection, ChunkLightData, ChunkLightingManager, FloodLightCalculation: the previous pass records 103 changed bodies in the light and channel classes; not re-derived",
+        "native_perception_channel_capture, native_region_light_capture, native_los_evidence_capture, section_aggregates, region_delta [C] repo-side contract functions (worldgen): not re-derived; repo-side"
       ],
       "confirmed_on_072": [
-        "Unloaded start column returns false (blocked) in PositionCache lambda$hasLineOfSightInternal$0: resolveSection returns false, then the lambda returns false (0.5.7: getChunkIfInMemory == null returns false)."
+        "previous pass (not re-read here): unloaded start column returns false (blocked) in PositionCache lambda$hasLineOfSightInternal$0"
       ]
     },
     "actor_world_state": {
@@ -82,10 +87,15 @@
         "com/hypixel/hytale/server/npc/movement/controllers/MotionControllerWalk.class": "b8bb0c895bef7e0b3530ca0f8c6b16f3460d970aa5e130d25393ffa46b776efe"
       },
       "open_gaps": [
-        "Submersion: WorldUtil.getPackedMaterialAndFluidAtPosition, findFarthestEmptySpaceAbove/Below and findFluidBlock are re-signatured to take ChunkStore directly (0.5.7: Ref plus ComponentAccessor). LivingEntity.getPackedMaterialAndFluidAtBreathingHeight changed (1 body). The fill-height and breathing reads are not re-derived.",
-        "Fall state: MotionControllerWalk.computeNewFallSpeed, computeMove, executeMove and findDropBlockCollision changed on 0.7.2; the fall-accumulation and landing claims are not re-derived.",
-        "Collision: CollisionConfig.canCollide (3 bodies), CollisionModule.processCollision and validatePosition changed. 37 changed bodies in 17 pinned classes (4 byte-identical to the 0.5.7 pin)."
-      ]
+        "fall_state.* [C] LivingEntity.currentFallDistance; MotionControllerWalk.computeNewFallSpeed (changed on 0.7.2, previous pass): not re-derived",
+        "breathing_state.* [C] TargetUtil.getLook (changed on 0.7.2, previous pass), BreathingCheckEvent, DamageSystems$BreathingSystem: not re-derived",
+        "compiled_provider_boundary.* [C] repo-side provider: not re-derived",
+        "controller_medium.* [C] SensorInWater, MotionControllerBase.inWater: not re-derived",
+        "submersion.* [C] WorldUtil (now takes ChunkStore; 0.5.7 took Ref and ComponentAccessor, previous pass): the signature change is recorded; the semantics were not re-derived",
+        "drop.* [C] MotionControllerWalk.findDropBlockCollision (changed on 0.7.2, previous pass): not re-derived",
+        "stationary_traversal.* [C] CollisionConfig.canCollide, CollisionModule (changed on 0.7.2, previous pass): not re-derived"
+      ],
+      "confirmed_on_072": []
     },
     "locomotion": {
       "EXPECTED_SERVER_SHA256": "23f71f03763422ce7c04df191db49cd0e7d87d43b12baad75c43fdc202410aff",
@@ -124,10 +134,17 @@
         "Server/NPC/Roles/_Core/Tests/Motion/Test_Dive_Flee.json": "e2a278ccc7e00a5ea571fac88dcbcdb4aa856a37ac115f9c74a0df0bd2c44cf0"
       },
       "open_gaps": [
-        "MovementStates gains extraJumpsUsed (byte) after the 23 booleans, and its codec moved to MemorySegment/ReadCursor (toObject, requireBounds). The extra-jump state has no constant in the audited set; not re-derived.",
-        "MovementConfig gains MaxSlopeAngleDegrees 30 and MaxWallAngleDegrees 15 (MovementConfig.toPacket changed). The previous lane found no reader in the 0.7.2 server (FIDELITY (l)); not re-derived here.",
-        "Pinned assets: 6 of 7 differ from the 0.5.7 pins. MovementConfig/Default.json gains the two keys; the transcribed values are unchanged per FIDELITY (b), not re-read by this lane. Test_Dive_Stationary.json is added (dive roles 5 -> 6), a non-hash expectation with no recorded 0.7.2 value.",
-        "MotionControllerWalk and ClientFeature changed: 203 changed bodies in 22 pinned classes (8 byte-identical to the 0.5.7 pin)."
+        "movement_state_observation.protocol [B] com.hypixel.hytale.protocol.MovementStates: exact instance-field count (javap -p): 0.5.10 has 23 boolean fields; 0.7.2 has the same 23 boolean fields plus `public byte extraJumpsUsed;` (a 24th instance field, not boolean); the five static int constants are on both; status: confirmed; 0.7.2 behaviour: the protocol object carries an extra byte after the 23 booleans, and the br...",
+        "movement_state_observation.component / npc_update / bridge_transport / availability / client_transition_boundary [C] MovementStatesComponent, MovementStatesSystem, bridge codec: not re-derived in this pass",
+        "npc_walk_movement_state_producer.* [C] repo producer (jax/world) citing Role.updateMovementState and MovementStatesSystem: not re-derived; repo-side",
+        "walk_steering.* [C] MotionControllerWalk.computeHeading; BuilderMotionControllerWalk: computeHeading changed on 0.7.2 (previous pass); not re-derived",
+        "sprint.master_fallback_forward_sprint_multiplier [C] MovementConfig class default (not a float literal in the 0.7.2 server bytecode, per the analysis agent): the source of 1.65 was not located in the assets read here",
+        "sprint.npc_walk_controller / player_config_selection / server_stamina_scope / transition_physics_location / native_npc_oracle [C] not re-derived in this pass:",
+        "pinned assets [C] previous pass: 6 of 7 differ from the 0.5.7 pins; not re-derived here:"
+      ],
+      "confirmed_on_072": [
+        "sprint.installed_gameplay_config [A] Assets.zip 0.7.2 Server/GameplayConfigs/Default.json: \"MovementConfig\": \"Default\" (python zipfile read); confirmed",
+        "sprint.installed_forward_sprint_multiplier [A] Assets.zip 0.7.2 Server/Entity/MovementConfig/Default.json: \"ForwardSprintSpeedMultiplier\": 1.273 (python zipfile read); confirmed"
       ]
     },
     "navigation": {
@@ -160,9 +177,61 @@
         "Server/NPC/Roles/_Core/Components/Instructions/Combat/Component_Instruction_Target_Adjusted_Attack_Melee.json": "45c63f868649ddae79cf600a52d19e30faa65092bd8f617b3a3b81c5ef66b165"
       },
       "open_gaps": [
-        "AStarBase.computePath changed and now returns AStarBase$Progress. The 200 / 200 / 900 limits are instance fields (maxPathLength, openNodesLimit, totalNodesLimit) set outside computePath; the limits, lookup order and open-list order are not re-derived.",
-        "Component_Instruction_Intelligent_Chase gains DesiredAltitudeWeight (default -1), read by MotionControllerWalk and BodyMotionFindBase. Its effect on the Trork chase is neither measured nor re-derived.",
-        "The four trace assets moved (Faction/ and Instructions/Combat/ paths); the trace pins are recorded at the 0.7.2 paths by the previous lane. Template_Trork_Melee.json gains MemoriesKillRange and MemoriesUnlockedBy. 49 changed bodies in 18 pinned classes (6 byte-identical)."
+        "path_follower.native_trace.stage [C] MotionControllerBase.steer/steer0/computeMove; Role.blendAvoidance; BodyMotionFindBase.computeSteering: evidence: steer -> steer0 -> computeMove (abstract; MotionControllerWalk.computeMove) -> executeMove; no pinned class invokes Role.blendAvoidance (only computeSummedDistancePush from Role.java); PathFollower.executePath called from BodyMotionFindBase (offset 1608); the avoida...",
+        "region_adapter_boundary.rejected_probe_positions_stored [C] repo artifact writer (region/traversal.py): evidence: a storage property of the repo's artifact; no 0.7.2 bytecode decides what the writer keeps; source only states accepted-only publication (traversal.py:614); status: inferred (needs the artifact writer's field list)",
+        "region_adapter_boundary.full_astar_equivalence [C] native_navigation.py contract scope: evidence: a verification requirement (node-for-node fixture), decidable only by a live run; the repo contract scopes it to T8 and leaves the runtime follower and replan to T11; status: inferred (runtime-only)"
+      ],
+      "confirmed_on_072": [
+        "astar.source [A] AStarBase.computePath: evidence: computePath invokes AStarNode.close, getLength, getPosition, getSuccessors and buildPath(AStarNode):boolean (off.py J72 offsets 31-143); status: confirmed",
+        "astar.limits.maximum_path_length [A] BuilderBodyMotionFindBase.readConfig; AStarBase.computePath: evidence: readConfig 'MaxPathLength' default sipush 200 (readConfig offsets 494-501); BodyMotionFindBase setMaxPathLength (offsets 315-324); computePath offsets 143-150 compare getLength with maxPathLength; status: confirmed",
+        "astar.limits.open_nodes [A] BuilderBodyMotionFindBase.readConfig; AStarBase.computePath: evidence: readConfig 'MaxOpenNodes' default sipush 200 (readConfig offsets 520-527); computePath offsets 507-526 test openNodes.size() >= openNodesLimit; status: confirmed",
+        "astar.limits.total_nodes [A] BuilderBodyMotionFindBase.readConfig; AStarBase.computePath: evidence: readConfig 'MaxTotalNodes' default sipush 900 (readConfig offsets 546-553); computePath offsets 538-557 test visitedBlocks.size() >= totalNodesLimit; status: confirmed",
+        "astar.limits.limit_check [A] AStarBase.computePath: evidence: direction loop back-edge goto 180 (offset 503), loop exit if_icmpge 506 (offset 184) falls into the open-node limit test at 506-510; limit tests run once per expanded node; status: confirmed",
+        "astar.limits.storage_headroom_per_limit [A] SearchDirections.create / createDirections / countSteps; MotionControllerWalk.is2D: evidence: countSteps returns 3^n-1 when diagonal moves are on (n = axes not projected out); MotionControllerWalk.is2D() is iconst_1;ireturn; so a Walk NPC has 3^2-1 = 8 successors per expansion, the overshoot bound; status: inferred (flag-to-axis mapping of create args at AStarBase.initCo...",
+        "astar.astar_base_field_limits.open_nodes [A] AStarBase.<init>(): evidence: offset 12 bipush 80 -> openNodesLimit (constructor default; BodyMotionFindBase overwrites it at runtime via setOpenNodesLimit); status: confirmed",
+        "astar.astar_base_field_limits.total_nodes [A] AStarBase.<init>(): evidence: offset 18 sipush 400 -> totalNodesLimit (constructor default); status: confirmed",
+        "astar.runtime_default_nodes_per_tick [A] BuilderBodyMotionFindBase.readConfig; BodyMotionFindBase.continuePathFinder: evidence: readConfig 'StepsPerTick' default bipush 50 (readConfig offsets 469-476) -> nodesPerTick; continuePathFinder passes this.nodesPerTick as computePath's 4th argument (offsets 1-15); status: confirmed (ctor copy of nodesPerTick from the builder not traced)",
+        "astar.runtime_default_build_optimised_path [A] BuilderBodyMotionFindBase.readConfig; AStarBase.<init>(): evidence: AStarBase.<init> offset 30 iconst_1 (putfield at 31) -> optimizedBuildPath; readConfig 'BuildOptimisedPath' default iconst_1 (readConfig offsets 150-156); status: confirmed",
+        "astar.installed_asset_limit_overrides [A]: 0.7.2 Assets.zip JSON members; evidence: nav_craft/asset_keys.py: MaxPathLength 0, MaxOpenNodes 0, MaxTotalNodes 0, StepsPerTick 0 matching members (BuildOptimisedPath matches 1, Test_Walk_Leave.json, not a limit key); status: confirmed",
+        "astar.goal_estimate [A] BodyMotionFind.estimateToGoal(AStarBase,Vector3d,MotionController): evidence: checkcast AStarWithTarget; getTargetPosition; Vector3d.distance(Vector3dc); d2f; freturn. Identical on J05 and J72; status: confirmed",
+        "astar.grid.fractional_bits [A] AStarBase.INDEX_FRACTIONAL_BITS; positionToIndex: evidence: javap -constants gives 1; positionToIndex multiplies each axis by ldc2_w 2.0 before MathUtil.fastFloor; status: confirmed",
+        "astar.grid.position_bits [A] AStarBase.POSITION_BITS; indexFromXYZ: evidence: javap -constants gives 11; indexFromXYZ shifts x by 22 and y by 11 (bipush 22, bipush 11); status: confirmed",
+        "astar.grid.position_offset [A] AStarBase.POSITION_OFFSET; initComputePath: evidence: javap -constants gives 1024; initComputePath stores ldc2_w 1024 into indexToPositionOffsetX/Y/Z (offsets 143-171); status: confirmed",
+        "astar.grid.position_mask [A] AStarBase.POSITION_MASK; indexFromXYZ: evidence: javap -constants gives 2047; indexFromXYZ range-checks each coordinate against ldc2_w 2047 (offsets 6-41); status: confirmed",
+        "astar.successor [A] AStarBase.computePath: evidence: computePath invokeinterface MotionController.probeMove (normalised index 106, keybody.py J72); MotionController changed only addVelocity (an.py changed); status: confirmed",
+        "astar.open [A] AStarBase.addOpenNode(AStarNode,long); AStarBase.computePath: evidence: addOpenNode scans from the end while openNodes[j].getTotalCost() < cost (fcmpg, ifge 53) and inserts at j+1, so the list is descending; computePath pops remove(size-1) (offsets 120-130); status: confirmed",
+        "astar.equal_total_cost [A] AStarBase.addOpenNode(AStarNode,long): evidence: the scan moves only past strictly smaller costs (fcmpg, ifge stops on equal), so an equal-cost node lands after existing equals, nearer the pop end, and is popped first (LIFO); status: confirmed",
+        "astar.cost [A] AStarNode.initWithPredecessor; AStarBase.addOpenNode(6-arg): evidence: initWithPredecessor offsets 32-42 totalCost = travelCost + estimateToGoal; estimate from AStarEvaluator.estimateToGoal at addOpenNode offsets 27-34; status: confirmed",
+        "astar.step_cost [A] AStarBase.addOrUpdateNode; measureWalkCost; MotionControllerBase.waypointDistance: evidence: addOrUpdateNode offset 104 calls measureWalkCost; measureWalkCost invokes MotionController.waypointDistance(Vector3dc,Vector3dc); MotionControllerWalk declares no override (javap -p), so MotionControllerBase.waypointDistance = Math.sqrt(waypointDistanceSquared) (offsets 0-9); status: confirmed",
+        "astar.step_cost_projection [A] MotionControllerBase.waypointDistanceSquared(Vector3dc,Vector3dc): evidence: each axis delta is multiplied by getComponentSelector().x/y/z before squaring (offsets 0-68); identical on J05 and J72; status: confirmed",
+        "astar.native_edge_capture [A] MotionControllerWalk.probeMove; AStarBase.computePath: evidence: probeMove is public double with dreturn at offsets 45, 356, 406 (values from waypointDistance, getLastDistance, projected length); computePath compares the returned distance with 0.49999995 times the step (ldc2_w 0.49999995 at offset 238, dmul 241, dcmpg 248); status: confirmed",
+        "astar.body_motion_find_estimate [A] BodyMotionFind.estimateToGoal: evidence: estimate is org.joml.Vector3d.distance to the target position (Euclidean by JOML's API; JOML body not dumped); status: confirmed for the call; inferred for JOML semantics",
+        "astar.limit_order [A] AStarBase.computePath: evidence: same as astar.limits.limit_check (offsets 184 -> 506); status: confirmed",
+        "astar.progress [A] AStarBase$Progress: evidence: javap -p lists UNSTARTED, ABORTED, COMPUTING, ACCOMPLISHED, TERMINATED, TERMINATED_OPEN_NODE_LIMIT_EXCEEDED, TERMINATED_TOTAL_NODE_LIMIT_EXCEEDED (declaration order equals the claim order; no extra constants); status: confirmed",
+        "astar.native_probe.pathfinder [A] bridge NavigationProbeCapture: evidence: NavigationProbeCapture.java:455 new AStarWithTarget(); native_navigation.py contract \"pathfinder\": \"native_AStarWithTarget\"; status: confirmed",
+        "astar.native_probe.goal [A] NavigationProbeCapture.java:426; AStarWithTarget.initComputePath: evidence: isGoalReached compares node.getPositionIndex() with getTargetPositionIndex(); AStarWithTarget.initComputePath offsets 33-36 store positionToIndex(target) (half-cell index, both jars); status: confirmed",
+        "astar.native_probe.optimized_build_path [A] NavigationProbeCapture.java:460: evidence: pathfinder.setOptimizedBuildPath(false); status: confirmed",
+        "astar.native_probe.result [A] NavigationProbeCapture.java (result loop after the sample loop): evidence: walks node.getNextPathNode() until null, copies positions and travel costs, and throws past capacity; status: inferred (the walk is over the complete path chain; the link direction, predecessor or successor, is not traced in bytecode)",
+        "astar.native_probe.bounded_samples [A] NativeNavigationPathProbe.java:35: evidence: public static final int MAX_SAMPLES = 32; count > MAX_SAMPLES rejected (line 61); status: confirmed",
+        "astar.native_probe.ordinary_rollout_overhead [A] ClientHandler.java:250, 785-807: evidence: captureNavigationPathProbe is reached only from ClientHandler.handleNavigationPathProbe (network message); no rollout code references it (grep of the bridge tree); status: confirmed",
+        "path_follower.rejection_weight_default [A] PathFollower.<init>(); BuilderBodyMotionFindBase.readConfig: evidence: PathFollower.<init> offset 71 ldc2_w 3.0; readConfig 'RejectionWeight' default ldc2_w 3.0 (readConfig offsets 327-333); status: confirmed",
+        "path_follower.exact_reached_distance_squared [A] PathFollower.updateCurrentTarget: evidence: offsets 29-37 dcmpg against ldc2_w 1.0000000000000002E-10; d2 <= threshold sets reached; status: confirmed",
+        "path_follower.near_reached_distance_squared [A] PathFollower.updateCurrentTarget: evidence: offsets 41-57 d2 < 0.01 and d2 > currentWaypointDistanceSquared sets reached; status: confirmed",
+        "path_follower.advance [A] PathFollower.updateCurrentTarget: evidence: offsets 60-63 short-circuit to reached on the distance tests; offsets 66-95 dot = NPCPhysicsMath.dotProduct(..., getComponentSelector), reached when dot < 0; status: confirmed",
+        "path_follower.smoothing [A] PathFollower.smoothPath -> PathFollower.canMoveTo -> ProbeMoveData.canMoveTo: evidence: smoothPath invokes canMoveTo (offsets 98, 142); PathFollower.canMoveTo offset 24 invokes ProbeMoveData.canMoveTo; ProbeMoveData.canMoveTo not in the changed list; status: confirmed",
+        "path_follower.native_trace.active_motion [A] Role.getLastBodySteeringMotion; Instruction.getBodyMotion; BodyMotion.getSteeringMotion; BodyMotion.findWrappedBodyMotion: evidence: getLastBodySteeringMotion returns lastBodyMotionStep.getBodyMotion().getSteeringMotion(); getSteeringMotion default returns this; findWrappedBodyMotion is isInstance then cast; bridge NativePathFollowerTrace.java:81-84 calls it with BodyMo...",
+        "path_follower.native_trace.waypoints [A] IWaypoint: evidence: javap -p: getLength():int, getPosition():Vector3d, advance(int), next(); status: confirmed",
+        "path_follower.native_trace.steering [A] Steering: evidence: javap -p: fields translation (Vector3d), maxDistance (double); getTranslation(), getMaxDistance(); status: confirmed",
+        "path_follower.native_trace.component_selector [A] Role.getActiveMotionController; MotionController.getComponentSelector: evidence: getActiveMotionController returns field activeMotionController; PathFollower.updateCurrentTarget offset 73 invokeinterface MotionController.getComponentSelector; status: confirmed",
+        "path_follower.fixture.role [A]: 0.7.2 Assets.zip Server/NPC/Roles/Intelligent/Faction/Trork/Trork_Brawler.json; evidence: 843 bytes, sha 1566e5739850 (equals pin); a Variant of Template_Trork_Melee; status: confirmed",
+        "path_follower.fixture.state [A] Template_Trork_Melee.json: evidence: lines 355-369: Sensor State \"Chase\", nested Sensor State \".Attack\"; status: confirmed",
+        "path_follower.fixture.motion [A] Component_Instruction_Intelligent_Chase.json: evidence: no literal id in Assets.zip (0 hits); lines 247-256 BodyMotion Type \"Seek\" under the ReadPosition sensor, which the label names; status: inferred (label to BodyMotion mapping)",
+        "path_follower.fixture.sight_range [A] Template_Trork_Melee.json: evidence: Parameters ViewRange Value 15 (lines 16-19); Chase component Parameters ViewRange Value 15; status: confirmed",
+        "path_follower.fixture.hearing_range [A] Template_Trork_Melee.json: evidence: Parameters HearingRange Value 8 (lines 24-27); status: confirmed",
+        "path_follower.fixture.attack_target_range [A] Template_Trork_Melee.json: evidence: line 398 \"TargetRange\": 4 inside the Chase/.Attack branch (line 393 Component_Instruction_Target_Adjusted_Attack_Melee); status: confirmed",
+        "path_lifecycle.owner [A] BodyMotionFindWithTarget.mustRecomputePath; BodyMotionFindBase.mustRecomputePath: evidence: WithTarget.mustRecomputePath invokespecial BodyMotionFindBase.mustRecomputePath (offset 4); both classes own the trigger code; status: confirmed",
+        "path_lifecycle.replan_triggers [A] BodyMotionFindBase.mustRecomputePath; BodyMotionFindBase.computeSteering; BodyMotionFindWithTarget.mustRecomputePath: evidence: controller_obstructed: isObstructed and !isComputing -> onBlockedPath -> true; avoid_block_damage_changed: isAvoidingBlockDamage != wasAvoidingBlockDamage -> true; force_recompute_flag: computeSteering offsets 718-779 isForceRecomputePath -> forceRecompu...",
+        "region_adapter_boundary.accepted_edges [A] MotionControllerWalk.probeMove; repo region/traversal.py:614: evidence: probeMove is public double (0.7.2) and is the edge authority; traversal.py:614 publishes only edges accepted by native probe evidence; status: confirmed for the 0.7.2 method; repo side confirmed by source"
       ]
     },
     "doors": {
@@ -188,11 +257,21 @@
         "Server/Item/RootInteractions/Door/Door_Horizontal.json": "26ee6d5e7a5c1bffe3828dc38bf539d4ba7c6e4ac218883f5f9cfda229ae0c60"
       },
       "open_gaps": [
-        "DoorInteraction lost canOpenDoor, isHorizontalDoor, isInFrontOfDoor and DoorInteraction$DoorState. checkDoor now returns DoorBlockUtils$DoorState (DoorBlockUtils is new on 0.7.2 and unpinned), and checkForDoubleDoor takes DoorBlockUtils$DoorState parameters (same shape). The vertical-transition and double-door claims depend on these and are not re-derived.",
-        "BlockAccessor.class is absent on 0.7.2. Rotation.add(Rotation, Rotation) is removed (the instance add(Rotation) and toInverse remain; toInverse changed). FillerBlockUtil has 3 changed bodies and 21 added methods. 1 of 6 pinned classes is byte-identical to the 0.5.7 pin."
+        "double_door.fallback [C] DoorInteraction.checkForDoubleDoor, DoorInteraction.checkDoor: checkForDoubleDoor (one getDoubleDoor call, dump index 5-20) and checkDoor (one getDoubleDoor call) both changed shape; how the two panels fall back to each other spans both methods and was not read end to end on both jars",
+        "vertical door census [B] (no method: asset census): Assets.zip 0.7.2: Server/Item/Items/* with BlockType.IsDoor true and Interactions.Use == \"Door\": 33 (python zipfile read with the audit's own selection rule); Door_Horizontal: 15 (matches). The audit's literal 31 (0.5.7) is false on 0.7.2. The two added vertical door assets were not identified (no 0.5.7 member list is recorded in the repo). construct: none (Const..."
       ],
       "confirmed_on_072": [
-        "All 9 pinned door assets in Assets.zip are byte-identical to the 0.5.7 pins (counted from the installed archive)."
+        "previous pass: all 9 pinned door assets are byte-identical to the 0.5.7 pins (counted from the installed archive)",
+        "vertical_transition.side_test [A] confirmed: 0.7.2 DoorBlockUtils.isInFrontOfDoor(Vector3i,Rotation,Vector3d)Z; 0.5.10 DoorInteraction.isInFrontOfDoor; identical instruction sequence (sin/cos of yaw, directionTo(blockCenter, actor), dot, dcmpg, ifge)",
+        "vertical_transition.closed_actor_front [A] DoorInteraction.interactWithBlock: interactWithBlock on both jars: if isInFrontOfDoor is true the chosen state is OPENED_OUT (0.7.2 dump index 100-102 (isInFrontOfDoor call at 100, ifeq at 101); 0.5.10 dump index 115-117), and OPENED_OUT maps to OpenDoorIn (claim below); confirmed (selection, mapping); the getInteractionState argument order is the same code on both jars (...",
+        "vertical_transition.closed_actor_behind [A] DoorInteraction.interactWithBlock: same branch: false gives OPENED_IN (0.7.2 dump index 105; 0.5.10 120), which maps to OpenDoorOut; confirmed",
+        "vertical_transition.open [A] confirmed (fromBlockState), inferred (reading of \"open: closed\"): DoorBlockUtils$DoorState.fromBlockState: null gives CLOSED; any string other than OpenDoorOut or OpenDoorIn falls to CLOSED (raw offsets 4 and 7 for the null case; the default CLOSED getstatic is dump index 33-34)",
+        "vertical_transition.enum_to_block_state [A] confirmed: fromBlockState on both jars: lookupswitch keys 0 (OpenDoorOut, ldc 45) and 1 (OpenDoorIn, ldc 59) go to offsets 96 (OPENED_IN) and 102 (OPENED_OUT); the inverse mapping holds",
+        "vertical_transition.closed_classification [A] fromBlockState default branch gives CLOSED on both jars: confirmed",
+        "double_door.partner_offset [A] confirmed: DoorInteraction.getDoubleDoor, identical instructions on both jars: BlockBoundingBoxes ... Box.getMax().x, d2i, iconst_2, imul, iconst_1, isub (dump index 40-45)",
+        "double_door.partner_yaw [A] Rotation.flip: getDoubleDoor calls Rotation.flip() (dump index 73 on both jars); Rotation.flip() is add(Rotation.OneEighty) on both jars (dump index 0-3); confirmed",
+        "double_door.partner_requirements [A] DoorInteraction.getDoubleDoor: getDoubleDoor on both jars: hitbox index comparison (if_icmpne), DoorInfo.filler test (ifeq), doorState comparison (if_acmpeq), dump index 77-102; the only text difference is the moved DoorState type name; confirmed",
+        "unsupported_surrogate_mechanics [A] confirmed (existence), unmodelled: the surrogate does not model these; 0.7.2 still has the horizontal door (Door_Horizontal, 15 assets), soft-block break (lambda breakSoftBlocksInHitbox in DoorInteraction), and canOpenDoor; the list states only what the surrogate omits"
       ]
     },
     "mutable_blocks": {
@@ -279,9 +358,23 @@
         "com/hypixel/hytale/builtin/triggervolumes/effect/builtin/RunRootInteractionEffect.class": "c85b7ab9455be51f7ba4670339ed4faa4b1c56186b945482ff067a5b24534d12"
       },
       "open_gaps": [
-        "BlockHealthModule$BlockHealthSystem is absent. The block-health work moved to BlockHealthSystems (Tick, ReplicateChanges, PlaceBlockEventSystem, EnsureSection, LoadPacket, MigrateBlockHealthChunk) and a new BlockHealthSection. The tick-procedure claim is not re-derived.",
-        "WorldChunk.setBlock is removed (0 overloads on 0.7.2): a claimed placement path.",
-        "342 changed bodies in 78 pinned classes (19 byte-identical to the 0.5.7 pin, 1 absent). The asset census and tick-procedure pins are not recorded for 0.7.2."
+        "health.storage [B] BlockHarvestUtils.damageSingleBlock: 0.7.2 damage path reads and writes BlockHealthSection (getHealth(III) dump index 532, damage(III,F,Instant) 684, isFragile(III) 695) and never references BlockHealthChunk; 0.5.10 full body uses BlockHealthChunk.getBlockHealth and damageBlock (see explosion_mutation.md); status: confirmed (call targets); 0.7.2 behaviour: per-section BlockHealthSection componen...",
+        "health.damage [C] BlockHealthSection.damage(III,F,Instant): body not read in this pass",
+        "health.repair [C] BlockHealthSystems$Tick (0.7.2): not dumped; the regeneration reset at health 1.0 is described in DESIGNS-072.md section 7 (design note, not verified here)",
+        "mutation.world [B] WorldChunk (0.7.2) and BlockOperations.setBlock: WorldChunk has 0 setBlock and 0 breakBlock overloads on 0.7.2 (dump; the 0.5.10 control has setBlock and setBlockPhysics only); the 0.7.2 write path is BlockOperations.setBlock, which calls BlockAnimationModule.onBlockReplaced (dump index 153) and BlockHealthModule.onBlockReplaced (dump index 158); status: confirmed; 0.7.2 behaviour: block writes ...",
+        "mutation.break [C] BlockHarvestUtils.performBlockBreak, naturallyRemoveBlock: changed on 0.7.2 (previous pass); not re-derived",
+        "mutation.place [C] BlockPlaceUtils: not re-derived",
+        "mutation.first_run [C] BlockHarvestUtils / BlockPlaceUtils: not re-derived",
+        "mutation_outcome_certifier [C] bridge and repo contracts: bridge-side and repo-side; the synthetic fixture hash is repo-side; not re-derived",
+        "resolved_item_interactions.trigger_vocabulary [B] com.hypixel.hytale.protocol.InteractionType: the enum has 29 constants on 0.7.2 (javap -constants, fields of the enum type) and 26 on the 0.5.10 control; the claim says 25, so it was stale on the control too; status: confirmed (count); 0.7.2 behaviour: 29 interaction types; construct: none",
+        "resolved_item_interactions [C] repo and bridge contracts: not re-derived",
+        "asset_census [B] Assets.zip 0.7.2 via the audit's own _asset_block_support_census (72 s): live 0.7.2 census differs from the embedded 0.5.7 values in 6 fields: resolved_block_rows 5823 -> 6216; implicit_bottom_support_rows 88 -> 144; implicit_full_supporting_rows 617 -> 665; player_placement_deco_rows 571 -> 535; support_dependent_rows 1883 -> 2065; support_drop_counts {none 3940, break 1881, destroy 0, fall 2} ->...",
+        "installed_falling_blocks [B] _asset_falling_blocks(Assets.zip 0.7.2): 11 live entries against 2 expected; status: confirmed (computed live); construct: none",
+        "installed_resolved_procedures [C] _asset_block_tick_procedures: not computed in this pass",
+        "tick procedures and the remaining health-API claims [C] BlockHealthSystems (not dumped): not re-derived"
+      ],
+      "confirmed_on_072": [
+        "health.destroyed [A] BlockHealth.isDestroyed(float) (0.7.2): closeToZero(health) or health < 0, same predicate as 0.5.10 BlockHealth.isDestroyed(); confirmed"
       ]
     },
     "explosion_mutation": {
@@ -305,27 +398,57 @@
         "Server/Item/Items/Recipe/Recipe_Book_Magic_Air.json": "02660eb8b65af7a16608c6e0f481d8a27ccae9d8da2ebac2ac3894fea6e321e5"
       },
       "open_gaps": [
-        "ExplosionUtils.performExplosion is re-signatured (Rotation3f added), not removed. Its phase order is confirmed for explosion_dynamics; the mutation claims that run through it are not re-derived.",
-        "BlockHarvestUtils.performBlockDamage is present with 3 overloads (2 on 0.5.7); the overload used by the claimed explosion path is not re-derived.",
-        "BlockHealthChunk lost damageBlock, getBlockHealth, repairBlock, makeBlockFragile, removeBlock, isBlockFragile and createBlockDamagePackets by name (the block-health API moved). DEBUG_SHAPES is replaced by a debugShapes() method that reads SelectInteraction.SHOW_VISUAL_DEBUG. 165 changed bodies in 12 pinned classes (0 byte-identical)."
+        "targeting.loaded_chunk [C] ExplosionUtils.processTargetBlocks: 0.5.10 uses ChunkStore.getChunkReference(J) with ChunkUtil.indexChunkFromBlock; 0.7.2 uses ChunkStore.getChunkSectionReferenceAtBlock(III) and Ref.isValid; whether a loaded chunk can lack a section that holds blocks is not decided here (needs the section lifecycle)",
+        "damage.soft_block [C] BlockHarvestUtils.damageSingleBlock: 0.7.2 has an isSoft branch (dump index 382 (keybody)) with fconst_1 pushes (397, 405), but the forced-scale path and the flag that reaches it were not decided in this pass",
+        "damage.health [B]: 0.5.10 full body calls BlockHealthModule.get().getBlockHealthChunkComponentType, BlockHealthChunk.getBlockHealth(Vector3i), damageBlock(Instant,...), isBlockFragile(Vector3i), BlockHealth.setHealth (dump index 455-615 (keybody)). 0.7.2 damageSingleBlock calls BlockHealthSection.getHealth(III), damage(III,F,Instant) and isFragile(III) (dump index 513-698 (keybody)) and never references BlockHealt...",
+        "mutation.partial [C] BlockHarvestUtils.damageSingleBlock: retained health is written back via BlockHealthSection.damage and kept unless isDestroyed; the sparse storage form was not re-derived",
+        "mutation.controlled_scope [C] repo fixture scope plus performBlockBreak and naturallyRemoveBlock (changed on 0.7.2); whether the 0.7.2 path cascades is not decided here:",
+        "drops.stack [C]: getDrops builds ItemStack(String,int) which delegates to ItemStack(String,int,BsonDocument null) on both jars (identical 6-instruction delegate); the 3-argument constructor changed on 0.7.2 (ItemStack constructors changed, per the crafting gap); durability and metadata initialisation not re-derived",
+        "host_publication.contract [C] repo identity, not a server claim; no bytecode carries it: status: not decidable from the server build",
+        "host_publication.evidence_phase / geometry_refresh / incomplete_after_execution / unsupported_or_overflow [C]: bridge: ExplosionMutationCodec.java:136-137 packs resync_required from the probe; NativeExplosionMutationProbe.java:798-803 checks overflow == (total > capacity); the empty-frame, same-connection requery and fail-closed paths were not read end to end"
+      ],
+      "confirmed_on_072": [
+        "entrypoint.method [A] ExplosionUtils.performExplosion: 0.7.2 calls processTargetBlocks at bytecode offset 130; 0.5.10 at 76; confirmed (raw_J72/raw_J05)",
+        "entrypoint.origin [A] ExplosionUtils.performExplosion: 0.7.2 offsets 77-114 floor(x,y,z)+0.5; 0.5.10 offsets 24-61 identical; confirmed",
+        "entrypoint.entity_path [A] performExplosion: processTargetEntities runs only if damageEntities (0.7.2 offsets 133-137; 0.5.10 79-83); the fixture's false value is repo-side, not re-derived; confirmed (code), inferred (fixture value)",
+        "entrypoint.block_path [A] ExplosionUtils.processTargetBlocks: called unconditionally from performExplosion on both jars; block work gated by damageBlocks inside (0.7.2 processTargetBlocks, gate near offset 587-591); confirmed",
+        "targeting.candidates [A] BlockSphereUtil: 9 common methods, 0 changed; processTargetBlocks calls forEachBlock on both; confirmed",
+        "targeting.occlusion [A] TargetUtil.getTargetBlock(ChunkStore,...) 0.7.2 = TargetBuffer + BlockIterator.iterate with accept predicate, same structure as 0.5.10 World overload: status: confirmed (structure); the \"valid\" predicate ExplosionUtils.isValidTargetBlock(int,boolean) gained one rule in 0.7.2: getExplosionReactionState() != null returns true (offsets 36-40), not named by the claim, not exercised by the fixtu...",
+        "targeting.duplicate_failed_hits [A] ExplosionUtils.processTargetBlocks: 0.7.2 skips positions in the ObjectOpenHashSet (Set.contains) and adds a position when performBlockDamage returns false (offset ~618 ifne 678 then Set.add); 0.7.2 also adds non-breakable positions (isBlockBreakingAllowed, new, unclaimed); confirmed",
+        "damage.scale [A] ExplosionUtils.calculateBlockDamageScale(FFF)F: 19 instructions, byte-identical normalised body on both jars (raw offsets 8-21: fdiv (10), Math.pow (17), fsub (21)); confirmed",
+        "damage.radius_boundary [A] calculateBlockDamageScale: raw offsets 2-7: fcmpl(distance, radius) at 2, iflt 8 at 3, fconst_0 and freturn at 6-7, so distance >= radius returns 0; identical on both jars; confirmed",
+        "damage.application [A] confirmed (structure), inferred (flag meaning): 0.5.10: 8-arg wrapper (passes iconst_0) into the 11-arg full body; 0.7.2: 9-arg (explosion passes iconst_1) -> 13-arg -> damageSingleBlock (982 instructions); the forwarded boolean's meaning was not re-derived",
+        "damage.filler [A] damage body: FillerBlockUtil.unpackX/Y/Z used on both jars (0.5.10 dump index 155-161 (keybody); 0.7.2 157-166 after BlockSection.getFiller(III)); confirmed",
+        "mutation.destroy [A]: 0.7.2 destroy is performBlockBreak then BlockOperations.setBlock(EMPTY) (damageSingleBlock dump index 726-773 (keybody)); BlockOperations.setBlock calls BlockHealthModule.onBlockReplaced (dump index 158 (keybody)), which clears the entry (per DESIGNS-072 section 7, the clear chain still to confirm in the mutable_blocks evidence). WorldChunk.breakBlock is absent on 0.7.2 and on the 0.5.10 cont...",
+        "drops.settings [A] ExplosionUtils.processTargetBlocks: 0.7.2 offsets 259-279 (sipush 1028; nextFloat; blockDropChance; fcmpl; ifle; sipush 2048); 0.5.10 offsets 236-256 identical; confirmed",
+        "drops.drop_chance_one [A] ExplosionUtils.processTargetBlocks: the bit is added only when nextFloat() > chance; nextFloat is in [0,1) (Java API), so the bit is never added at chance 1; confirmed (structure), Java spec (range)",
+        "drops.resolution [A] confirmed for 0.7.2; the 0.5.10 drop path not located in this pass: damageSingleBlock calls getDrops(BlockType,int,String,String) then BlockHarvestUtils.spawnDrops, which calls ItemComponent.generateItemDrops (dump index 793-870 (keybody) and the spawnDrops show)",
+        "drops.fixture [A] Server/Item/Items/Recipe/Recipe_Book_Magic_Air.json in 0.7.2 Assets.zip: BlockType.Gathering.Soft = {\"ItemId\": \"Recipe_Book_Magic_Air\"}, Breaking null (python zipfile read); confirmed"
       ]
     },
     "explosion_dynamics": {
       "EXPECTED_SERVER_SHA256": "23f71f03763422ce7c04df191db49cd0e7d87d43b12baad75c43fdc202410aff",
-      "EXPECTED_SEMANTIC_SHA256": null,
+      "EXPECTED_SEMANTIC_SHA256": "d03a747eaa42df3ac0b0f219b84ef3efa7bdc22ecf169b90adee4151a14fcdc4",
       "CLASS_SHA256": {
         "com/hypixel/hytale/server/core/entity/ExplosionUtils.class": "d44cd12a8c0f99996e7efe33c9742ce88688b32f7f14d8115b32886723d3f322",
         "com/hypixel/hytale/server/core/modules/entity/damage/DamageSystems.class": "619a73604c012c13c02b550a65a40e8d50e802b9e9c9e395e539cf7bf65751ff"
       },
-      "open_gaps": [
-        "The host contract (hytalegym/hytalegym/worldgen/native_explosion_dynamics.py and native_explosion_ordering.py) carries the 0.5.7 ExplosionUtils digest as source_class_sha256 and the 0.5.7 DamageSystems digest. The installed classes differ, so the payload names a stale identity. The script cannot express a 0.7.2 identity without re-keying that contract, which this lane does not do.",
-        "processTargetEntity changed beyond the audited claims: the damage cause comes from config entityDamageCauseId (a null cause skips the hit; 0.5.7 used DamageCause.ENVIRONMENT), and a zero-length knockback direction falls back to (0,1,0). The native fixture sets knockback false, so this is not measured here.",
-        "wire_order (UUID text ascending) is not re-derived."
-      ],
+      "open_gaps": [],
       "confirmed_on_072": [
         "Phase order blocks, then entities, then effects: ExplosionUtils.performExplosion (0.7.2) calls processTargetBlocks, then processTargetEntities when damageEntities is set, then performExplosionEffects. The debug spheres sit behind debugShapes().",
         "Raw damage entityDamage*pow(1-d/entityDamageRadius, entityDamageFalloff): unchanged in processTargetEntity (the changed bytecode follows the positive-damage test).",
         "Math.round before health subtraction: DamageSystems$ApplyDamage.handle invokes Math.round(F)I, and its normalised body is identical on both jars (the class is not pinned)."
+      ],
+      "verified_claims": [
+        "phase_order: ExplosionUtils.performExplosion (0.7.2) calls processTargetBlocks (offset 130), processTargetEntities when damageEntities (133-149), performExplosionEffects (157); 0.5.10 same order",
+        "within_phase_order: processTargetBlocks and processTargetEntities iterate Set.iterator over fastutil hash sets (ObjectOpenHashSet, ReferenceOpenHashSet) on both jars",
+        "raw_damage: ExplosionUtils.processTargetEntity (0.7.2) entityDamage*pow(1-d/entityDamageRadius,entityDamageFalloff) at offsets 117-135, raw>0 test 138-142; same formula on 0.5.10",
+        "health_application: DamageSystems$ApplyDamage.handle (inner class, not hashed) setAmount((float)Math.round(getAmount())) offsets 76-87 then subtractStatValue 90-99 on both jars",
+        "wire_order: hytale-plugin-0.7.2 NativeExplosionCandidateProbe.java:111 sorts candidates by UUID::toString (comparator 149-150); constructor rejects non-ascending UUIDs (76-86)"
+      ],
+      "caveats": [
+        "processTargetEntity changed beyond the five claims: damage cause from ExplosionConfig.entityDamageCauseId (0.7.2 default Environment, ExplosionConfig.<init> offsets 41-44; a null cause skips the hit) and a zero-length knockback fallback (0,1,0); the fixture sets knockback false and no bridge code sets the cause; the default resolves to the Environment damage cause (asset Server/Entity/Damage/Environment.json exists; the static binding DamageCause.ENVIRONMENT was not read)",
+        "host contract (worldgen/native_explosion_dynamics.py) still names the 0.5.7 ExplosionUtils and DamageSystems digests as source identity; EXPECTED_HOST_CONTRACT_SHA256 is not recorded for 0.7.2 (not re-keyed in this lane), so the audit's matches_0_5_7_baseline stays false and the audit exits 1 while the gate passes on the semantic hash"
       ]
     },
     "crafting": {
@@ -358,10 +481,15 @@
         "com/hypixel/hytale/server/core/entity/entities/player/data/PlayerConfigData.class": "e90b0006def06258b573b7358e864ea55fcbfab527f605a38faba902fa9873ef"
       },
       "open_gaps": [
-        "CraftingManager: craftItem, isValidBenchForRecipe, getBenchTierLevel, queueCraft, tick, finishTierUpgrade and getContainersAroundBench changed (9 changed bodies; benchHasRequiredAugmentTags and resolveCraftQuantity added). The bench-gate and craft-quantity claims depend on these. The live crafting measurements (FIDELITY (s), (t), (v), (ab), (ac), (ae)) cover tiers, memories, timed and processing crafts but are not mapped to these claims.",
-        "CraftRecipeAction codec (toObject, getRecipeId, getQuantity, serialize) changed; InventoryUtils.moveItem, smartMoveItem and getSectionById changed (pickup-priority claim); ItemStack constructors and with* methods changed (crafted-stack claim); MaterialQuantity has 9 methods removed and 11 added (inventory-boundary claim).",
-        "The recipe corpus 1,947 -> 2,047 is an expectation with no recorded 0.7.2 value (EXPECTED_ASSET_METRICS). 16 of 24 pinned classes differ; 66 changed bodies in 574 common methods."
-      ]
+        "recipe_identity.* [C] old decompile file:line citations, not bytecode: not checkable from the 0.7.2 bytecode",
+        "bench_gate.* [C] bench-match predicate not located (see note): not re-derived",
+        "execution_boundary.* [C] CraftingManager.craftItem and giveOutput: not re-derived",
+        "learning.* [C] PlayerConfigData, LearnRecipeInteraction: not re-derived",
+        "craftable_count.* [C] repo-side simulator (BaseBuilderTask.java and NativeEnvironmentSession.java file:line): repo and old citations; not re-derived",
+        "inventory_boundary.* [C] not re-derived: CraftingManager.getInputMaterials, getOutputItemStack; InventoryUtils.moveItem, smartMoveItem, getSectionById (changed, previous pass); SimpleItemContainer.addOrDropItemStack",
+        "recipe corpus expectation [C] asset metrics: the previous pass records 2,047 recipes on 0.7.2 (FIDELITY (b)); not recounted in this pass, so a B cannot be stated here"
+      ],
+      "confirmed_on_072": []
     },
     "inventory": {
       "EXPECTED_SERVER_SHA256": "23f71f03763422ce7c04df191db49cd0e7d87d43b12baad75c43fdc202410aff",
@@ -395,13 +523,24 @@
         "com/hypixel/hytale/server/npc/role/support/PositionCache.class": "9a12cfab97d768548472854e7908458bda82c77b9ef106a243861dd5c44ebc3e"
       },
       "open_gaps": [
-        "scale_boundary does not hold on 0.7.2: EntityScaleBoundingBoxSystem (absent on 0.5.7) calls BoundingBox.setScale(EntityScaleComponent.getScale / Model.getScale) each tick, so EntityScaleComponent now changes the physical box and the 'diagnostic_display_network_scale' label is false for this build. No gen-7 overlay or jax module applies entity scale to a box.",
-        "perception_endpoint (entity_body_blocks_los: false) rests on PositionCache.testLineOfSightEntity, which changed; not re-derived (shared with perception).",
-        "BoundingBox: 7 of 12 common methods changed (scale, unscaledBox and scaledDetailBoxes added); 24 changed bodies in 5 pinned classes (3 byte-identical to the 0.5.7 pin). The transport schema (hytalerl_privileged_npc_snapshot_v2) is a bridge contract and was not re-read."
+        "collision_eligibility.excluded [B] TangiableEntitySpatialSystem.<clinit>: 0.7.2 query excludes Intangible (Intangible.getComponentType, Query.not, Query.and); the class has 0 references to DeathComponent (raw javap count 0 on 0.7.2; 0 in the dump on 0.5.10, whose bodies are identical); status: confirmed for this class; inferred that no other system removes dead entities from the spatial store (not checked); 0.7.2 ...",
+        "perception_endpoint.owner [C] PositionCache.testLineOfSightEntity: the entity LOS path changed on 0.7.2 (previous pass: hasLineOfSight reads a cached roleIndex field); not re-derived in this pass (analysis agent stopped on the weekly API limit)",
+        "perception_endpoint.model_present [C] PositionCache.testLineOfSightEntity: same method as above; not re-derived",
+        "perception_endpoint.model_absent [C] PositionCache.testLineOfSightEntity: same method as above; not re-derived",
+        "perception_endpoint.entity_body_blocks_los [C] PositionCache.testLineOfSightEntity: same method as above; not re-derived",
+        "scale_boundary.EntityScaleComponent [B] EntityScaleBoundingBoxSystem.tick: 0.7.2 tick: EntityScaleComponent.getScale() (offset 32), resolveBoxScale(scale, ModelComponent) (39), BoundingBox.setScale(F) (40), each tick; the component changes the physical box; status: confirmed (dump of EntityScaleBoundingBoxSystem.tick; class absent on 0.5.10 per the previous pass, not re-checked here); 0.7.2 behaviour: EntityScaleC...",
+        "scale_boundary.physical_scale_application [B] EntityScaleBoundingBoxSystem.tick: the box scale is set from the entity scale component by this system, so the scale is applied here as well as in the model path (a second application is not ruled out, see the next line); status: confirmed for setScale; inferred for the double application; construct: none",
+        "scale_boundary.double_application_forbidden [C] EntityScaleBoundingBoxSystem.resolveBoxScale: whether resolveBoxScale plus ModelSystems applies the model scale twice is not decided in this pass",
+        "transport.missing_or_invalid [C] hytale-plugin-0.7.2 PrivilegedNpcSnapshot.java, SnapshotCodec.java: the label \"physical_scene_unavailable_fail_closed\" is not emitted anywhere in the 0.7.2 bridge (grep); the error-frame path for missing input was not read end to end",
+        "class_sha256 [C] (pins): the BoundingBox, EntityScaleComponent, ModelSystems, TangiableEntitySpatialSystem and PositionCache digests; their use is covered by the claims above"
       ],
       "confirmed_on_072": [
-        "Rotation-adjusted box at unit scale: ModelSystems$UpdateBoundingBox has identical bodies on both jars, and BoundingBox.applyRotation writes unscaledBox then rescales (the identity at scale 1).",
-        "TangiableEntitySpatialSystem: no changed bodies on 0.7.2 (4 common methods)."
+        "physical_bounds.semantics [A] ModelSystems$UpdateBoundingBox: inner class ModelSystems$UpdateBoundingBox: 12 methods, identical normalised bodies on 0.5.10 and 0.7.2 (dump); confirmed (rotation part); the scale part is decided under scale_boundary",
+        "physical_bounds.producer [A] ModelSystems$UpdateBoundingBox: same evidence as above; confirmed",
+        "collision_eligibility.system [A] TangiableEntitySpatialSystem: class present on both jars, 4 methods, bodies identical; query built in <clinit>; confirmed",
+        "collision_eligibility.required [A] TangiableEntitySpatialSystem.<clinit>: <clinit> calls TransformComponent.getComponentType and BoundingBox.getComponentType while building the query (dump index list); confirmed",
+        "transport.schema [A] hytale-plugin-0.7.2 PrivilegedNpcSnapshot.java:17: the bridge emits \"hytalerl_privileged_npc_snapshot_v2\" (grep of the 0.7.2 bridge source); confirmed",
+        "transport.ordering [A] hytale-plugin-0.7.2 PrivilegedNpcSnapshot.java:79-82: spatial rows sorted by PrivilegedEntityRow.UUID_BYTE_ORDER (PrivilegedEntityRow.java:23-35: Long.compareUnsigned on the most, then least, significant bits, equal to canonical UUID text order); the \"aligned geometry rows\" part (line 49 message) was not read; status: confirmed for the spatial sort; inferred for the geometry alignment"
       ]
     }
   }
