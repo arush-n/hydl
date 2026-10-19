@@ -110,6 +110,18 @@ Scope as of 2026-10-18, from a read-only pass over the tracked code. It covers t
         PYTHONPATH=/Users/arush/hydl/HytaleRL/hytalegym /Users/arush/hydl/.venv/bin/python -c "from hytalegym.jax.evaluation import region_v6_suite_contract as f; f(traversal_manifest_path='/Users/arush/hydl/HytaleRL/artifacts/worldgen/region-library-pilot-v2/traversal-v2/traversal-manifest.json'); print('v6 reproduces its frozen SHA')"
 
 - Status on 2026-10-18: this raises `drifted` for v6. An unchecked recomputation also fails for v1 to v5 on both pilot-v2 traversal manifests. The cause is not isolated. Fix this before any suite rebuild.
+- Diagnosis (2026-10-19, read-only lane; scratch `suite_drift/`): two causes. Since the release, the suite input changed in
+  `879321e` (2026-10-18): `worldgen/region/stability.py` moved `CURRENT_NATIVE_EVIDENCE_JAR_SHA256` from `21C4B1FA` to
+  `7700D112` and its accessor now prefers `server_profile().bridge_jar_sha256`; the arsenal contract embeds that pin
+  (`jax/combat/arsenal/schema/spec.py:1230`), so v6 recomputes to `46DF509E` in the working tree. Independently, the release
+  code with the on-disk artifacts gives `58190258`, not the frozen `4A52B017`, and no on-disk traversal manifest, documented
+  digest or known bridge pin reproduces the frozen value (1,587 combinations tried), so the freeze inputs are not recoverable.
+  The library, the four frozen worlds and their edge selections all match. Under `HYTALERL_SERVER_VERSION=0.7.2` the pin
+  becomes `460054A8` and v6 gives `D9DD0390`. Consequence: a suite is per server line because its content carries the line's
+  bridge pin. The 0.7.2 suite (v7) is frozen from the promoted 0.7.2 traversal manifest under the 0.7.2 profile and keyed by
+  `server_profile().certified_version`; the 0.5.7 v6 stays historical (re-freezing it or binding a 0.5.7 v7 to the current
+  pin is an owner decision; the lane's candidate patch is `suite_drift/proposed.patch`). Pins: `tests/jax/test_region_public_benchmark.py:131-142`,
+  `evaluation/_artifact.py` (`FROZEN_REGION_SUITE_SHA256_BY_ID`), `docs/jax/arsenal-benchmark.md:221-222`.
 - A 0.7.2 suite cannot come from the current code. `REGION_LIBRARY_SEMANTIC_SHA256`, `REGION_CAPTURE_EVIDENCE_BRIDGE_SHA256` and `FROZEN_REGION_WORLDS` are 0.5.7 values (`_contracts.py:72-79, 134`), and a new frozen version is needed (`_contracts.py:816-821`). That is a code change in `hytalegym/jax/evaluation`, the owner's call.
 
 ### Reach/pursue task zoo (tracked tool, 2026-10-18)
