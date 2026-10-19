@@ -73,6 +73,8 @@ The cap is an observed bound, not a statistical one. A later run can exceed 6, a
 
 Open question before step 2 (owner's call): each library manifest records every NPZ's complete `semantic_sha256`. A library built from the staged 0.7.2 NPZ would therefore carry the NPZ's complete digest, which a fresh capture on this bridge does not reproduce. The projection digest is the stable value for this seed. Which digest identifies the 0.7.2 library is not decided here.
 
+Pointers keyed by server line (2026-10-19). The Region library folder is now chosen at call time from `server_profile().region_library`: `_region_library_manifest()` and `_traversal_library_manifest()` in `hytalegym/hytalegym/jax/world/tokens/__init__.py` (read by the staging identity behind `world_geometry_token_contract`), and `_region_manifest()` in `hytalegym/hytalegym/sim/common/bench.py` (read by the `region` workload). With `HYTALERL_SERVER_VERSION` unset or 0.5.7, both read `artifacts/worldgen/region-library-pilot-v2/` (`manifest.json` and `traversal-v2/traversal-manifest.json`). With 0.7.2, both read `artifacts/worldgen/region-library-pilot-v2-072/` at the same relative paths. The tokens and bench entries of step 4 are therefore done. `recertification.py` already resolves its folder the same way (`_default_region_library`), so step 4's line numbers for it are stale. Until `region-library-pilot-v2-072/traversal-v2/` is staged, a 0.7.2 load stops with a missing-file error on the traversal manifest, and neither module falls back to the 0.5 folder.
+
 ## Identities
 
 The 0.7.2 bridge pin, the seed, the staged NPZ and its digests, the contract file and the compare runs are recorded in `artifacts/worldgen/world-evidence-history/460054A8/STATUS.md`. They are volatile, so they stay out of this README.
@@ -206,7 +208,11 @@ First capture, in order (the report carries `reference_mode: first_capture` and 
 5. The seed-570057 region projection is compared with that contract (`region_seed_projection`, as in compare mode).
 6. The capacity report is produced for the line (`world_token_capacity`, `tests/fidelity/surrogate_world_token_benchmark.py` on the Region library, no server): `stage/world-token-capacity.json`.
 7. The stationary traversal is captured twice (`stationary_traversal_1` and `stationary_traversal_2`, `--recording-directory stage/stationary-N`). Neither has `--expect-recording`. After both finish, `_require_stationary_repeat_stable` requires the reported fields (except `captured_at_utc`, the artifact and the report digest), each artifact's sha256, and the arrays to agree (floats within 1e-12) before anything is staged.
-8. The traversal graph library is built natively (`region_traversal_graphs`), with no `--expect-manifest`.
+8. The traversal graph library is built natively (`region_traversal_graphs`), with no `--expect-manifest`. From here on the
+   run exports `HYTALERL_TRAVERSAL_MANIFEST=<stage>/traversal-v2/traversal-manifest.json` to the remaining probes (and sets it
+   around its own cascade), because the world-token identity (`hytalegym/jax/world/tokens`) reads the traversal manifest
+   beside the line's Region library, which in a first capture exists only in the stage until promotion; the promotion copies
+   the same bytes, so the identity the probes and the cascade record is the line's identity after promotion.
 9. The navigation and walk probes and the nine world-action probes run as in compare mode.
 10. The cascade is written last, reading the staged `stage/traversal-v2/traversal-manifest.json` (`derive_contract_cascade(..., traversal_manifest=...)`).
 11. The loaders and the graph's bridge check run, and the report is written with the 19 candidate rows (the 18 compare rows plus `world_capacity_report`).
@@ -310,6 +316,17 @@ First capture adds the capacity benchmark (measured 2026-10-19 on the 0.7.2 libr
 
 - 0.7.2 (first-capture inputs given, so the gate is the first stop): `HYTALERL_SERVER_VERSION=0.7.2`, pinned bridge via `--deployed-bridge`, `--expected-bridge-sha256 460054A8...CAD88D`, `--port 5556`, `--control-seed 481374900`, `--seed-projection-contract .../460054A8/fixtures/native_region_seed_projection_contract.json`, `--seed-projection-npz artifacts/worldgen/region_0.7.2_seed_570057.npz`. No server was launched. Result: Final run (20:35 UTC, the final code): `RuntimeError: World source-pin audit failed (mutable_blocks): mutable block sources differ from Hytale 0.5.7`, exit 1, raised by the gate's verify call (L206). The stage holds `source-pin-staleness-failure.json` only. The gate passed perception, actor_world_state, locomotion, navigation and doors, because the audit lane's working-tree pins (`hytalegym/hytalegym/worldgen/source_pin_baselines_072.json`, modified and uncommitted) now pin them. The committed pins (HEAD 7a260d2) pin only inventory and explosion_dynamics, so there the gate stops at perception. The first-capture inputs were parsed; the gate stopped the run before they were checked. Before the audit lane's working-tree pins (20:27 UTC, same code except the report line), the stop was perception.
 - 0.5.7 (the real 0.5 install, `v0.5` Assets and server jar, `--expected-bridge-sha256 7700D112...8D7B`): the gate passes on the 0.5.10 control. The run then stops at the bridge-identity check, because no 0.5 bridge build is on this machine. Result: `RuntimeError: deployed bridge differs from canonical world evidence: observed=460054A8E7508FE5E205AD527AFB08474B61626EE5C2212FC2A484ECFCCAD88D expected=7700D112F8BCE9A6AFFE5EEB765867E83138F67070FA82408D08E5AB948F8D7B`, exit 1, raised at L253 after the change (L232 before; the same message, moved by the helpers added above it). The gate passed on the 0.5.10 control, and the stage holds `source-pin-staleness.json` only. The same line appeared before the change.
+
+### Live runs (2026-10-19, first capture on 0.7.2)
+
+- Run 1 (16:04 to 17:18): gate, seed projection (`408D5FB2` reproduced, 5 fluid-only cells of a cap of 6), capacity report,
+  two byte-identical stationary captures, 20 graphs; stopped at the mutable-block probe, whose gate compared the audit's
+  0.5.7 literal match instead of the per-line pin (fixed in the twelve live compare scripts, `expected_source_pin`, `2d1e993`).
+- Run 2 (18:07 to 18:20, compile cache warm: stationary captures under a minute, graphs in five): the same captures, then the
+  navigation, walk and the first five world-action probes; stopped at the crafting probe, whose import chain computes the
+  world-token identity from the traversal manifest beside the Region library (absent until promotion, once the pointer
+  keyed by profile landed mid-run). Fixed by the exported `HYTALERL_TRAVERSAL_MANIFEST` above and the tokens module's
+  override and intermediate state (task #89).
 
 ### Blockers and what changed
 

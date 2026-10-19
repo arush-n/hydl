@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 from datetime import UTC, datetime
 import hashlib
 import json
@@ -13,7 +14,7 @@ import shutil
 import socket
 import subprocess
 import sys
-from typing import Any, Mapping, Sequence
+from typing import Any, Iterator, Mapping, Sequence
 
 import numpy as np
 
@@ -410,6 +411,7 @@ def _recapture_world_evidence_unlocked(
     )
     environment = os.environ.copy()
     environment["PYTHONPATH"] = str(package_root)
+    staged_traversal_manifest = graph_candidate / "traversal-manifest.json"
     for phase, command in commands:
         _update_recertification_progress(
             progress_lease,
@@ -423,6 +425,11 @@ def _recapture_world_evidence_unlocked(
             check=True,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         )
+        if reference_mode == "first_capture" and phase == "region_traversal_graphs":
+            # The world-token identity (jax/world/tokens) reads the line's traversal manifest beside its
+            # Region library. In a first capture that library exists only in the stage until promotion, so
+            # the probes after the graph step read the staged copy (promotion copies the same bytes).
+            environment[TRAVERSAL_MANIFEST_ENV] = str(staged_traversal_manifest)
 
     if reference_mode == "first_capture":
         _require_stationary_repeat_stable(
@@ -434,15 +441,16 @@ def _recapture_world_evidence_unlocked(
             phase="contract_cascade",
             phase_status="running",
         )
-        _write_json(
-            cascade_path,
-            derive_contract_cascade(
-                root,
-                expected_bridge,
-                region_root=region_root,
-                traversal_manifest=graph_candidate / "traversal-manifest.json",
-            ),
-        )
+        with _environment_override(TRAVERSAL_MANIFEST_ENV, str(staged_traversal_manifest)):
+            _write_json(
+                cascade_path,
+                derive_contract_cascade(
+                    root,
+                    expected_bridge,
+                    region_root=region_root,
+                    traversal_manifest=staged_traversal_manifest,
+                ),
+            )
     library = RegionArtifactLibrary.load(region_manifest)
     graphs = RegionTraversalGraphLibrary.load(
         graph_candidate / "traversal-manifest.json",
@@ -1006,12 +1014,31 @@ def _default_region_library(repository_root: Path) -> Path:
     return repository_root / "artifacts" / "worldgen" / folder
 
 
+#: Read at call time by hytalegym.jax.world.tokens: the traversal manifest the world-token identity uses instead
+#: of the one beside the line's Region library. A first capture points it at the staged traversal-v2.
+TRAVERSAL_MANIFEST_ENV = "HYTALERL_TRAVERSAL_MANIFEST"
+
 _PROJECTION_CONTRACT = "native_region_seed_projection_contract.json"
 _STATIONARY_RECORDING = "native_traversal_projection_v2_recording.json"
 _STATIONARY_ARTIFACT = "native_traversal_projection_v2_recording.npz"
 _STATIONARY_IGNORED = frozenset(
     {"artifact", "artifact_sha256", "captured_at_utc", "report_semantic_sha256"}
 )
+
+
+@contextlib.contextmanager
+def _environment_override(name: str, value: str) -> Iterator[None]:
+    """Set one environment variable for the duration of the block and restore it after."""
+
+    previous = os.environ.get(name)
+    os.environ[name] = value
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = previous
 
 
 def _world_capacity_report(repository_root: Path) -> Path:
