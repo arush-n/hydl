@@ -32,7 +32,7 @@ verifier stops at the first failing audit and never reads an audit's
    digests still match, and an evidence line is given. An audit you did not verify
    keeps `EXPECTED_SEMANTIC_SHA256` null and names its gaps in `open_gaps`.
 5. Gate: run `tests/worldgen/test_source_pins.py` and
-   `tests/worldgen/test_source_pin_baselines.py` (23 tests), then the verifier. Do not
+   `tests/worldgen/test_source_pin_baselines.py` (26 tests), then the verifier. Do not
    edit the audit scripts' semantics or the 0.5 constants to make an audit pass.
 
 Pitfalls found on 0.7.2:
@@ -145,13 +145,14 @@ Rules:
    census may grow), and every scalar (string, number, boolean, null) is wording that may change type. A claim
    is never dropped or added at any depth. The check cannot see a whole list record removed or added (census
    lists change length), so reviewers check list-record changes by hand.
-3. Stale text needs its override before a semantic pin stands. `STALE_CLAIM_TEXT_072` (in the gitignored
-   `tests/worldgen/test_source_pin_baselines.py`) names each audit whose module text states a claim false on
-   0.7.2, with the constants to override. A 0.7 semantic pin for one of them needs those constants in its
-   `claim_texts` first. `UNOVERRIDDEN_STALE_AT_RULE_072` is a ratchet: it lists the pins accepted before this
-   rule that still lack an override (inventory today: its `transport.schema` text says v1, and both bridges
-   emit v2). Recording that override changes inventory's observed 0.7 hash, so its semantic pin must be
-   re-accepted in the same step, and the set emptied in the test.
+3. Stale text needs its override before a semantic pin stands. `STALE_CLAIM_TEXT_072` in the tracked
+   `hytalegym/worldgen/source_pin_baselines.py` names each audit whose module text states a claim false on
+   0.7.2, with the constants to override. `pins_for` refuses a 0.7 record that carries
+   `EXPECTED_SEMANTIC_SHA256` for a listed audit unless its `claim_texts` has each listed constant, so the
+   gate enforces the rule; the on-disk test checks the same list. `UNOVERRIDDEN_STALE_AT_RULE_072` in
+   `tests/worldgen/test_source_pin_baselines.py` is a ratchet over pins accepted before the rule. It is empty
+   now (inventory's override is recorded). Recording an override changes that audit's observed 0.7 hash, so
+   its semantic pin is re-accepted in the same step.
 4. Audit scripts change by one payload line, or by moving claim constants. Each payload carries
    `"source_contract": pins.get("SOURCE_CONTRACT", SOURCE_CONTRACT)`. Perception's claims were inline in its
    payload; they now sit in the module constant `PERCEPTION_CLAIMS` (content unchanged) and enter the payload as
@@ -173,3 +174,30 @@ this repository):
   - mutable_blocks, its collector fragment: `e465a47137e5` to `a97af2381a28`.
   - perception, one re-worded `PERCEPTION_CLAIMS` leaf (`los_contract.perception.predicate`): `a86113082526` to `fb222a92d7a5`.
 - Tests: 16 before the change, 23 after (seven new rule tests).
+
+## Host contracts per server version (2026-10-19, task #84)
+
+The explosion and mutable-block host contracts name the source-class digests and fixture descriptors of the server
+they were certified on. Each such 0.5.7 value stays as it was and is paired with a 0.7.2 entry in a dictionary keyed
+by the certified version (the key `CERTIFIED_CHUNK_API_SHA256` uses). The entry is selected by
+`server_profile().certified_version`. The 0.5.10 control selects the 0.5.7 entry because its profile certifies
+0.5.7, and an unset `HYTALERL_SERVER_VERSION` selects 0.5.7.
+
+- ExplosionUtils.class digest: `native_explosion.py`, `native_explosion_mutation.py`, `native_explosion_ordering.py`
+  (the ordering constant is exported and read by `native_explosion_dynamics.py`).
+- DamageSystems.class digest: `native_explosion_dynamics.py`.
+- Evidence and cells contracts: the server labels, and the controlled-fixture descriptors in `native_mutable_blocks.py`. On
+  0.5.7 these are `BlockHealthChunk.damageBlock` and `repairBlock`. On 0.7.2 they are `BlockHealthSection.damage`
+  and `clearHealth` (javap of the installed JAR; the bridge calls `clearHealth(index)`). The 0.7.2 fixture
+  arithmetic is marked not re-derived.
+
+Known and not changed: `native_explosion_dynamics.py` keeps the 0.5.7 DamageSystems value `F5DB0A20...`, which
+does not match the 0.5.10 jar's `DamageSystems.class` (`3b2ed7e4...`, the value the explosion_dynamics audit pins).
+Changing it would move the 0.5 line, so it is recorded here.
+
+Proof (2026-10-19): on the 0.5.10 control, all six contract dumps are byte-identical before and after, and all
+eleven audit semantic hashes are unchanged. The contract-pinning tests report the same failure set before and
+after on both Assets.zip variants. On 0.7.2 the explosion_mutation and explosion_dynamics observed hashes moved
+(`00ccd47d61fb` to `03de2a855cb5`, `d03a747eaa42` to `fc89b7000856`). The cells contract's label was keyed in the same
+step (coordinator), which moves the mutable_blocks 0.7 hash as well; the 0.5.10 dumps of all six contracts stay
+byte-identical. The accepted explosion_dynamics 0.7 pin and the round-one mutable_blocks pin are re-accepted after this.

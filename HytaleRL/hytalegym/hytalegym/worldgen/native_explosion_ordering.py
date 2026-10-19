@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 
+from hytalegym.server_versions import server_profile
 from hytalegym.worldgen.native_explosion import (
     native_explosion_candidate_contract_sha256,
 )
@@ -18,6 +19,10 @@ NATIVE_EXPLOSION_ORDERING_VERSION = 1
 EXPLOSION_UTILS_CLASS_SHA256 = (
     "03FE187757565EA414053D795136044F3362246B26136B5B1A6387DDA2F6D4B5"
 )
+EXPLOSION_UTILS_CLASS_SHA256_BY_SERVER = {
+    "0.5.7": EXPLOSION_UTILS_CLASS_SHA256,
+    "0.7.2": "D44CD12A8C0F99996E7EFE33C9742CE88688B32F7F14D8115B32886723D3F322",
+}
 
 
 def native_explosion_ordering_contract() -> dict[str, object]:
@@ -28,7 +33,9 @@ def native_explosion_ordering_contract() -> dict[str, object]:
         "version": NATIVE_EXPLOSION_ORDERING_VERSION,
         "native_source": {
             "class": "com.hypixel.hytale.server.core.entity.ExplosionUtils",
-            "class_sha256": EXPLOSION_UTILS_CLASS_SHA256,
+            "class_sha256": EXPLOSION_UTILS_CLASS_SHA256_BY_SERVER[
+                server_profile().certified_version
+            ],
             "entry_point": "performExplosion",
         },
         "execution_phases": [
@@ -71,6 +78,7 @@ def native_explosion_ordering_contract_sha256() -> str:
 
 __all__ = [
     "EXPLOSION_UTILS_CLASS_SHA256",
+    "EXPLOSION_UTILS_CLASS_SHA256_BY_SERVER",
     "NATIVE_EXPLOSION_ORDERING_SCHEMA",
     "NATIVE_EXPLOSION_ORDERING_VERSION",
     "native_explosion_ordering_contract",

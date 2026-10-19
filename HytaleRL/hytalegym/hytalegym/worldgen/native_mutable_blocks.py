@@ -19,6 +19,7 @@ from hytalegym.jax.world.mutable_blocks import (
     BLOCK_SEMANTIC_KEY_WORDS,
     mutable_block_contract_sha256,
 )
+from hytalegym.server_versions import server_profile
 from hytalegym.worldgen.block_affordances import (
     BLOCK_AFFORDANCE_TAGS,
     GATHER_TYPES,
@@ -435,26 +436,50 @@ def native_mutable_block_cells_request(
     return request
 
 
+# Controlled fixture by certified server version. The 0.5.7 store is BlockHealthChunk; the 0.7.2 store is
+# BlockHealthSection (damage and clearHealth, from javap of the installed 0.7.2 server JAR). The 0.7.2
+# fixture arithmetic is not re-derived in this repository.
+_CONTROLLED_SEQUENCE_BY_SERVER = {
+    "0.5.7": {
+        "damage": "BlockHealthChunk.damageBlock_1.0_minus_0.4_is_0.6",
+        "direct_repair": (
+            "BlockHealthChunk.repairBlock_0.6_plus_0.1_removes_"
+            "the_sparse_entry_and_reads_as_full_1.0"
+        ),
+        "timed_repair": (
+            "separate_BlockHealthSystem_path_not_exercised_by_"
+            "this_endpoint"
+        ),
+    },
+    "0.7.2": {
+        "damage": (
+            "BlockHealthSection.damage(int,float,Instant)_"
+            "fixture_arithmetic_not_rederived_on_0.7.2"
+        ),
+        "direct_repair": (
+            "BlockHealthSection.clearHealth(int)_"
+            "fixture_arithmetic_not_rederived_on_0.7.2"
+        ),
+        "timed_repair": (
+            "separate_BlockHealthSystems_Tick_path_not_exercised_by_"
+            "this_endpoint_not_rederived_on_0.7.2"
+        ),
+    },
+}
+
+
 def native_mutable_block_evidence_contract() -> dict[str, object]:
     """Return the checkpoint-pinnable native evidence boundary."""
 
     return {
         "schema": NATIVE_MUTABLE_BLOCK_SCHEMA,
         "version": NATIVE_MUTABLE_BLOCK_VERSION,
-        "server_version": "0.5.7",
+        "server_version": server_profile().certified_version,
         "phases": list(NATIVE_MUTABLE_BLOCK_PHASES),
         "mutation": "controlled_flat_fixture_reversible_in_finally",
-        "controlled_sequence": {
-            "damage": "BlockHealthChunk.damageBlock_1.0_minus_0.4_is_0.6",
-            "direct_repair": (
-                "BlockHealthChunk.repairBlock_0.6_plus_0.1_removes_"
-                "the_sparse_entry_and_reads_as_full_1.0"
-            ),
-            "timed_repair": (
-                "separate_BlockHealthSystem_path_not_exercised_by_"
-                "this_endpoint"
-            ),
-        },
+        "controlled_sequence": dict(
+            _CONTROLLED_SEQUENCE_BY_SERVER[server_profile().certified_version]
+        ),
         "values": "exact_geometry_normalized_health_and_signed_counters",
         "semantic_key": (
             "sha256_words_big_endian_of_utf8_asset_id_nul_decimal_rotation"
@@ -487,7 +512,7 @@ def native_mutable_block_cells_contract() -> dict[str, object]:
     return {
         "schema": NATIVE_MUTABLE_BLOCK_CELLS_SCHEMA,
         "version": NATIVE_MUTABLE_BLOCK_CELLS_VERSION,
-        "server_version": "0.5.7",
+        "server_version": server_profile().certified_version,
         "request": {
             "positions": "little_endian_signed_int32_absolute_xyz",
             "capacity": NATIVE_MUTABLE_BLOCK_CELL_CAPACITY,

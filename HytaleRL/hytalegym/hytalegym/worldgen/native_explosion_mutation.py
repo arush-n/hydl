@@ -15,6 +15,7 @@ import json
 
 import numpy as np
 
+from hytalegym.server_versions import server_profile
 from hytalegym.worldgen.native_explosion_mutation_contract import (
     NATIVE_EXPLOSION_MUTATION_CELL_CAPACITY,
     NATIVE_EXPLOSION_MUTATION_DROP_CAPACITY,
@@ -41,6 +42,11 @@ from hytalegym.worldgen.native_mutable_blocks import (
 _EXPLOSION_UTILS_SHA256 = (
     "03FE187757565EA414053D795136044F3362246B26136B5B1A6387DDA2F6D4B5"
 )
+# The ExplosionUtils.class digest by certified server version (0.5.7 above; 0.7.2 from the installed JAR).
+_EXPLOSION_UTILS_SHA256_BY_SERVER = {
+    "0.5.7": _EXPLOSION_UTILS_SHA256,
+    "0.7.2": "D44CD12A8C0F99996E7EFE33C9742CE88688B32F7F14D8115B32886723D3F322",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,7 +148,9 @@ def native_explosion_mutation_host_contract() -> dict[str, object]:
         "wire_schema": NATIVE_EXPLOSION_MUTATION_SCHEMA,
         "native_method": NATIVE_METHOD,
         "source_class": "com.hypixel.hytale.server.core.entity.ExplosionUtils",
-        "source_class_sha256": _EXPLOSION_UTILS_SHA256,
+        "source_class_sha256": _EXPLOSION_UTILS_SHA256_BY_SERVER[
+            server_profile().certified_version
+        ],
         "request": {
             "caller_fields": (
                 "world_epoch",

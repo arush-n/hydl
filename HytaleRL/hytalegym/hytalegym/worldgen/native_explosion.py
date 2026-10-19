@@ -11,6 +11,8 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
+from hytalegym.server_versions import server_profile
+
 
 NATIVE_EXPLOSION_CANDIDATE_SCHEMA = (
     "hytalerl_native_explosion_candidate_probe_v1"
@@ -25,6 +27,10 @@ _JAX_EXPLOSION_PRODUCER_SHA256 = (
 _EXPLOSION_UTILS_CLASS_SHA256 = (
     "03FE187757565EA414053D795136044F3362246B26136B5B1A6387DDA2F6D4B5"
 )
+_EXPLOSION_UTILS_CLASS_SHA256_BY_SERVER = {
+    "0.5.7": _EXPLOSION_UTILS_CLASS_SHA256,
+    "0.7.2": "D44CD12A8C0F99996E7EFE33C9742CE88688B32F7F14D8115B32886723D3F322",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,7 +213,9 @@ def native_explosion_candidate_contract() -> dict[str, object]:
         "wire_schema": NATIVE_EXPLOSION_CANDIDATE_SCHEMA,
         "native_method": _NATIVE_METHOD,
         "source_class": "com.hypixel.hytale.server.core.entity.ExplosionUtils",
-        "source_class_sha256": _EXPLOSION_UTILS_CLASS_SHA256,
+        "source_class_sha256": _EXPLOSION_UTILS_CLASS_SHA256_BY_SERVER[
+            server_profile().certified_version
+        ],
         "jax_producer_sha256": _JAX_EXPLOSION_PRODUCER_SHA256,
         "scope": {
             "damage_entities": True,

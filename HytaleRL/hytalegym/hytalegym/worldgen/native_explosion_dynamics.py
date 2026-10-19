@@ -17,8 +17,10 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
+from hytalegym.server_versions import server_profile
 from hytalegym.worldgen.native_explosion_ordering import (
     EXPLOSION_UTILS_CLASS_SHA256,
+    EXPLOSION_UTILS_CLASS_SHA256_BY_SERVER,
     native_explosion_ordering_contract_sha256,
 )
 
@@ -40,6 +42,10 @@ _NATIVE_METHOD = "ExplosionUtils.performExplosion"
 DAMAGE_SYSTEMS_CLASS_SHA256 = (
     "F5DB0A203DC80920699D1BB92EF3E3537C081D9E5A1A5E2E5FEB969A52D3F601"
 )
+DAMAGE_SYSTEMS_CLASS_SHA256_BY_SERVER = {
+    "0.5.7": DAMAGE_SYSTEMS_CLASS_SHA256,
+    "0.7.2": "619A73604C012C13C02B550A65A40E8D50E802B9E9C9E395E539CF7BF65751FF",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -237,12 +243,16 @@ def native_explosion_dynamics_contract() -> dict[str, object]:
         "wire_schema": NATIVE_EXPLOSION_DYNAMICS_SCHEMA,
         "native_method": _NATIVE_METHOD,
         "source_class": "com.hypixel.hytale.server.core.entity.ExplosionUtils",
-        "source_class_sha256": EXPLOSION_UTILS_CLASS_SHA256,
+        "source_class_sha256": EXPLOSION_UTILS_CLASS_SHA256_BY_SERVER[
+            server_profile().certified_version
+        ],
         "damage_application_source": {
             "class": (
                 "com.hypixel.hytale.server.core.modules.entity.damage.DamageSystems"
             ),
-            "class_sha256": DAMAGE_SYSTEMS_CLASS_SHA256,
+            "class_sha256": DAMAGE_SYSTEMS_CLASS_SHA256_BY_SERVER[
+                server_profile().certified_version
+            ],
             "rule": "Math.round(raw_damage)_before_health_subtraction",
         },
         "ordering_contract_sha256": native_explosion_ordering_contract_sha256(),
@@ -348,6 +358,7 @@ def _sha256(value: object, label: str) -> str:
 
 __all__ = [
     "DAMAGE_SYSTEMS_CLASS_SHA256",
+    "DAMAGE_SYSTEMS_CLASS_SHA256_BY_SERVER",
     "NATIVE_EXPLOSION_DYNAMICS_FIXTURE_KIND",
     "NATIVE_EXPLOSION_DYNAMICS_MAX_CAPACITY",
     "NATIVE_EXPLOSION_DYNAMICS_PHASE_ORDER",
