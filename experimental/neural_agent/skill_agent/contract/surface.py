@@ -611,9 +611,11 @@ HELD_KINDS: tuple[str, ...] = ("unknown", "nothing", "block", "tool", "weapon", 
 """What an entity holds; ``unknown`` until the observation can publish held items legally."""
 CONTAINERS: tuple[str, ...] = ("storage", "armor", "hotbar", "utility", "tools", "backpack")
 """The gym's inventory containers, in id order (``jax/combat/inventory/schema/contract.py``)."""
-DESCRIPTION_WIDTH: int = 32
-"""Numbers per description vector (owner, 2026-10-19: description vectors now; PERCEPTION.md section 9 step 5, the
-per-tick cost, sets the final width)."""
+DESCRIPTION_WIDTH: int = 64
+"""Numbers per description vector (owner, 2026-10-19: description vectors now, as strong as possible within 30 Hz).
+Set by build step 5 (``bench/bench_perception.py``, PERCEPTION.md decision 1): at batch 8 and 64 entities the trunk's
+p95 is 1.61 ms at 32 numbers and 1.65 ms at 64, within noise; 64 keeps 80% of the item embeddings' variance against
+66% at 32, and the trunk's model width (64) bounds what a wider vector could carry."""
 RESERVE_WIDTH: int = 8
 """Spare features per content token, zero until a later version assigns them (PERCEPTION.md principle 6)."""
 

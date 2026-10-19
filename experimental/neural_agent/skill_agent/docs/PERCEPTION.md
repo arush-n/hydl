@@ -1,12 +1,12 @@
 # The skill layer's perception: an open content schema (design, 2026-10-19)
 
-**Status: accepted by the owner on 2026-10-19, with the decisions of section 8. Build steps 1 to 4 are done: the
+**Status: accepted by the owner on 2026-10-19, with the decisions of section 8. All five build steps are done: the
 registry (`perception/registry.py`) holds the items, blocks, gather types, creatures, attitudes and description
 vectors; the v2 token types stand beside v1 (`contract/surface.py`, section 4 "As built") and the trunk reads them;
 the v2 adapter (`perception/adapter.py`, section 5 "As built") fills them from the legal observation; the asks of the
-simulator layer are written (`PERCEPTION_ASKS.md`). The learner observation publishes few ids today (no inventory, no
-block candidates, no creature roles), so v2 content stays unknown until the asks land. Step 5, the per-tick cost,
-comes next.** Owner rulings that frame it (2026-10-19): the
+simulator layer are written (`PERCEPTION_ASKS.md`); the per-tick cost is measured and set the description width to 64
+(decision 1). The learner observation publishes few ids today (no inventory, no block candidates, no creature roles),
+so v2 content stays unknown until the asks land.** Owner rulings that frame it (2026-10-19): the
 perception schema comes before the working spine; the layers are discrete components finished independently and
 combined later, so this is the skill layer's own input contract; and the architecture must stay open to mods and new
 game features ("large enough for anything").
@@ -118,10 +118,11 @@ damage, slows movement) instead of five names; the material class.
 
 **kit, light, route**: unchanged.
 
-**As built** (step 2, 2026-10-19; `contract/surface.py`, schema `skill_tokens_v2`): entity 89 features, block
-candidate 71, inventory slot 74, self 36; geometry (14) and kit (15) keep v1's. Each content token holds its v1 state,
+**As built** (step 2, 2026-10-19, with the description width of step 5; `contract/surface.py`, schema
+`skill_tokens_v2`): entity 121 features, block candidate 103, inventory slot 106, self 36; geometry (14) and kit (15)
+keep v1's. Each content token holds its v1 state,
 the registry's property row (pinned in the contract: 14 creature, 15 block and 21 item properties, checked against
-the registry by a test), a 32-number description vector, 8 reserve features, `known` (its id is in the registry) and
+the registry by a test), a 64-number description vector, 8 reserve features, `known` (its id is in the registry) and
 `marked` last; ids stay fields. The entity adds its facing, its attack phase (the observation's five) and progress,
 its attitude toward the agent (no bit set when unknown, as for another player), `player`, and its maximum health
 over the agent's; the self token adds the agent's maximum health and the held item's property row. The trunk reads
@@ -187,7 +188,11 @@ together with regression tests. Training is paused, so no module exists yet to r
    So every content token carries a **description vector** now: a fixed-length embedding of the asset's name,
    description, tags and categories, computed offline by a pinned text encoder and reduced to a fixed width by a
    projection fitted on the 0.7.2 corpus. At run time it is a table gather, so it costs width, not encoding time. The
-   width (proposal: 32) is set by the latency measurement of step 5.
+   width (proposal: 32) is set by the latency measurement of step 5. **Set to 64** (step 5, 2026-10-19,
+   `bench/bench_perception.py`): the width changes the trunk's cost by less than the noise (batch 8, 64 entities:
+   p95 1.62, 1.61 and 1.65 ms at 16, 32 and 64 numbers; v1 1.58 ms), while 64 numbers keep 80% of the item
+   embeddings' variance (66% at 32) and agree with the full embedding on 73% of nearest neighbours (60% at 32);
+   creatures 84% and 78% (71% and 68%). The trunk's model width (64) bounds what a wider vector could carry.
 2. **Entities scale with the world.** "add support for 32 or higher but work on 16 right now": the entity capacity is a
    configuration, 16 by default, with 32 and above covered by the tests and the latency measurement.
 3. **0.7.2 only.** 0.5.7 stays history; the registry builder is keyed by version, so another can be added.

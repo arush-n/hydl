@@ -46,7 +46,7 @@ import numpy as np
 REGISTRY_SCHEMA = "skill_content_registry_v1"
 DEFAULT_VERSION = "0.7.2"
 DESCRIPTION_ENCODER = "sentence-transformers/all-MiniLM-L6-v2"
-DESCRIPTION_WIDTH = 32
+DESCRIPTION_WIDTH = 64
 ITEM_PREFIX = "Server/Item/Items/"
 ROLE_PREFIX = "Server/NPC/Roles/"
 GROUP_PREFIX = "Server/NPC/Groups/"
