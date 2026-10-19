@@ -41,7 +41,7 @@ Import the submodules, which are sorted into subfolders by purpose (each subfold
 ``perception``: what the skill layer perceives (``docs/PERCEPTION.md``).
 
 * ``perception.registry``: the content registry built from a server version's assets: items, blocks, gather
-  types, description vectors.
+  types, creatures, attitudes, description vectors.
 
 ``teaching``: what scripted teachers share, and their certificates.
 

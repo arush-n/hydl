@@ -1,8 +1,8 @@
 # The skill layer's perception: an open content schema (design, 2026-10-19)
 
-**Status: accepted by the owner on 2026-10-19, with the decisions of section 8. Build step 1 is half done: the
-registry's items, blocks, gather types and description vectors are built and tested (`perception/registry.py`); its
-creatures come next.** Owner rulings that frame it (2026-10-19): the
+**Status: accepted by the owner on 2026-10-19, with the decisions of section 8. Build step 1 is done: the registry
+(`perception/registry.py`) holds the items, blocks, gather types, creatures, attitudes and description vectors, built
+and tested; the v2 token types come next.** Owner rulings that frame it (2026-10-19): the
 perception schema comes before the working spine; the layers are discrete components finished independently and
 combined later, so this is the skill layer's own input contract; and the architecture must stay open to mods and new
 game features ("large enough for anything").
@@ -64,15 +64,28 @@ table with its SHA-256. It reuses the repo's asset readers where they apply: the
 (`combat/assets/catalog.py`), and stack and durability (`jax/combat/arsenal/world_actions/crafting.py`,
 `_item_properties`). Gather types become an open table that grows when the assets grow, never an enum that rejects.
 
+Creatures, as built (2026-10-19): the 894 roles a world can spawn (`Generic` and `Variant`; 523 gameplay, 371 test)
+resolve by the rules of the repo's extractor (`hytalegym/tools/content_extract/npc_roles.py`) and agree with its gen-7
+table on every role. The rest was read from the 0.7.2 server's classes. An NPC's attitude toward a target comes from
+the attitude table of its `AttitudeGroup`, looked up by the target's role, by `$player` for a player, or by `$self` for
+a target of its own role (so two Trork brawlers fall back to their default, Ignore); then from its defaults, hostile to
+players and neutral to NPCs when it names none. A table sets its attitudes in the engine's order (Ignore, Hostile,
+Neutral, Friendly, Revered), so a role in two of its groups takes the later one. Groups add included groups, remove
+excluded groups, add matching roles and remove excluded roles, in that order, with a case-sensitive glob. Trade is the
+engine's shop actions anywhere in a role's instructions or its components; taming is the `IsTameable` parameter.
+
 ## 4. Token schema v2 (proposed widths)
 
 Every content token keeps its position, validity and `marked` features, and gains these groups:
 
 **entity**, the N nearest perceptible (a configuration: 16 by default, tested at 32 and above, section 8):
 - relation to me: enemy, ally, neutral, animal, merchant, player, unknown. Hostility comes from the attitude tables and
-  the group, not one `hostile` bit;
-- kind properties from the registry, by `entity_kind`: size, maximum health over mine, speed class, melee or ranged,
-  trades, tameable;
+  the group, not one `hostile` bit (built: the registry resolves each creature's attitude toward a player and toward
+  every role; "animal" has no asset field, and the description vector carries it);
+- kind properties from the registry, by the entity's role id: size, maximum health over mine, speed class, melee or
+  ranged, trades, tameable. The observation's `entity_kind` cannot serve: it is a coarse kind, NPC for every entity
+  (`ENTITY_KIND_NPC`, `observation/v1/schema/contract.py:246`, filled at `v1/runtime/encoder.py:140`), so the role id
+  is an ask of the simulator layer (section 5);
 - state from the observation: position, velocity, distance, facing (yaw sin and cos), visible, last-seen age, health
   fraction, alive, attack phase (idle, wind-up, strike, recover) and progress. A wind-up is a visible cue, the legal
   basis combat timing needs (TRAINING_PLAN 2e);
@@ -108,8 +121,10 @@ inventory and geometry; gathers properties by id; and computes the relations (to
 health) inside the same jitted function. It never reads the simulator's state.
 
 **Asks of the simulator layer** (a contract request; that code is not this lane's): block candidates published with
-their block id; an entity's held item id when a player could see it; per-cell fluid ids in geometry. The adapter maps
-each id to properties itself.
+their block id; each entity's role id; an entity's held item id when a player could see it; per-cell fluid ids in
+geometry. The adapter maps each id to properties itself. An attitude changed at run time (the engine's override, and
+friendship between NPCs spawned together) is state, not content; whether the observation publishes it is settled with
+the adapter.
 
 ## 6. Versioning
 
