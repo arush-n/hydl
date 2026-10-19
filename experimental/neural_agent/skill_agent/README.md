@@ -41,7 +41,7 @@ Import a module by its subfolder: `from experimental.neural_agent.skill_agent.ru
 | [`tasks/`](tasks/README.md) | The flat task world skills are trained and measured on, and the episode runner. |
 | [`training/`](training/README.md) | Native traces, the behaviour-cloning dataset, the training building blocks every skill's strategy uses (per-skill DAgger, the bars), and the A2 reference trainer. |
 | [`bench/`](bench/README.md) | Per-tick latency benches (the 30 Hz gate). |
-| [`docs/`](docs/README.md) | The design record: `BUILD.md` (the plan), `TRAINING_PLAN.md`, `ARCHITECTURE_RESEARCH.md`, `FIDELITY.md`, `AGENT_BRIEF.md`. |
+| [`docs/`](docs/README.md) | The design record: `BUILD.md` (the plan), `TRAINING_PLAN.md`, `PERCEPTION.md` (the perception contract), `ARCHITECTURE_RESEARCH.md`, `FIDELITY.md`, `AGENT_BRIEF.md`. |
 
 ## 1. Create, register, use (the guide)
 
