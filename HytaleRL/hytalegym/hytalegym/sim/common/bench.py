@@ -16,7 +16,8 @@ fresh worker process (cold JIT, persistent compilation cache off, CPU):
   step against the 33.3 ms tick budget (target p95 <= 15 ms) and the real-time
   factor, simulated seconds (the step clock the engine actually used) per wall
   second;
-* ``region``: load ``region-library-pilot-v2`` and its traversal graphs and
+* ``region``: load the server line's Region library (``region-library-pilot-v2``
+  on 0.5, ``region-library-pilot-v2-072`` on 0.7.2) and its traversal graphs and
   build a working-set atlas with its path table (read-only).
 
 Then a profile of the rendered per-tick path (``jax.profiler`` trace; thunk time
@@ -59,8 +60,6 @@ REPO_ROOT = HERE.parents[4]
 SOURCE_PACKAGE = "hytalegym.jax"
 TICK_BUDGET_MS = 1000.0 / 30.0
 P95_TARGET_MS = 15.0
-REGION_MANIFEST = REPO_ROOT / "HytaleRL/artifacts/worldgen/region-library-pilot-v2/manifest.json"
-TRAVERSAL_MANIFEST = REGION_MANIFEST.parent / "traversal-v2" / "traversal-manifest.json"
 _HLO_TABLES = ("FileNames", "FunctionNames", "FileLocations", "StackFrames")
 
 
@@ -464,6 +463,21 @@ def workload_realtime(package: str, program: str = "planned", npc_counts=(1, 8),
     return result
 
 
+def _region_manifest() -> Path:
+    """Region library manifest of the configured server line, read at call time.
+
+    ``hytalegym.server_versions`` is imported here, not at module level, so this
+    module still imports only the standard library. The 0.5 line, and an unset
+    ``HYTALERL_SERVER_VERSION``, keep ``region-library-pilot-v2``; 0.7.2 reads
+    ``region-library-pilot-v2-072``.
+    """
+
+    from hytalegym.server_versions import server_profile
+
+    folder = server_profile().region_library or "region-library-pilot-v2"
+    return REPO_ROOT / "HytaleRL/artifacts/worldgen" / folder / "manifest.json"
+
+
 def workload_region(package: str, program: str = "planned", working_set: int = 8) -> dict:
     jax = _quiet_jax()
 
@@ -472,15 +486,17 @@ def workload_region(package: str, program: str = "planned", working_set: int = 8
 
     import inspect
 
+    manifest = _region_manifest()
+    traversal_manifest = manifest.parent / "traversal-v2" / "traversal-manifest.json"
     world = importlib.import_module(f"{package}.world")
     # The committed loader always verifies the artifacts; a later edit adds
     # verify_artifacts. Use the cheaper path when the tree has it.
     options = ({"verify_artifacts": False}
                if "verify_artifacts" in inspect.signature(RegionArtifactLibrary.load).parameters else {})
     started = time.perf_counter()
-    library = RegionArtifactLibrary.load(REGION_MANIFEST, **options)
+    library = RegionArtifactLibrary.load(manifest, **options)
     loaded = time.perf_counter()
-    traversal = RegionTraversalGraphLibrary.load(TRAVERSAL_MANIFEST, library)
+    traversal = RegionTraversalGraphLibrary.load(traversal_manifest, library)
     traversal_loaded = time.perf_counter()
     selection = world.region_atlas_from_artifact_library(
         library, split="train", working_set_capacity=working_set, selection_key=0,
@@ -490,7 +506,7 @@ def workload_region(package: str, program: str = "planned", working_set: int = 8
     built = time.perf_counter()
     return {"library_load_s": loaded - started, "traversal_load_s": traversal_loaded - loaded,
             "atlas_and_path_table_build_s": built - traversal_loaded, "total_s": built - started,
-            "working_set": working_set, "manifest": str(REGION_MANIFEST),
+            "working_set": working_set, "manifest": str(manifest),
             "verify_artifacts": options.get("verify_artifacts", True)}
 
 

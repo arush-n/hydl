@@ -6,6 +6,7 @@ from functools import cache
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 from typing import NamedTuple
 
@@ -26,6 +27,7 @@ from hytalegym.jax.world.traversal import (
     TraversalTokenObservation,
 )
 from hytalegym.jax.world.types import GeometryState
+from hytalegym.server_versions import server_profile
 from hytalegym.worldgen.region.contract import (
     CHUNK_SIZE,
     CORE_CHUNKS_PER_AXIS,
@@ -87,15 +89,46 @@ _EPSILON = jnp.float32(1.0e-6)
 _WORLDGEN_ARTIFACT_ROOT = (
     Path(__file__).resolve().parents[5] / "artifacts" / "worldgen"
 )
-_REGION_LIBRARY_MANIFEST = (
-    _WORLDGEN_ARTIFACT_ROOT / "region-library-pilot-v2" / "manifest.json"
-)
-_TRAVERSAL_LIBRARY_MANIFEST = (
-    _WORLDGEN_ARTIFACT_ROOT
-    / "region-library-pilot-v2"
-    / "traversal-v2"
-    / "traversal-manifest.json"
-)
+
+
+def _region_library_manifest() -> Path:
+    """Region library manifest of the configured server line, read at call time.
+
+    The line's ``region_library`` folder: the 0.5 line, and an unset
+    ``HYTALERL_SERVER_VERSION``, keep ``region-library-pilot-v2``; 0.7.2 reads
+    ``region-library-pilot-v2-072``.
+    """
+
+    folder = server_profile().region_library or "region-library-pilot-v2"
+    return _WORLDGEN_ARTIFACT_ROOT / folder / "manifest.json"
+
+
+#: Read at call time: an absolute traversal manifest named here is used instead
+#: of the one beside the line's Region library (the recertification exports its
+#: stage's manifest during a first capture).
+_TRAVERSAL_MANIFEST_ENV = "HYTALERL_TRAVERSAL_MANIFEST"
+
+
+def _traversal_library_manifest() -> Path:
+    """Traversal manifest the identity reads, resolved at call time.
+
+    ``HYTALERL_TRAVERSAL_MANIFEST`` names it directly; without it, it is the
+    ``traversal-v2`` manifest beside the configured line's Region library.
+    """
+
+    override = os.environ.get(_TRAVERSAL_MANIFEST_ENV)
+    if not override:
+        return (
+            _region_library_manifest().parent
+            / "traversal-v2"
+            / "traversal-manifest.json"
+        )
+    path = Path(override)
+    if not path.is_absolute():
+        raise ValueError(
+            f"{_TRAVERSAL_MANIFEST_ENV} must be an absolute path, not {override!r}"
+        )
+    return path
 
 
 class WorldGeometryTokenObservation(NamedTuple):
@@ -720,8 +753,27 @@ def world_geometry_token_contract_sha256() -> str:
 STAGING_LIBRARY_ABSENT = "absent_no_staged_region_library"
 
 
-@cache
+#: What the staging identity reports for the traversal library while the Region
+#: library is staged but its traversal graphs are not (the first-capture state).
+#: Not a hex digest, so a contract built in that state can never be mistaken for
+#: one built with the traversal library.
+STAGING_TRAVERSAL_ABSENT = "absent_no_staged_traversal_library"
+
+
 def _native_region_staging_artifact_identity() -> tuple[str, str, int]:
+    traversal_manifest = _traversal_library_manifest()
+    if os.environ.get(_TRAVERSAL_MANIFEST_ENV) and not traversal_manifest.is_file():
+        # A named traversal manifest must exist; only the line's own folder may
+        # lack one, and that case is the sentinel state in the cached function.
+        raise RuntimeError(f"cannot read World contract artifact {traversal_manifest}")
+    return _staging_artifact_identity(_region_library_manifest(), traversal_manifest)
+
+
+@cache
+def _staging_artifact_identity(
+    region_manifest: Path,
+    traversal_manifest: Path,
+) -> tuple[str, str, int]:
     # ABSENT IS NOT INVALID. The captured Region library and its traversal
     # graphs are ~13 MB of data derived from the shipped game, so they are not
     # published; a clone therefore legitimately has none. Raising here made
@@ -730,25 +782,33 @@ def _native_region_staging_artifact_identity() -> tuple[str, str, int]:
     # is still executing -- the token LAYOUT is source and is present, only the
     # provenance of the library it was staged against is missing.
     #
-    # Gated on the region manifest alone, and on its ABSENCE only. A manifest
-    # that exists but whose graphs or traversal sidecar do not is a broken
-    # working copy rather than a clean one, and still fails closed below.
-    if not _REGION_LIBRARY_MANIFEST.is_file():
+    # Gated on the region manifest alone, and on its ABSENCE only. A region
+    # manifest whose traversal manifest is ABSENT is the first-capture state:
+    # the library is captured, and its traversal graphs are built and promoted
+    # later. That state reports STAGING_TRAVERSAL_ABSENT, a non-hex sentinel, so
+    # a contract built in it can never equal one built with the traversal
+    # library; the 0.5 line never reaches it. A manifest that exists but is
+    # unreadable or malformed, or a traversal manifest whose graphs do not match
+    # it, is a broken working copy rather than a clean one, and still fails
+    # closed below.
+    if not region_manifest.is_file():
         return (STAGING_LIBRARY_ABSENT, STAGING_LIBRARY_ABSENT, 0)
-    region = _read_json_object(_REGION_LIBRARY_MANIFEST)
-    traversal = _read_json_object(_TRAVERSAL_LIBRARY_MANIFEST)
+    region = _read_json_object(region_manifest)
     region_sha256 = _sha256_field(
         region.get("library_semantic_sha256"),
         "Region library semantic SHA-256",
-    )
-    traversal_sha256 = _sha256_field(
-        traversal.get("library_semantic_sha256"),
-        "traversal library semantic SHA-256",
     )
     region_payload = dict(region)
     region_payload.pop("library_semantic_sha256", None)
     if _canonical_sha256(region_payload) != region_sha256:
         raise RuntimeError("Region library manifest hash changed")
+    if not traversal_manifest.is_file():
+        return (region_sha256, STAGING_TRAVERSAL_ABSENT, 0)
+    traversal = _read_json_object(traversal_manifest)
+    traversal_sha256 = _sha256_field(
+        traversal.get("library_semantic_sha256"),
+        "traversal library semantic SHA-256",
+    )
     if (
         region_traversal_library_semantic_sha256(traversal)
         != traversal_sha256
@@ -759,11 +819,14 @@ def _native_region_staging_artifact_identity() -> tuple[str, str, int]:
     return (
         region_sha256,
         traversal_sha256,
-        _legal_core_node_count(traversal),
+        _legal_core_node_count(traversal, traversal_manifest),
     )
 
 
-def _legal_core_node_count(traversal: dict[str, object]) -> int:
+def _legal_core_node_count(
+    traversal: dict[str, object],
+    traversal_manifest: Path,
+) -> int:
     entries = traversal.get("entries")
     if (
         not isinstance(entries, list)
@@ -771,7 +834,7 @@ def _legal_core_node_count(traversal: dict[str, object]) -> int:
         or traversal.get("graph_count") != len(entries)
     ):
         raise RuntimeError("traversal graph count is invalid")
-    graph_root = _TRAVERSAL_LIBRARY_MANIFEST.parent.resolve()
+    graph_root = traversal_manifest.parent.resolve()
     core_width = CORE_CHUNKS_PER_AXIS * CHUNK_SIZE
     count = 0
     for entry in entries:
