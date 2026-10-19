@@ -250,6 +250,23 @@ The 0.5 set is not touched: it stays at the fixture root and in `world-evidence-
 
 Rollback for 0.7.2: remove the three added locations. They are new, so nothing else is restored. Deleting them needs an owner yes.
 
+#### Promotion tool (2026-10-19)
+
+`tools/worldgen/promote_world_evidence.py <stage> --server-version 0.7.2` is the manual copy made checkable. Dry run by
+default: it recomputes every candidate row's sha256, runs the pre-promotion checks below (manifest status, bridge pin,
+installed line, the `first_capture` digests against `ServerProfile.region_library_sha256` and `seed_projection_sha256`,
+the two stationary captures byte-identical, cascade relationships and identities, traversal manifest bridge and source
+library, `graph_count` against the entries and the recording's `artifact_count`, `full_edge_census`, the seed-projection
+difference report within its cap with zero other differing cells, the capacity report's library and seed count, the
+stationary recording `exact`, the source-pin report status), prints the copy plan with each destination's state (absent,
+identical, exists, differs), and refuses when any check fails or any destination is present with other bytes. With
+`--apply` it copies the targets into the line's folders (`world_fixture_root(version)`, `<library>/traversal-v2/`, the
+profile's capacity report path), copies the manifest, the source-pin report, the cascade and the difference report into
+`world-evidence-history/<bridge8>/` with the schema version suffix, and writes `publication-v<N>.json` there with the
+checks and `created_paths` (the rollback list). Smoke test on 2026-10-19: against the 0.5.7 publication folder
+`5A54A8F5` as a stage, all 26 checks pass and the plan reports every fixture identical and `traversal-v2` present, so it
+refuses, as it should. Pointers and defaults are never touched by the tool.
+
 Who reads the promoted 0.7.2 evidence: the routed readers, when run with `HYTALERL_SERVER_VERSION=0.7.2`. The sim and the JAX world tokens read the Region library by fixed path (`hytalegym/jax/world/tokens/__init__.py:87-96`, `hytalegym/sim/common/bench.py:62-63`), and those pointers stay on 0.5 until the swap. `hytalegym/jax/world/region/provider.py` selects a library by its digest and does not read these paths.
 
 ### Gates, in order
