@@ -371,6 +371,15 @@ without the variable. Findings beyond the pins: `EntityScaleComponent` is a phys
 several (ad) "removed" members were signature changes; the explosion host contract is keyed to 0.5.7 digests. Phase 5's gate stays
 open until the ten audits are re-derived claim by claim.
 
+**Phase 4 stubs, offline design pass (2026-10-18; `sim/gen7/mechanics/DESIGNS-072.md`).** The thirteen unimplemented switches
+now have a design record each (authored 0.7.2 facts with their class or asset, the hook target, the state needed, the receipt and a
+probe) and thirteen probes under `tests/fidelity/combat/gen7_probes/` that load and take the port pair as arguments. Facts that
+change the plan: hit interrupt is asset data over generic Java (31 attack rows); the dodge head change is a remap, not a width
+change; no learner profile carries a rune, so rune casting has no native run yet; the "~23x" knockback holds only on the non-default
+`SplitVelocity` branch; `walk_descent`'s premise has no code behind it; climbing is a gen-5 engine gap in both versions; no server
+class implements the hookshot, swimming or the slope keys. The live measurements run on a quiet machine in the 14a order; phase 4's
+gate (interrupt/flinch and mana/rune differentials, dodge) stays open until they do.
+
 ## 2c. Time base: 30 Hz (owner, 2026-10-17, late)
 
 Owner: "we will be operating on 30hz, the goal is that we are faster so that we can accommodate for the

@@ -98,6 +98,9 @@ Each step ends with its gate, a command with a pass bar.
   `import a.b.c as x` reads that attribute first, so a stale attribute binds the second render to the first render's modules
   (2026-10-18: a cross-render `world` module in the executor's line-of-sight call; four setup errors in the full suite).
   `tests/sim/support.py` `unmount` now drops the attribute; mount and unmount renders through `support.py`.
+- A Hook row renders only when its module defines `construct(original, profile)`. No stub module does, so flipping a
+  row from `stub` to `active` without the module fails at render for every lane (2026-10-18, the offline design pass;
+  `sim/gen7/mechanics/DESIGNS-072.md` is the per-mechanic design record for the thirteen unimplemented switches).
 - The gen-7 tools name gen 7: `sim_port.regen_swap_plan` checks `hytalegym.sim.gen7.overlay`, and `fidelity_index.py`
   reads `FIDELITY-0.7.2.md`.
 
