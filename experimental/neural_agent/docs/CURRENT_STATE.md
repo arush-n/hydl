@@ -143,6 +143,19 @@ lane finished at 00:31, and no Haiku lane can run until the reset, so the remain
 traversal library, the inherited-labels writer, the stub measurements #69, the idle re-measurement #78) waits on the reset or on
 an owner ruling to use another model. Still the owner's: the publish gate (re-derive the audits or publish the 0.7.2 library with
 the audit state recorded), the arena-side zoo and horizon rules, the phase-6 stamp (#79) and default flip (#80).
+
+Update after the limit lifted (2026-10-19, 00:38 to 01:15 CDT; `2117ab0`): the owner reported the Haiku limit reset, the four
+audit claim lanes and the collector were resumed from their transcripts and finished, so all ten failing audits are classified
+claim by claim: A 1 (explosion_dynamics), B 7 (perception, entity_geometry, locomotion, doors, mutable_blocks, explosion_mutation,
+crafting), C 2 (navigation, actor_world_state, both on repo-side or runtime-only claims with nothing false). Genuine 0.7.2
+changes: block health per `BlockHealthSection` cleared on a changing write, entity scale physical, the LOS detail-hitbox test
+(already modelled by `line_of_sight`), the bench gate's augment tags (unmodelled; task #82), the `MovementStates` byte (not
+reaching the bridge), 28 interaction types against 25 (coordinator-confirmed with javap; the earlier 26 against 29 counted the
+`$VALUES` array), and the content censuses. Gen-5 test artifacts (false on the 0.5.10 control too): the `DeathComponent`
+exclusion, the sprint fallback 1.65, `WorldChunk.breakBlock`, the bridge `canCraft` output-room omission, the recipe id split.
+Bridge follow-up filed as #81 (no-heightmap columns flagged valid). Running: the loader lane's writer for
+`inherited_seed_labels_v1`, and the idle timing re-measurement #78, which waits for the peer session's distill run to end (load
+10.6 at 00:42).
 Committed earlier: the
 crafting oracle stage 3 (`274aaec`, timed bench crafts with probe events; pin `5FE609E2`), phase 4j (`a534e83`: the Trork
 target no longer gets a headless Player, which the PvP-off filter used to cancel the agent's damage; the iron combo and
