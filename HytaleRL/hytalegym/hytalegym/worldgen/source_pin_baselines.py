@@ -113,12 +113,31 @@ def pins_for(
     return pins
 
 
+def expected_source_pin(
+    audit: str,
+    server_jar: str | Path,
+    name: str,
+    default: str,
+) -> str | None:
+    """Return one pin an audit must match on the release line of ``server_jar``, or None when unrecorded.
+
+    ``default`` is the audit's 0.5.7 module constant, returned unchanged on the 0.5 line. On the 0.7 line a null
+    or absent record yields None, so a caller that compares against the result fails closed.
+    """
+
+    pinned = pins_for(audit, server_jar, {name: default})[name]
+    if pinned is None or pinned == UNRECORDED:
+        return None
+    return str(pinned)
+
+
 __all__ = [
     "ABSENT",
     "BASELINE_072_PATH",
     "STALE_CLAIM_TEXT_072",
     "UNRECORDED",
     "archive_digest",
+    "expected_source_pin",
     "pins_for",
     "server_jar_release_line",
 ]
