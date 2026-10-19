@@ -153,6 +153,9 @@ def _source_audit_environment(project_root: Path, assets: Path | None = None) ->
     environment["PYTHONPATH"] = str(project_root.resolve())
     if assets is not None:
         environment.setdefault("HYTALE_ASSETS_ZIP", str(assets))
+        # The crafting audit's argparse default reads APPDATA alone (2026-10-19, the recertification dry run):
+        # a placeholder directory keeps that default computable; the gate passes --assets explicitly anyway.
+        environment.setdefault("APPDATA", str(assets.parent))
     return environment
 
 
