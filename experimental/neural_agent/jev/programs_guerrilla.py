@@ -8,8 +8,8 @@ whose condition holds on the lane wins, and ties go to the lower index.
    ``AllOf``: ``Not(AllOf((Not(facing_me), Not(self_health_below))))``. Scalars: AVOID_BAND_BLOCKS, the skill layer's default
    band of (6, 10) blocks.
 2. ``shortbow`` (SHOT_PRIORITY, 0.4) when the shot is clean: the target is seen, its distance is inside BOW_WINDOW_BLOCKS,
-   and it is not in melee reach (report ``in_reach`` is off). Scalar: ``hold_seconds`` = SHOT_HOLD_SECONDS = 0.45, which
-   selects the smallest draw tier (ability slot 0) under either tick reading (the constant's docstring).
+   and it is not in melee reach (report ``in_reach`` is off). Scalar: ``hold_seconds`` = SHOT_HOLD_SECONDS = 0.2 s, which
+   selects the smallest draw tier (ability slot 0, the quick shot) under the contract's mapping (the constant's docstring).
 3. ``hide`` (HIDE_PRIORITY, 0.3) while the target is seen. It names no cover point, so the hide body retreats as ``avoid``
    does (``skill_agent/runtime/scripted_bodies.py``, ``hide``) until a cover position is supplied.
 4. Search is the step: while the target is unseen no interrupt holds, and the step's pursuit runs. The executor's request
@@ -54,12 +54,12 @@ distance of the 9-block local window (``skill_agent/docs/PERCEPTION_ASKS.md``, t
 a shot fires at 3.5 blocks, and the arsenal freezes at 4.5). The 0.5.7 shortbow (``hytalegym/jax/combat/arsenal/profiles/
 hytale_0_5_7.py``, ``_iron_shortbow``) gives each tier's projectile speed and gravity and no range, so no bow range is
 measured for the Region route."""
-SHOT_HOLD_SECONDS: float = 0.45
-"""The shortbow's ``hold_seconds``: the largest draw tier whose draw fits the hold is taken, and 0.45 s selects ability
-slot 0, the smallest tier, under both readings of the tiers' spawn ticks 9, 15, 24, 33, 42 (``_iron_shortbow``,
-``release_tick`` = ceil(charge x 30) + 6): at 0.045 s an engine tick the tiers start at 0.41, 0.68, 1.08, 1.49, 1.89 s;
-at the profile's 30 ticks a second they start at 0.3, 0.5, 0.8, 1.1, 1.4 s, where 0.5 would sit on the tier-1 edge. 0.0
-fits no tier, so the body's choice would be undefined. The body's mapping is the skill layer's and is not built yet."""
+SHOT_HOLD_SECONDS: float = 0.2
+"""The shortbow's ``hold_seconds``, the draw time (``requests.py``, the guerrilla verbs): the body takes the largest tier
+whose authored charge threshold (0.1, 0.3, 0.6, 0.9, 1.2 s for the 0.5.7 iron shortbow) is at most the hold, and a hold
+below the first threshold is tier 0. 0.2 s selects tier 0, the quick shot (the arrow spawns at tick 9), and would also
+under the two spawn-tick readings that were in play before the contract pinned the mapping (tiers from 0.41 s at 0.045 s
+a tick, or from 0.3 s at 30 ticks a second), since it sits below their first tier. The body is not built yet."""
 AVOID_PRIORITY: float = EVADER_PRIORITY
 SHOT_PRIORITY: float = COMBAT_PHASE_PRIORITY
 HIDE_PRIORITY: float = 0.3

@@ -66,9 +66,14 @@ The id ``guard`` is the catalogue's own (section 12, scoped posture_defence by i
 Guerrilla verbs (2026-10-20). ``hide`` takes the entity, the threat to hide from, and drives locomotion. Its position is
 an optional cover point the body heads for: ``validate`` checks only the arguments a verb needs, so a request is valid with
 or without one, and a position it carries is not checked. ``shortbow`` takes the entity or the position and drives hands,
-abilities_magic and gaze (the muzzle is the head, and aiming is the gaze scope). Its one scalar, ``hold_seconds``, selects
-the draw tier: the bow fires on one tap of ability slot k, with spawn ticks 9, 15, 24, 33 and 42 for k = 0 to 4 (0.41,
-0.68, 1.08, 1.49 and 1.89 s), and the largest tier whose draw fits is taken. ``avoid`` takes the entity and drives
+abilities_magic and gaze (the muzzle is the head, and aiming is the gaze scope). Its one scalar, ``hold_seconds``, is the
+draw time, how long the bow is held drawn, and selects the draw tier: the body takes the largest tier k whose authored
+charge threshold is at most ``hold_seconds``, and a hold below the first threshold is tier 0, a tap. The 0.5.7 iron
+shortbow (``jax/combat/arsenal/profiles/hytale_0_5_7.py``, ``_iron_shortbow``) authors the thresholds 0.1, 0.3, 0.6, 0.9
+and 1.2 s for k = 0 to 4; in the engine each tier is one tap of ability slot k, and the arrow spawns 6 ticks after the
+release at 30 ticks a second (release_tick = ceil(threshold x 30) + 6: ticks 9, 15, 24, 33 and 42). The release delay is
+not part of the hold. (Pinned 2026-10-20 after three readings of the tiers were in play; the skill layer confirms or
+objects when it builds the body.) ``avoid`` takes the entity and drives
 locomotion, with the scalars ``band_min`` and ``band_max``: it retreats beyond the band, away from the target. The skill
 layer writes their bodies; ``shortbow`` has none yet (``skill_agent/runtime/scripted_bodies.py``, ``BODIES``).
 """
