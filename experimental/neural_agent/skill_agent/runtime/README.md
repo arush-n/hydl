@@ -6,7 +6,7 @@ statuses back. Fixed and exact: the thinking happens inside the bodies (`../mode
 | Module | Lines | What it holds |
 |---|---:|---|
 | `combiner.py` | 504 | The fixed greedy combiner: per tick and per agent, check each request, grant it by scope (atomically), run the granted bodies, merge their heads, stream the statuses (R1 to R6); `BodyStep`, `AgentContext`, `StubBody`. |
-| `library.py` | 456 | `SkillLibrary`: create, register and use verbs and programs; `from_catalogue()` registers the catalogue's verbs and programs; `combiner(layout)` builds one combiner per episode. |
+| `library.py` | 458 | `SkillLibrary`: create, register and use verbs and programs; `from_catalogue()` registers the catalogue's verbs and programs; `combiner(layout)` builds one combiner per episode. |
 | `programs.py` | 140 | `ProgramRunner`: an activity program (stages in order, the steps of a stage together, for-each) as a stream of requests, with the statuses read back. |
 | `scratchpad.py` | 216 | The combiner on S_t: requests in from the shared state's `requests` section, statuses out to `skills`; `CombiningDecider` puts it behind the program executor (B3). With `actor_verbs` its `on_tick` returns the tick's grants as a `GrantedActor`'s state, for the session's per-tick seam (2026-10-19), and writes the actor's reports onto each granted request's status (`progress`), where the decision layer and the LLM read them (`docs/IDEAS.md` idea 8). |
 | `sim_adapter.py` | 131 | `HeadAdapter`: the combiner's 21 choices onto the heads a simulator implements (neutral elsewhere), with the drops counted. |

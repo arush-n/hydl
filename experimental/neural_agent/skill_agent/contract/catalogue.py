@@ -59,7 +59,7 @@ import json
 import math
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -143,6 +143,11 @@ SECOND_SCOPES: Mapping[str, tuple[str, ...]] = {
     "lure_animal": ("hands",),
 }
 """Learned verbs that also drive a second scope; their one request carries both scopes."""
+
+REMEMBERED_TARGET_VERBS: frozenset[str] = frozenset({"keep_range", "avoid"})
+"""Learned verbs whose target the request may name by its remembered world position while it is out of sight
+(2026-10-20, beside the decision layer's change for pursuit and evader, task #96): their required entity becomes
+``any_of`` entity or position. Their bodies act on either (``runtime/scripted_bodies.py``, ``target``)."""
 
 WEAPON_SECTIONS: tuple[int, ...] = (9, 10)
 STRIKE_VERBS: frozenset[str] = frozenset({"punish", "interrupt", "kite"})
@@ -600,6 +605,9 @@ def verb_contract(skill: CatalogueSkill, verb: str) -> VerbContract | None:
     if skill.kind == "A":
         return None
     arguments = parse_instruction(verb, skill.instruction, skill.section, skill.kind)
+    if verb in REMEMBERED_TARGET_VERBS and "entity" in arguments.required:
+        arguments = replace(arguments, required=tuple(name for name in arguments.required if name != "entity"),
+                            any_of=("entity", "position"))
     scope = scope_for(verb, skill.section)
     scopes = (scope, *SECOND_SCOPES.get(verb, ())) if scope else ()
     if skill.kind == "L" and "hands" in scopes and (skill.section in WEAPON_SECTIONS or verb in STRIKE_VERBS):
@@ -807,6 +815,7 @@ __all__ = [
     "PROOF_OF_CONCEPT",
     "SECTION_SCOPES",
     "VERB_SCOPES",
+    "REMEMBERED_TARGET_VERBS",
     "WEAPON_SECTIONS",
     "ActivityProgram",
     "ActivityStep",

@@ -402,15 +402,17 @@ def proof_of_concept_verbs(catalogue: Any) -> tuple[VerbContract, ...]:
     Their ids, control (commitment, duration, emergency events) and done text come from the catalogue
     (``catalogue.proof_of_concept_contracts``, tested against the skills themselves). Their arguments and
     scopes come from the middle layer's request registry (``requests.ARGUMENT_SCHEMAS``: idle nothing,
-    pursuit and evader an entity), which is also what the in-graph parity path grants, so the host
-    statuses and the compiled action name the same heads.
+    pursuit and evader the target entity or its remembered position), which is also what the in-graph parity path
+    grants, so the host statuses and the compiled action name the same heads. Both the required arguments and the
+    ``any_of`` groups are copied: a dropped group would leave a verb requiring nothing.
     """
 
     built = []
     for base in proof_of_concept_contracts(catalogue):
         schema = middle.ARGUMENT_SCHEMAS[base.verb]
         required = tuple(kind for kind in middle.ARGUMENT_NAMES if getattr(schema, kind))
-        arguments = ArgumentSchema(required, (), (), base.arguments.done, "request registry")
+        any_of = tuple(name for group in schema.any_of for name in group)
+        arguments = ArgumentSchema(required, any_of, (), base.arguments.done, "request registry")
         control = base.contract
         built.append(build_verb_contract(
             base.verb, arguments, schema.scopes, base.kind, base.section, base.description,
