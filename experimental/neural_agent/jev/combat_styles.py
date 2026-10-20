@@ -5,9 +5,10 @@ combat styles, so there is real skill instead of brute force". P_COMBAT (``progr
 :class:`~experimental.neural_agent.jev.programs.Program` values built from the verbs and predicates that exist, so the
 executive can name one per agent and moment through ``NA_PROGRAM`` (``eval/arms.py``, ``program_settings``).
 
-Built and registered in ``PROGRAMS``: COUNTER, PRESSURE, HIT_AND_RUN. Designs, not registered: AMBUSH (needs the ``hide``
-verb) and ZONING (needs the ``shortbow`` verb). Their builders raise ``ValueError`` until ``requests.COMBAT_CONTRACTS``
-declares those verbs.
+Built and registered in ``PROGRAMS``: COUNTER, PRESSURE, HIT_AND_RUN. Designs, not registered: AMBUSH (on the ``hide``
+verb) and ZONING (on the ``shortbow`` verb). Their builders raise ``ValueError`` while ``requests.COMBAT_CONTRACTS`` does
+not declare those verbs; it declares them since the guerrilla lane (#99, 21a7dc3), so both build today, and they stay
+unregistered until their overlap with ``PROGRAMS["GUERRILLA"]`` (which covers hide and shortbow) is settled.
 
 Rule order. A style's interrupts are its priority list: the highest priority whose predicate holds pre-empts the step
 (``programs.py`` item 5); on a tie the interrupt listed first wins. Where none holds, the step's skill runs. A program runs
