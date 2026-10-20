@@ -350,7 +350,20 @@ they move naturally. The single-rule scripted bodies of 2026-10-19 are the floor
 | L5 | PPO from the distilled cohort, with a decaying pull back to it (section 2b), against the league: the scripted styles, the production opponent, and frozen snapshots of the student added as it improves, under rating-aware matchmaking. A motion prior from the native traces keeps it natural (AMP, Peng et al. 2021). | Its rating against the league rises over snapshots; it wins on held-out styles; it does not collapse (the section 2b guards). |
 | L6 | The game's own NPC combat: the native fight traces cloned into a behaviour policy (`arena/training/imitation/native_replay.py`, `install_native_teacher_policy`), as a league opponent and the source of the motion prior. | The cloned policy reproduces the traces' move statistics. |
 
-**Status (2026-10-20).** The lookahead teacher is `teaching/lookahead.py`; its CLI reproduces the scratchpad
+**L1 status (2026-10-20).** The coordinator built the two-actor arena (`experimental/neural_agent/tasks/duel_arena.py`,
+bc69536; equal maximum health at 5871dee). The duel has no built-in AI, so the gate is restated with the coordinator:
+the scripted priority on both bodies, from placements symmetric under a half turn, each entity after its own random
+start delay of 0 to 20 ticks, with wins and damage at parity within 2 SE (`tasks/duel.py`). Without the delays the
+twins swing on the same tick, each guards the other's wind-up, and nothing lands. Measured over 64 lanes and 600
+ticks: on gen 5 parity holds for all four weapons, but most bouts end undecided. On gen 7 it fails: with swords
+entity 0 wins 51 of 63 decided bouts (damage +5.9 ± 2.1), and with maces entity 1 wins 9 of 9 (−4.5 ± 1.7). In a
+fixed probe entity 1's attacks resolve later than entity 0's (its first hit 1 tick later, its third combo hit 39 ticks
+later), while movement and turning are symmetric. The coordinator is tracing the cause (#103). Until the seats are
+equal, the league plays every pair in both seats. Two findings for the bodies: the strike reach is the sword's 3.5
+blocks for every weapon, but daggers land only within 2.0, so dagger bodies never hit; and against a guard on every
+wind-up the slow battleaxe and mace almost never land.
+
+**L3 status (2026-10-20).** The lookahead teacher is `teaching/lookahead.py`; its CLI reproduces the scratchpad
 prototype's measurement exactly on gen 5 and gen 7. On gen 7 it meets L3's gate against the opponents that exist
 today, the production opponent with four weapons; the scripted styles of L2 are not built yet. The teacher forks the
 simulator every 4 ticks and rolls 10 candidate moves 24 ticks ahead: wait, strike with each of the sword's 4
