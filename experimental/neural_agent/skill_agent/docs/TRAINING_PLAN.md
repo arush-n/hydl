@@ -350,6 +350,15 @@ they move naturally. The single-rule scripted bodies of 2026-10-19 are the floor
 | L5 | PPO from the distilled cohort, with a decaying pull back to it (section 2b), against the league: the scripted styles, the production opponent, and frozen snapshots of the student added as it improves, under rating-aware matchmaking. A motion prior from the native traces keeps it natural (AMP, Peng et al. 2021). | Its rating against the league rises over snapshots; it wins on held-out styles; it does not collapse (the section 2b guards). |
 | L6 | The game's own NPC combat: the native fight traces cloned into a behaviour policy (`arena/training/imitation/native_replay.py`, `install_native_teacher_policy`), as a league opponent and the source of the motion prior. | The cloned policy reproduces the traces' move statistics. |
 
+**Status (2026-10-20).** L3's gate is met by a prototype (scratchpad, not yet in the package). The teacher forks the
+simulator every 4 ticks and rolls 10 candidate moves 24 ticks ahead: wait, strike with each of the sword's 4
+abilities, guard, step in, out, left or right; head and body face the target. On gen 7, 16 lanes, opponents at 4
+times their health, 600 ticks, it won 64 of 64 fights against the production opponent with four weapons (sword,
+battleaxe, mace, daggers) and never died. The scripted priority over the skill layer's bodies won 31 and died 32
+times. The teacher mostly strikes with the sword's third ability, and against the sword and the mace it steps out of
+reach between strikes. A plan costs about 0.1 s for 16 lanes. Gen 5 agrees: 49 kills and 0 deaths against 16 and 32.
+Console replays of the mace fights: 20261020T062617Z-11750ee7 (scripted), 20261020T062640Z-e8823f3b (teacher).
+
 **Bars, every run.**
 - Win rate, and damage dealt over damage taken, against each league member, held-out styles included.
 - Skill, not damage alone (`IDEAS.md` idea 10): hits per swing, punishes and blocks landed, the variety of moves used
