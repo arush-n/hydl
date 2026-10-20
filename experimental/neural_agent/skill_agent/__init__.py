@@ -22,6 +22,8 @@ Import the submodules, which are sorted into subfolders by purpose (each subfold
 * ``runtime.sim_adapter``: the combiner's choices onto the heads a simulator implements; drops counted.
 * ``runtime.parity``: today's one goal per lane as one request through the combiner path (A6).
 * ``runtime.joint_check``: the composition arms with and without the combiner on S_t behind the program executor (B3).
+* ``runtime.neural_pursuit``: the trained walk/look network (the A2 C' run) as the decision layer's ``pursuit`` skill.
+* ``runtime.spine``: the working spine: the composition run with the stand-in pursuit and with the neural one.
 
 ``model``: the networks.
 

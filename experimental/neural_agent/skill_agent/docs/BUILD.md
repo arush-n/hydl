@@ -351,6 +351,15 @@ E8, E9 and the combat bodies after P3, E10 as soon as traces are recorded, E12 a
 Per phase: run the gate, record it in the ledger with the command and the numbers, append a dated note
 to `SKILL.md`, commit in one batch, never push.
 
+**The working spine (2026-10-19, the owner's choice A).** A trained skill acts end to end through the three layers on
+gen 5: the A2 C' network, composing walk_to and look_at from the legal observation, runs as the decision layer's
+`pursuit` in the dispatcher (`runtime/neural_pursuit.py`), behind the program executor and the combiner on S_t
+(`runtime/spine.py`). jprog-J0 on `combat_open_flat`, 512 ticks: 16 of 16 episodes caught against the stand-in PPO
+pursuit's 10 of 16 (seed 0), and 86 of 86 against 42 of 80 (seed 1, 64 lane-runs); every interrupt answered, no
+commitment violation, no decision miss. Not yet: the combiner's grant gating the action (the compiled dispatcher acts
+on the manager's goal; the in-graph active-request table is where the grant would gate it); a scripted pursuit as the
+comparison (H10); rear targets, where the network stalls (TRAINING_NEEDS 19 and 20).
+
 ## 7b. Phase B for the skill-agent session (proposed 2026-10-17, late; done 2026-10-18)
 
 Phase A is done (eight commits: catalogue, protocol, combiner, parity, trace loader, fidelity ledger,
