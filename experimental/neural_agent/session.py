@@ -281,6 +281,10 @@ def run_session(
     is called on every tick, after the scratchpad sections of that tick are
     written, as ``on_tick(clock_tick, transition, hierarchy_state)``; the lower
     layer's combiner wrapper uses it to run between decisions (2026-10-17 late).
+    ``on_tick`` returns None (the state is kept) or a replacement for
+    ``carry.actor_state`` with the same PyTree structure (2026-10-19): the session
+    writes it into the carried state, so the next tick sees it. A different
+    structure raises ValueError.
     """
 
     if executive is not None and executive_writer is None:
@@ -463,11 +467,17 @@ def run_session(
                 readings=None if readings is None else tuple(readings),
             )
 
-        # 6. a host decider's per-tick observer, after the sections of this tick are written: the lower
-        #    layer's combiner runs here when its wrapper defines ``on_tick`` (skill_agent/runtime/scratchpad.py), so
-        #    the status stream carries running statuses between decisions, not only at them
+        # 6. a host decider's per-tick hook, after the sections of this tick are written: the lower layer's
+        #    combiner runs here when its wrapper defines ``on_tick`` (skill_agent/runtime/scratchpad.py), so the
+        #    status stream carries running statuses between decisions, not only at them. It may return a
+        #    replacement carry.actor_state (same PyTree structure); None keeps the state, as that wrapper does
         if observes_ticks:
-            host_decider.on_tick(clock_tick, transition, new_state)
+            actor_state = host_decider.on_tick(clock_tick, transition, new_state)
+            if actor_state is not None:
+                if jax.tree.structure(actor_state) != jax.tree.structure(new_state.carry.actor_state):
+                    raise ValueError("on_tick changed the actor_state structure")
+                new_state = new_state._replace(carry=new_state.carry._replace(actor_state=actor_state))
+                changed = True
 
         return new_state if changed else None
 

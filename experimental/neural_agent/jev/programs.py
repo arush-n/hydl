@@ -126,6 +126,21 @@ combiner writes statuses, items 8 and 9 change nothing in items 1 to 7. Ticks ar
    A request that fails is still sent, so the combiner rejects it and item 8 reacts; ``invalid_requests``
    counts it. The lanes' requests and every other agent's live requests are written as one ``requests``
    section by its writer "jev": one document version per decision.
+
+Combat program (2026-10-19, ``P_COMBAT``). One pursuit step (exit "done") with four rules and the evader as
+interrupts. The evader on damage (``EVADE_ON_DAMAGE``: the belief's ``ticks_since_damage``, as above) has the top
+priority. Then: ``guard`` while the target winds up; ``punish`` in its recovery and ``sword`` within
+STRIKE_REACH_BLOCKS (the reach of a strike through an ability slot); ``keep_range`` in its sweep within
+MELEE_REACH_BLOCKS (the target's sweep reach, a proxy). Pursuit runs when no rule holds,
+which is the target out of reach, or idle or cooling down. The reads, with the belief's field names: the distance is
+``target_distance_blocks`` (known only while ``target_visible`` is known and above 0.5). The attack phase is the
+legal observation's ``target_i32`` column ``attack_phase`` (``ActorPolicyInput.legal_observation.base``), read as the
+code of ``ATTACK_PHASE_CODES`` and only while the target is visible. The belief itself carries no attack field: its
+ten features are ``contracts.BELIEF_FEATURE_NAMES``. The attack index (``target_i32`` ``attack_index``) is not read:
+the phase already names each window, and a rule that fired once per attack would need per-lane memory. Priorities:
+the evader (``EVADER_PRIORITY``, 0.5) above the phase rules (``COMBAT_PHASE_PRIORITY``, 0.4) above ``sword``
+(``SWORD_PRIORITY``, 0.3), so damage always wins. ``P_COMBAT`` needs a catalogue that holds the four verbs, and the
+skill layer implements none of them yet, so it cannot run in a session today.
 """
 
 from __future__ import annotations
@@ -138,6 +153,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from adk.architecture.hierarchy import ManagedGoal
+from adk.policy import fields
 from experimental.neural_agent.contracts import (
     BELIEF_FEATURE_COUNT,
     INT32_MAX,
@@ -196,9 +212,28 @@ TICK_COLUMNS: tuple[int, ...] = (
 #: the target by its index among the belief's targets: 0. The lower layer registers the same convention
 #: (agreed between the two sessions, 2026-10-17).
 TARGET_ENTITY: int = 0
+#: Reach of the target's sweep, in blocks: a proxy, the base agent attack range of the 0.5.7 ruleset
+#: (``hytalegym/rulesets/hytale_0_5_7/kweebec_razorleaf_vs_trork_brawler_v9.json``, ``agent.attacks[0].range``). The
+#: target's own reach is not measured. The learner's base attack is switched off (``observation/v3/encoding/encoder.py``
+#: 470-476), so this is not the strike reach.
+MELEE_REACH_BLOCKS: float = 3.0
+#: Reach of a strike through an ability slot, in blocks: the skill layer measured ability choice 1 landing at 2.5 blocks
+#: (not reproduced here). The 0.7.2 melee selectors end at 2.5 blocks most often (``hytalegym/sim/gen7/data/
+#: weapons.json``: 42 of the 112 ``EndDistance`` values). Within reach means strictly closer, as ``distance_below`` reads.
+STRIKE_REACH_BLOCKS: float = 2.5
+#: The target's attack phases as the legal observation publishes them (``target_i32`` ``attack_phase``): the legacy
+#: controller's codes (``hytalegym/jax/combat/opponents/legacy/controller.py``).
+ATTACK_PHASE_CODES: dict[str, int] = {"idle": 0, "windup": 1, "sweep": 2, "recovery": 3, "cooldown": 4}
+#: Priorities of the combat rules. The evader's (EVADER_PRIORITY) is above them. The phase rules name one phase each,
+#: so they never compete; sword holds in reach whatever the phase, so it is below them.
+COMBAT_PHASE_PRIORITY: float = 0.4
+SWORD_PRIORITY: float = 0.3
 
 _PROGRAM, _INTERRUPT = 0, 1
 _SEEN: int = feature_index("ticks_since_target_seen")
+_DISTANCE_COLUMN: int = feature_index("target_distance_blocks")
+_VISIBLE_PREDICATE: Predicate = Predicate("target_visible")
+_ATTACK_PHASE_COLUMN: int = fields.field_index("target_i32", "attack_phase")
 #: The widest finite world box: the executor's own check of a request cannot know the world (item 9).
 _ANY_WORLD: tuple[tuple[float, ...], tuple[float, ...]] = ((-float(INT32_MAX),) * 3, (float(INT32_MAX),) * 3)
 
@@ -243,18 +278,52 @@ class ProgramStep:
 
 
 @dataclass(frozen=True)
+class TargetPhase:
+    """The target's attack is in ``phase`` and, when ``within_blocks`` is given, the target is that near.
+
+    An interrupt's predicate beside :class:`Predicate` (the combat program, module docstring). It holds only while the
+    belief says the target is visible, because the encoder publishes the target's fields only while it is visible. The
+    phase comes from the legal observation's target row, not from the belief.
+
+    Raises:
+        ValueError: If ``phase`` is not a key of ``ATTACK_PHASE_CODES``, or ``within_blocks`` is not finite and positive.
+    """
+
+    phase: str
+    within_blocks: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.phase not in ATTACK_PHASE_CODES:
+            raise ValueError(f"TargetPhase.phase must be one of {tuple(ATTACK_PHASE_CODES)}, got {self.phase!r}")
+        if self.within_blocks is not None:
+            within = float(self.within_blocks)
+            if not math.isfinite(within) or within <= 0.0:
+                raise ValueError(f"TargetPhase.within_blocks must be finite and positive, got {self.within_blocks!r}")
+            object.__setattr__(self, "within_blocks", within)
+
+    def holds(self, features: Sequence[float], known: Sequence[bool], code: int) -> bool:
+        """Return whether, on one lane, the target is visible, in ``phase`` by its legal ``code``, and within reach."""
+
+        if not _VISIBLE_PREDICATE.evaluate(features, known) or int(code) != ATTACK_PHASE_CODES[self.phase]:
+            return False
+        if self.within_blocks is None:
+            return True
+        return bool(known[_DISTANCE_COLUMN]) and float(features[_DISTANCE_COLUMN]) < self.within_blocks
+
+
+@dataclass(frozen=True)
 class Interrupt:
     """A conditional goal of the executive: ``skill_id`` pre-empts the program while ``predicate`` holds."""
 
     skill_id: str
     priority: float
-    predicate: Predicate
+    predicate: Predicate | TargetPhase
     params: tuple[float, ...] = ()
 
     def __post_init__(self) -> None:
         _skill_id(self.skill_id, "Interrupt")
-        if not isinstance(self.predicate, Predicate) or self.predicate == ALWAYS:
-            raise ValueError("Interrupt.predicate must be a Predicate other than 'always'")
+        if not isinstance(self.predicate, (Predicate, TargetPhase)) or self.predicate == ALWAYS:
+            raise ValueError("Interrupt.predicate must be a Predicate other than 'always', or a TargetPhase")
         priority = float(self.priority)
         if not math.isfinite(priority):
             raise ValueError(f"Interrupt.priority must be finite, got {self.priority!r}")
@@ -293,6 +362,17 @@ P_SEQ = Program(
         ProgramStep(PURSUIT_SKILL, exit=EXIT_DONE),
     ),
     interrupts=(EVADE_ON_DAMAGE,),
+)
+#: The combat program (module docstring): evade on damage; guard, punish and keep range by the target's phase; sword in reach.
+P_COMBAT = Program(
+    steps=(ProgramStep(PURSUIT_SKILL, exit=EXIT_DONE),),
+    interrupts=(
+        EVADE_ON_DAMAGE,
+        Interrupt("guard", COMBAT_PHASE_PRIORITY, TargetPhase("windup")),
+        Interrupt("punish", COMBAT_PHASE_PRIORITY, TargetPhase("recovery", STRIKE_REACH_BLOCKS)),
+        Interrupt("keep_range", COMBAT_PHASE_PRIORITY, TargetPhase("sweep", MELEE_REACH_BLOCKS)),
+        Interrupt("sword", SWORD_PRIORITY, Predicate("distance_below", STRIKE_REACH_BLOCKS)),
+    ),
 )
 PROGRAMS: dict[str, Program] = {"J0": P_J0, "SEQ": P_SEQ}
 
@@ -389,6 +469,7 @@ class ProgramExecutor:
         self._used_skills = sorted(
             {0} | {k for row in self._step_skill for k in row} | {k for row in self._interrupt_skill for k in row}
         )
+        self._reads_phase = any(isinstance(i.predicate, TargetPhase) for p in programs for i in p.interrupts)
         self._minimum = np.asarray(self._control.minimum_commitment_seconds, dtype=np.float32)
         self._maximum = np.asarray(self._control.maximum_duration_seconds, dtype=np.float32)
         self._no_reissue = window
@@ -505,6 +586,7 @@ class ProgramExecutor:
             raise ValueError(f"belief.features must have shape ({lanes}, {BELIEF_FEATURE_COUNT}), got {features.shape}")
         features[:, list(TICK_COLUMNS)] *= np.float32(TICKS_SATURATION)
         known = np.asarray(belief.feature_known, dtype=np.bool_)
+        codes = self._target_codes(transition) if self._reads_phase else None
         emergency = np.asarray(step.goal_runtime.emergency_interrupt, dtype=np.bool_)
         done = np.asarray(transition.done, dtype=np.bool_)
         valid = np.asarray(hierarchy_state.goal_valid, dtype=np.bool_)
@@ -554,7 +636,8 @@ class ProgramExecutor:
                 ):
                     self._advance(lane, len(steps))
 
-            desired, desired_params, source, priority = self._desired(lane, features[lane], known[lane])
+            code = -1 if codes is None else int(codes[lane])
+            desired, desired_params, source, priority = self._desired(lane, features[lane], known[lane], code)
             current_skill = int(skill[lane])
             if fresh[lane] or ended is not None or desired != current_skill:
                 allowed = (
@@ -667,7 +750,7 @@ class ProgramExecutor:
             self.programs_finished[lane] += 1
 
     def _desired(
-        self, lane: int, features: np.ndarray, known: np.ndarray
+        self, lane: int, features: np.ndarray, known: np.ndarray, code: int = -1
     ) -> tuple[int, tuple[float, ...], int, float]:
         """Return (skill index, params, source, priority) of the goal the lane wants now (module docstring, item 5).
 
@@ -680,7 +763,12 @@ class ProgramExecutor:
             skill = self._interrupt_skill[lane][position]
             if self._blocked[lane, skill] > 0.0 or interrupt.priority <= best:
                 continue
-            if interrupt.predicate.evaluate(features, known):
+            holds = (
+                interrupt.predicate.holds(features, known, code)
+                if isinstance(interrupt.predicate, TargetPhase)
+                else interrupt.predicate.evaluate(features, known)
+            )
+            if holds:
                 chosen, best = position, interrupt.priority
         if chosen >= 0:
             return self._interrupt_skill[lane][chosen], program.interrupts[chosen].params, _INTERRUPT, best
@@ -692,6 +780,14 @@ class ProgramExecutor:
             self.blocked_decisions[lane] += 1
             return 0, (), _PROGRAM, 0.0
         return skill, program.steps[k].params, _PROGRAM, 0.0
+
+    def _target_codes(self, transition: Any) -> np.ndarray:
+        """int[B]: the target's attack phase code per lane, from the legal observation's target row (module docstring)."""
+
+        target = np.asarray(transition.actor_input.legal_observation.base.target_i32, dtype=np.int64)
+        if target.ndim != 2 or target.shape[0] != self._lanes:
+            raise ValueError(f"legal_observation.base.target_i32 must have one row per lane ({self._lanes}), got {target.shape}")
+        return target[:, _ATTACK_PHASE_COLUMN]
 
     def _set_source(self, lane: int, source: int, priority: float) -> None:
         """Record where the lane's goal now comes from and the interrupt's priority, counting pre-emptions
@@ -865,18 +961,25 @@ class ProgramExecutor:
 
 
 __all__ = [
+    "ATTACK_PHASE_CODES",
+    "COMBAT_PHASE_PRIORITY",
     "EVADE_ON_DAMAGE",
     "EXIT_DONE",
     "EXIT_TIMER",
     "Interrupt",
     "LaneInformationRequest",
     "MAX_PROGRAM_STEPS",
+    "MELEE_REACH_BLOCKS",
     "PROGRAMS",
+    "P_COMBAT",
     "P_J0",
     "P_SEQ",
     "Program",
     "ProgramExecutor",
     "ProgramStep",
+    "STRIKE_REACH_BLOCKS",
+    "SWORD_PRIORITY",
     "TARGET_ENTITY",
     "TICK_COLUMNS",
+    "TargetPhase",
 ]
