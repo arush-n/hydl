@@ -35,7 +35,6 @@ from experimental.neural_agent.executive.goal_language import Predicate
 from experimental.neural_agent.jev.programs import (
     COMBAT_PHASE_PRIORITY,
     EXIT_DONE,
-    STRIKE_REACH_BLOCKS,
     AllOf,
     Interrupt,
     Not,
