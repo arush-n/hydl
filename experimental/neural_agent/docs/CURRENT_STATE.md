@@ -350,3 +350,35 @@ machine), the legal mask's missing inventory term and the silent geometry freeze
 place feature behind the contract gate (#91), cover at range through the Region geometry route, #80 (the default flip) after a
 gen-7 checkpoint that passes live. Nothing is pushed.
 
+Status at 16:31 on 2026-10-20. Decision layer: the combat styles beside P_COMBAT (`0b22cda`; COUNTER, PRESSURE and HIT_AND_RUN
+registered under their NA_PROGRAM names, AMBUSH and ZONING as designs; the referee variants wait for the skill layer's charged
+holds, since its sword ignores the hold scalar today); the guerrilla verbs hide, shortbow and avoid with their contracts, the
+`Report` condition that reads the bodies' five reports from the newest live status with the belief as fallback, and P_GUERRILLA
+(`21a7dc3`; avoid while faced or hurt, shortbow from 3.5 to 4.5 blocks, hide while seen, the pursuit step as the search through the
+remembered position); the shortbow contract pins `hold_seconds` as the draw time mapped to the authored tiers 0.1, 0.3, 0.6, 0.9,
+1.2 s with a hold below the first as tier 0 (`a827072`, confirmed on both lines by the sim's adapter), and the guerrilla hold is
+provisional at 0.2 s because gen 7 authors 1, 2, 4, 7, 19 damage per tier (#105: the tier follows the skill layer's per-tier
+measurement). The duel for the league: entity 1's observation on its own maxima (`1efe339`), `max_health` (`5871dee`),
+`roles=(entity 0 role, entity 1 role)` over the 14 paired CombatParams fields and the statuses (`f2f5957`), and the built-in
+target motion off (`fb78247`: it was gated by `target_active`, not the controller mask, and moved entity 1 from its activation
+tick). The seat bias the skill layer found (entity 0 wins most decisive gen-5 fights) is diagnosed (#103, two lanes, ledger):
+masks and the ruleset attack table ruled out; the one-tick first-hit lag is selector geometry (eye offset with the defender's
+box; same-role pairs land together); what remains is the engine's two-actor path, filed as #108 for the owner (only slot 0 takes
+the force-pushed knockback branch; the motion kernel runs every row through the agent slot), so the league plays both seats. The
+gen-7 render moves both duel bodies alike (#104 measured: no agent-only construct fires in a flat duel; the shared start split
+delays both chains one tick and the sword knockback patch stops entity 1 being lifted); its follow-ups are #107 (the landing hold
+never arms on knockback landings; the duel's mana reads 0 against the construct's 100 at spawn; target-slot twins for the jump
+constructs). Simulator: the hit-interrupt construct part A (`61b8288`: the measured logic and the asset table, 14 tests, hooks
+unwired) with part B running in a lane (the eligible flag per entity from `entity_role_ids`, the hit row identity through a
+call-site patch under the overlay lock, the flinch verified on the target's motion, the construct's statuses pre-compensated by
+half a tick); the stock status clock's 16 ticks for a 0.5 s status (native 15) filed as #106. The skill layer landed L2
+(`2b8351a`, the pure-JAX styles under the programs' names, constants pinned to the programs) and marks league numbers
+seat-confounded until #108 is decided; its shortbow body comes with the per-tier measurement. Remaining items on this side after
+part B: #80 (the default flip, a gen-7 checkpoint that passes live), the fluid-cell cap (owner knob), the legal mask's missing
+inventory term and the silent geometry freeze, the bound place behind the contract gate (#91 residual), cover at range through
+the Region geometry route, the duel's residual role-scaled normalisers (a target-role gait maximum in the actor-first view, in
+another session's dirty file), the hit-interrupt Part 2 probe, the 0.5.7 line items (v6 suite repair, the path-table 255 rule,
+the built 0.5 bridge against its pin, the stamp tests on the default line), the other #69 stubs (runes, hookshot, climbing,
+gliding, riding, swimming), grants beyond none for the augment differential, the 0.5-only replays on 0.7, and #105 to #108. No
+training on either side.
+
