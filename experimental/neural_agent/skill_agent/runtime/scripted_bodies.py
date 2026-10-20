@@ -25,7 +25,7 @@ body strikes or guards what it cannot see.
 | ``keep_range`` | locomotion | holds the band ``band_min`` to ``band_max`` blocks (``band_max`` defaults to one block more) from the target, seen or remembered: runs in when farther, walks out when nearer, faces the target |
 | ``avoid`` | locomotion | retreats from the target, seen or remembered, until beyond the band (``band_min``, ``band_max``; ``AVOID_BAND_BLOCKS`` when the request names none): sprints inside the near edge, runs inside the far edge, beyond it holds and faces the target; with the threat neither seen nor remembered it keeps running the way it faces |
 | ``hide`` | locomotion | with a cover point in its request (``position``), runs to it, sneaks the last blocks and stops there; with none, retreats from the threat as ``avoid`` does (cover found from the geometry comes with the cover arena) |
-| ``shortbow`` | hands, abilities_magic, gaze | aims the head at the seen target, the pitch from the engine's own arrow flight for the draw tier ``hold_seconds`` selects, and taps the tier once the aim is within a degree; holds fire while the target is unseen or out of the tier's range |
+| ``shortbow`` | hands, abilities_magic, gaze | aims the head where the seen target will be when the arrow arrives (its velocity times the flight), the pitch from the engine's own arrow flight for the draw tier ``hold_seconds`` selects, and taps the tier once the aim is within a degree; holds fire while the target is unseen or out of the tier's range |
 | ``idle`` | none | every head neutral |
 
 Conventions (``neural_skills/walk_to/teacher.py``): a target at bearing ``b`` degrees, positive to the right, is
@@ -44,7 +44,7 @@ import numpy as np
 
 from experimental.neural_agent.skill_agent.contract.surface import ATTACK_PHASES
 from experimental.neural_agent.skill_agent.teaching.teachers import BODY_YAW_HEAD, COMPASS_DIRECTIONS, LOCOMOTION_HEAD
-from hytalegym.jax.combat import hytale_0_5_7_loadouts
+from hytalegym.jax.combat import default_combat_params, hytale_0_5_7_loadouts
 from hytalegym.jax.combat.arsenal.schema import contract as arsenal_contract
 from hytalegym.jax.combat.observation.v1.schema.contract import (
     COMBAT_FLOAT_FEATURES,
@@ -297,6 +297,11 @@ ARROW_TICKS = 64
 reaches them."""
 ARROW_PITCHES = tuple(float(value) for value in np.arange(-45.0, 47.0001, 0.25))
 """The arrow pitches the aim searches, degrees: the head's pitch range plus the tiers' 2-degree offset."""
+LEAD_LAG_TICKS = 1.0
+"""The shortbow leads a moving target by its flight time plus this many ticks: a choice acts a tick after the
+observation it answers. Measured 2026-10-20 against a body running across the line of fire (gen 5, tiers 1, 2 and 4
+at 4.5 and 8 blocks): lags of 0, 1 and 2 ticks hit 86, 88 and 82% of 51 arrows; without lead, 2 of 20 for tiers 1
+and 2 and 0 of 4 for tier 4 at 4.5 blocks."""
 PITCH_BINS = ARSENAL_POLICY_ACTION_HEAD_SIZES[ARSENAL_POLICY_ACTION_HEAD_NAMES.index("pitch_delta_bins")]
 _SELF = {name: index for index, name in enumerate(SELF_FLOAT_FEATURES)}
 _COMBAT = {name: index for index, name in enumerate(COMBAT_FLOAT_FEATURES)}
@@ -333,10 +338,31 @@ def bow_tiers() -> BowTiers:
                     table[:, arsenal_contract.EF_PITCH_OFFSET_DEGREES])
 
 
-def arrow_pitch(tier: jax.Array, distance: jax.Array, rise: jax.Array, heading: jax.Array) -> tuple[jax.Array, jax.Array]:
+@cache
+def velocity_scales() -> tuple[float, float]:
+    """The running engine's velocity normalisers: the entity row divides the target's relative velocity by
+    ``target_chase_speed`` and the self row the agent's own by ``agent_maximum_gait_speed``
+    (``observation/v1/runtime/encoder.py``)."""
+
+    with jax.ensure_compile_time_eval():
+        params = default_combat_params(microticks=1)
+    return float(params.target_chase_speed), float(params.agent_maximum_gait_speed)
+
+
+class ArrowAim(NamedTuple):
+    """``arrow_pitch``'s answer per lane: the head pitch in degrees, whether the tier reaches, and the arrow's flight
+    to the target in engine ticks (0 where it does not reach)."""
+
+    pitch: jax.Array
+    reachable: jax.Array
+    flight_ticks: jax.Array
+
+
+def arrow_pitch(tier: jax.Array, distance: jax.Array, rise: jax.Array, heading: jax.Array) -> ArrowAim:
     """The lowest head pitch (degrees) whose arrow of ``tier`` passes ``rise`` blocks above its launch point when it
-    has flown ``distance`` horizontal blocks, and whether any pitch does. ``heading`` is ``|sin yaw| + |cos yaw|`` of
-    the head's world yaw: the engine drags the arrow's 0.2-block cube by the sum of its axis speeds.
+    has flown ``distance`` horizontal blocks, whether any pitch does, and how many ticks that arrow flies. ``heading``
+    is ``|sin yaw| + |cos yaw|`` of the head's world yaw: the engine drags the arrow's 0.2-block cube by the sum of its
+    axis speeds.
 
     The flight is the engine's (``StandardPhysicsTickSystem``, ``jax/combat/arsenal/projectiles/runtime.py``,
     ``_standard_velocity``): each tick the arrow moves by its velocity, then loses ``gravity * (|vx| + |vy| + |vz|) /
@@ -353,30 +379,37 @@ def arrow_pitch(tier: jax.Array, distance: jax.Array, rise: jax.Array, heading: 
     drag = gravity[:, None] / (terminal[:, None] ** 2)
     reach = distance[:, None]
 
-    def tick(carry, _):
-        x, y, horizontal, vertical, height = carry
+    def tick(carry, index):
+        x, y, horizontal, vertical, height, when = carry
         x_next, y_next = x + horizontal * ARROW_TICK_SECONDS, y + vertical * ARROW_TICK_SECONDS
         crossing = jnp.isnan(height) & (x < reach) & (x_next >= reach)
         fraction = (reach - x) / jnp.maximum(x_next - x, 1e-9)
         height = jnp.where(crossing, y + fraction * (y_next - y), height)
+        when = jnp.where(crossing, index + fraction, when)
         rate = drag * (horizontal * heading[:, None] + jnp.abs(vertical))
         horizontal = horizontal - horizontal * rate * ARROW_TICK_SECONDS
         vertical = vertical - vertical * rate * ARROW_TICK_SECONDS - gravity[:, None] * ARROW_TICK_SECONDS
-        return (x_next, y_next, horizontal, vertical, height), None
+        return (x_next, y_next, horizontal, vertical, height, when), None
 
     zero = jnp.zeros_like(horizontal)
-    (*_, height), _ = jax.lax.scan(tick, (zero, zero, horizontal, vertical, jnp.full_like(zero, jnp.nan)), None,
-                                   ARROW_TICKS)
+    unset = jnp.full_like(zero, jnp.nan)
+    (*_, height, when), _ = jax.lax.scan(tick, (zero, zero, horizontal, vertical, unset, unset),
+                                         jnp.arange(ARROW_TICKS, dtype=jnp.float32))
     above = ~jnp.isnan(height) & (height >= rise[:, None])
     reachable = jnp.any(above, axis=1)
     first = jnp.argmax(above, axis=1)
     before = jnp.maximum(first - 1, 0)
-    high = jnp.take_along_axis(height, first[:, None], axis=1)[:, 0]
-    low = jnp.take_along_axis(height, before[:, None], axis=1)[:, 0]
-    fraction = jnp.where((first > 0) & ~jnp.isnan(low) & (high > low), (rise - low) / jnp.maximum(high - low, 1e-9),
-                         1.0)
-    arrow = pitches[before] + jnp.clip(fraction, 0.0, 1.0) * (pitches[first] - pitches[before])
-    return arrow - offset, reachable
+
+    def at(values, index):
+        return jnp.take_along_axis(values, index[:, None], axis=1)[:, 0]
+
+    high, low = at(height, first), at(height, before)
+    fraction = jnp.clip(jnp.where((first > 0) & ~jnp.isnan(low) & (high > low),
+                                  (rise - low) / jnp.maximum(high - low, 1e-9), 1.0), 0.0, 1.0)
+    arrow = pitches[before] + fraction * (pitches[first] - pitches[before])
+    early, late = at(when, before), at(when, first)
+    flight = jnp.where(jnp.isnan(early), late, early + fraction * (late - early))
+    return ArrowAim(arrow - offset, reachable, jnp.where(reachable, flight, 0.0))
 
 
 def draw_tier(hold_seconds: jax.Array) -> jax.Array:
@@ -389,26 +422,45 @@ def draw_tier(hold_seconds: jax.Array) -> jax.Array:
 
 def shortbow(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array,
              position: Position | None = None) -> jax.Array:
-    """Aim at the seen target and loose the tier ``hold_seconds`` selects. The yaw error is the target's bearing in
-    the head's frame (the combat prefix, which the engine encodes from the head yaw and blanks while the target is not
-    perceptible); the pitch is ``arrow_pitch`` for the target's distance and height (its entity row) from the assumed
-    launch height to ``AIM_HEIGHT_BLOCKS`` above its feet. The tap waits until both errors are within
-    ``AIM_TOLERANCE_DEGREES``; the head keeps following the target while the arrow is drawn, and the engine admits the
-    next tap once the shot is over. The arrow leaves 0.15 to the right of the eye and converges by a quarter of a degree,
-    so it passes 0.12 to 0.15 blocks right of the aim at 4 to 8 blocks, inside the target's half width."""
+    """Aim where the seen target will be when the arrow arrives, and loose the tier ``hold_seconds`` selects.
+
+    The target's place now is its entity row (body frame); the head's yaw off the body is the difference between the
+    target's bearing in the head's frame (the combat prefix, which the engine encodes from the head yaw and blanks
+    while the target is not perceptible) and in the body's. The target's own velocity is its relative velocity plus
+    the shooter's (an arrow keeps none of the shooter's motion, measured 2026-10-20), and the aim point is its place
+    ``flight + LEAD_LAG_TICKS`` ticks ahead, the flight from ``arrow_pitch`` (solved twice, the second time for the
+    led point). The pitch is ``arrow_pitch`` for that point, from the assumed launch height to ``AIM_HEIGHT_BLOCKS``
+    above the target's feet. The tap waits until both errors are within ``AIM_TOLERANCE_DEGREES``; the head keeps
+    following while the arrow is drawn, and the engine admits the next tap once the shot is over. The arrow leaves 0.15
+    to the right of the eye and converges by a quarter of a degree, so it passes 0.12 to 0.15 blocks right of the aim
+    at 4 to 8 blocks, inside the target's half width."""
 
     seen = target(observation)
     tier = draw_tier(scalars[:, 0])
     prefix = observation.base.combat_f32
     perceived = seen.seen & (prefix[:, _COMBAT["target_visible"]] > 0.5)
-    yaw_error = jnp.rad2deg(jnp.arctan2(prefix[:, _COMBAT["visible_target_right"]],
-                                        prefix[:, _COMBAT["visible_target_forward"]]))
+    head_bearing = jnp.rad2deg(jnp.arctan2(prefix[:, _COMBAT["visible_target_right"]],
+                                           prefix[:, _COMBAT["visible_target_forward"]]))
+    head_offset = head_bearing - seen.bearing  # degrees the head is turned left of the body
+    row = observation.base.entity_f32[:, 0]
     self_row = observation.base.self_f32
+    target_scale, gait_scale = velocity_scales()
+    own_forward, own_right = self_row[:, _SELF["forward_velocity"]], self_row[:, _SELF["right_velocity"]]
+    own_bearing = jnp.arctan2(own_right, own_forward) - jnp.deg2rad(head_offset)  # the head frame to the body's
+    own_speed = jnp.hypot(own_forward, own_right) * gait_scale
+    velocity_forward = row[:, _FLOAT["relative_velocity_forward"]] * target_scale + own_speed * jnp.cos(own_bearing)
+    velocity_right = row[:, _FLOAT["relative_velocity_right"]] * target_scale + own_speed * jnp.sin(own_bearing)
     heading = jnp.abs(self_row[:, _SELF["yaw_sin"]]) + jnp.abs(self_row[:, _SELF["yaw_cos"]])
-    up = observation.base.entity_f32[:, 0, _FLOAT["relative_up"]] * NEARBY_ENTITY_RADIUS_BLOCKS
-    aim, reachable = arrow_pitch(tier, seen.distance, up + AIM_HEIGHT_BLOCKS - ASSUMED_LAUNCH_HEIGHT, heading)
-    pitch_error = aim - self_row[:, _SELF["pitch"]] * 90.0
-    aiming = perceived & reachable
+    rise = row[:, _FLOAT["relative_up"]] * NEARBY_ENTITY_RADIUS_BLOCKS + AIM_HEIGHT_BLOCKS - ASSUMED_LAUNCH_HEIGHT
+    forward, right = seen.forward, seen.right
+    for _ in range(2):
+        lead = (arrow_pitch(tier, jnp.hypot(forward, right), rise, heading).flight_ticks + LEAD_LAG_TICKS) \
+            * ARROW_TICK_SECONDS
+        forward, right = seen.forward + velocity_forward * lead, seen.right + velocity_right * lead
+    aim = arrow_pitch(tier, jnp.hypot(forward, right), rise, heading)
+    yaw_error = jnp.rad2deg(jnp.arctan2(right, forward)) + head_offset  # the led point's bearing in the head's frame
+    pitch_error = aim.pitch - self_row[:, _SELF["pitch"]] * 90.0
+    aiming = perceived & aim.reachable
     aimed = (aiming & (jnp.abs(yaw_error) <= AIM_TOLERANCE_DEGREES)
              & (jnp.abs(pitch_error) <= AIM_TOLERANCE_DEGREES))
     factors = idle(observation, mask, ticks, scalars)
@@ -449,7 +501,7 @@ def reports(observation: Any, factors: jax.Array, neutral: jax.Array) -> jax.Arr
 assert HEAD["locomotion_gait_compass"] == LOCOMOTION_HEAD and HEAD["body_yaw_delta_bins"] == BODY_YAW_HEAD
 
 __all__ = ["AIM_HEIGHT_BLOCKS", "AIM_TOLERANCE_DEGREES", "ARROW_LAUNCH_HEIGHTS", "ASSUMED_LAUNCH_HEIGHT",
-           "AVOID_BAND_BLOCKS", "BODIES", "FACING_ME_DEGREES", "HIDE_ARRIVED_BLOCKS", "HIDE_SNEAK_BLOCKS", "REPORTS",
-           "SHORTBOW_THRESHOLD_SECONDS", "BowTiers", "Position", "Target", "arrow_pitch", "avoid", "body_frame",
-           "bow_tiers", "draw_tier", "evader", "guard", "hide", "idle", "keep_range", "legal", "punish", "reports",
-           "shortbow", "sword", "target"]
+           "AVOID_BAND_BLOCKS", "BODIES", "FACING_ME_DEGREES", "HIDE_ARRIVED_BLOCKS", "HIDE_SNEAK_BLOCKS",
+           "LEAD_LAG_TICKS", "REPORTS", "SHORTBOW_THRESHOLD_SECONDS", "ArrowAim", "BowTiers", "Position", "Target",
+           "arrow_pitch", "avoid", "body_frame", "bow_tiers", "draw_tier", "evader", "guard", "hide", "idle",
+           "keep_range", "legal", "punish", "reports", "shortbow", "sword", "target", "velocity_scales"]
