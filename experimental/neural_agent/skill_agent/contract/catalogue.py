@@ -141,6 +141,7 @@ SECOND_SCOPES: Mapping[str, tuple[str, ...]] = {
     "kite": ("hands",),
     "search_for": ("locomotion",),
     "lure_animal": ("hands",),
+    "shortbow": ("gaze",),  # the arrow leaves along the head's yaw and pitch (requests.py, 2026-10-20)
 }
 """Learned verbs that also drive a second scope; their one request carries both scopes."""
 
