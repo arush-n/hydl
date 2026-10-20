@@ -32,7 +32,7 @@ public final class PerceptionBuilders {
         String worldgenVersion,
         int[] positions
     ) {
-        record Column(short height, int tint) {}
+        record Column(short height, int tint, boolean hasHeight) {}
 
         int samples = positions.length / 3;
         byte[] available = new byte[samples];
@@ -71,11 +71,12 @@ public final class PerceptionBuilders {
             if (column == null) {
                 column = new Column(
                     blocks.getHeight(localX, localZ),
-                    blocks.getTint(localX, localZ)
+                    blocks.getTint(localX, localZ),
+                    blocks.hasHeight(localX, localZ)
                 );
                 columns.put(columnKey, column);
             }
-            if (column.height() != NativePerceptionChannels.WORLD_HEIGHT) {
+            if (column.hasHeight()) {
                 heightmap[sample] = column.height();
                 valid |= NativePerceptionChannels.VALID_HEIGHTMAP;
             }

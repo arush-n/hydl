@@ -224,7 +224,7 @@ final class NativeItemInteractionEvidenceBuilders {
         int mask = 0;
         if (values == null) return mask;
         for (InteractionType value : values) {
-            // 0.5 bit positions; types new in 0.7.2 have no bit in the 25-type mask.
+            // Bit positions are wire indices: the 0.5 indices, then the 0.7.2 types at 25 to 27.
             int index = NativeInteractionTypes.wireIndex(value);
             if (index >= 0) mask |= 1 << index;
         }

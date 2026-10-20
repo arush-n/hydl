@@ -395,6 +395,19 @@ public final class NativeWorldAccess {
             return height == HeightmapColumn.NO_HEIGHT ? 0 : (short) height;
         }
 
+        /** True where the column's heightmap holds a height; NO_HEIGHT marks a column with none. */
+        public boolean hasHeight(int x, int z) {
+            if (!world.isInThread()) {
+                return onWorld(world, () -> hasHeight(x, z));
+            }
+            HeightmapColumn heightmap = store.getComponent(reference, HeightmapColumn.getComponentType());
+            return heightmap != null && hasHeightmapEntry(heightmap.getHeight(x, z));
+        }
+
+        static boolean hasHeightmapEntry(int engineHeight) {
+            return engineHeight != HeightmapColumn.NO_HEIGHT;
+        }
+
         /** 0.5 {@code WorldChunk/BlockChunk.getTint}: the column tint, still held by the 0.7.2 BlockChunk. */
         public int getTint(int x, int z) {
             if (!world.isInThread()) {

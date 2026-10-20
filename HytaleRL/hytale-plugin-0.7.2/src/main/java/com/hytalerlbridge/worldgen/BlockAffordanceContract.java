@@ -15,7 +15,7 @@ public final class BlockAffordanceContract {
         "hytalerl_block_affordance_dictionary_v1";
     public static final int VERSION = 1;
     public static final String DICTIONARY_SHA256 =
-        "4f2104af54536d75d357c44af972422803e2e51035ec4a19545f3c5089477e24";
+        "a09b94411592dda21683826f7f1961c80e26a86d68dc6d376027a4beb023dba2";
 
     public static final int TAG_BREAKABLE = 1 << 0;
     public static final int TAG_ORE = 1 << 1;
@@ -48,7 +48,10 @@ public final class BlockAffordanceContract {
         "Soils",
         "Unbreakable",
         "VolcanicRocks",
-        "Woods"
+        "Woods",
+        // 0.7.2 appends these two; the 21 names above keep their portable indices.
+        "Metals",
+        "GoblinMetal"
     );
 
     private BlockAffordanceContract() {}

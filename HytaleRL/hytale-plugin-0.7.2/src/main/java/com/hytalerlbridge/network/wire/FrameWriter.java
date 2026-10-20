@@ -4,6 +4,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
+import java.util.List;
 import org.msgpack.core.MessageBufferPacker;
 import org.msgpack.core.MessagePack;
 import org.msgpack.core.MessagePacker;
@@ -99,6 +100,11 @@ public final class FrameWriter {
             packer.packLong(number);
         } else if (value instanceof Number number) {
             packer.packDouble(number.doubleValue());
+        } else if (value instanceof List<?> list) {
+            packer.packArrayHeader(list.size());
+            for (Object item : list) {
+                packInfoValue(packer, item);
+            }
         } else {
             packer.packString(value.toString());
         }

@@ -7,6 +7,8 @@ import hashlib
 import json
 from typing import Mapping
 
+from hytalegym.server_versions import server_profile
+
 
 BLOCK_AFFORDANCE_SCHEMA = "hytalerl_block_affordance_dictionary_v1"
 BLOCK_AFFORDANCE_VERSION = 1
@@ -27,7 +29,7 @@ BLOCK_AFFORDANCE_TAG_CAPACITY = 16
 
 # Index zero is the valid absence of a Breaking declaration. Unknown strings
 # are rejected rather than assigned a process-dependent runtime ordinal.
-GATHER_TYPES = (
+_GATHER_TYPES_05 = (
     "none",
     "Benches",
     "Branches",
@@ -50,6 +52,13 @@ GATHER_TYPES = (
     "VolcanicRocks",
     "Woods",
 )
+# 0.7.2 appends Metals and GoblinMetal (the installed census has 22 names);
+# the 0.5 table keeps its 21 names and indices.
+_GATHER_TYPES_BY_SERVER = {
+    "0.5.7": _GATHER_TYPES_05,
+    "0.7.2": _GATHER_TYPES_05 + ("Metals", "GoblinMetal"),
+}
+GATHER_TYPES = _GATHER_TYPES_BY_SERVER[server_profile().certified_version]
 GATHER_TYPE_NONE = 0
 GATHER_TYPE_UNBREAKABLE = GATHER_TYPES.index("Unbreakable")
 

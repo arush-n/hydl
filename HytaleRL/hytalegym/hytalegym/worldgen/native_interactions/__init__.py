@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
+from hytalegym.server_versions import server_profile
+
 # Re-exported to preserve this module's attribute surface.
 from hytalegym.worldgen.native_interactions._contract import (  # noqa: F401
     _canonical_sha256,
@@ -35,14 +37,13 @@ NATIVE_ITEM_INTERACTION_SCHEMA_V3 = (
 NATIVE_ITEM_INTERACTION_SCHEMA = NATIVE_ITEM_INTERACTION_SCHEMA_V2
 NATIVE_ITEM_INTERACTION_VERSION = 2
 NATIVE_ITEM_INTERACTION_VERSION_V3 = 3
-NATIVE_ITEM_TRIGGER_CAPACITY = 25
 NATIVE_ITEM_INTERACTION_CAPACITY = 256
 NATIVE_ITEM_EDGE_CAPACITY = 512
 NATIVE_ITEM_CHARGE_TIME_CAPACITY = 16
 NATIVE_ITEM_BLOCK_CHANGE_CAPACITY = 256
 NATIVE_ITEM_METADATA_CAPACITY = 16_384
 
-INTERACTION_TYPE_NAMES = (
+_INTERACTION_TYPE_NAMES_05 = (
     "Primary",
     "Secondary",
     "Ability1",
@@ -69,6 +70,15 @@ INTERACTION_TYPE_NAMES = (
     "Dodge",
     "GameModeSwap",
 )
+# 0.7.2 appends Ability4, OnBreak and OnBreakImpact; no existing index moves.
+_INTERACTION_TYPE_NAMES_BY_SERVER = {
+    "0.5.7": _INTERACTION_TYPE_NAMES_05,
+    "0.7.2": _INTERACTION_TYPE_NAMES_05 + ("Ability4", "OnBreak", "OnBreakImpact"),
+}
+INTERACTION_TYPE_NAMES = _INTERACTION_TYPE_NAMES_BY_SERVER[
+    server_profile().certified_version
+]
+NATIVE_ITEM_TRIGGER_CAPACITY = len(INTERACTION_TYPE_NAMES)
 
 
 @dataclass(frozen=True, slots=True)

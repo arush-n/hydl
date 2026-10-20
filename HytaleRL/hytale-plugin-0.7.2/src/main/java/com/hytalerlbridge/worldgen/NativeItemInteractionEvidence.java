@@ -55,7 +55,7 @@ public record NativeItemInteractionEvidence(
     public static final String SCHEMA =
         "hytalerl_native_item_interaction_evidence_v3";
     public static final int VERSION = 3;
-    public static final int TRIGGER_CAPACITY = 25;
+    public static final int TRIGGER_CAPACITY = NativeInteractionTypes.WIRE_TYPES.size();
     public static final int INTERACTION_CAPACITY = 256;
     public static final int EDGE_CAPACITY = 512;
     public static final int CHARGE_TIME_CAPACITY = 16;
