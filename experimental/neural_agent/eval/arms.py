@@ -34,8 +34,10 @@ The arms follow the composition brief and
   ``--js1-heads PATH`` loads them (``jev/system_one/train_supervised.load_heads``).
 * ``jprog``: a host-mode arm wired like ``j_lm``. ``ProgramExecutor``
   (``jev/programs.py``, SYSTEM_ONE.md section 9.9) runs one hand-written behaviour
-  program on every lane: ``NA_PROGRAM=J0`` (the default) or ``SEQ``, with the
-  feedback rule's window ``NA_NO_REISSUE`` seconds (default 0, off). It uses the
+  program on every lane: ``NA_PROGRAM=J0`` (the default) or any other key of
+  ``jev/programs.py`` ``PROGRAMS`` (SEQ, COMBAT, the combat styles COUNTER,
+  PRESSURE and HIT_AND_RUN), with the feedback rule's window ``NA_NO_REISSUE``
+  seconds (default 0, off). It uses the
   registry's control table. The report labels it ``jprog-<program>``, plus
   ``-noreissue<w>s`` when the rule is on. In the eager runner's timed session,
   ``session.run_session`` binds its scratchpad to the executor, which then also
