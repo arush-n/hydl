@@ -331,10 +331,58 @@ after its fidelity rows pass.
 - Cloning has 32 traces on two worlds (README 2.8): H6 may fail on data, not on method. More worlds are recorded
   first if it does.
 
+## 7. Stage L: combat skill through a league (owner, 2026-10-20; L4 and L5 wait on the owner's yes)
+
+The owner, after watching the referee's replays in the Console: "these are very simple training strategies which are a
+good proof of concept but it needs to be a lot more complex than this". Then: start with combat skill through a
+league, and reopen training now, with the richer recipe.
+
+**Goal.** Combat skills that show skill against varied opponents: reading the opponent, choosing among the weapon's
+moves, spacing, adapting. They are measured against a league of opponents rather than one scripted opponent, and
+they move naturally. The single-rule scripted bodies of 2026-10-19 are the floor, not the target.
+
+| Step | What | Gate |
+|---|---|---|
+| L1 | A two-actor harness: both entities under policy control in one arena, through the gym's multi-actor path (a policy-controlled entity mask, per-actor observation and decoding). The skill layer (the referee and its bodies or modules) drives the agent; a league member drives the opponent. Both perceive legally. | A scripted body against the production opponent through the harness reproduces today's numbers within noise. |
+| L2 | A league of scripted styles: counter-puncher, rusher, kiter and turtler, from the style knobs (`IDEAS.md` idea 2), plus the production opponent; Elo ratings (`arena/training/selfplay/league.py`). | The styles beat each other in a cycle, not in a line: no single style dominates. |
+| L3 | A lookahead teacher (privileged). Every K ticks it forks the simulator's state and rolls each candidate move H ticks forward against the opponent's policy, all candidates at once: each ability slot, charge, guard, a step in, out or aside, wait. It takes the best by damage dealt minus damage taken plus a spacing term. | It beats every scripted style by a clear margin (2 SE), or it is not a teacher. |
+| L4 | The combat cohort distilled from the teacher by DAgger on the student's own states. Modules on the frozen trunk (v2 tokens, the perception channel on gen 7) for sword (its move choice across the slots, and charge), guard, punish, keep_range, evader and avoid; the style scalars as inputs. | The student keeps the teacher's win rate against the league within 2 SE, on legal perception. |
+| L5 | PPO from the distilled cohort, with a decaying pull back to it (section 2b), against the league: the scripted styles, the production opponent, and frozen snapshots of the student added as it improves, under rating-aware matchmaking. A motion prior from the native traces keeps it natural (AMP, Peng et al. 2021). | Its rating against the league rises over snapshots; it wins on held-out styles; it does not collapse (the section 2b guards). |
+| L6 | The game's own NPC combat: the native fight traces cloned into a behaviour policy (`arena/training/imitation/native_replay.py`, `install_native_teacher_policy`), as a league opponent and the source of the motion prior. | The cloned policy reproduces the traces' move statistics. |
+
+**Bars, every run.**
+- Win rate, and damage dealt over damage taken, against each league member, held-out styles included.
+- Skill, not damage alone (`IDEAS.md` idea 10): hits per swing, punishes and blocks landed, the variety of moves used
+  (their entropy), the spacing held.
+- Legality: the view sector, occlusion, the sensor range.
+- Naturalness against the native traces.
+- A comparison with the scripted bodies and with the lookahead teacher.
+
+**Order and asks.**
+- L1 to L3 are build and measurement, with no learning and no budget: they start now.
+- L4 and L5 are the training runs. Each starts on the owner's yes to its budget, after a smoke that reaches a success
+  branch (section 2b, rule 2).
+- L6 waits on an inventory of the native traces (`agent_skills/training_runs/traces_072`,
+  `HytaleRL/artifacts/native-trace-*`).
+
+**Risks.**
+- The multi-actor arena is the gym's. Plugging the skill layer in as one actor's controller may need a seam from the
+  simulator side.
+- The local geometry window (9 blocks) keeps this stage to melee; ranged weapons and cover wait on the Region route.
+- The lookahead teacher multiplies the simulation cost by candidates times horizon. It runs every K ticks, and its cost
+  is measured first.
+- A self-play league can cycle, or collapse onto one strategy (Balduzzi et al. 2019). The scripted styles stay in the
+  pool as anchors, as AlphaStar kept its exploiters (Vinyals et al. 2019).
+
 ## References
 
 - Agarwal, R., et al. (2021). Deep reinforcement learning at the edge of the statistical precipice. NeurIPS.
   arXiv:2108.13264.
+- Balduzzi, D., et al. (2019). Open-ended learning in symmetric zero-sum games. ICML.
+- Bansal, T., Pachocki, J., Sidor, S., Sutskever, I., Mordatch, I. (2018). Emergent complexity via multi-agent competition. ICLR.
+- Elo, A. E. (1978). The Rating of Chessplayers, Past and Present. Arco.
+- Peng, X. B., Ma, Z., Abbeel, P., Levine, S., Kanazawa, A. (2021). AMP: Adversarial motion priors for stylized physics-based character control. ACM TOG (SIGGRAPH).
+- Vinyals, O., et al. (2019). Grandmaster level in StarCraft II using multi-agent reinforcement learning. Nature 575.
 - Andrychowicz, M., et al. (2021). What matters for on-policy deep actor-critic methods? A large-scale study. ICLR.
   arXiv:2006.05990.
 - Chen, D., Zhou, B., Koltun, V., and Krähenbühl, P. (2019). Learning by cheating. CoRL. arXiv:1912.12294.
