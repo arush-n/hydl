@@ -54,8 +54,9 @@ ANY_WORLD: tuple[tuple[float, ...], tuple[float, ...]] = ((-1.0e9,) * 3, (1.0e9,
 _SEEN: int = feature_index("ticks_since_target_seen")
 
 
-def combine_from_scratchpad(state: SharedState, combiner: Combiner, tick: int,
-                            contexts: Mapping[int, AgentContext]) -> dict[int, CombinedStep]:
+def combine_from_scratchpad(state: SharedState, combiner: Combiner, tick: int, contexts: Mapping[int, AgentContext],
+                            reports: Mapping[int, Mapping[str, Mapping[str, float]]] | None = None,
+                            ) -> dict[int, CombinedStep]:
     """Run one tick of the combiner on S_t and write the statuses back.
 
     Args:
@@ -64,6 +65,9 @@ def combine_from_scratchpad(state: SharedState, combiner: Combiner, tick: int,
         tick: The tick.
         contexts: Agent -> its context for this tick (world bounds, known entities, legal scopes,
             observation and belief tokens). Every agent to step this tick.
+        reports: Agent -> verb -> the body's named reports this tick (``scripted_bodies.REPORTS``). An ``accepted``
+            or ``running`` status of a request of that verb carries them in its ``progress``, beside the host
+            body's own signals.
 
     Returns:
         Agent -> the combiner's step (factors, statuses, head composition, grants).
@@ -72,6 +76,15 @@ def combine_from_scratchpad(state: SharedState, combiner: Combiner, tick: int,
     requests = state.requests
     steps = {agent: combiner.step(tick, agent, requests.for_agent(agent), contexts[agent])
              for agent in sorted(contexts)}
+    if reports:
+        for agent, step in steps.items():
+            verbs = {request.request_id: request.verb for request in requests.for_agent(agent)}
+            by_verb = reports.get(agent, {})
+            statuses = tuple(
+                dataclasses.replace(status, progress={**dict(status.progress or ()), **by_verb[verbs[status.request_id]]})
+                if status.kind in ("accepted", "running") and verbs.get(status.request_id) in by_verb else status
+                for status in step.statuses)
+            steps[agent] = step._replace(statuses=statuses)
     statuses = tuple(status for agent in sorted(steps) for status in steps[agent].statuses)
     if statuses:
         skills = state.skills
@@ -173,13 +186,30 @@ class CombiningDecider:
             return
         object.__setattr__(self, "_combined_tick", tick)
         seen = target_seen(transition.hierarchy_step.belief_update.belief)
-        steps = combine_from_scratchpad(state, self.combiner, tick, lane_contexts(seen, self.world_bounds))
+        steps = combine_from_scratchpad(state, self.combiner, tick, lane_contexts(seen, self.world_bounds),
+                                        reports=self._reports(transition))
         object.__setattr__(self, "last_steps", steps)
         for step in steps.values():
             for status in step.statuses:
                 self.status_counts[status.kind] += 1
                 if status.kind == "rejected":
                     self.status_counts[f"rejected:{status.reason.split(':', 1)[0]}"] += 1
+
+    def _reports(self, transition: Any) -> dict[int, dict[str, dict[str, float]]] | None:
+        """The served actor's reports of this tick (``diagnostics["reports"]`` float[B, V, R], ``granted_actor.py``),
+        per lane and verb by name; None without a served actor or when the decision carries none."""
+
+        if self.actor_verbs is None:
+            return None
+        diagnostics = getattr(getattr(transition.hierarchy_step, "actor_decision", None), "diagnostics", None)
+        values = diagnostics.get("reports") if isinstance(diagnostics, Mapping) else None
+        if values is None:
+            return None
+        from experimental.neural_agent.skill_agent.runtime.scripted_bodies import REPORTS
+
+        values = np.asarray(values, dtype=np.float64)
+        return {lane: {verb: dict(zip(REPORTS, values[lane, index].tolist())) for index, verb in enumerate(self.actor_verbs)}
+                for lane in range(values.shape[0])}
 
 
 __all__ = ["ANY_WORLD", "SKILLS_WRITER", "TARGET_ENTITY", "CombiningDecider", "combine_from_scratchpad", "lane_contexts",

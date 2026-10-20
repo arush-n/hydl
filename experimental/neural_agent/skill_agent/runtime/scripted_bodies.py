@@ -168,6 +168,31 @@ BODIES = {"idle": idle, "evader": evader, "sword": sword, "guard": guard, "punis
           "keep_range": keep_range}
 """Verb -> scripted body."""
 
+FACING_ME_DEGREES = 60.0
+"""A target faces the agent when its head turns within this angle of the bearing to the agent: half the 120-degree
+view sector of the gym's legal observation, so the agent stands in the sector the target looks through. The entity
+row publishes the angle as ``head_facing_error``, degrees over 180."""
+
+REPORTS: tuple[str, ...] = ("seen", "distance", "facing_me", "in_reach", "acting")
+"""What a body reports each tick, by name; the list is append-only, as the verb ids are (IDEAS.md idea 8). ``seen``:
+the target is perceived (0 or 1). ``distance``: its distance in blocks, 0 when unseen. ``facing_me``: it faces the
+agent (``FACING_ME_DEGREES``). ``in_reach``: a strike would land (the strike's gate: within ``REACH_BLOCKS`` and
+``FRONT_DEGREES``). ``acting``: the body moves some head away from neutral this tick; a granted body that never acts
+is waiting, for reach, a wind-up or a sight of the target."""
+
+
+def reports(observation: Any, factors: jax.Array, neutral: jax.Array) -> jax.Array:
+    """``REPORTS`` of one body this tick, float32[B, len(REPORTS)], from the legal observation and the body's choices
+    ``factors`` int32[B, 12] against the neutral choices ``neutral``."""
+
+    seen = target(observation)
+    facing = jnp.abs(observation.base.entity_f32[:, 0, _FLOAT["head_facing_error"]]) * 180.0 <= FACING_ME_DEGREES
+    in_reach = seen.seen & (seen.distance <= REACH_BLOCKS) & (jnp.abs(seen.bearing) <= FRONT_DEGREES)
+    columns = (seen.seen, jnp.where(seen.seen, seen.distance, 0.0), seen.seen & facing, in_reach,
+               jnp.any(factors != neutral, axis=1))
+    return jnp.stack([jnp.asarray(column, jnp.float32) for column in columns], axis=1)
+
 assert HEAD["locomotion_gait_compass"] == LOCOMOTION_HEAD and HEAD["body_yaw_delta_bins"] == BODY_YAW_HEAD
 
-__all__ = ["BODIES", "Target", "evader", "guard", "idle", "keep_range", "legal", "punish", "sword", "target"]
+__all__ = ["BODIES", "FACING_ME_DEGREES", "REPORTS", "Target", "evader", "guard", "idle", "keep_range", "legal",
+           "punish", "reports", "sword", "target"]

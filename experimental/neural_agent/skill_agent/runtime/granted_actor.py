@@ -12,6 +12,10 @@ Every body runs on the whole batch each tick and the table selects per lane and 
 skill: a static computation that ``jax.jit`` accepts. A body sees the ticks since its own grant. The heads are the
 simulator's twelve (the gen-5 layout, which the gen-7 render keeps); a head belongs to the scope ``surface.scope_of``
 names.
+
+Reports (IDEAS.md idea 8): each tick every verb's body also reports ``scripted_bodies.REPORTS`` from the observation
+and its own choices, as ``diagnostics["reports"]`` float32[B, V, R]. ``CombiningDecider`` writes a granted request's
+reports onto its status on the blackboard, where the decision layer and the LLM read them.
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ from adk.architecture.components import ActorDecision
 from experimental.neural_agent.skill_agent.contract.surface import SCOPE_NAMES, scope_of
 from experimental.neural_agent.skill_agent.runtime.combiner import ActiveRequestTable, BodyStep, CombinedStep
 from experimental.neural_agent.skill_agent.runtime.scripted_bodies import BODIES, idle
+from experimental.neural_agent.skill_agent.runtime.scripted_bodies import reports as body_reports
 from hytalegym.jax.combat.observation.v3.policy import ARSENAL_POLICY_ACTION_HEAD_NAMES
 
 ArrayBody = Callable[[Any, jax.Array, jax.Array, jax.Array], jax.Array]
@@ -55,6 +60,13 @@ def granted_factors(table: ActiveRequestTable, observation: Any, mask: jax.Array
                     bodies: Sequence[ArrayBody]) -> jax.Array:
     """The merged action int32[B, 12]: each head takes the choice of the body granted on its scope, or neutral."""
 
+    return _granted(table, observation, mask, bodies)[0]
+
+
+def _granted(table: ActiveRequestTable, observation: Any, mask: jax.Array,
+             bodies: Sequence[ArrayBody]) -> tuple[jax.Array, list[jax.Array], jax.Array]:
+    """The merged action, every body's own choices (in verb order) and the neutral choices."""
+
     outputs = []
     lanes = jnp.arange(table.verb.shape[0])
     for verb, body in enumerate(bodies):
@@ -68,7 +80,7 @@ def granted_factors(table: ActiveRequestTable, observation: Any, mask: jax.Array
         for verb, output in enumerate(outputs):
             choice = jnp.where(granted == verb, output[:, head], choice)
         columns.append(choice)
-    return jnp.stack(columns, axis=1).astype(jnp.int32)
+    return jnp.stack(columns, axis=1).astype(jnp.int32), outputs, neutral
 
 
 class GrantedActor:
@@ -90,12 +102,15 @@ class GrantedActor:
 
     def __call__(self, state: ActiveRequestTable, belief: Any, goal_payload: Any, actor_input: Any, key: jax.Array,
                  /) -> ActorDecision:
-        factors = self.factors(state, actor_input.legal_observation, actor_input.action_mask)
+        observation = actor_input.legal_observation
+        factors, outputs, neutral = _granted(state, observation, jnp.asarray(actor_input.action_mask, jnp.bool_),
+                                             self._bodies)
+        reports = jnp.stack([body_reports(observation, output, neutral) for output in outputs], axis=1)
         lanes = factors.shape[0]
         zeros = jnp.zeros((lanes,), dtype=jnp.float32)
         return ActorDecision(state=state, action_factors=factors, logits=None, behavior_log_probability=zeros,
                              value=zeros, terminate_goal=jnp.zeros((lanes,), dtype=jnp.bool_),
-                             diagnostics={"granted": state.verb >= 0})
+                             diagnostics={"granted": state.verb >= 0, "reports": reports})
 
 
 def continuous(request: Any, ticks_since_start: int, observation_tokens: Any, belief_tokens: Any) -> BodyStep:

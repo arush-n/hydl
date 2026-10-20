@@ -113,6 +113,7 @@ privileged scripts and keeps the student on legal perception ("learning by cheat
   Adversarial Skill Embeddings (Peng et al. 2022) learn reusable, controllable skills the same way, with the
   cross-entropy form r_style = -log(1 - D(s_t, s_{t+1})).
 - **Uniqueness**: no two agents need the same z.
+- **Growth** (owner: "5 names for now but in the future there should be many"): the names are an append-only list, as the verb ids are (`neural_skills/spec.py`); a module trained before a name existed reads it as 0 (neutral).
 
 ## Idea 3: vague requests
 
@@ -185,7 +186,43 @@ per environment family, preconditions, failure modes, calibration.
 
   Upward the same holds: the skills write events and numbers, and the views turn them into words for the LLM.
 
+**First slice built (2026-10-19 night).**
+- What: every verb's body reports `scripted_bodies.REPORTS` each tick: seen, distance, facing_me (the target's head
+  within 60 degrees of the bearing to the agent), in_reach, acting. The granted actor carries them as
+  `diagnostics["reports"]`, and `CombiningDecider` writes them into each granted request's status (`progress`) on
+  `skills`, with no change to the blackboard's schema.
+- Checked: in a COMBAT referee run every granted status carried them.
+- Shown at once: with the legal view sector on, an evader that loses sight of the threat stands still (acting 0,
+  seen 0). The remembered last-seen position in its request is what it needs.
+
+## Idea 9: inputs as wide as legality allows, each module using what it needs
+
+The owner: "we can expand the information that the model takes in, the more legal information the better, not every
+neural layer will activate each input but if needed it should."
+
+The architecture already allows it. The trunk attends over token sets, and each skill's module cross-attends to the
+trunk's tokens (`model/generalist.py`). A module that never needs a channel learns to ignore it, and one that does
+can find it, so a new legal channel costs a module nothing.
+
+Two bounds:
+- **Legality**: every input passes the legal-observation gate.
+- **Time**: the per-tick cost stays within 30 Hz, measured whenever the schema widens (`bench/bench_perception.py`).
+
+Candidates, beside what is read today:
+- the remembered last-seen positions of what left the agent's sight;
+- cover at range;
+- block candidates (ask 4);
+- fluid ids (ask 6);
+- role ids (ask 1);
+- the request's own remembered context (idea 8).
+
 ## A proposed order, if approved (architecture only; training stays paused)
+
+**The owner's picks (2026-10-19 night):** build first the skills' reports (idea 8) and the guerrilla proof (idea 5);
+the ideas stay ideas while they are prototyped, each moving into `BUILD.md` or `TRAINING_PLAN.md` once proven; the
+behaviour scalars start with five names, and "in the future there should be many", so the list is append-only like
+the verb ids; training reopens after the guerrilla proof, with the first cohort trained together.
+
 
 1. The neural layer's reports (idea 8): events and calibrated chances into `skills`, routed per reader by utility;
    and the request fields the decision layer passes down (remembered positions, style, urgency), with the
