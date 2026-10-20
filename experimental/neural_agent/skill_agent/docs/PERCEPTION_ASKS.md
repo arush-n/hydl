@@ -45,7 +45,7 @@ before any field lands.
 | 5 | accepted, scheduled after certification (2026-10-19) | `entity_held_item_id` (i32; 0 when none or not legally observed) |
 | 6 | accepted, scheduled after certification (2026-10-19) | `fluid_id` per geometry token (i32; visible fluids only) |
 | 7 | answered (2026-10-19) | `weapon_id` is already the held weapon's semantic id (`jax/combat/arsenal/profiles/hytale_0_5_7.py:989`, checked); a held item that is not a weapon comes through `entity_held_item_id`. The adapter can read the held weapon now (a follow-up). |
-| 8 | sent (2026-10-19, owner's yes) | The agent's own body yaw: `body_yaw_sin`, `body_yaw_cos` in the gen-7 channel. Today the self row's yaw is the head's (`v1/runtime/encoder.py:323`) and the body yaw is published nowhere; the trained walk/look network reads it. The agent knows its heading. Until it lands, the gen-5 spine reads it from the environment, a labelled non-legal stopgap. |
+| 8 | sent (2026-10-19, owner's yes); low priority since the same day | The agent's own body yaw: `body_yaw_sin`, `body_yaw_cos` in the gen-7 channel. Today the self row's yaw is the head's (`v1/runtime/encoder.py:323`). Found after sending: while the target is visible the body yaw is recoverable from published fields, the head yaw minus (the target's head-frame bearing in the combat prefix minus its body-frame bearing in the entity row), exactly on 960 samples (`runtime/neural_pursuit.py`, `body_yaw`); the spine uses that, so no stopgap reads the environment. The ask still covers the case with no target in view. |
 
 ## Already published, and read by the v2 adapter
 
