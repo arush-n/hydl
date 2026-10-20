@@ -25,6 +25,27 @@ and leaves the token's `known` feature at 0.
 | 6 | Fluids | World geometry tokens carry semantic flags, no fluid id (`v3/tokens/world.py:34-50`) | The fluid's semantic id per geometry token | A fluid is visible |
 | 7 | The agent's held item, by id | `weapon_i32` publishes `weapon_id`, `weapon_family`, `active_ability_slot` (`v3/schema/contract.py:20-24`) | Say whether `weapon_id` is the held item's semantic id; if not, publish that id | The agent knows what it holds |
 
+## Status
+
+**2026-10-19: all seven accepted** by the 0.7.2 port's coordinator (the simulator session), scheduled as the next
+simulator task after the 0.7.2 certification unless the owner reorders. The shape: an opt-in gen-7 perception channel
+(working name `perception_v2`) produced by the render beside the v3 observation, behind the gen-7 profile switch, so
+the v1 and v3 layouts and the gen-5 identity fingerprints stay bit-identical and nothing in
+`jax/combat/observation` changes in place. Every per-entity and per-block field passes the legal-observation gate of
+the certified pair path (view sector, sensor range, line of sight with the detail-hitbox rule); a role or held item
+is never published for an entity row the gate blanks. The channel's contract (layout, capacities, gate rules) comes
+before any field lands.
+
+| # | Status | Field, as proposed by the simulator side |
+|---|---|---|
+| 1 | accepted, scheduled after certification (2026-10-19) | `entity_role_id` (i32; 0 for a player); `entity_kind` gains `ENTITY_KIND_PLAYER` |
+| 2 | accepted, scheduled after certification (2026-10-19) | `inventory_i32`, `inventory_f32`: the v3 inventory tokens republished unchanged |
+| 3 | accepted, scheduled after certification (2026-10-19) | `entity_capacity`, a configuration (16 by default, 32 and above), rows padded with id 0 |
+| 4 | accepted, scheduled after certification (2026-10-19) | `block_candidate_i32` rows (cell x, y, z, face, block_id, reachable) and `block_candidate_capacity`, mirroring the bridge's native world-action capture |
+| 5 | accepted, scheduled after certification (2026-10-19) | `entity_held_item_id` (i32; 0 when none or not legally observed) |
+| 6 | accepted, scheduled after certification (2026-10-19) | `fluid_id` per geometry token (i32; visible fluids only) |
+| 7 | answered (2026-10-19) | `weapon_id` is already the held weapon's semantic id (`jax/combat/arsenal/profiles/hytale_0_5_7.py:989`, checked); a held item that is not a weapon comes through `entity_held_item_id`. The adapter can read the held weapon now (a follow-up). |
+
 ## Already published, and read by the v2 adapter
 
 Each entity row's position and velocity in the agent's frame, visibility, health fraction and `alive`; its world yaw
