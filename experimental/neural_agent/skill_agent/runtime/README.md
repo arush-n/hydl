@@ -13,6 +13,7 @@ statuses back. Fixed and exact: the thinking happens inside the bodies (`../mode
 | `parity.py` | 184 | Today's one goal per lane as one request through the combiner path (A6). |
 | `joint_check.py` | 104 | B3's joint check: the composition arms with and without the combiner on S_t behind the middle layer's program executor. |
 | `neural_pursuit.py` | 194 | The spine's skill (2026-10-19): the A2 C' network composing walk_to and look_at as the decision layer's `pursuit`, in the dispatcher's `Skill` protocol, from the legal observation only. Its body yaw comes from published fields: the head yaw minus the target's head-frame bearing less its body-frame bearing (exact while the target is visible). |
+| `gen7.py` | 84 | Runs any skill-layer module or script on a private gen-7 render (owner, 2026-10-19: gen 7 now): renders the 0.7.2 overlay into a directory, mounts it before `hytalegym` is imported, restores the v3 legacy module aliases the redirect drops (reported; the coordinator is fixing it in `render.py`). |
 | `spine.py` | 114 | The working spine: `run_composition` with the stand-in pursuit and with the neural one in every arm's dispatcher, every host decider behind the combiner on S_t; the arms' metrics side by side and the statuses streamed. The combiner's grant does not yet gate the action. |
 
 Run (from the repo root). Both take `--out` and pass every other flag to the composition run they wrap, so `--help`
@@ -25,9 +26,11 @@ NA_PROGRAM=J0 JAX_PLATFORMS=cpu .venv/bin/python -m experimental.neural_agent.sk
     --arms flat,j0,shuffled,jprog --runner eager --ticks 64 --batch 8 --episodes 1 --seed 0
 NA_PROGRAM=J0 JAX_PLATFORMS=cpu .venv/bin/python -m experimental.neural_agent.skill_agent.runtime.spine --out <dir> \
     --arms jprog --runner eager --ticks 512 --batch 8 --episodes 2 --seed 0
+JAX_PLATFORMS=cpu .venv/bin/python -m experimental.neural_agent.skill_agent.runtime.gen7 --engine <dir> [--render] \
+    -- <module or script.py> [args]
 ```
 
 Gates: `test_sa_combiner.py`, `test_sa_library.py`, `test_sa_execute_all.py` (every verb and every program runs on
-gen 7), `test_sa_scratchpad.py`, `test_sa_joint.py`, `test_sa_sim_adapter.py`, `test_sa_spine.py`. `parity.py` has no
-unit test: its gate is the recorded run (A6, in `experimental/neural_agent/docs/LEDGER.md`); the spine's numbers are
-recorded there too (2026-10-19).
+gen 7), `test_sa_scratchpad.py`, `test_sa_joint.py`, `test_sa_sim_adapter.py`, `test_sa_spine.py`, `test_sa_gen7.py`.
+`parity.py` has no unit test: its gate is the recorded run (A6, in `experimental/neural_agent/docs/LEDGER.md`); the
+spine's numbers are recorded there too (2026-10-19).

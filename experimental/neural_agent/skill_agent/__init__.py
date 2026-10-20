@@ -24,6 +24,7 @@ Import the submodules, which are sorted into subfolders by purpose (each subfold
 * ``runtime.joint_check``: the composition arms with and without the combiner on S_t behind the program executor (B3).
 * ``runtime.neural_pursuit``: the trained walk/look network (the A2 C' run) as the decision layer's ``pursuit`` skill.
 * ``runtime.spine``: the working spine: the composition run with the stand-in pursuit and with the neural one.
+* ``runtime.gen7``: runs skill-layer code on a private gen-7 render.
 
 ``model``: the networks.
 
