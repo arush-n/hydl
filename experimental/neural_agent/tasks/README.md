@@ -36,3 +36,23 @@ geometry added through `geometry_arsenal_world_capabilities` and `geometry_provi
 - Loadout: `iron_sword` (default) or `iron_shortbow`, through `build_arena(..., loadout=...)`. The CLI has no loadout flag, so
   composition runs use the default. The opponent's loadout is unchanged.
 - Gate: `tests/experimental/neural_agent/test_na_arenas.py` (cover layout and digest, loadout, and the behavioural case).
+
+## duel_arena.py (2026-10-20, task #101, the skill layer's league ask L1)
+
+`make_duel_arena(batch, (loadout0, loadout1), *, view_sector_full_angle_radians, legal_observation_sensor_range)` returns an arena
+whose `reset(keys)` gives `(state, obs0, obs1, mask0, mask1)` and whose `step(state, factors0, factors1, keys)` gives
+`(state, obs0, obs1, mask0, mask1, info, done)`: both entities take external int32[B, 12] factors each tick, each gets its
+own learner v3 observation and bool[B, 124] mask from its own perspective, and the opponent's built-in AI is off
+(`arsenal_runtime_config(..., opponent_controller_mask=zeros)`). Built from the multi-actor package's pieces
+(`policy_actor_assignment`, `actor_first_arsenal_view`, `observe_policy_actors_flat`, `decode_policy_actor_factors_flat`,
+`step_multi_actor_arena`) on the open-flat capabilities; no engine edit. The adapter computes entity 1's perception by
+applying the fixture on entity 1's view (the fixture gates the agent row only), copies the flat floor's actor-world rows to
+entity 1 (the engine zeroes them for non-agent rows), and seeds both heads from `entity_yaw`. No episode horizon: the caller
+stops the loop. Measured (tests/experimental/neural_agent/test_na_duel_arena.py, on disk): each entity moves under its own
+factors, neutral factors keep both still for 100 ticks with the AI off, a sword tap damages entity 1 and both views track it,
+the sector hides a target behind either entity, the sensor range hides both, masks are per entity. The stock open-flat scene has
+no geometry window (geometry_exhausted stays False at 8.5 blocks): the 4-block window of the bow recipe comes from the tests'
+exact flat geometry. Known gap: entity 1's health fractions use the other role's maximum (observation/v1 encoder divides the
+self row by agent_max_health and the target row by target_max_health; the actor-first view does not swap them), pinned by a
+strict xfail until the adapter rescales them.
+
