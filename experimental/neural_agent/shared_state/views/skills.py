@@ -7,13 +7,14 @@ Split out of the single ``shared_state.py`` on 2026-10-18 without changes; the p
 from __future__ import annotations
 
 
-from typing import NamedTuple
+from typing import Collection, NamedTuple, Sequence
 
 import numpy as np
 
 from experimental.neural_agent.contracts import (
     PARAM_WIDTH,
 )
+from experimental.neural_agent.requests import RequestStatus
 
 from ..document import (
     SharedState,
@@ -56,3 +57,29 @@ def view_for_skills(state: SharedState) -> SkillsView:
     )
 
 
+#: The bodies' report names, in the order of ``skill_agent/runtime/scripted_bodies.py`` ``REPORTS`` (append-only there).
+#: Mirrored rather than imported: the decision layer does not import the skill layer's runtime (a test checks they agree).
+REPORT_NAMES: tuple[str, ...] = ("seen", "distance", "facing_me", "in_reach", "acting")
+
+
+def lane_reports(statuses: Sequence[RequestStatus], request_ids: Collection[int]) -> dict[str, float] | None:
+    """Return the body's reports of a lane's live requests, by name, from the newest status that carries them.
+
+    The scratchpad writes the reports into the ``progress`` of ``accepted`` and ``running`` statuses only
+    (``skill_agent/runtime/scratchpad.py``, ``combine_from_scratchpad``).
+
+    Args:
+        statuses: The lane's statuses, oldest first.
+        request_ids: The ids of the lane's live requests, the ones the last decision issued.
+
+    Returns:
+        The values of the names in ``REPORT_NAMES`` that the status carries, or None when no such status exists yet.
+    """
+
+    for status in reversed(statuses):
+        if status.request_id not in request_ids or status.kind not in ("accepted", "running") or not status.progress:
+            continue
+        reports = {name: float(value) for name, value in status.progress if name in REPORT_NAMES}
+        if reports:
+            return reports
+    return None

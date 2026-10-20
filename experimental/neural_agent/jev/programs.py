@@ -151,13 +151,21 @@ nothing. ``P_J0`` and ``P_SEQ`` keep the ungated ``EVADE_ON_DAMAGE``. ``P_COMBAT
 (``NA_PROGRAM=COMBAT``, 2026-10-19). It runs on the combat catalogue
 (``skill_library.library.build_combat_registry``) with ``--arms jprog`` alone, which the composition CLI enforces.
 Its scalars: sword's ``hold_seconds`` is 0.0 (a tap), keep_range's band is KEEP_RANGE_BAND, (3.1, 3.6).
+
+Reports (2026-10-20, ``Report``). The skill layer's bodies publish five reports each tick, the ``REPORTS`` of
+``skill_agent/runtime/scripted_bodies.py``: ``seen``, ``distance``, ``facing_me``, ``in_reach`` and ``acting``. The
+scratchpad writes them into the ``progress`` of their request's ``accepted`` and ``running`` statuses
+(``skill_agent/runtime/scratchpad.py``). Each decision reads, per lane, the newest such status of the lane's live requests
+(``shared_state.views.skills.lane_reports``). A Report condition reads one report by name and falls back to the belief
+when the report is absent; the mapping is in the class docstring. ``Not``, ``AllOf`` and ``Interrupt`` take a Report as
+they take a Predicate. A program that names no Report decides as before.
 """
 
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any, NamedTuple, Sequence
+from typing import Any, Mapping, NamedTuple, Sequence
 
 import jax.numpy as jnp
 import numpy as np
@@ -202,6 +210,7 @@ from experimental.neural_agent.requests import (
     validate,
 )
 from experimental.neural_agent.shared_state import SECTION_WRITERS, RequestsSection, SharedState
+from experimental.neural_agent.shared_state.views.skills import lane_reports
 from experimental.neural_agent.tasks.composition import (
     EVADER_CONSTRAINT,
     EVADER_PRIORITY,
@@ -327,19 +336,91 @@ class TargetPhase:
         return bool(known[_DISTANCE_COLUMN]) and float(features[_DISTANCE_COLUMN]) < self.within_blocks
 
 
+#: The flag reports a Report condition reads (it holds when the report reads 1), and the two distance kinds (their
+#: argument is in blocks; ``distance`` is 0 when the target is unseen).
+REPORT_FLAGS: tuple[str, ...] = ("seen", "facing_me", "in_reach", "acting")
+REPORT_DISTANCES: tuple[str, ...] = ("distance_above", "distance_below")
+#: The belief resets ``ticks_since_target_seen`` to 0 when the target is visible (``belief/core.py``), so below half a tick.
+_SEEN_HALF_TICK: float = 0.5
+
+
+@dataclass(frozen=True)
+class Report:
+    """A condition on one report of the lane's live request, with the belief as the fallback (module docstring).
+
+    ``kind`` is a flag report (``seen``, ``facing_me``, ``in_reach`` or ``acting``, which holds when the report reads 1),
+    or a distance (``distance_above`` or ``distance_below``, comparing the ``distance`` report with ``argument`` in blocks).
+    A report is absent when no status of the lane's live request carries it yet, or the body does not publish it. Then the
+    belief answers:
+
+    - ``seen``: ``ticks_since_target_seen`` is known and below half a tick (the belief resets it when the target is visible);
+    - ``distance_above`` and ``distance_below``: ``target_distance_blocks``, known only while the target is visible;
+    - ``facing_me``, ``in_reach`` and ``acting``: the belief has no reading, so the condition does not hold.
+
+    Raises:
+        ValueError: If the kind is unknown, a distance kind has no finite argument, or another kind has one.
+    """
+
+    kind: str
+    argument: float | None = None
+
+    def __post_init__(self) -> None:
+        """Check the kind, and that exactly the distance kinds carry an argument."""
+
+        kinds = REPORT_FLAGS + REPORT_DISTANCES
+        if self.kind not in kinds:
+            raise ValueError(f"Report.kind must be one of {kinds}, got {self.kind!r}")
+        if (self.kind in REPORT_DISTANCES) != (self.argument is not None):
+            raise ValueError(f"Report {self.kind!r} {'needs' if self.kind in REPORT_DISTANCES else 'takes no'} an argument")
+        if self.argument is not None:
+            argument = float(self.argument)
+            if not math.isfinite(argument):
+                raise ValueError(f"Report.argument must be finite, got {self.argument!r}")
+            object.__setattr__(self, "argument", argument)
+
+    def holds(
+        self, features: Sequence[float], known: Sequence[bool], code: int, reports: Mapping[str, float] | None = None
+    ) -> bool:
+        """Return whether the condition holds on one lane, with the belief row in physical units.
+
+        ``reports`` maps the report names to their values, or is None when the lane has none. ``code`` is the target's
+        attack phase, which a report does not read.
+        """
+
+        del code
+        if self.kind == "seen":
+            if reports is not None and "seen" in reports:
+                return reports["seen"] > 0.5
+            return bool(known[_SEEN]) and float(features[_SEEN]) < _SEEN_HALF_TICK
+        if self.kind in REPORT_DISTANCES:
+            if reports is not None and "distance" in reports:
+                distance = reports["distance"]
+            elif known[_DISTANCE_COLUMN]:
+                distance = float(features[_DISTANCE_COLUMN])
+            else:
+                return False
+            return distance > self.argument if self.kind == "distance_above" else distance < self.argument
+        return reports is not None and reports.get(self.kind, 0.0) > 0.5
+
+
 def _check_condition(condition: Any, owner: str) -> None:
-    """Raise TypeError unless ``condition`` is a Predicate, a TargetPhase, a Not or an AllOf."""
+    """Raise TypeError unless ``condition`` is a Predicate, a TargetPhase, a Report, a Not or an AllOf."""
 
-    if not isinstance(condition, (Predicate, TargetPhase, Not, AllOf)):
-        raise TypeError(f"{owner} takes a Predicate, a TargetPhase, a Not or an AllOf, got {condition!r}")
+    if not isinstance(condition, (Predicate, TargetPhase, Report, Not, AllOf)):
+        raise TypeError(f"{owner} takes a Predicate, a TargetPhase, a Report, a Not or an AllOf, got {condition!r}")
 
 
-def _holds(condition: Any, features: Sequence[float], known: Sequence[bool], code: int) -> bool:
-    """Return whether a condition holds on one lane. A Predicate reads the belief row; the others also read ``code``."""
+def _holds(
+    condition: Any, features: Sequence[float], known: Sequence[bool], code: int, reports: Mapping[str, float] | None = None
+) -> bool:
+    """Return whether a condition holds on one lane. A Predicate reads the belief row; a TargetPhase also reads ``code``;
+    a Report reads ``reports`` (None falls back to the belief); Not and AllOf pass ``reports`` on."""
 
     if isinstance(condition, Predicate):
         return condition.evaluate(features, known)
-    return condition.holds(features, known, code)
+    if isinstance(condition, TargetPhase):
+        return condition.holds(features, known, code)
+    return condition.holds(features, known, code, reports)
 
 
 def _reads_target_phase(condition: Any) -> bool:
@@ -367,10 +448,12 @@ class Not:
     def __post_init__(self) -> None:
         _check_condition(self.part, "Not")
 
-    def holds(self, features: Sequence[float], known: Sequence[bool], code: int) -> bool:
+    def holds(
+        self, features: Sequence[float], known: Sequence[bool], code: int, reports: Mapping[str, float] | None = None
+    ) -> bool:
         """Return whether ``part`` does not hold on one lane (``code`` is the target's phase code, or -1)."""
 
-        return not _holds(self.part, features, known, code)
+        return not _holds(self.part, features, known, code, reports)
 
 
 @dataclass(frozen=True)
@@ -392,10 +475,12 @@ class AllOf:
             _check_condition(part, "AllOf")
         object.__setattr__(self, "parts", parts)
 
-    def holds(self, features: Sequence[float], known: Sequence[bool], code: int) -> bool:
+    def holds(
+        self, features: Sequence[float], known: Sequence[bool], code: int, reports: Mapping[str, float] | None = None
+    ) -> bool:
         """Return whether every part holds on one lane (``code`` is the target's phase code, or -1)."""
 
-        return all(_holds(part, features, known, code) for part in self.parts)
+        return all(_holds(part, features, known, code, reports) for part in self.parts)
 
 
 @dataclass(frozen=True)
@@ -404,13 +489,15 @@ class Interrupt:
 
     skill_id: str
     priority: float
-    predicate: Predicate | TargetPhase | Not | AllOf
+    predicate: Predicate | TargetPhase | Report | Not | AllOf
     params: tuple[float, ...] = ()
 
     def __post_init__(self) -> None:
         _skill_id(self.skill_id, "Interrupt")
-        if not isinstance(self.predicate, (Predicate, TargetPhase, Not, AllOf)) or self.predicate == ALWAYS:
-            raise ValueError("Interrupt.predicate must be a Predicate other than 'always', a TargetPhase, a Not or an AllOf")
+        if not isinstance(self.predicate, (Predicate, TargetPhase, Report, Not, AllOf)) or self.predicate == ALWAYS:
+            raise ValueError(
+                "Interrupt.predicate must be a Predicate other than 'always', a TargetPhase, a Report, a Not or an AllOf"
+            )
         priority = float(self.priority)
         if not math.isfinite(priority):
             raise ValueError(f"Interrupt.priority must be finite, got {self.priority!r}")
@@ -472,6 +559,9 @@ P_COMBAT = Program(
     ),
 )
 PROGRAMS: dict[str, Program] = {"J0": P_J0, "SEQ": P_SEQ, "COMBAT": P_COMBAT}
+# The guerrilla program (2026-10-20) is in its own module, which imports the DSL above, so it is imported after PROGRAMS.
+from experimental.neural_agent.jev.programs_guerrilla import P_GUERRILLA  # noqa: E402
+PROGRAMS["GUERRILLA"] = P_GUERRILLA
 # The combat styles (jev/combat_styles.py, task #100): COUNTER, PRESSURE and HIT_AND_RUN join the names NA_PROGRAM accepts.
 from experimental.neural_agent.jev.combat_styles import built_styles  # noqa: E402
 PROGRAMS.update(built_styles())
@@ -744,7 +834,8 @@ class ProgramExecutor:
                     self._advance(lane, len(steps))
 
             code = -1 if codes is None else int(codes[lane])
-            desired, desired_params, source, priority = self._desired(lane, features[lane], known[lane], code)
+            reports = lane_reports(history.get(lane, ()), self._live[lane]) if bound else None
+            desired, desired_params, source, priority = self._desired(lane, features[lane], known[lane], code, reports)
             current_skill = int(skill[lane])
             if fresh[lane] or ended is not None or desired != current_skill:
                 allowed = (
@@ -860,7 +951,7 @@ class ProgramExecutor:
             self.programs_finished[lane] += 1
 
     def _desired(
-        self, lane: int, features: np.ndarray, known: np.ndarray, code: int = -1
+        self, lane: int, features: np.ndarray, known: np.ndarray, code: int = -1, reports: Mapping[str, float] | None = None
     ) -> tuple[int, tuple[float, ...], int, float]:
         """Return (skill index, params, source, priority) of the goal the lane wants now (module docstring, item 5).
 
@@ -873,7 +964,7 @@ class ProgramExecutor:
             skill = self._interrupt_skill[lane][position]
             if self._blocked[lane, skill] > 0.0 or interrupt.priority <= best:
                 continue
-            if _holds(interrupt.predicate, features, known, code):
+            if _holds(interrupt.predicate, features, known, code, reports):
                 chosen, best = position, interrupt.priority
         if chosen >= 0:
             return self._interrupt_skill[lane][chosen], program.interrupts[chosen].params, _INTERRUPT, best
@@ -1093,6 +1184,7 @@ __all__ = [
     "Program",
     "ProgramExecutor",
     "ProgramStep",
+    "Report",
     "STRIKE_REACH_BLOCKS",
     "SWORD_PRIORITY",
     "TARGET_ENTITY",

@@ -134,10 +134,10 @@ class DeclaredVerbSkill(IdleSkill):
 
 
 def build_combat_registry(batch: int) -> SkillRegistry:
-    """Return the catalogue of the combat program: idle, pursuit, evader, then the four combat verbs.
+    """Return the catalogue of the combat program: idle, pursuit, evader, then the seven combat verbs.
 
-    The verbs come from ``COMBAT_CONTRACTS`` in ``COMBAT_VERBS`` order (sword, guard, punish, keep_range), so their
-    dispatcher indexes are 3 to 6. The default three are unchanged, so an arm that does not run the combat program
+    The verbs come from ``COMBAT_CONTRACTS`` in ``COMBAT_VERBS`` order (sword, guard, punish, keep_range, hide, shortbow,
+    avoid), so their dispatcher indexes are 3 to 9. The default three are unchanged, so an arm that does not run the combat program
     keeps its catalogue.
 
     Args:

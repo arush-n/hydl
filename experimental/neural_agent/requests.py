@@ -20,7 +20,7 @@ contract's ``param_names[i]``. Each argument has a presence flag: ``None`` means
 Argument requirements. ``validate`` takes the verb's contract (its ``param_names`` name the scalars,
 and every named scalar is needed) and an :class:`ArgumentSchema`: which of position, direction,
 entity and cell the verb needs, and which scopes it drives. The schemas come from a mapping keyed by
-verb, ``ARGUMENT_SCHEMAS`` by default (idle, pursuit, evader, and the combat verbs of 2026-10-19). The lower layer's catalogue parser
+verb, ``ARGUMENT_SCHEMAS`` by default (idle, pursuit, evader, the combat verbs of 2026-10-19, and the guerrilla verbs of 2026-10-20). The lower layer's catalogue parser
 will supply the full mapping later. It is passed as ``validate(..., schemas=...)``, so nothing else
 changes when it does.
 
@@ -62,6 +62,15 @@ none; the contract's default control; no checkpoint). ``dodge`` is deferred:
 the gen-7 dodge head is still a stub, so a dodge request has no schema here and ``validate`` returns ``verb_unknown``.
 The id ``guard`` is the catalogue's own (section 12, scoped posture_defence by its section, per the skill layer,
 2026-10-19); no rename on either side.
+
+Guerrilla verbs (2026-10-20). ``hide`` takes the entity, the threat to hide from, and drives locomotion. Its position is
+an optional cover point the body heads for: ``validate`` checks only the arguments a verb needs, so a request is valid with
+or without one, and a position it carries is not checked. ``shortbow`` takes the entity or the position and drives hands,
+abilities_magic and gaze (the muzzle is the head, and aiming is the gaze scope). Its one scalar, ``hold_seconds``, selects
+the draw tier: the bow fires on one tap of ability slot k, with spawn ticks 9, 15, 24, 33 and 42 for k = 0 to 4 (0.41,
+0.68, 1.08, 1.49 and 1.89 s), and the largest tier whose draw fits is taken. ``avoid`` takes the entity and drives
+locomotion, with the scalars ``band_min`` and ``band_max``: it retreats beyond the band, away from the target. The skill
+layer writes their bodies; ``shortbow`` has none yet (``skill_agent/runtime/scripted_bodies.py``, ``BODIES``).
 """
 
 from __future__ import annotations
@@ -235,9 +244,12 @@ ARGUMENT_SCHEMAS: Mapping[str, ArgumentSchema] = MappingProxyType(
         "guard": ArgumentSchema(entity=True, scopes=("posture_defence",)),
         "punish": ArgumentSchema(entity=True, scopes=("hands", "abilities_magic")),
         "keep_range": ArgumentSchema(any_of=(("entity", "position"),), scopes=("locomotion",)),
+        "hide": ArgumentSchema(entity=True, scopes=("locomotion",)),
+        "shortbow": ArgumentSchema(any_of=(("entity", "position"),), scopes=("hands", "abilities_magic", "gaze")),
+        "avoid": ArgumentSchema(entity=True, scopes=("locomotion",)),
     }
 )
-"""The schemas of the proof-of-concept skills (``skill_library/``) and of the four combat verbs (2026-10-19), keyed
+"""The schemas of the proof-of-concept skills (``skill_library/``) and of the four combat verbs (2026-10-19) and the three guerrilla verbs (2026-10-20), keyed
 by skill id. The combat verbs take the target entity; their scalars are the ``param_names`` of ``COMBAT_CONTRACTS``, not part of the
 schema. Their scopes match the peer's catalogue parser where it names
 one (``VERB_SCOPES``: keep_range locomotion; it names punish hands, and the strike rule adds abilities_magic, which
@@ -253,8 +265,9 @@ groups, d4c6cc1, so its entity-unknown check still fires when the entity is the 
 come from. Replace this mapping with the catalogue parser's by passing ``schemas=`` to :func:`validate`.
 """
 
-COMBAT_VERBS: tuple[str, ...] = ("sword", "guard", "punish", "keep_range")
-"""The combat verbs with a schema here. ``dodge`` is deferred (module docstring)."""
+COMBAT_VERBS: tuple[str, ...] = ("sword", "guard", "punish", "keep_range", "hide", "shortbow", "avoid")
+"""The combat verbs with a schema here: the four of 2026-10-19, then the guerrilla verbs of 2026-10-20. ``dodge`` is
+deferred (module docstring)."""
 
 
 def _combat_contract(
@@ -292,13 +305,21 @@ COMBAT_CONTRACTS: Mapping[str, SkillContract] = MappingProxyType(
         "keep_range": _combat_contract(
             "keep_range", ("belief", "target_i32", "action_mask"), "distance_kept", "target_not_visible", ("band_min", "band_max")
         ),
+        "hide": _combat_contract("hide", ("belief", "target_i32", "action_mask"), "target_out_of_sight", "target_still_visible"),
+        "shortbow": _combat_contract(
+            "shortbow", ("belief", "target_i32", "action_mask"), "target_hit", "target_not_visible", ("hold_seconds",)
+        ),
+        "avoid": _combat_contract(
+            "avoid", ("belief", "target_i32", "action_mask"), "beyond_band", "target_not_visible", ("band_min", "band_max")
+        ),
     }
 )
 """The declared contracts of the combat verbs, keyed by id. Nothing else in the decision layer or the skill layer
 declares these ids yet (checked 2026-10-19). ``target_i32`` is the legal observation's target integer group, which
 holds ``attack_phase`` and ``attack_index``. The success and failure labels are placeholders for the lower layer.
 Scalars (2026-10-19): sword takes ``hold_seconds`` (the catalogue's section-9 group default), keep_range takes
-``band_min`` and ``band_max`` (the catalogue's section-12 band tactics); punish and guard take none."""
+``band_min`` and ``band_max`` (the catalogue's section-12 band tactics); punish and guard take none.
+Guerrilla (2026-10-20): shortbow takes ``hold_seconds``, avoid takes ``band_min`` and ``band_max``, hide takes none."""
 
 
 # ---- the records ----
