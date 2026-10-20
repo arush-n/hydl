@@ -167,6 +167,12 @@ def run_checks(stage: Path, manifest: dict, version: str, repository_root: Path)
     checks.add("stationary recording exact", stationary.get("exact") is True)
     facts["stationary_projection_semantic_sha256"] = str(stationary.get("report_semantic_sha256", "")).upper()
 
+    block_use = stage / manifest["publication"]["targets"].get("block_use_recording", "fixtures/native_block_use_recording.json")
+    if block_use.is_file():
+        status = _read_json(block_use).get("typed_synthetic_status", "certified (key absent: a recording older than 2026-10-19)")
+        checks.add("block-use typed synthetic status (informational)", True, str(status))
+        facts["block_use_typed_synthetic_status"] = str(status)
+
     pins = _read_json(stage / "source-pin-staleness.json")
     checks.add("source-pin report status", pins.get("status") not in (None, "stale_or_unavailable"), str(pins.get("status")))
     facts["source_pin_report_semantic_sha256"] = str(pins.get("report_semantic_sha256", "")).upper()
@@ -298,6 +304,7 @@ def main(argv: list[str] | None = None) -> int:
         "stationary_projection_semantic_sha256": facts["stationary_projection_semantic_sha256"],
         "seed_projection_semantic_sha256": facts["seed_projection_semantic_sha256"],
         "first_capture": manifest.get("first_capture"),
+        "block_use_typed_synthetic_status": facts.get("block_use_typed_synthetic_status"),
         "checks": [{"name": name, "passed": ok, "detail": detail} for name, ok, detail in checks.rows],
         "created_paths": created,
         **receipt_rows,
