@@ -30,7 +30,7 @@ FAMILY_MODULES = (
 
 #: Explicit families: extracted only when named (``--families``), never part of the content manifest. The gen-7
 #: construct reads their checked-in table directly (see crafting_augment_tags.py).
-EXTRA_FAMILY_MODULES = ("crafting_augment_tags",)
+EXTRA_FAMILY_MODULES = ("crafting_augment_tags", "hit_interrupt")
 
 
 def family_module(name: str):

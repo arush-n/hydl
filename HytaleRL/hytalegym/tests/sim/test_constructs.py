@@ -64,7 +64,7 @@ def test_every_changed_switch_has_an_owning_module_and_refuses_until_implemented
                                                          "bench_tiers", "crafting_memories", "timed_crafting",
                                                          "processing_benches", "diagram_crafting",
                                                          "guard_cooldown", "ability_start_split", "shortbow_reset_ammo", "crossbow_variant",
-                                                         "shield_bash_fork", "reset_head_heading", "crafting_augment_tags"}),
+                                                         "shield_bash_fork", "reset_head_heading", "crafting_augment_tags", "hit_interrupt"}),
 )
 def test_stub_entry_points_raise(module_name: str) -> None:
     module = importlib.import_module(f"hytalegym.sim.gen7.mechanics.{module_name}")
