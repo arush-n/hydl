@@ -182,7 +182,9 @@ Line numbers are for `recertification.py` after the first-capture change of 2026
 Current state:
 
 - 0.5.7: compare mode, unchanged. All four references exist, so the run is the same as before. The cascade output is byte-identical before and after the change. The real 0.5 dry run stops at the bridge-identity check, because no 0.5 bridge build exists on this machine (see "Dry runs").
-- 0.7.2: compare mode since 2026-10-19 19:45. The first capture (live run 4, 19:26 to 19:42) passed end to end and was promoted
+- 0.7.2: compare mode since 2026-10-19 19:45; re-promoted at 21:43 for the rebuilt bridge `6F5B6021` (receipt
+  `world-evidence-history/6F5B6021/publication-v12.json`; the 460054A8 evidence is under that folder's `superseded/`). The first
+  capture (live run 4, 19:26 to 19:42) passed end to end and was promoted
   with `promote_world_evidence.py` (receipt `world-evidence-history/460054A8/publication-v12.json`, 62 files: 14 fixtures under
   `fixtures/world/v0_7/`, the 42-file `traversal-v2/` and `world-token-capacity.json` in `region-library-pilot-v2-072/`, the
   manifest, source-pin report, cascade and difference report copied beside the receipt). Identities: Region `9DCA3C71`,
@@ -363,6 +365,14 @@ First capture adds the capacity benchmark (measured 2026-10-19 on the 0.7.2 libr
   records the bridge's closures verbatim (place: `rotation_zero_destination_geometry_unavailable`; the synthetic break cell:
   `block_primary_unavailable`) with the Use path certified; the capabilities probe passes unchanged. Promoted at 19:44 (the
   tool's 44 checks all passed; every destination was absent). Rollback: the receipt's `created_paths`.
+- Runs 5 to 7 (20:55 to 21:41, the rebuilt bridge `6F5B6021` of the batch `dbd30f2`, pin `fda3b20`), compare mode against
+  the 460054A8 promotion: run 5 stopped at the source-pin gate (the census refold had made the mutable_blocks pin stale; the
+  final acceptance round `8773844` fixed it); run 6 stopped at the graph compare's 0.5-only literal
+  (`is_supported_hytale_05_release` in `native_region_traversal_graph_compare.py`, now a release-line check against the
+  profile); run 7 passed end to end (18 candidate rows, 5 fluid-only cells of a cap of 6, the traversal library byte-identical
+  to the first capture). Promoted at 21:43 with `--apply --supersede`: 14 destinations of the 460054A8 promotion moved into
+  `world-evidence-history/460054A8/superseded/`, 60 files written, receipt `world-evidence-history/6F5B6021/publication-v12.json`.
+  The capacity report of the first capture stays (compare mode does not re-measure it).
 
 ### Blockers and what changed
 
