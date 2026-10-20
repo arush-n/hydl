@@ -227,9 +227,12 @@ Night of 2026-10-19: the 0.7.2 World evidence is captured and promoted. Live run
 `b9a1d75`, and the tokens module's override and intermediate state, `7ab2139`; and run 3 exposed the block-use probe's unbound
 typed requests, now bound from the capture with the bridge's closures recorded, task #91). `promote_world_evidence.py`
 promoted it (receipt `460054A8/publication-v12.json`; Region `9DCA3C71`, traversal `CC613B12`, world token `9A216202`), and
-the 0.7.2 line recertifies in compare mode. Certification status: audits accepted, evidence promoted, pointers keyed; in flight
-the suite v7 (#88), the path-distance tables (#90) and the 0.7-line recorded tests; the stamp (#79) and the default flip (#80)
-wait for the owner's training and a gen-7 checkpoint that passes live. The peer session's seven perception asks are accepted
+the 0.7.2 line recertifies in compare mode. Certification status at 20:20: audits accepted, evidence promoted, pointers keyed,
+the Arsenal Region suite v7 frozen per line (`896e31c`, 0.7.2 suite `51BFCC28`; v1 to v6 byte-identical), the task zoo and the
+twenty path-distance tables built (`5ba2010`), and the gitignored recorded-evidence tests routed by line (0.7: worldgen
+recordings 11 passed and 1 skipped, fidelity replays 5 of 6; the remaining 0.7 failures are 0.5-only chains, five owner
+calls listed in the lane's report under `recorded_tests_072/`; the 0.5 line unchanged test by test). The stamp (#79) and the
+default flip (#80) wait for the owner's training and a gen-7 checkpoint that passes live. The peer session's seven perception asks are accepted
 as a gen-7 extension channel (#92, after certification). Nothing is pushed.
 
 ## 7. Decisions taken and still open (2026-10-18, evening)
