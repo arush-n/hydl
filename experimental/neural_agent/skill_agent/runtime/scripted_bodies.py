@@ -12,7 +12,7 @@ the decision layer's combat program reads too.
 | Verb | Scopes | What it does |
 |---|---|---|
 | ``evader`` | locomotion, hands | turns away from the target and runs; sprints once facing away |
-| ``sword`` | hands, abilities_magic | presses the weapon's first ability (its primary attack; in the gym a weapon attacks through its ability slots) while the target is within reach (3 blocks) and within 60 degrees of the body's front; ``hold_seconds`` is accepted, and charged holds are not built yet |
+| ``sword`` | hands, abilities_magic | presses the weapon's first ability (its primary attack; in the gym a weapon attacks through its ability slots) while the target is within reach (3.5 blocks) and within 60 degrees of the body's front; ``hold_seconds`` is accepted, and charged holds are not built yet |
 | ``guard`` | posture_defence | guards while the target winds up within 5 blocks |
 | ``punish`` | hands, abilities_magic | the same strike, only while the target is in its recovery |
 | ``keep_range`` | locomotion | holds the band ``band_min`` to ``band_max`` blocks (``band_max`` defaults to one block more): runs in when farther, walks out when nearer, faces the target |
@@ -46,7 +46,10 @@ from hytalegym.jax.combat.observation.v3.policy.layout import neutral_arsenal_po
 from hytalegym.jax.combat.observation.v3.policy.look_deltas import encode_look_delta
 from hytalegym.jax.combat.types import GAIT_RUN, GAIT_SPRINT, GAIT_WALK
 
-REACH_BLOCKS = 3.0
+REACH_BLOCKS = 3.5
+"""The strike's reach in blocks, centre to centre, less a 0.2 margin: the iron sword's first ability hit a still
+target from 3.4 to 3.7 blocks and never from 3.8 (measured 2026-10-19 on gen 5 and gen 7, open flat, microticks 1).
+The opponent's hits land within 3.0, so a strike from 3.0 to 3.5 lands out of its reach."""
 FRONT_DEGREES = 60.0
 GUARD_RANGE_BLOCKS = 5.0
 MAXIMUM_TURN_DEGREES = 45.0
