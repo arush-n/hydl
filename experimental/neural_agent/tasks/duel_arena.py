@@ -301,7 +301,9 @@ def make_duel_arena(
             entity's head yaw. ``None`` leaves the fixture's sector open.
         legal_observation_sensor_range: Hide a row beyond ``params.sensor_range``.
         combat_params: The ``CombatParams`` to duel under (``microticks`` must be 1, one
-            decision per tick); ``None`` takes ``default_combat_params(microticks=1)``.
+            decision per tick); ``None`` takes ``default_combat_params(microticks=1)``. The
+            duel sets ``target_active`` False whatever is passed: the built-in target motion
+            is gated by it, not by the opponent-controller mask (#103b, 2026-10-20).
         max_health: ``(entity 0 maximum, entity 1 maximum)`` overriding
             ``agent_max_health`` and ``target_max_health`` (the league's equal roles,
             2026-10-20); the reset health defaults follow them, and so do the
@@ -361,6 +363,11 @@ def make_duel_arena(
             agent_max_health=jnp.asarray(float(max_health[0]), dtype=jnp.float32),
             target_max_health=jnp.asarray(float(max_health[1]), dtype=jnp.float32),
         )
+    # The built-in target motion (chase, strafe, maintain; opponents/legacy/motion.py) is gated by
+    # params.target_active, not by the opponent-controller mask, and switches on at the target's activation
+    # tick (36 to 44, a reset draw). The duel drives entity 1 by its factors alone, so it is off here (2026-10-20,
+    # #103b: under neutral factors entity 1 drifted 0.65 blocks in 100 ticks at 6 and 10 blocks of separation).
+    params = params._replace(target_active=jnp.asarray(False, dtype=jnp.bool_))
     config = arsenal_runtime_config(
         hytale_0_5_7_loadouts(
             _profiles(loadouts[0], batch),
