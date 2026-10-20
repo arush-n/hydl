@@ -18,12 +18,12 @@ body strikes or guards what it cannot see.
 
 | Verb | Scopes | What it does |
 |---|---|---|
-| ``evader`` | locomotion, hands | turns away from the target, seen or remembered, and runs; sprints once facing away |
+| ``evader`` | locomotion, hands | turns away from the target, seen or remembered, and runs; sprints once facing away; with the threat neither seen nor remembered (behind it, out of the view sector) it keeps sprinting the way it faces, which it turned away from the threat |
 | ``sword`` | hands, abilities_magic | presses the weapon's first ability (its primary attack; in the gym a weapon attacks through its ability slots) while the target is within reach (3.5 blocks) and within 60 degrees of the body's front; ``hold_seconds`` is accepted, and charged holds are not built yet |
 | ``guard`` | posture_defence | guards while the target winds up within 5 blocks |
 | ``punish`` | hands, abilities_magic | the same strike, only while the target is in its recovery |
 | ``keep_range`` | locomotion | holds the band ``band_min`` to ``band_max`` blocks (``band_max`` defaults to one block more) from the target, seen or remembered: runs in when farther, walks out when nearer, faces the target |
-| ``avoid`` | locomotion | retreats from the target, seen or remembered, until beyond the band (``band_min``, ``band_max``; ``AVOID_BAND_BLOCKS`` when the request names none): sprints inside the near edge, runs inside the far edge, beyond it holds and faces the target |
+| ``avoid`` | locomotion | retreats from the target, seen or remembered, until beyond the band (``band_min``, ``band_max``; ``AVOID_BAND_BLOCKS`` when the request names none): sprints inside the near edge, runs inside the far edge, beyond it holds and faces the target; with the threat neither seen nor remembered it keeps running the way it faces |
 | ``hide`` | locomotion | with a cover point in its request (``position``), runs to it, sneaks the last blocks and stops there; with none, retreats from the threat as ``avoid`` does (cover found from the geometry comes with the cover arena) |
 | ``idle`` | none | every head neutral |
 
@@ -174,10 +174,19 @@ def _flee(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Arra
     return _set(factors, "body_yaw_delta_bins", _turn(away), flee)
 
 
+def _onward(factors: jax.Array, gait: int, where: jax.Array) -> jax.Array:
+    """Keep moving the way the body faces where ``where``: a fleeing body that can no longer place its threat turned
+    away from it while it could, so forward is away (measured 2026-10-20: standing still instead left the referee's
+    evader granted for most of a fight, taking hits it never saw)."""
+
+    return _set(factors, "locomotion_gait_compass", jnp.int32((gait - 1) * COMPASS_DIRECTIONS + 1), where)
+
+
 def evader(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array,
            position: Position | None = None) -> jax.Array:
     threat = target(observation, position)
-    return legal(_flee(observation, mask, ticks, scalars, threat, threat.known, threat.known), mask)
+    factors = _flee(observation, mask, ticks, scalars, threat, threat.known, threat.known)
+    return legal(_onward(factors, GAIT_SPRINT, ~threat.known), mask)
 
 
 def _strike(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array, when: jax.Array) -> jax.Array:
@@ -235,7 +244,7 @@ def avoid(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Arra
     retreat = threat.known & (threat.distance < far)
     factors = _flee(observation, mask, ticks, scalars, threat, retreat, threat.distance < near)
     factors = _set(factors, "body_yaw_delta_bins", _turn(threat.bearing), threat.known & ~retreat)
-    return legal(factors, mask)
+    return legal(_onward(factors, GAIT_RUN, ~threat.known), mask)
 
 
 def hide(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array,
