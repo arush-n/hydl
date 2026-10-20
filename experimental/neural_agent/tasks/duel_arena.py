@@ -45,8 +45,10 @@ from hytalegym.jax.combat.arsenal.environment import (
 )
 from hytalegym.jax.combat.arsenal.factory import empty_arsenal_commands
 from hytalegym.jax.combat.arsenal.runtime import reset_arsenal_batch
+from hytalegym.jax.combat.arsenal.training_inventory import training_inventory_from_config
 from hytalegym.jax.combat.observation.v3.policy import ARSENAL_POLICY_ACTION_HEAD_SIZES
 from hytalegym.jax.combat.runtime.math import _round_to_scale, _unit_fraction
+from hytalegym.jax.combat.contracts.semantic import semantic_id
 from hytalegym.jax.combat.types import AGENT_ENTITY, TARGET_ENTITY
 from hytalegym.jax.training.multi_actor import (
     decode_policy_actor_factors_flat,
@@ -61,6 +63,8 @@ from hytalegym.jax.training.multi_actor.views import actor_first_arsenal_view
 ENTITY_COUNT: int = 2
 #: AgentSpec's default turn limit (adk/core/spec.py), which the open-flat scene uses.
 MAXIMUM_TURN_DEGREES: float = 45.0
+#: The shortbow's per-shot arrow (``Weapon_Arrow_Crude``; the bow recipe's ARROW_ITEM). Each shot removes one.
+ARROW_ITEM: int = semantic_id("Weapon_Arrow_Crude")
 _HEAD_SIZES: tuple[int, ...] = tuple(ARSENAL_POLICY_ACTION_HEAD_SIZES)
 _HEAD_STARTS: tuple[int, ...] = tuple(
     sum(_HEAD_SIZES[:index]) for index in range(len(_HEAD_SIZES))
@@ -281,6 +285,25 @@ def _role_paired_params(params, roles, agent_role):
     return params._replace(**update)
 
 
+def _arrow_inventory(config, arrows):
+    """``training_inventory_from_config(config)`` with each entity's arrow stack set to its count.
+
+    The inventory is ``[batch, entity, container slot]``. A loadout holds its arrow stack in a slot as the outer root's
+    budget (quantity 1); every slot holding :data:`ARROW_ITEM` takes that entity's count, so a shot removes one arrow.
+    An entity with a positive count whose loadout holds no arrow stack raises ``ValueError``.
+    """
+
+    inventory = training_inventory_from_config(config)
+    arrow_slot = inventory.item_id == ARROW_ITEM
+    for entity, count in enumerate(arrows):
+        if count > 0 and not bool(jnp.all(jnp.any(arrow_slot[:, entity], axis=-1))):
+            raise ValueError(
+                f"arrows[{entity}] is {count} but entity {entity}'s loadout has no arrow stack ({ARROW_ITEM})"
+            )
+    counts = jnp.asarray(arrows, dtype=inventory.quantity.dtype)[None, :, None]
+    return inventory._replace(quantity=jnp.where(arrow_slot, counts, inventory.quantity))
+
+
 def make_duel_arena(
     batch: int,
     loadouts: Sequence[str | Sequence[str]],
@@ -290,6 +313,7 @@ def make_duel_arena(
     combat_params: Any | None = None,
     max_health: tuple[float, float] | None = None,
     roles: tuple[str, str] | None = None,
+    arrows: tuple[int, int] | None = None,
 ) -> DuelArena:
     """Build the two-entity duel on the open-flat fixture.
 
@@ -325,6 +349,11 @@ def make_duel_arena(
             (``multi_actor/locomotion.py``, ``_materialize_entity_zero``) and reads ``agent_max_speed`` for both
             slots, so a role pair moves both bodies through ``agent_*``; the ``target_*`` motion fields are read only by
             the built-in target's motion, which ``params.target_active`` switches on (see tasks/README.md).
+        arrows: ``(entity 0 arrows, entity 1 arrows)``, two non-negative ints, or ``None`` (the bare factory
+            inventory, which holds no arrows). Each count is the quantity of the entity's arrow stack
+            (:data:`ARROW_ITEM`) in ``training_inventory_from_config(config)``, passed to the reset as its
+            ``initial_inventory``. A shot removes one arrow. ``None`` keeps the reset bit-identical. An entity with
+            a positive count whose loadout holds no arrow stack raises ``ValueError``.
 
     Returns:
         A :class:`DuelArena`. ``reset(keys, *, entity_position=None, entity_health=None,
@@ -345,6 +374,14 @@ def make_duel_arena(
     sector = view_sector_full_angle_radians
     if sector is not None and (isinstance(sector, bool) or not isinstance(sector, (int, float))):
         raise TypeError("view_sector_full_angle_radians must be a float or None")
+    if arrows is not None and (
+        not isinstance(arrows, (tuple, list))
+        or len(arrows) != ENTITY_COUNT
+        or any(isinstance(count, bool) or not isinstance(count, int) or count < 0 for count in arrows)
+    ):
+        raise ValueError(
+            f"arrows must be (entity 0 arrows, entity 1 arrows), two non-negative ints, got {arrows!r}"
+        )
 
     params = default_combat_params(microticks=1) if combat_params is None else combat_params
     if int(params.microticks) != 1:
@@ -377,6 +414,7 @@ def make_duel_arena(
         legal_observation=True,
         entity_role_ids=None if roles is None else tuple(roles),
     )
+    seeded_inventory = None if arrows is None else _arrow_inventory(config, tuple(arrows))
     entity_index = jnp.tile(jnp.arange(ENTITY_COUNT, dtype=jnp.int32), (batch, 1))
     assignment = policy_actor_assignment(
         entity_index,
@@ -416,6 +454,7 @@ def make_duel_arena(
             entity_position=entity_position,
             entity_health=entity_health,
             entity_yaw=entity_yaw,
+            initial_inventory=seeded_inventory,
         )
         if entity_yaw is not None:
             # Every head starts on its body (multi_actor/locomotion.py:115-123). reset_arsenal_batch
@@ -500,4 +539,4 @@ def make_duel_arena(
     return DuelArena(reset=reset, step=jax.jit(step))
 
 
-__all__ = ["DuelArena", "ENTITY_COUNT", "ROLE_PAIRED_FIELDS", "factors_are_legal", "make_duel_arena"]
+__all__ = ["ARROW_ITEM", "DuelArena", "ENTITY_COUNT", "ROLE_PAIRED_FIELDS", "factors_are_legal", "make_duel_arena"]

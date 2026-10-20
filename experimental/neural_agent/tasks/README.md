@@ -91,3 +91,22 @@ checked against the pre-edit code). Measured on gen 5 (not in the tests):
 - The follow-up hits depend on reset draws, not per-tick draws or the damage jitter: the activation tick above and the
   motion-timing profile (`runtime/reset.py`, the timing draw next to the activation draw). Without knockback there is no
   seat difference and no key dependence.
+
+### Arrows for the shortbow (task #109, 2026-10-20)
+
+`make_duel_arena(..., arrows=(entity 0 arrows, entity 1 arrows))` seeds each entity's arrow stack at reset. The reset's inventory is
+`training_inventory_from_config(config)` with the quantity of every slot holding `ARROW_ITEM` (`Weapon_Arrow_Crude`, semantic ID
+1135244191, the shortbow's per-shot removal of one arrow) set to that entity's count, and it is passed as the reset's
+`initial_inventory`. The inventory is `[batch, entity, container slot]`; a shortbow loadout holds its arrow stack in one slot per
+entity (slot 41 of 76 in the probe). The count is finite: 1 fires once and a second tap spawns nothing. The seam is
+`initial_inventory` of `reset_arsenal_batch`, which `make_arsenal_environment` fills from its `inventory_reset_provider`; the duel's
+reset takes no provider. `None` (the default) keeps the bare factory inventory, which holds no arrows, so a shortbow tap is admitted
+and spawns nothing. An entity with a positive count whose loadout holds no arrow stack raises `ValueError`.
+
+The tests (tests/experimental/neural_agent/test_na_duel_arena.py, on disk) check tier 0 at 2.5 blocks: entity 0's tap
+spawns on tick 9 and hits entity 1 on tick 13 for 6, the bow recipe's ticks (0-based, tap at tick 0); the mirror spawns
+on 9 and its hit is asserted within one tick of 13 (it lands on 14). A probe run after the edit, not part of the tests,
+gave the mirror hit on 14 and, with 64 arrows, two taps spawning on 9 and 49 and hitting on 13 and 53.
+
+Caveat: the shortbow's range per tier (the spawn and hit ticks of tiers 0 to 4, and how far a shot reaches) is the skill layer's
+measurement, not this arena's. The tests here check tier 0 at 2.5 blocks only.
