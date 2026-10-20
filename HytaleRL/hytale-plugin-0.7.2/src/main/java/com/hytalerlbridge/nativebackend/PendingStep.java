@@ -308,7 +308,8 @@ final class PendingStep {
     void rejectWorldVerb(
         int entityId,
         NativeWorldVerbRequest request,
-        String reason
+        String reason,
+        long worldTick
     ) {
         if (
             request == null
@@ -334,12 +335,12 @@ final class PendingStep {
                 WorldVerbTelemetry.Execution.rejected(
                     request,
                     reason,
-                    -1L
+                    worldTick
                 );
         }
     }
 
-    void rejectUnprocessedWorldVerbs() {
+    void rejectUnprocessedWorldVerbs(long worldTick) {
         for (
             int entityId = 0;
             entityId < worldVerbRequestedByActor.length;
@@ -359,7 +360,8 @@ final class PendingStep {
             rejectWorldVerb(
                 entityId,
                 request,
-                "native_world_verb_actor_control_not_observed"
+                "native_world_verb_actor_control_not_observed",
+                worldTick
             );
         }
     }

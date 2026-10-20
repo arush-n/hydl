@@ -2528,7 +2528,7 @@ final class NativeEnvironmentSession
             boolean agentMissing = agentRef == null || !agentRef.isValid();
             if (!agentMissing && step.executedTicks < step.requestedTicks) return;
 
-            step.rejectUnprocessedWorldVerbs();
+            step.rejectUnprocessedWorldVerbs(world.getTick());
 
             NativeSnapshot snapshot = agentMissing
                 ? deadSnapshot()
@@ -3577,7 +3577,8 @@ final class NativeEnvironmentSession
                 step.rejectWorldVerb(
                     entry.actorSlot(),
                     entry.request(),
-                    decision.rejectReason()
+                    decision.rejectReason(),
+                    world.getTick()
                 );
             }
         }
