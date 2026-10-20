@@ -2330,6 +2330,7 @@ def open_flat_arsenal_world_capabilities(
     *,
     config: ArsenalRuntimeConfig | None = None,
     legal_observation_sensor_range: bool = False,
+    view_sector_full_angle_radians: jax.Array | float | None = None,
 ) -> ArsenalWorldCapabilities:
     """Explicit permissive control fixture; never the production default.
 
@@ -2337,6 +2338,16 @@ def open_flat_arsenal_world_capabilities(
     agent's entry for an opponent beyond ``params.sensor_range``, as the
     perception does. The fixture has clear sight lines at every range, so the
     sensor range alone decides there.
+
+    ``view_sector_full_angle_radians`` (two-entity path only; opt-in, 2026-10-19)
+    applies the geometry path's sector test (``_pair_agent_in_view``, centred on
+    the agent's head yaw) to the agent's entries the geometry path gates with
+    it: the perceptible entry, ``line_of_sight`` and ``selector_line_of_sight``.
+    An opponent outside the sector is not perceived, and a line-of-sight ability
+    cannot select it. The test is planar and the fixture carries no eye offsets,
+    so the bodies stand in for the eyes. ``None`` and a full circle (tau) leave
+    the fixture unchanged. The fixture never re-selects the engagement target;
+    only the geometry path blanks the target id.
     """
 
     if not isinstance(legal_observation_sensor_range, bool):
@@ -2346,6 +2357,10 @@ def open_flat_arsenal_world_capabilities(
     if legal_observation_sensor_range and entity_shape[1] != ENTITY_COUNT:
         raise ValueError(
             "legal_observation_sensor_range is implemented for the two-entity path only"
+        )
+    if view_sector_full_angle_radians is not None and entity_shape[1] != ENTITY_COUNT:
+        raise ValueError(
+            "view_sector_full_angle_radians is implemented for the two-entity path only"
         )
     clear = jnp.ones(entity_shape, dtype=jnp.bool_)
     if entity_shape[1] == ENTITY_COUNT:
@@ -2381,6 +2396,38 @@ def open_flat_arsenal_world_capabilities(
         candidate_perceptible = candidate_perceptible.at[
             :, AGENT_ENTITY, TARGET_ENTITY
         ].set(_pair_agent_sensor_range(state.combat, params))
+    line_of_sight = clear
+    selector_line_of_sight = clear
+    if view_sector_full_angle_radians is not None:
+        # The geometry path's pair sector (geometry_arsenal_world_capabilities, its
+        # pair_agent_los_gate), on the bodies: the fixture has no eye offsets and
+        # the test is planar. A full circle gates nothing.
+        pair_view_angle = _broadcast_view_angle(
+            view_sector_full_angle_radians,
+            entity_shape[0],
+            entity_shape[1],
+        )[:, AGENT_ENTITY]
+        pair_view_valid = (
+            jnp.isfinite(pair_view_angle)
+            & (pair_view_angle >= jnp.float32(0.0))
+            & (pair_view_angle <= jnp.float32(math.tau))
+        )
+        pair_sector_ok = (
+            _pair_agent_in_view(state.combat, state.combat.position, pair_view_angle)
+            & pair_view_valid
+        )
+        sector_gate = jnp.where(
+            pair_view_angle == jnp.float32(math.tau), True, pair_sector_ok
+        )
+        candidate_perceptible = candidate_perceptible.at[
+            :, AGENT_ENTITY, TARGET_ENTITY
+        ].set(candidate_perceptible[:, AGENT_ENTITY, TARGET_ENTITY] & sector_gate)
+        line_of_sight = line_of_sight.at[:, AGENT_ENTITY].set(
+            line_of_sight[:, AGENT_ENTITY] & sector_gate
+        )
+        selector_line_of_sight = selector_line_of_sight.at[:, AGENT_ENTITY].set(
+            selector_line_of_sight[:, AGENT_ENTITY] & sector_gate
+        )
     return world._replace(
         actor_world_state_available=jnp.ones((entity_shape[0],), dtype=jnp.bool_),
         actor_controller_medium_available=jnp.ones(
@@ -2395,9 +2442,9 @@ def open_flat_arsenal_world_capabilities(
             (entity_shape[0], entity_shape[1], entity_shape[1]),
             dtype=jnp.bool_,
         ),
-        line_of_sight=clear,
+        line_of_sight=line_of_sight,
         line_of_sight_valid=clear,
-        selector_line_of_sight=clear,
+        selector_line_of_sight=selector_line_of_sight,
         selector_line_of_sight_valid=clear,
         direct_target_selected=clear,
         direct_target_selection_valid=clear,
