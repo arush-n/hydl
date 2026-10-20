@@ -381,6 +381,13 @@ First capture adds the capacity benchmark (measured 2026-10-19 on the 0.7.2 libr
   `world-evidence-history/6F5B6021/superseded/`, 60 files written, receipt `world-evidence-history/6EB44F30/publication-v12.json`.
   The frozen v7 suite was re-frozen after the promotion (`493FD07E`): the promoted traversal manifest's
   `native_evidence_jar_sha256` and the arsenal contract both carry the bridge, so the value moves with every rebuild and promotion.
+- Run 9 (00:06 to 00:23 on 2026-10-20, the bridge `9AABD344` of the fixture-aim and augment-readout batches b0717c9 and
+  e643be4): stopped at the Region capture compare, seven cross-reset fluid-only cells against the seed projection contract's
+  cap of six (all non-damaging, `other` 0; the count has risen with the machine load: 3, 5, 6, 7 over runs 4, 7, 8, 9; the
+  5-minute load was 15 under seven lanes). The cap is an owner knob; run 10 is queued for a quiet machine with the pin
+  `1CB4F651` (the request-tick fix a5cf904). Measured live beside it: the block-use probe's break cell is advertised once the
+  pickaxe's slot is active (acknowledged), closed at reset only because the tool is not held (`break_authored_tool_unavailable`),
+  and a refused typed request's receipt now carries the decision's world tick (it was -1, which `from_info` rejects).
 
 ### Blockers and what changed
 
