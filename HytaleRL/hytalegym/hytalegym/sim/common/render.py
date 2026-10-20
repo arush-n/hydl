@@ -596,6 +596,22 @@ class _RenderFinder:
                 parts.pop()
             self.rendered[".".join([package, *parts])] = is_package
 
+    def _legacy_target(self, fullname: str) -> types.ModuleType | None:
+        """The rendered module that a legacy name of a rendered package names, else None.
+
+        A package registers its old module names (v3's ``_legacy_module_targets``) as attributes and as
+        ``<package>.<name>`` in ``sys.modules`` when it is imported; under a render both carry the
+        rendered package name, so the source name is answered from them.
+        """
+        parent_name, _, leaf = fullname.rpartition(".")
+        parent = sys.modules.get(parent_name)
+        if not isinstance(parent, types.ModuleType):
+            return None
+        target = vars(parent).get(leaf)  # vars, not getattr: a package's module __getattr__ is not consulted
+        if not isinstance(target, types.ModuleType) or not target.__name__.startswith(self.package + "."):
+            return None
+        return target if sys.modules.get(f"{parent.__name__}.{leaf}") is target else None
+
     def find_spec(self, fullname, path=None, target=None):
         if fullname == self.package:
             return importlib.util.spec_from_file_location(
@@ -616,6 +632,11 @@ class _RenderFinder:
             if target_name in self.rendered:
                 return importlib.machinery.ModuleSpec(
                     fullname, _AliasLoader(target_name), is_package=self.rendered[target_name]
+                )
+            legacy = self._legacy_target(fullname)
+            if legacy is not None:
+                return importlib.machinery.ModuleSpec(
+                    fullname, _AliasLoader(legacy.__name__), is_package=hasattr(legacy, "__path__")
                 )
             # Not rendered (e.g. hytalegym.jax.training): the original module,
             # which then imports the rendered engine through these aliases.
@@ -641,7 +662,9 @@ def redirect_imports(out_dir: str | Path, *, alias: bool = True) -> str:
     ``hytalegym``). Every ``hytalegym.jax.X`` is then the very module object
     ``<package>.X`` for every module the render contains; modules it does not
     contain (``hytalegym.jax.training``...) load from the original tree and
-    import the rendered engine through the aliases. Returns the package.
+    import the rendered engine through the aliases. A legacy name that a rendered package registers for
+    itself (``hytalegym.jax.combat.observation.v3.world_tokens``) names the same rendered module.
+    Returns the package.
     """
 
     if any(name == "hytalegym" or name.startswith("hytalegym.") for name in sys.modules):

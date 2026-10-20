@@ -7,7 +7,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
+import sys
 from dataclasses import replace
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -327,6 +330,43 @@ def test_redirect_imports_must_run_before_hytalegym(gen5):
     out, _ = gen5
     with pytest.raises(R.RenderError, match="before hytalegym"):
         R.redirect_imports(out)
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+# A fresh interpreter: hytalegym is already imported in this process, so redirect_imports cannot run here.
+_LEGACY_PROBE = """
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location("_render_probe", sys.argv[1])
+render = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(render)
+package = render.redirect_imports(sys.argv[2])
+import hytalegym.jax.combat.observation.v3.world_tokens as world_tokens
+try:
+    import hytalegym.jax.combat.observation.v3.no_such_legacy_name
+except ImportError as exc:
+    unknown = type(exc).__name__
+else:
+    unknown = None
+print(json.dumps({
+    "package": package,
+    "module": world_tokens.__name__,
+    "rendered": world_tokens is sys.modules[package + ".combat.observation.v3.tokens.world"],
+    "unknown": unknown,
+}))
+"""
+
+
+def test_gen7_redirect_serves_v3_legacy_module_names_as_rendered_modules(gen7):
+    out, _ = gen7
+    done = subprocess.run(
+        [sys.executable, "-c", _LEGACY_PROBE, R.__file__, str(out)],
+        cwd=REPO_ROOT, capture_output=True, text=True, timeout=900,
+    )
+    assert done.returncode == 0, done.stderr[-2000:]
+    result = json.loads(done.stdout.strip().splitlines()[-1])
+    assert result["module"] == result["package"] + ".combat.observation.v3.tokens.world"
+    assert result["rendered"] is True
+    assert result["unknown"] == "ModuleNotFoundError"
 
 
 def test_bench_compare_outputs_is_bit_exact():
