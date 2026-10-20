@@ -20,6 +20,17 @@ whose condition holds on the lane wins, and ties go to the lower index.
 
 The reports and their belief fallback are the ``Report`` class in ``programs.py`` (its docstring has the mapping).
 
+Candidates (2026-10-20, task #111). ``P_GUERRILLA`` has two gaps. (1) ``avoid`` (0.5) holds while the target faces the
+agent, and the shot (0.4) sits below it; a chasing target always faces the agent, so it is never shot at. (2) The shot
+runs alone: nothing turns the body to the target, and the bow aims with the head only, within 45 degrees. The skill
+layer measured (commit 1112c77) that a body facing the target lets the bow hit a strafing target at 4.5 to 10 blocks
+on 85% of its arrows on gen 5 (114 of 134) and 79% on gen 7 (99 of 125), with the lead the body adds; the bow alone
+loses a strafer that runs past the head's 45 degrees. ``P_GUERRILLA_SHOT_FIRST`` fixes the first gap: the shot at 0.6,
+above ``avoid``. ``P_GUERRILLA_FACING`` fixes both: the same, and while the shot is in force a companion request of
+``keep_range`` (the 6 to 10 band, facing the target; ``programs.py``, item 9, "Companions"). The guerrilla referee run
+chooses among GUERRILLA, GUERRILLA_SHOT_FIRST and GUERRILLA_FACING, and the two losers are removed afterwards.
+``P_GUERRILLA`` itself is unchanged.
+
 Not built: "not yet in cover". No report or belief feature measures cover: ``REPORTS`` has none, and the cover asks of
 ``skill_agent/docs/PERCEPTION_ASKS.md`` are not in the belief. Rule 3 therefore tests "seen" alone. That reads as "not yet
 in cover" only if line of sight is symmetric, which is inferred and not measured.
@@ -87,3 +98,36 @@ P_GUERRILLA = Program(
     ),
 )
 """The guerrilla program (module docstring): ``PROGRAMS["GUERRILLA"]`` in ``programs.py``."""
+
+SHOT_FIRST_PRIORITY: float = 0.6
+"""The shot's priority in the two candidates below: above ``avoid`` (0.5), so a clean shot wins over ``avoid``'s
+facing rule (gap 1 of the module docstring)."""
+
+P_GUERRILLA_SHOT_FIRST = Program(
+    steps=(ProgramStep(PURSUIT_SKILL, exit=EXIT_DONE),),
+    interrupts=(
+        Interrupt("shortbow", SHOT_FIRST_PRIORITY, _SHOT, params=(SHOT_HOLD_SECONDS,)),
+        Interrupt("avoid", AVOID_PRIORITY, _AVOID, params=AVOID_BAND_BLOCKS),
+        Interrupt("hide", HIDE_PRIORITY, Report("seen")),
+    ),
+)
+"""Candidate 1 (task #111): ``P_GUERRILLA`` with the shot first. Only the shot's priority changes; the shot runs
+alone."""
+
+P_GUERRILLA_FACING = Program(
+    steps=(ProgramStep(PURSUIT_SKILL, exit=EXIT_DONE),),
+    interrupts=(
+        Interrupt(
+            "shortbow",
+            SHOT_FIRST_PRIORITY,
+            _SHOT,
+            params=(SHOT_HOLD_SECONDS,),
+            beside=(("keep_range", AVOID_BAND_BLOCKS),),
+        ),
+        Interrupt("avoid", AVOID_PRIORITY, _AVOID, params=AVOID_BAND_BLOCKS),
+        Interrupt("hide", HIDE_PRIORITY, Report("seen")),
+    ),
+)
+"""Candidate 2 (task #111): ``P_GUERRILLA_SHOT_FIRST`` plus a companion. While the shot is in force, ``keep_range``
+holds the 6 to 10 band and faces the target beside it (disjoint scopes: shortbow drives hands, abilities_magic and
+gaze; keep_range drives locomotion), so the body turns to the target as the skill layer measured for its shot."""

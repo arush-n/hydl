@@ -103,8 +103,9 @@ combiner writes statuses, items 8 and 9 change nothing in items 1 to 7. Ticks ar
 
    A lane whose request was withdrawn issues none until its request key (item 9) changes, so one step asks
    the LLM once. A fresh lane (item 2) drops its live requests unread.
-9. Requests, after every lane decided. Each lane's live request is replaced by one new request for the goal
-   in force; a request lives one host cadence, so every decision re-issues it::
+9. Requests, after every lane decided. Each lane's live requests are replaced by new ones for the goal in force: one
+   for the goal, and one more for each companion of its interrupt (Companions, below). A request lives one host
+   cadence, so every decision re-issues them::
 
        request_id    n_b, then n_b <- n_b + 1 (monotonic per agent, never reset)
        agent         b
@@ -117,8 +118,8 @@ combiner writes statuses, items 8 and 9 change nothing in items 1 to 7. Ticks ar
        urgency       min(1, clip(priority, 0, 1) + u_b);   confidence 1
        goal_slot, executive_version   the goal's payload;   program_step   k_b (len(steps) once finished)
 
-   The request key (verb, interrupt or not, k_b, the payload's version, E_t's version) scopes a step: when it
-   changes, the step's rejections, u_b and the withdrawal reset. Each request is checked with
+   The request key (verb, interrupt or not, k_b, the payload's version, E_t's version, the companions) scopes a step:
+   when it changes, the step's rejections, u_b and the withdrawal reset. Each request is checked with
    ``requests.validate`` against its verb's contract (``contracts=``; without them the check reports
    verb_unknown) and the entities the belief knows: {TARGET_ENTITY} when ``ticks_since_target_seen`` is
    known and below TICKS_SATURATION (the belief starts it saturated), else none. The world box and the
@@ -126,6 +127,19 @@ combiner writes statuses, items 8 and 9 change nothing in items 1 to 7. Ticks ar
    A request that fails is still sent, so the combiner rejects it and item 8 reacts; ``invalid_requests``
    counts it. The lanes' requests and every other agent's live requests are written as one ``requests``
    section by its writer "jev": one document version per decision.
+
+Companions (2026-10-20, task #111). An :class:`Interrupt` may carry ``beside``: companion requests ``(verb, params)``
+issued beside its own request while its goal is in force, so two requests of one agent on disjoint scopes both run
+(the combiner grants greedily by scope). The companion scopes must be disjoint from the interrupt's verb and from each
+other's; the interrupt checks this when it is built, and the executor refuses a companion verb outside the catalogue.
+Each companion is one more request of item 9, with the same agent, expiry, mode, urgency, priority and program step,
+its own id, ``goal_slot`` -1, and scalars truncated to its contract's ``param_names``. The companions are those of the
+goal the lane emits: the interrupt whose goal the executor last wrote, which the switch rule (item 6) may keep while
+the desired goal differs. A goal that came from the program's step has none. Companions are requests only: they have
+no goal, so items 1 to 7 are unchanged, and correspondence (item 8) applies to every live request, companions
+included. Known limit (task #114): an Advance ends the goal only when every live request names the goal's skill, so a
+goal with a companion never ends COMPLETED from its own report; it runs until its contract's maximum duration, and is
+renewed there while ``no_reissue_seconds`` is 0. A companion's deferral also raises the whole lane's urgency.
 
 Combat program (2026-10-19, ``P_COMBAT``). One pursuit step (exit "done") with four rules and the evader as
 interrupts. The evader on damage (``EVADE_ON_DAMAGE``: the belief's ``ticks_since_damage``, as above) has the top
@@ -485,12 +499,17 @@ class AllOf:
 
 @dataclass(frozen=True)
 class Interrupt:
-    """A conditional goal of the executive: ``skill_id`` pre-empts the program while ``predicate`` holds."""
+    """A conditional goal of the executive: ``skill_id`` pre-empts the program while ``predicate`` holds.
+
+    ``beside`` names companion requests ``(verb, params)`` issued with the interrupt's own request while its goal is in
+    force (module docstring, item 9, "Companions"). Their scopes are disjoint from this verb's and from each other's.
+    """
 
     skill_id: str
     priority: float
     predicate: Predicate | TargetPhase | Report | Not | AllOf
     params: tuple[float, ...] = ()
+    beside: tuple[tuple[str, tuple[float, ...]], ...] = ()
 
     def __post_init__(self) -> None:
         _skill_id(self.skill_id, "Interrupt")
@@ -503,6 +522,22 @@ class Interrupt:
             raise ValueError(f"Interrupt.priority must be finite, got {self.priority!r}")
         object.__setattr__(self, "priority", priority)
         object.__setattr__(self, "params", _params(self.params, "Interrupt"))
+        companions = []
+        for verb, values in self.beside:
+            verb = _skill_id(verb, "Interrupt.beside")
+            if verb not in ARGUMENT_SCHEMAS:
+                raise ValueError(f"Interrupt.beside: {verb!r} is not a verb of requests.ARGUMENT_SCHEMAS")
+            companions.append((verb, _params(values, "Interrupt.beside")))
+        claimed = set(ARGUMENT_SCHEMAS[self.skill_id].scopes) if self.skill_id in ARGUMENT_SCHEMAS else set()
+        for verb, _ in companions:
+            scopes = set(ARGUMENT_SCHEMAS[verb].scopes)
+            if scopes & claimed:
+                raise ValueError(
+                    f"Interrupt.beside: {verb!r} shares the scopes {sorted(scopes & claimed)} of the interrupt "
+                    "or of another companion"
+                )
+            claimed |= scopes
+        object.__setattr__(self, "beside", tuple(companions))
 
 
 @dataclass(frozen=True)
@@ -560,17 +595,24 @@ P_COMBAT = Program(
 )
 PROGRAMS: dict[str, Program] = {"J0": P_J0, "SEQ": P_SEQ, "COMBAT": P_COMBAT}
 # The guerrilla program (2026-10-20) is in its own module, which imports the DSL above, so it is imported after PROGRAMS.
-from experimental.neural_agent.jev.programs_guerrilla import P_GUERRILLA  # noqa: E402
+from experimental.neural_agent.jev.programs_guerrilla import (  # noqa: E402
+    P_GUERRILLA,
+    P_GUERRILLA_FACING,
+    P_GUERRILLA_SHOT_FIRST,
+)
 PROGRAMS["GUERRILLA"] = P_GUERRILLA
+PROGRAMS["GUERRILLA_SHOT_FIRST"] = P_GUERRILLA_SHOT_FIRST
+PROGRAMS["GUERRILLA_FACING"] = P_GUERRILLA_FACING
 # The combat styles (jev/combat_styles.py, task #100): COUNTER, PRESSURE and HIT_AND_RUN join the names NA_PROGRAM accepts.
 from experimental.neural_agent.jev.combat_styles import built_styles  # noqa: E402
 PROGRAMS.update(built_styles())
 
 
 def program_uses_combat(program: Program) -> bool:
-    """True when the program names a combat verb (``COMBAT_VERBS``) as a step or an interrupt."""
+    """True when the program names a combat verb (``COMBAT_VERBS``) as a step, an interrupt or a companion."""
 
     verbs = {step.skill_id for step in program.steps} | {interrupt.skill_id for interrupt in program.interrupts}
+    verbs |= {verb for interrupt in program.interrupts for verb, _ in interrupt.beside}
     return bool(verbs & set(COMBAT_VERBS))
 
 
@@ -616,7 +658,7 @@ class ProgramExecutor:
         ValueError: If the catalogue is empty, repeats an id or does not start with idle, a program is
             missing, ``no_reissue_seconds`` is negative or not finite, or ``contracts`` are not the
             catalogue's in its order.
-        KeyError: If a step or interrupt names a skill outside the catalogue.
+        KeyError: If a step, an interrupt or a companion names a skill outside the catalogue.
         TypeError: If a program is not a Program, the table is not a SkillControlTable, ``shared_state``
             is not a SharedState, or a contract is not a SkillContract.
     """
@@ -663,6 +705,7 @@ class ProgramExecutor:
         self._programs = programs
         self._step_skill = [tuple(lookup(step.skill_id) for step in p.steps) for p in programs]
         self._interrupt_skill = [tuple(lookup(i.skill_id) for i in p.interrupts) for p in programs]
+        self._beside_skill = [[tuple(lookup(verb) for verb, _ in i.beside) for i in p.interrupts] for p in programs]
         self._used_skills = sorted(
             {0} | {k for row in self._step_skill for k in row} | {k for row in self._interrupt_skill for k in row}
         )
@@ -677,6 +720,8 @@ class ProgramExecutor:
         self._elapsed = np.zeros(lanes, dtype=np.float32)
         self._age = np.zeros(lanes, dtype=np.float32)
         self._source = np.full(lanes, _PROGRAM, dtype=np.int64)
+        # The interrupt (its position in the program) whose goal the lane emits, -1 for the program's step (item 9).
+        self._in_force = np.full(lanes, -1, dtype=np.int64)
         self._blocked = np.zeros((lanes, len(ids)), dtype=np.float32)
         self._issued_version = np.full(lanes, -1, dtype=np.int64)
         longest = max(len(p.steps) for p in programs)
@@ -835,7 +880,9 @@ class ProgramExecutor:
 
             code = -1 if codes is None else int(codes[lane])
             reports = lane_reports(history.get(lane, ()), self._live[lane]) if bound else None
-            desired, desired_params, source, priority = self._desired(lane, features[lane], known[lane], code, reports)
+            desired, desired_params, source, priority, position = self._desired(
+                lane, features[lane], known[lane], code, reports
+            )
             current_skill = int(skill[lane])
             if fresh[lane] or ended is not None or desired != current_skill:
                 allowed = (
@@ -852,6 +899,7 @@ class ProgramExecutor:
                 version[lane] = executive_version[lane]
                 slot[lane] = slots[desired][lane]
                 self._age[lane] = 0.0
+                self._in_force[lane] = position
             self._set_source(lane, source, priority)
 
         self._started[:] = True
@@ -952,10 +1000,11 @@ class ProgramExecutor:
 
     def _desired(
         self, lane: int, features: np.ndarray, known: np.ndarray, code: int = -1, reports: Mapping[str, float] | None = None
-    ) -> tuple[int, tuple[float, ...], int, float]:
-        """Return (skill index, params, source, priority) of the goal the lane wants now (module docstring, item 5).
+    ) -> tuple[int, tuple[float, ...], int, float, int]:
+        """Return the lane's desired goal: (skill, params, source, priority, position). Module docstring, item 5.
 
         ``priority`` is the chosen interrupt's, or 0.0 for the program (its requests take E_t's, item 9).
+        ``position`` is the chosen interrupt's index in the program, -1 for the program's step.
         """
 
         program = self._programs[lane]
@@ -967,15 +1016,15 @@ class ProgramExecutor:
             if _holds(interrupt.predicate, features, known, code, reports):
                 chosen, best = position, interrupt.priority
         if chosen >= 0:
-            return self._interrupt_skill[lane][chosen], program.interrupts[chosen].params, _INTERRUPT, best
+            return self._interrupt_skill[lane][chosen], program.interrupts[chosen].params, _INTERRUPT, best, chosen
         k = int(self._step[lane])
         if k >= len(program.steps):
-            return 0, (), _PROGRAM, 0.0
+            return 0, (), _PROGRAM, 0.0, -1
         skill = self._step_skill[lane][k]
         if skill != 0 and self._blocked[lane, skill] > 0.0:
             self.blocked_decisions[lane] += 1
-            return 0, (), _PROGRAM, 0.0
-        return skill, program.steps[k].params, _PROGRAM, 0.0
+            return 0, (), _PROGRAM, 0.0, -1
+        return skill, program.steps[k].params, _PROGRAM, 0.0, -1
 
     def _target_codes(self, transition: Any) -> np.ndarray:
         """int[B]: the target's attack phase code per lane, from the legal observation's target row (module docstring)."""
@@ -1088,7 +1137,9 @@ class ProgramExecutor:
             index, goal_slot, k = int(skill[lane]), int(slot[lane]), int(self._step[lane])
             verb = self._skill_ids[index]
             interrupt = bool(self._source[lane] == _INTERRUPT)
-            key = (verb, interrupt, k, int(version[lane]), int(executive_version[lane]))
+            position = int(self._in_force[lane])
+            beside = self._programs[lane].interrupts[position].beside if position >= 0 else ()
+            key = (verb, interrupt, k, int(version[lane]), int(executive_version[lane]), beside)
             if key != self._request_key[lane]:
                 self._request_key[lane] = key
                 self._step_rejections[lane] = 0
@@ -1102,46 +1153,58 @@ class ProgramExecutor:
                 priority = float(self._interrupt_priority[lane])
             else:
                 priority = float(priorities[lane, goal_slot]) if goal_slot >= 0 else 0.0
-            contract = None if self._contracts is None else self._contracts[index]
-            schema = ARGUMENT_SCHEMAS.get(verb)
-            named = 0 if contract is None else len(contract.param_names)
-            target_entity, target_position = target_arguments(schema, features[lane], target_memory, lane, TARGET_ENTITY)
-            request = ActionRequest(
-                request_id=int(self._next_request[lane]),
-                agent=lane,
-                issued_tick=tick,
-                expires_tick=tick + int(self.host_cadence_ticks),
-                verb=verb,
-                args=RequestArgs(
-                    entity=target_entity,
-                    position=target_position,
-                    scalars=tuple(float(value) for value in params[lane, :named]),
-                ),
-                mode=MODE_INTERRUPT if interrupt else MODE_PARALLEL,
-                urgency=min(1.0, min(max(priority, 0.0), 1.0) + float(self._urgency_boost[lane])),
-                confidence=1.0,
-                priority=priority,
-                goal_slot=goal_slot,
-                executive_version=int(version[lane]),
-                program_step=k,
-            )
-            self._next_request[lane] += 1
-            self.requests_issued[lane] += 1
-            seen = bool(known[lane, _SEEN]) and float(features[lane, _SEEN]) < TICKS_SATURATION
-            reason = validate(
-                request,
-                contract,
-                tick=tick,
-                world_bounds=_ANY_WORLD,
-                known_entities=(TARGET_ENTITY,) if seen else (),
-                legal_scopes=SCOPES,
-                done_ids=(),
-            )
-            if reason is not None:
-                self.invalid_requests += 1
-                if self.first_invalid_request is None:
-                    self.first_invalid_request = reason
-            live[request.request_id] = request
+            mode = MODE_INTERRUPT if interrupt else MODE_PARALLEL
+            urgency = min(1.0, min(max(priority, 0.0), 1.0) + float(self._urgency_boost[lane]))
+            # The goal's own request, then one per companion of its interrupt (module docstring, item 9).
+            asks = [(verb, index, goal_slot, params[lane])]
+            if beside:
+                asks += [
+                    (name, companion, -1, values)
+                    for (name, values), companion in zip(beside, self._beside_skill[lane][position])
+                ]
+            for ask_verb, ask_index, ask_slot, ask_params in asks:
+                contract = None if self._contracts is None else self._contracts[ask_index]
+                schema = ARGUMENT_SCHEMAS.get(ask_verb)
+                named = 0 if contract is None else len(contract.param_names)
+                target_entity, target_position = target_arguments(
+                    schema, features[lane], target_memory, lane, TARGET_ENTITY
+                )
+                request = ActionRequest(
+                    request_id=int(self._next_request[lane]),
+                    agent=lane,
+                    issued_tick=tick,
+                    expires_tick=tick + int(self.host_cadence_ticks),
+                    verb=ask_verb,
+                    args=RequestArgs(
+                        entity=target_entity,
+                        position=target_position,
+                        scalars=tuple(float(value) for value in ask_params[:named]),
+                    ),
+                    mode=mode,
+                    urgency=urgency,
+                    confidence=1.0,
+                    priority=priority,
+                    goal_slot=ask_slot,
+                    executive_version=int(version[lane]),
+                    program_step=k,
+                )
+                self._next_request[lane] += 1
+                self.requests_issued[lane] += 1
+                seen = bool(known[lane, _SEEN]) and float(features[lane, _SEEN]) < TICKS_SATURATION
+                reason = validate(
+                    request,
+                    contract,
+                    tick=tick,
+                    world_bounds=_ANY_WORLD,
+                    known_entities=(TARGET_ENTITY,) if seen else (),
+                    legal_scopes=SCOPES,
+                    done_ids=(),
+                )
+                if reason is not None:
+                    self.invalid_requests += 1
+                    if self.first_invalid_request is None:
+                        self.first_invalid_request = reason
+                live[request.request_id] = request
         state = self.scratchpad
         others = tuple(request for request in state.requests.live if not 0 <= request.agent < self._lanes)
         mine = tuple(request for live in self._live for request in live.values())
