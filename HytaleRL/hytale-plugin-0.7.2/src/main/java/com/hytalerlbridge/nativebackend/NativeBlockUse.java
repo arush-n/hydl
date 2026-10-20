@@ -258,6 +258,29 @@ public final class NativeBlockUse {
     }
 
     /**
+     * Head pose (yaw, pitch) whose camera ray runs from the actor's eye
+     * through the centre of a cell. It inverts
+     * {@link Transform#getDirection(float, float)} and is the same aim the
+     * synthetic Use fixture takes at reset.
+     */
+    public static float[] poseTowardCell(
+        double actorX,
+        double eyeY,
+        double actorZ,
+        int cellX,
+        int cellY,
+        int cellZ
+    ) {
+        double dx = cellX + 0.5 - actorX;
+        double dy = cellY + 0.5 - eyeY;
+        double dz = cellZ + 0.5 - actorZ;
+        return new float[] {
+            (float) Math.atan2(-dx, -dz),
+            (float) Math.atan2(dy, Math.hypot(dx, dz)),
+        };
+    }
+
+    /**
      * Capture the exact Adventure camera ray used by block interactions.
      *
      * <p>This deliberately does not require an authored Use root. Break and

@@ -4324,6 +4324,27 @@ final class NativeEnvironmentSession
             );
             syntheticWorldFixturePlaceTarget = place;
             syntheticWorldFixtureBreakTarget = broken;
+            // Aim the head at the authored break cell, as the Use fixture aims
+            // at its authored target, so the reset capture reads a camera ray
+            // that can reach the break cell.
+            ModelComponent model = store.getComponent(
+                agentRef,
+                ModelComponent.getComponentType()
+            );
+            if (model == null) {
+                throw new IllegalStateException(
+                    "Synthetic World fixture has no settled actor model"
+                );
+            }
+            float[] pose = NativeBlockUse.poseTowardCell(
+                position.x,
+                position.y + model.getModel().getEyeHeight(agentRef, store),
+                position.z,
+                broken.x,
+                broken.y,
+                broken.z
+            );
+            policyActorState(0).setPose(pose[0], pose[1]);
         }, INITIALIZATION_TIMEOUT);
     }
 
