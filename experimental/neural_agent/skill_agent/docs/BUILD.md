@@ -365,9 +365,10 @@ now).** `runtime/granted_actor.py`: an actor whose state is the combiner's activ
 bodies, each on its scopes' heads; `runtime/scripted_bodies.py`: evader, sword, punish, guard, keep_range, idle.
 Granted through the host combiner, keep_range, sword and guard took the open-flat arena's opponent from 61 health to
 0 in every lane, and guard answered every visible wind-up. Weapons attack through the ability head in the gym, so the
-catalogue's weapon verbs hold `abilities_magic` too. Waiting on the coordinator: the session's per-tick seam (the
-grants reach the agent through `CombiningDecider.on_tick`, built here) and the combat verbs in the decision layer;
-then the spine runs with the actor in place of the dispatcher.
+catalogue's weapon verbs hold `abilities_magic` too. The session's per-tick seam carries the grants to the actor
+(1a3098c), and the spine's referee run (`runtime/spine.py --runs ... referee`) puts the actor in place of the
+dispatcher: on J0 it caught 16 of 16 on gen 5 and on gen 7 (the stand-in 10 of 16, gen 5 only) and answered every
+interrupt; the decision layer's combat program (`NA_PROGRAM=COMBAT`, 7a64020) runs through it on gen 7.
 
 ## 7b. Phase B for the skill-agent session (proposed 2026-10-17, late; done 2026-10-18)
 
