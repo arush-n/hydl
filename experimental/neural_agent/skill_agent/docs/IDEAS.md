@@ -216,6 +216,32 @@ Candidates, beside what is read today:
 - role ids (ask 1);
 - the request's own remembered context (idea 8).
 
+## Idea 10: varied combat, real skill instead of brute force
+
+The owner: "we should have more variable combat with the middle and neural layer from changing swinging styles to
+combat styles so there is real skill instead of brute force."
+
+Today's strike body is brute force: it presses the weapon's first ability whenever the target is in reach.
+
+The variety is already in the simulator. The iron sword's four ability slots are different moves: on the open-flat
+arena, slot 1 took the opponent from 61 health to 1 and slots 2 to 4 dealt 11, 25 and 9 (2026-10-19). The catalogue
+gives melee verbs a charge time (`hold_seconds`), and the kit tokens are meant to carry combo windows, hold thresholds,
+charge tiers and costs (`BUILD.md` section 3.1).
+
+- **Swinging styles (neural layer).** The strike chooses among the weapon's moves by the moment: a quick hit into an
+  opening, a charged blow into a long recovery, a combo when the window holds, a feint or a held guard when the
+  target is winding up. The style scalars (idea 2) shade it: patience waits for the opening, aggression presses,
+  precision commits to the clean hit.
+- **Combat styles (decision layer).** Several combat programs instead of one priority list: counter-puncher (guard
+  the wind-up, punish the recovery), pressure (close, combo, deny space), hit-and-run (strike from the band where the
+  sword outranges the opponent, 3.1 to 3.6 blocks, then reset), ambush, zoning. The LLM picks one for the agent and
+  the moment; the reports tell the decision layer when to switch.
+- **Learning it.** Native NPC fights show real move variety (the recorded traces), so they are the naturalness prior
+  (idea 2). The teachers draw their move choice and tempo from the style knobs. The opponents come from a pool of
+  styles, so no single pattern wins.
+- **Measuring skill, not damage alone.** Damage dealt per damage taken; hits per swing; punishes and blocks landed;
+  the variety of moves used (their entropy); and whether a style beats the opponents it should beat.
+
 ## A proposed order, if approved (architecture only; training stays paused)
 
 **The owner's picks (2026-10-19 night):** build first the skills' reports (idea 8) and the guerrilla proof (idea 5);
