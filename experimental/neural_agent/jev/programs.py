@@ -472,6 +472,9 @@ P_COMBAT = Program(
     ),
 )
 PROGRAMS: dict[str, Program] = {"J0": P_J0, "SEQ": P_SEQ, "COMBAT": P_COMBAT}
+# The combat styles (jev/combat_styles.py, task #100): COUNTER, PRESSURE and HIT_AND_RUN join the names NA_PROGRAM accepts.
+from experimental.neural_agent.jev.combat_styles import built_styles  # noqa: E402
+PROGRAMS.update(built_styles())
 
 
 def program_uses_combat(program: Program) -> bool:
