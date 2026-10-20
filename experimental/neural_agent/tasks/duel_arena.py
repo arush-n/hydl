@@ -242,6 +242,8 @@ def make_duel_arena(
     *,
     view_sector_full_angle_radians: float | None,
     legal_observation_sensor_range: bool,
+    combat_params: Any | None = None,
+    max_health: tuple[float, float] | None = None,
 ) -> DuelArena:
     """Build the two-entity duel on the open-flat fixture.
 
@@ -252,6 +254,12 @@ def make_duel_arena(
         view_sector_full_angle_radians: The view sector, radians, centred on each
             entity's head yaw. ``None`` leaves the fixture's sector open.
         legal_observation_sensor_range: Hide a row beyond ``params.sensor_range``.
+        combat_params: The ``CombatParams`` to duel under (``microticks`` must be 1, one
+            decision per tick); ``None`` takes ``default_combat_params(microticks=1)``.
+        max_health: ``(entity 0 maximum, entity 1 maximum)`` overriding
+            ``agent_max_health`` and ``target_max_health`` (the league's equal roles,
+            2026-10-20); the reset health defaults follow them, and so do the
+            fractions each entity reads.
 
     Returns:
         A :class:`DuelArena`. ``reset(keys, *, entity_position=None, entity_health=None,
@@ -273,7 +281,16 @@ def make_duel_arena(
     if sector is not None and (isinstance(sector, bool) or not isinstance(sector, (int, float))):
         raise TypeError("view_sector_full_angle_radians must be a float or None")
 
-    params = default_combat_params(microticks=1)
+    params = default_combat_params(microticks=1) if combat_params is None else combat_params
+    if int(params.microticks) != 1:
+        raise ValueError("combat_params.microticks must be 1: the duel takes one decision per tick")
+    if max_health is not None:
+        if len(max_health) != ENTITY_COUNT or any(float(value) <= 0.0 for value in max_health):
+            raise ValueError("max_health must be two positive maxima, (entity 0, entity 1)")
+        params = params._replace(
+            agent_max_health=jnp.asarray(float(max_health[0]), dtype=jnp.float32),
+            target_max_health=jnp.asarray(float(max_health[1]), dtype=jnp.float32),
+        )
     config = arsenal_runtime_config(
         hytale_0_5_7_loadouts(
             _profiles(loadouts[0], batch),
