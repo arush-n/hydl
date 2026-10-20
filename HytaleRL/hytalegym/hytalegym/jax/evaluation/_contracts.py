@@ -19,6 +19,8 @@ from hytalegym.jax.training.checkpoint import (
 )
 from hytalegym.jax.world import REGION_ARTIFACT_ASSIGNMENT_METHOD, REGION_ARTIFACT_USAGE_HELDOUT_EVALUATION, REGION_TRAVERSAL_POLICY_STAGING_CAPACITY
 from hytalegym.rulesets import combat_ruleset_sha256
+from hytalegym.server_versions import server_profile
+from hytalegym.jax.world.tokens import _traversal_library_manifest
 
 
 ARSENAL_REGION_V1 = "hytalerl_arsenal_region_v1"
@@ -67,6 +69,9 @@ ARSENAL_REGION_V6 = "hytalerl_arsenal_region_v6"
 ARSENAL_REGION_V6_SUITE_SHA256 = (
     "4A52B017C74A149C848AECB0DC435AD2FA6F5964E12DBAB041C49609CD1B4494"
 )
+
+
+ARSENAL_REGION_V7 = "hytalerl_arsenal_region_v7"
 
 
 REGION_LIBRARY_SEMANTIC_SHA256 = (
@@ -231,11 +236,156 @@ FROZEN_REGION_WORLDS = (
 )
 
 
+FROZEN_REGION_WORLDS_0_7_2 = (
+    FrozenRegionWorld(
+        evaluation_order=0,
+        selection_slot=3,
+        seed=1921897808,
+        semantic_sha256=(
+            "DD8C1EE88FC73886EFF64F9D63E75E76E57383CD51D05141208D9F740CC97287"
+        ),
+        graph_semantic_sha256=(
+            "E0A890383A3D05AC34653F230B3EB7428BE40F0455B3087960484FE94C3399F2"
+        ),
+        legal_core_source_nodes=26953,
+        directed_edges=269250,
+        source_node=32286,
+        edge_slot=1,
+        destination_node=31776,
+        source_position=(13.5, 143.0, 16.5),
+        destination_position=(12.5, 143.0, 16.5),
+        edge_kind=1,
+        edge_flags=1,
+        edge_cost=1.0,
+        edge_selection_sha256=(
+            "000007EB449FF9C4D56F640DB6136B485F77A76D92B71FE45180E4FFA04E0125"
+        ),
+    ),
+    FrozenRegionWorld(
+        evaluation_order=1,
+        selection_slot=2,
+        seed=1397671741,
+        semantic_sha256=(
+            "1AB93B7ECCC549357E0872925240C4F5E2B530B14C27DCF55E7EC12D0924B38E"
+        ),
+        graph_semantic_sha256=(
+            "F241AF76AB9CA7C3C4ADDD46AF42A1FB942DA1EDD9A170CA31493590A186C82D"
+        ),
+        legal_core_source_nodes=23257,
+        directed_edges=238407,
+        source_node=7992,
+        edge_slot=3,
+        destination_node=7990,
+        source_position=(-54.5, 39.0, -24.5),
+        destination_position=(-54.5, 39.0, -25.5),
+        edge_kind=1,
+        edge_flags=1,
+        edge_cost=1.0,
+        edge_selection_sha256=(
+            "0000387234EC96AD34527A5CCDC82FC27B7B183B204C34666274BB7C70293086"
+        ),
+    ),
+    FrozenRegionWorld(
+        evaluation_order=2,
+        selection_slot=1,
+        seed=1176664667,
+        semantic_sha256=(
+            "0987E3052751A1BD6F2C414281099D7AEF6601ACCE7E0C76D7568E7C70D6F729"
+        ),
+        graph_semantic_sha256=(
+            "2022D689357E8F3F4AD4389EFBB2C6D0B9C70DE0BC5A8A2D5530C39CEA9A43CF"
+        ),
+        legal_core_source_nodes=21027,
+        directed_edges=224556,
+        source_node=22897,
+        edge_slot=0,
+        destination_node=22584,
+        source_position=(26.5, 67.0, -31.5),
+        destination_position=(25.5, 67.0, -32.5),
+        edge_kind=1,
+        edge_flags=1,
+        edge_cost=1.4142135381698608,
+        edge_selection_sha256=(
+            "00004C2A56E65383DA09804561DAD8A998E24CF4968A06EE9BB005C43A699BD7"
+        ),
+    ),
+    FrozenRegionWorld(
+        evaluation_order=3,
+        selection_slot=0,
+        seed=1274646439,
+        semantic_sha256=(
+            "D27B99E0E9726254EFA8F39B133AA52351785957BC40FE0B9A6321160BB24AA3"
+        ),
+        graph_semantic_sha256=(
+            "A453BB7E00C0FC14C150B0D095E51B7FA285F23F118DF5F1110F8B4CEE3CB1AE"
+        ),
+        legal_core_source_nodes=21772,
+        directed_edges=237910,
+        source_node=8438,
+        edge_slot=3,
+        destination_node=8437,
+        source_position=(-19.5, 123.0, 51.5),
+        destination_position=(-19.5, 123.0, 50.5),
+        edge_kind=1,
+        edge_flags=1,
+        edge_cost=1.0,
+        edge_selection_sha256=(
+            "000179456013DA2AC4AD2BFE9AB60EC34CD3F75EEB421CE17929AE82C4E62C16"
+        ),
+    ),
+)
+
+
+@dataclass(frozen=True)
+class RegionV7Line:
+    """Frozen Region v7 inputs and identity of one server line."""
+
+    region_library_sha256: str
+    capture_evidence_bridge_sha256: str
+    worlds: tuple[FrozenRegionWorld, ...]
+    suite_sha256: str
+
+
+#: Region v7 is frozen per server line, keyed by ``server_profile().certified_version``.
+#: A line without an entry has no frozen v7 suite; its v6 stays historical.
+ARSENAL_REGION_V7_LINES = {
+    "0.7.2": RegionV7Line(
+        region_library_sha256=(
+            "9DCA3C71D43A2C3BF4BE6AFF6E2BD24D2F6608C8BE01D1687A0B259F06DAAB95"
+        ),
+        capture_evidence_bridge_sha256=(
+            "460054A8E7508FE5E205AD527AFB08474B61626EE5C2212FC2A484ECFCCAD88D"
+        ),
+        worlds=FROZEN_REGION_WORLDS_0_7_2,
+        suite_sha256=(
+            "51BFCC2867776FCEFEF078C12E8B8B0762B410570EC26CF64A3D7FEBB3C44690"
+        ),
+    ),
+}
+
+
+def frozen_region_v7_line(line: str | None = None) -> RegionV7Line:
+    """Return the frozen Region v7 inputs of ``line`` (default: the configured line)."""
+
+    line = server_profile().certified_version if line is None else line
+    spec = ARSENAL_REGION_V7_LINES.get(line)
+    if spec is None:
+        raise RuntimeError(
+            f"{ARSENAL_REGION_V7} has no frozen v7 suite on this line ({line}); "
+            f"frozen lines: {', '.join(sorted(ARSENAL_REGION_V7_LINES))}"
+        )
+    return spec
+
+
 def _region_suite_contract(
     *,
     traversal_manifest: Mapping[str, Any],
     suite_id: str,
     version: int,
+    server_line: str | None = None,
+    region_library_sha256: str = REGION_LIBRARY_SEMANTIC_SHA256,
+    capture_evidence_bridge_sha256: str = REGION_CAPTURE_EVIDENCE_BRIDGE_SHA256,
+    worlds: tuple[FrozenRegionWorld, ...] = FROZEN_REGION_WORLDS,
 ) -> dict[str, Any]:
     profiles = tuple(PROFILE_NAMES)
     loadouts = hytale_0_5_7_loadouts(profiles)
@@ -253,6 +403,7 @@ def _region_suite_contract(
         "schema": f"hytalerl_arsenal_region_suite_v{version}",
         "version": version,
         "id": suite_id,
+        **({"server_line": server_line} if server_line is not None else {}),
         "environment": "jax_arsenal",
         "task": "kweebec_razorleaf_vs_trork_brawler",
         "opponent": {
@@ -330,9 +481,9 @@ def _region_suite_contract(
             "region_library": {
                 "schema": "hytalerl_region_artifact_library_v1",
                 "version": 1,
-                "semantic_sha256": REGION_LIBRARY_SEMANTIC_SHA256,
+                "semantic_sha256": region_library_sha256,
                 "capture_evidence_bridge_sha256": (
-                    REGION_CAPTURE_EVIDENCE_BRIDGE_SHA256
+                    capture_evidence_bridge_sha256
                 ),
             },
             "traversal_library": {
@@ -340,7 +491,7 @@ def _region_suite_contract(
                 "version": 2,
                 "semantic_sha256": traversal_semantic_sha256,
                 "source_region_library_semantic_sha256": (
-                    REGION_LIBRARY_SEMANTIC_SHA256
+                    region_library_sha256
                 ),
                 "capture_evidence_bridge_sha256": (
                     traversal_evidence_bridge_sha256
@@ -369,7 +520,7 @@ def _region_suite_contract(
                     else {}
                 ),
             },
-            "worlds": [asdict(world) for world in FROZEN_REGION_WORLDS],
+            "worlds": [asdict(world) for world in worlds],
         },
         "providers": {
             "capabilities": {
@@ -654,6 +805,22 @@ def _region_v6_suite_contract(
     )
 
 
+def _region_v7_suite_contract(
+    *,
+    traversal_manifest: Mapping[str, Any],
+) -> dict[str, Any]:
+    spec = frozen_region_v7_line()
+    return _region_suite_contract(
+        traversal_manifest=traversal_manifest,
+        suite_id=ARSENAL_REGION_V7,
+        version=7,
+        server_line=server_profile().certified_version,
+        region_library_sha256=spec.region_library_sha256,
+        capture_evidence_bridge_sha256=spec.capture_evidence_bridge_sha256,
+        worlds=spec.worlds,
+    )
+
+
 def region_v1_suite_contract(
     *,
     traversal_manifest_path: str | Path,
@@ -724,6 +891,21 @@ def region_v6_suite_contract(
         Path(traversal_manifest_path).read_text(encoding="utf-8")
     )
     return _checked_region_v6_suite_contract(traversal_manifest)
+
+
+def region_v7_suite_contract(
+    traversal_manifest_path: str | Path | None = None,
+) -> dict[str, Any]:
+    """Return Region v7 for the configured line; fails closed off its line or on drift."""
+
+    frozen_region_v7_line()
+    path = (
+        _traversal_library_manifest()
+        if traversal_manifest_path is None
+        else Path(traversal_manifest_path)
+    )
+    traversal_manifest = json.loads(path.read_text(encoding="utf-8"))
+    return _checked_region_v7_suite_contract(traversal_manifest)
 
 
 def _checked_region_v1_suite_contract(
@@ -817,6 +999,21 @@ def _checked_region_v6_suite_contract(
         raise RuntimeError(
             f"{ARSENAL_REGION_V6} drifted: expected "
             f"{ARSENAL_REGION_V6_SUITE_SHA256}, current {actual}; "
+            "publish a new suite version"
+        )
+    return suite
+
+
+def _checked_region_v7_suite_contract(
+    traversal_manifest: Mapping[str, Any],
+) -> dict[str, Any]:
+    spec = frozen_region_v7_line()
+    suite = _region_v7_suite_contract(traversal_manifest=traversal_manifest)
+    actual = canonical_sha256(suite)
+    if actual != spec.suite_sha256:
+        raise RuntimeError(
+            f"{ARSENAL_REGION_V7} drifted on {suite['server_line']}: expected "
+            f"{spec.suite_sha256}, current {actual}; "
             "publish a new suite version"
         )
     return suite

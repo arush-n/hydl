@@ -73,6 +73,13 @@ from ._contracts import (  # noqa: F401  (re-exported: callers unchanged)
     ARSENAL_REGION_V5_SUITE_SHA256,
     ARSENAL_REGION_V6,
     ARSENAL_REGION_V6_SUITE_SHA256,
+    ARSENAL_REGION_V7,
+    ARSENAL_REGION_V7_LINES,
+    FROZEN_REGION_WORLDS_0_7_2,
+    RegionV7Line,
+    _checked_region_v7_suite_contract,
+    frozen_region_v7_line,
+    region_v7_suite_contract,
     EDGE_SELECTION_METHOD,
     EDGE_SELECTION_NAMESPACE,
     EDGE_SELECTION_PAYLOAD_V1,
@@ -283,12 +290,42 @@ def load_region_v6_context(
     )
 
 
+def load_region_v7_context(
+    region_manifest_path: str | Path,
+    traversal_manifest_path: str | Path,
+) -> RegionBenchmarkContext:
+    """Load the configured line's frozen Region v7 corpus; fails closed."""
+
+    spec = frozen_region_v7_line()
+    region_path = Path(region_manifest_path)
+    traversal_path = Path(traversal_manifest_path)
+    region_manifest = json.loads(region_path.read_text(encoding="utf-8"))
+    traversal_manifest = json.loads(
+        traversal_path.read_text(encoding="utf-8")
+    )
+    suite = _checked_region_v7_suite_contract(traversal_manifest)
+    return _load_region_context(
+        region_path,
+        traversal_path,
+        region_manifest,
+        traversal_manifest,
+        suite,
+        region_library_sha256=spec.region_library_sha256,
+        capture_evidence_bridge_sha256=spec.capture_evidence_bridge_sha256,
+        worlds=spec.worlds,
+    )
+
+
 def _load_region_context(
     region_path: Path,
     traversal_path: Path,
     region_manifest: Mapping[str, Any],
     traversal_manifest: Mapping[str, Any],
     suite: Mapping[str, Any],
+    *,
+    region_library_sha256: str = REGION_LIBRARY_SEMANTIC_SHA256,
+    capture_evidence_bridge_sha256: str = REGION_CAPTURE_EVIDENCE_BRIDGE_SHA256,
+    worlds: tuple[FrozenRegionWorld, ...] = FROZEN_REGION_WORLDS,
 ) -> RegionBenchmarkContext:
     corpus = suite["region_corpus"]
     _require_manifest_value(
@@ -304,12 +341,12 @@ def _load_region_context(
     _require_manifest_sha(
         region_manifest,
         ("library_semantic_sha256",),
-        REGION_LIBRARY_SEMANTIC_SHA256,
+        region_library_sha256,
     )
     _require_manifest_sha(
         region_manifest,
         ("capture_contract", "native_evidence_jar_sha256"),
-        REGION_CAPTURE_EVIDENCE_BRIDGE_SHA256,
+        capture_evidence_bridge_sha256,
     )
     _require_manifest_value(
         traversal_manifest,
@@ -329,7 +366,7 @@ def _load_region_context(
     _require_manifest_sha(
         traversal_manifest,
         ("source_region_library_semantic_sha256",),
-        REGION_LIBRARY_SEMANTIC_SHA256,
+        region_library_sha256,
     )
     _require_manifest_sha(
         traversal_manifest,
@@ -341,7 +378,7 @@ def _load_region_context(
     selection = region_environments_from_artifact_manifest(
         region_path,
         usage=REGION_ARTIFACT_USAGE_HELDOUT_EVALUATION,
-        expected_library_semantic_sha256=REGION_LIBRARY_SEMANTIC_SHA256,
+        expected_library_semantic_sha256=region_library_sha256,
         working_set_capacity=REGION_WORLD_COUNT,
         environment_count=REGION_WORLD_COUNT,
         selection_key=REGION_SELECTION_KEY,
@@ -351,7 +388,7 @@ def _load_region_context(
             suite["region_corpus"]["traversal_library"]["semantic_sha256"]
         ),
     )
-    _validate_loaded_worlds(selection, traversal_manifest)
+    _validate_loaded_worlds(selection, traversal_manifest, worlds=worlds)
     return RegionBenchmarkContext(
         selection=selection,
         region_manifest=region_manifest,
@@ -496,10 +533,46 @@ def run_arsenal_region_v6_trained(
 ) -> dict[str, Any]:
     """Run Region v6 with exact geometry and target navigation bound."""
 
-    context = load_region_v6_context(
-        region_manifest_path,
-        traversal_manifest_path,
+    return _run_region_trained(
+        load_region_v6_context(region_manifest_path, traversal_manifest_path),
+        worlds=FROZEN_REGION_WORLDS,
+        action_source=action_source,
+        subject=subject,
+        action_carry_initializer=action_carry_initializer,
+        compile=compile,
     )
+
+
+def run_arsenal_region_v7_trained(
+    action_source: ActionSource,
+    subject: Mapping[str, Any],
+    *,
+    region_manifest_path: str | Path,
+    traversal_manifest_path: str | Path,
+    action_carry_initializer: ActionCarryInitializer,
+    compile: bool = True,
+) -> dict[str, Any]:
+    """Run the configured line's frozen Region v7 with exact geometry and target navigation bound."""
+
+    return _run_region_trained(
+        load_region_v7_context(region_manifest_path, traversal_manifest_path),
+        worlds=frozen_region_v7_line().worlds,
+        action_source=action_source,
+        subject=subject,
+        action_carry_initializer=action_carry_initializer,
+        compile=compile,
+    )
+
+
+def _run_region_trained(
+    context: RegionBenchmarkContext,
+    *,
+    worlds: tuple[FrozenRegionWorld, ...],
+    action_source: ActionSource,
+    subject: Mapping[str, Any],
+    action_carry_initializer: ActionCarryInitializer,
+    compile: bool,
+) -> dict[str, Any]:
     suite = context.suite
     _validate_trained_subject(subject, suite=suite)
     reference_config = _reference_policy_config(
@@ -512,7 +585,7 @@ def run_arsenal_region_v6_trained(
     rows_by_arm: dict[str, list[dict[str, Any]]] = {
         name: [] for name in TRAINED_COMPARISON_ARMS
     }
-    for world in FROZEN_REGION_WORLDS:
+    for world in worlds:
         (
             params,
             runtime,
@@ -530,7 +603,7 @@ def run_arsenal_region_v6_trained(
         )
         if blockers:
             raise RuntimeError(
-                "Arsenal Region v6 publication is blocked:\n- "
+                f"Arsenal Region v{suite['version']} publication is blocked:\n- "
                 + "\n- ".join(blockers)
             )
         common = {
@@ -762,6 +835,10 @@ __all__ = [
     "ARSENAL_REGION_V5_SUITE_SHA256",
     "ARSENAL_REGION_V6",
     "ARSENAL_REGION_V6_SUITE_SHA256",
+    "ARSENAL_REGION_V7",
+    "ARSENAL_REGION_V7_LINES",
+    "FROZEN_REGION_WORLDS_0_7_2",
+    "RegionV7Line",
     "FROZEN_REGION_WORLDS",
     "load_region_v1_context",
     "load_region_v2_context",
@@ -769,6 +846,7 @@ __all__ = [
     "load_region_v4_context",
     "load_region_v5_context",
     "load_region_v6_context",
+    "load_region_v7_context",
     "region_benchmark_artifact_errors",
     "region_v1_runtime_blockers",
     "region_v1_suite_contract",
@@ -777,10 +855,13 @@ __all__ = [
     "region_v4_suite_contract",
     "region_v5_suite_contract",
     "region_v6_suite_contract",
+    "region_v7_suite_contract",
+    "frozen_region_v7_line",
     "run_arsenal_region_v1_trained",
     "run_arsenal_region_v2_trained",
     "run_arsenal_region_v3_trained",
     "run_arsenal_region_v4_trained",
     "run_arsenal_region_v5_trained",
     "run_arsenal_region_v6_trained",
+    "run_arsenal_region_v7_trained",
 ]

@@ -24,6 +24,8 @@ from ._contracts import (  # noqa: F401  (re-exported: callers unchanged)
     ARSENAL_REGION_V5_SUITE_SHA256,
     ARSENAL_REGION_V6,
     ARSENAL_REGION_V6_SUITE_SHA256,
+    ARSENAL_REGION_V7,
+    ARSENAL_REGION_V7_LINES,
     EDGE_SELECTION_METHOD,
     EDGE_SELECTION_NAMESPACE,
     EDGE_SELECTION_PAYLOAD_V1,
@@ -63,6 +65,7 @@ FROZEN_REGION_SUITE_SHA256_BY_ID = {
     ARSENAL_REGION_V4: ARSENAL_REGION_V4_SUITE_SHA256,
     ARSENAL_REGION_V5: ARSENAL_REGION_V5_SUITE_SHA256,
     ARSENAL_REGION_V6: ARSENAL_REGION_V6_SUITE_SHA256,
+    ARSENAL_REGION_V7: ARSENAL_REGION_V7_LINES["0.7.2"].suite_sha256,
 }
 
 
@@ -525,6 +528,7 @@ def _rows_match_world_contract(
 def _validate_loaded_worlds(
     selection: RegionLibraryEnvironmentSelection,
     traversal_manifest: Mapping[str, Any],
+    worlds: tuple[FrozenRegionWorld, ...] = FROZEN_REGION_WORLDS,
 ) -> None:
     traversal_atlas = selection.traversal_atlas
     if traversal_atlas is None:
@@ -536,7 +540,7 @@ def _validate_loaded_worlds(
         ).tolist()
     )
     expected_order = tuple(
-        world.selection_slot for world in FROZEN_REGION_WORLDS
+        world.selection_slot for world in worlds
     )
     if world_order != expected_order:
         raise ValueError("held-out Region world assignment changed")
@@ -544,7 +548,7 @@ def _validate_loaded_worlds(
         entry["source_region_semantic_sha256"].upper(): entry
         for entry in traversal_manifest["entries"]
     }
-    for world in FROZEN_REGION_WORLDS:
+    for world in worlds:
         actual_sha = selection.working_set.artifact_semantic_sha256[
             world.selection_slot
         ].upper()
@@ -567,7 +571,11 @@ def _validate_loaded_worlds(
             != world.graph_semantic_sha256
         ):
             raise ValueError("held-out Region traversal graph changed")
-        selected = _select_world_edge(selection, world.selection_slot)
+        selected = _select_world_edge(
+            selection,
+            world.selection_slot,
+            worlds=worlds,
+        )
         if selected != world:
             raise ValueError(
                 f"Region spawn edge changed for {world.semantic_sha256}"
@@ -577,6 +585,7 @@ def _validate_loaded_worlds(
 def _select_world_edge(
     selection: RegionLibraryEnvironmentSelection,
     selection_slot: int,
+    worlds: tuple[FrozenRegionWorld, ...] = FROZEN_REGION_WORLDS,
 ) -> FrozenRegionWorld:
     atlas = selection.traversal_atlas
     if atlas is None:
@@ -636,7 +645,7 @@ def _select_world_edge(
     )
     evaluation_order = next(
         world.evaluation_order
-        for world in FROZEN_REGION_WORLDS
+        for world in worlds
         if world.selection_slot == selection_slot
     )
     return FrozenRegionWorld(
@@ -646,7 +655,7 @@ def _select_world_edge(
         semantic_sha256=semantic_sha256,
         graph_semantic_sha256=next(
             world.graph_semantic_sha256
-            for world in FROZEN_REGION_WORLDS
+            for world in worlds
             if world.selection_slot == selection_slot
         ),
         legal_core_source_nodes=int(sources.size),

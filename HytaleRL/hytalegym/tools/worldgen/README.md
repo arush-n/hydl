@@ -106,7 +106,7 @@ Scope as of 2026-10-18, from a read-only pass over the tracked code. It covers t
 
 ### Arsenal Region suites (derived at call time, pinned by SHA)
 
-- Generator in the repo: `region_vN_suite_contract(traversal_manifest_path=...)`, v1 to v6, in `hytalegym/hytalegym/jax/evaluation/_contracts.py`. The checked v6 wrapper raises on drift (`_contracts.py:809-821`).
+- Generator in the repo: `region_vN_suite_contract(traversal_manifest_path=...)`, v1 to v6, in `hytalegym/hytalegym/jax/evaluation/_contracts.py`, and `region_v7_suite_contract()` (per line; see the v7 bullet). The checked v6 wrapper raises on drift.
 - One-command check. It prints the success line and exits 0 when v6 reproduces its frozen SHA:
 
         PYTHONPATH=/Users/arush/hydl/HytaleRL/hytalegym /Users/arush/hydl/.venv/bin/python -c "from hytalegym.jax.evaluation import region_v6_suite_contract as f; f(traversal_manifest_path='/Users/arush/hydl/HytaleRL/artifacts/worldgen/region-library-pilot-v2/traversal-v2/traversal-manifest.json'); print('v6 reproduces its frozen SHA')"
@@ -120,11 +120,18 @@ Scope as of 2026-10-18, from a read-only pass over the tracked code. It covers t
   digest or known bridge pin reproduces the frozen value (1,587 combinations tried), so the freeze inputs are not recoverable.
   The library, the four frozen worlds and their edge selections all match. Under `HYTALERL_SERVER_VERSION=0.7.2` the pin
   becomes `460054A8` and v6 gives `D9DD0390`. Consequence: a suite is per server line because its content carries the line's
-  bridge pin. The 0.7.2 suite (v7) is frozen from the promoted 0.7.2 traversal manifest under the 0.7.2 profile and keyed by
+  bridge pin. The 0.7.2 suite (v7) is frozen (2026-10-19, see the v7 bullet) from the promoted 0.7.2 traversal manifest under the 0.7.2 profile and keyed by
   `server_profile().certified_version`; the 0.5.7 v6 stays historical (re-freezing it or binding a 0.5.7 v7 to the current
   pin is an owner decision; the lane's candidate patch is `suite_drift/proposed.patch`). Pins: `tests/jax/test_region_public_benchmark.py:131-142`,
   `evaluation/_artifact.py` (`FROZEN_REGION_SUITE_SHA256_BY_ID`), `docs/jax/arsenal-benchmark.md:221-222`.
-- A 0.7.2 suite cannot come from the current code. `REGION_LIBRARY_SEMANTIC_SHA256`, `REGION_CAPTURE_EVIDENCE_BRIDGE_SHA256` and `FROZEN_REGION_WORLDS` are 0.5.7 values (`_contracts.py:72-79, 134`), and a new frozen version is needed (`_contracts.py:816-821`). That is a code change in `hytalegym/jax/evaluation`, the owner's call.
+- Resolved 2026-10-19 (owner's call: per-line v7). The three 0.5.7 identities are now inputs of the line table `ARSENAL_REGION_V7_LINES`; v1 to v6 keep them as defaults, and their suite dicts are unchanged (JSON compared before and after the change).
+- Region v7 (0.7.2 line), frozen 2026-10-19: `hytalerl_arsenal_region_v7` for `certified_version == "0.7.2"` is `51BFCC2867776FCEFEF078C12E8B8B0762B410570EC26CF64A3D7FEBB3C44690`.
+  - Inputs: Region library `9DCA3C71D43A2C3BF4BE6AFF6E2BD24D2F6608C8BE01D1687A0B259F06DAAB95` (profile `region_library_sha256`; library manifest); traversal library `CC613B1202C44A2C351EAEA6027E057A4E844676B7DC361BCDD070CAE2A38C4C` (`region-library-pilot-v2-072/traversal-v2`, 20 graphs); capture bridge `460054A8E7508FE5E205AD527AFB08474B61626EE5C2212FC2A484ECFCCAD88D` (profile `bridge_jar_sha256`; the library's capture contract and the traversal's native evidence); the arsenal contract, which carries the same bridge pin.
+  - Held-out worlds (`FROZEN_REGION_WORLDS_0_7_2`), by evaluation order: 0 slot 3 seed 1921897808; 1 slot 2 seed 1397671741; 2 slot 1 seed 1176664667; 3 slot 0 seed 1274646439. Each record carries the library's stored semantic digest, the traversal graph digest and the spawn edge, chosen by the same selection code as v6 (`_select_world_edge`, now taking the world table). The 0.5.7 order (slots 1, 3, 0, 2) does not apply to this library.
+  - Fresh-capture drift is irrelevant to loading the frozen library. The identity is the library's stored NPZs and graphs; the held-out digests are one capture's complete digests (`artifacts/worldgen/region-library-pilot-v2-072/STATUS.md`), and a fresh capture need not reproduce them. Loading checks the stored artifacts, not a live capture.
+  - Per-line rule: `region_v7_suite_contract()` and `load_region_v7_context()` read `server_profile().certified_version`. A line without an `ARSENAL_REGION_V7_LINES` entry raises "no frozen v7 suite on this line"; a changed input raises "drifted". The bridge pin is read at import (`hytalegym/jax/combat/mechanics/schema/contract.py:117`), so a process has one line: start 0.7.2 with `HYTALERL_SERVER_VERSION=0.7.2`. The 0.7.2 test cases skip on any other line.
+  - One-command check (a 0.7.2 process): `HYTALERL_SERVER_VERSION=0.7.2 PYTHONPATH=/Users/arush/hydl/HytaleRL/hytalegym /Users/arush/hydl/.venv/bin/python -c "from hytalegym.jax.evaluation import region_v7_suite_contract as f; f(); print('v7 reproduces its frozen SHA')"`
+  - How to freeze a later line (use a new id, `hytalerl_arsenal_region_v8`, because the registry keeps one value per id): (1) promote that line's Region and traversal libraries and add its profile entry in `hytalegym/server_versions`; (2) build its held-out world records through the selection code (`region_environments_from_artifact_manifest`, then `_select_world_edge` with the evaluation order set to the environment index and the graph digest taken from the traversal entry); (3) add the v8 content function and a line entry whose frozen value is computed in a process started with that line's `HYTALERL_SERVER_VERSION`; (4) register the id in `_artifact.py` and the package exports; (5) add tests that skip off the line, and a tampered-copy drift case.
 
 ### Reach/pursue task zoo (tracked tool, 2026-10-18)
 
