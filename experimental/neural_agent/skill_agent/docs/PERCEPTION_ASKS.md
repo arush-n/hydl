@@ -25,6 +25,33 @@ and leaves the token's `known` feature at 0.
 | 6 | Fluids | World geometry tokens carry semantic flags, no fluid id (`v3/tokens/world.py:34-50`) | The fluid's semantic id per geometry token | A fluid is visible |
 | 7 | The agent's held item, by id | `weapon_i32` publishes `weapon_id`, `weapon_family`, `active_ability_slot` (`v3/schema/contract.py:20-24`) | Say whether `weapon_id` is the held item's semantic id; if not, publish that id | The agent knows what it holds |
 
+### Asks 9 and 10, and an arena: cover at range (2026-10-20, for the guerrilla proof)
+
+The owner's principle for these: "the more legal information the better, not every neural layer will activate each
+input but if needed it should". Today the agent sees geometry only in its 9-by-9-block local window: the navigation
+tokens reach 4 blocks, and `combat_cover` (9046a78) puts its pillars at radius 3 because the engine window ends
+there. Hiding needs cover at the range a player picks it, 5 to 16 blocks.
+
+| # | Ask | Today | Proposed field | Legal basis |
+|---|---|---|---|---|
+| 9 | The solid structures the agent sees at range | Nothing beyond the local window | Occluder tokens: the K nearest solid columns tall enough to hide a standing agent (2 blocks or more) whose face the agent can see within the sensor range, as (cell x, z relative to the agent, base y, height, block semantic id); K a configuration, 16 by default | The face is in line of sight and in the view sector, the same gate as an entity row |
+| 10 | Where to stand behind them against a threat | Nothing | For each occluder token, the cell beside it on the side away from the target, with a flag that the column blocks the target's line of sight to a standing agent there, the walking distance, and whether a path exists | Derived from ask 9's visible geometry and the target's position as the agent knows it (seen, or last known), a computation a player makes by eye |
+
+**The arena that tests them.** A guerrilla arena on the Region geometry route (`RegionGeometryState` with a region
+fixture), so cover can sit 5 to 16 blocks out:
+- pillars and walls scattered around the spawn;
+- the agent with a ranged loadout once the bow fires;
+- an active melee opponent;
+- the legal sector and the sensor range.
+
+Ask 10 is the convenience form of ask 9. If only one lands, ask 9 is the input a network needs; the cover point can
+then be learned, or computed in the skill layer from ask 9.
+
+The arena is also what ranged combat needs. On the open-flat and local-window fixtures a target beyond the 9-block
+window freezes the arsenal: `geometry_exhausted` is set, abilities never tick, and nothing reports it (the
+coordinator's bow recipe, 2026-10-20). A shot fires at 3.5 blocks and freezes at 4.5. A bow there works only at sword
+range; at range it needs the Region route.
+
 ## Status
 
 **2026-10-19: all seven accepted** by the 0.7.2 port's coordinator (the simulator session), scheduled as the next
