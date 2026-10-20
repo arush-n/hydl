@@ -142,6 +142,14 @@ per environment family, preconditions, failure modes, calibration.
   - its calibrated chance of success and time left, from the status heads `BUILD.md` section 3.2 names.
 - **The one-writer rule holds**: the skill layer writes `skills`. Reading the LLM's marks means widening the skills'
   view, which is the coordinator's file.
+- **Inputs only, never text** (owner: "the neural layer has to feed from inputs so it cannot read natural language but
+  the idea is there"). The LLM's words reach the neural layer only as typed fields: an entity handle, a position or
+  region, a flag, a scalar. The executive section already holds them beside the words (`GoalEntry`: the typed goal
+  fields plus the LLM's words, `shared_state/sections/executive.py`), and the decision layer lowers them into what the
+  skills read. A described target (idea 3) arrives as a vector from the text encoder and projection the registry
+  uses for its own descriptions, so matching it against what the agent sees is arithmetic, not reading. The same
+  holds upward: the skills write events and numbers, and the views turn them into words for the LLM
+  (`shared_state/views/briefing.py`).
 
 ## A proposed order, if approved (architecture only; training stays paused)
 
