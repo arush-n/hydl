@@ -146,6 +146,13 @@ class NeuralPursuitSkill:
 
         return jnp.zeros((validate_batch(batch), SKILL_STATE_WIDTH), dtype=jnp.float32)
 
+    def body(self, observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array | None = None) -> jax.Array:
+        """The skill as an array body (``granted_actor.py``): factors int32[B, 12] from the learner observation, the
+        flat action mask bool[B, 124] (restricted here to the scope) and the ticks since its grant, int32[B]; pursuit
+        takes no scalar arguments."""
+
+        return self._act(observation, self._scope.restrict(jnp.asarray(mask, dtype=jnp.bool_)), ticks)
+
     def __call__(self, state: jax.Array, belief: SharedBeliefState, actor_input: ActorPolicyInput, params: jax.Array,
                  key: jax.Array) -> tuple[jax.Array, jax.Array]:
         """One tick: ``(next_state, factors)``, float32[B, SKILL_STATE_WIDTH] and int32[B, 12]."""

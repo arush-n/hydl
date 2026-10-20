@@ -360,6 +360,15 @@ commitment violation, no decision miss. Not yet: the combiner's grant gating the
 on the manager's goal; the in-graph active-request table is where the grant would gate it); a scripted pursuit as the
 comparison (H10); rear targets, where the network stalls (TRAINING_NEEDS 19 and 20).
 
+**The referee controls the body (2026-10-19, owner: the grant controls the body, no stand-ins, scripted first, gen 7
+now).** `runtime/granted_actor.py`: an actor whose state is the combiner's active-request table runs only the granted
+bodies, each on its scopes' heads; `runtime/scripted_bodies.py`: evader, sword, punish, guard, keep_range, idle.
+Granted through the host combiner, keep_range, sword and guard took the open-flat arena's opponent from 61 health to
+0 in every lane, and guard answered every visible wind-up. Weapons attack through the ability head in the gym, so the
+catalogue's weapon verbs hold `abilities_magic` too. Waiting on the coordinator: the session's per-tick seam (the
+grants reach the agent through `CombiningDecider.on_tick`, built here) and the combat verbs in the decision layer;
+then the spine runs with the actor in place of the dispatcher.
+
 ## 7b. Phase B for the skill-agent session (proposed 2026-10-17, late; done 2026-10-18)
 
 Phase A is done (eight commits: catalogue, protocol, combiner, parity, trace loader, fidelity ledger,

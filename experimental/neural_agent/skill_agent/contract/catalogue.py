@@ -36,7 +36,9 @@ each departure carries its reason there. A few learned verbs drive a second scop
 competency (``SECOND_SCOPES``, for example ``build_up`` places blocks with the hands while it jumps):
 the one request carries both scopes, and the combiner grants them together or not at all
 (``requests.ArgumentSchema.scopes`` is a tuple; agreed with the middle layer on 2026-10-17). Parallel
-requests are for independent verbs (walk while looking at something), not for halves of one verb.
+requests are for independent verbs (walk while looking at something), not for halves of one verb. A verb that strikes
+with a weapon (``WEAPON_SECTIONS``, ``STRIKE_VERBS``) also holds ``abilities_magic``: in the gym a weapon's attacks
+are its ability slots, so the strike drives the ability head (2026-10-19).
 
 The three proof-of-concept skills (``idle``, ``pursuit``, ``evader``) are not catalogue rows.
 ``proof_of_concept_contracts`` maps them onto the rows that describe them (``PROOF_OF_CONCEPT``)
@@ -141,6 +143,13 @@ SECOND_SCOPES: Mapping[str, tuple[str, ...]] = {
     "lure_animal": ("hands",),
 }
 """Learned verbs that also drive a second scope; their one request carries both scopes."""
+
+WEAPON_SECTIONS: tuple[int, ...] = (9, 10)
+STRIKE_VERBS: frozenset[str] = frozenset({"punish", "interrupt", "kite"})
+"""The melee and ranged sections, and the tactics that strike. Their learned verbs that use the hands also hold
+``abilities_magic``: in the gym a weapon's attacks are its ability slots (the v3 encoder masks the base action's
+attacks for the learner, ``observation/v3/encoding/encoder.py:470-476``), so a strike drives the ability head.
+Measured 2026-10-19 in the open-flat combat arena: pressing ability slot 1 took the opponent from 61 health to 1."""
 
 PROGRESS_UNIVERSAL: tuple[str, ...] = ("progress", "elapsed_s")
 """Progress every verb reports: the fraction toward its done condition (0 to 1) and seconds since its grant."""
@@ -593,6 +602,8 @@ def verb_contract(skill: CatalogueSkill, verb: str) -> VerbContract | None:
     arguments = parse_instruction(verb, skill.instruction, skill.section, skill.kind)
     scope = scope_for(verb, skill.section)
     scopes = (scope, *SECOND_SCOPES.get(verb, ())) if scope else ()
+    if skill.kind == "L" and "hands" in scopes and (skill.section in WEAPON_SECTIONS or verb in STRIKE_VERBS):
+        scopes = (*scopes, "abilities_magic")
     return build_verb_contract(verb, arguments, scopes, skill.kind, skill.section, describe(skill, verb, arguments))
 
 
@@ -717,8 +728,8 @@ def summary(catalogue: Catalogue) -> dict[str, Any]:
     contracts = verb_contracts(catalogue)
     by_verb = {contract.verb: contract for contract in contracts}
     learned = [skill for skill in catalogue.skills if skill.kind == "L"]
-    learned_scoped = [skill for skill in learned if all(1 <= len(by_verb[verb].scopes) <= 2 for verb in skill.ids)]
-    two_scope = [skill for skill in learned if any(len(by_verb[verb].scopes) == 2 for verb in skill.ids)]
+    learned_scoped = [skill for skill in learned if all(1 <= len(by_verb[verb].scopes) <= 3 for verb in skill.ids)]
+    several_scopes = [skill for skill in learned if any(len(by_verb[verb].scopes) >= 2 for verb in skill.ids)]
     learned_complete = [skill for skill in learned if all(by_verb[verb].arguments.complete for verb in skill.ids)]
     activities = resolve_activities(catalogue)
     unresolved = [f"{program.activity}: {step.text}" for program in activities for step in program.steps
@@ -739,7 +750,7 @@ def summary(catalogue: Catalogue) -> dict[str, Any]:
         "contracts": len(contracts),
         "learned_rows": len(learned),
         "learned_rows_with_scopes": len(learned_scoped),
-        "learned_rows_with_two_scopes": len(two_scope),
+        "learned_rows_with_several_scopes": len(several_scopes),
         "learned_rows_with_complete_schema": len(learned_complete),
         "rows_on_group_default": sum(1 for skill in catalogue.skills if skill.kind != "A" and not skill.instruction),
         "incomplete_schemas": [f"{contract.verb}: {list(contract.arguments.unparsed)}" for contract in contracts
@@ -787,6 +798,7 @@ __all__ = [
     "CARRIED_KINDS",
     "CATALOGUE_VERSION",
     "SECOND_SCOPES",
+    "STRIKE_VERBS",
     "CONTEXT_KINDS",
     "DEFAULT_CATALOGUE",
     "KINDS",
@@ -795,6 +807,7 @@ __all__ = [
     "PROOF_OF_CONCEPT",
     "SECTION_SCOPES",
     "VERB_SCOPES",
+    "WEAPON_SECTIONS",
     "ActivityProgram",
     "ActivityStep",
     "ArgumentSchema",

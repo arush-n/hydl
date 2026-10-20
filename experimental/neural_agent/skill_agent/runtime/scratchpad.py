@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import dataclasses
 from collections import Counter
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 import numpy as np
 
@@ -106,6 +106,9 @@ class CombiningDecider:
         inner: The host decider (``decide(transition, hierarchy_state, executive) -> goal``).
         combiner: The combiner, built once per session (it carries every lane's grants).
         world_bounds: The world box of the contexts.
+        actor_verbs: The verb list of a ``granted_actor.GrantedActor`` this decider serves. With it, ``on_tick``
+            returns the tick's grants as that actor's state (the active-request table), which the session's per-tick
+            seam writes into the agent so the grants drive the body; without it ``on_tick`` returns None.
 
     ``last_steps`` holds the combiner's steps of the latest decision and ``status_counts`` counts every
     status it wrote by kind (a rejection also as ``rejected:<code>``); every other attribute reads through
@@ -115,11 +118,13 @@ class CombiningDecider:
     FORWARDED: tuple[str, ...] = ("scratchpad", "host_cadence_ticks", "tick_seconds", "host_respects_commitment",
                                   "current_tick")
 
-    def __init__(self, inner: Any, combiner: Combiner, world_bounds: Any = ANY_WORLD) -> None:
+    def __init__(self, inner: Any, combiner: Combiner, world_bounds: Any = ANY_WORLD,
+                 actor_verbs: Sequence[str] | None = None) -> None:
         object.__setattr__(self, "_inner", inner)
         object.__setattr__(self, "_bound", {})
         object.__setattr__(self, "combiner", combiner)
         object.__setattr__(self, "world_bounds", world_bounds)
+        object.__setattr__(self, "actor_verbs", None if actor_verbs is None else tuple(actor_verbs))
         object.__setattr__(self, "last_steps", {})
         object.__setattr__(self, "status_counts", Counter())
         object.__setattr__(self, "_combined_tick", None)
@@ -142,17 +147,25 @@ class CombiningDecider:
             self._combine(int(self._bound.get("current_tick", 0)), transition)
         return goal
 
-    def on_tick(self, clock_tick: int, transition: Any, hierarchy_state: Any) -> None:
+    def on_tick(self, clock_tick: int, transition: Any, hierarchy_state: Any) -> Any:
         """The session's per-tick hook (it calls a decider's ``on_tick`` after the tick's scratchpad sections are
         written): the combiner runs on every tick, so ``running`` statuses reach the stream between decisions.
         A tick the decision already combined is not combined again. The inner decider's own hook, if any, runs
-        first."""
+        first. Returns the tick's grants as the served actor's state when ``actor_verbs`` is set, else None."""
 
         object.__setattr__(self, "_hooked", True)
         inner = getattr(self._inner, "on_tick", None)
         if callable(inner):
             inner(clock_tick, transition, hierarchy_state)
         self._combine(int(clock_tick), transition)
+        state = self._bound.get("scratchpad")
+        if self.actor_verbs is None or state is None:
+            return None
+        from experimental.neural_agent.skill_agent.runtime.granted_actor import grants_table
+
+        agents = sorted(self.last_steps)
+        live = [{request.request_id: request for request in state.requests.for_agent(agent)} for agent in agents]
+        return grants_table([self.last_steps[agent] for agent in agents], live, self.actor_verbs)
 
     def _combine(self, tick: int, transition: Any) -> None:
         state = self._bound.get("scratchpad")

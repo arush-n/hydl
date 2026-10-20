@@ -25,6 +25,9 @@ Import the submodules, which are sorted into subfolders by purpose (each subfold
 * ``runtime.neural_pursuit``: the trained walk/look network (the A2 C' run) as the decision layer's ``pursuit`` skill.
 * ``runtime.spine``: the working spine: the composition run with the stand-in pursuit and with the neural one.
 * ``runtime.gen7``: runs skill-layer code on a private gen-7 render.
+* ``runtime.granted_actor``: the actor that runs only the bodies the combiner granted (the referee controls the
+  body).
+* ``runtime.scripted_bodies``: the scripted bodies: evader, sword, punish, guard, keep_range, idle.
 
 ``model``: the networks.
 
