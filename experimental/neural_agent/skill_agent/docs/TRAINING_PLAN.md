@@ -355,13 +355,24 @@ bc69536; equal maximum health at 5871dee). The duel has no built-in AI, so the g
 the scripted priority on both bodies, from placements symmetric under a half turn, each entity after its own random
 start delay of 0 to 20 ticks, with wins and damage at parity within 2 SE (`tasks/duel.py`). Without the delays the
 twins swing on the same tick, each guards the other's wind-up, and nothing lands. Measured over 64 lanes and 600
-ticks: on gen 5 parity holds for all four weapons, but most bouts end undecided. On gen 7 it fails: with swords
-entity 0 wins 51 of 63 decided bouts (damage +5.9 ± 2.1), and with maces entity 1 wins 9 of 9 (−4.5 ± 1.7). In a
-fixed probe entity 1's attacks resolve later than entity 0's (its first hit 1 tick later, its third combo hit 39 ticks
-later), while movement and turning are symmetric. The coordinator is tracing the cause (#103). Until the seats are
-equal, the league plays every pair in both seats. Two findings for the bodies: the strike reach is the sword's 3.5
+ticks: on gen 7 it fails. With swords entity 0 wins 51 of 63 decided bouts (damage +5.9 ± 2.1), and with maces
+entity 1 wins 9 of 9 (−4.5 ± 1.7). Gen 5's priority mirror held parity only because 55 to 64 of 64 bouts ended
+undecided; with decisive mirrors gen 5 fails too: PRESSURE on both bodies, entity 0 wins 47 to 3 (damage +25.2 ±
+2.4), and HIT_AND_RUN on both, 46 to 18 (+17.6 ± 2.9). In fixed probes entity 1's follow-up attacks re-queue on
+different ticks than entity 0's (first hits coincide, follow-ups differ in both directions). Movement, turning and
+perception are symmetric: both entities read the other's distance within 0.065 blocks and its bearing within 1.1
+degrees. The coordinator is tracing the cause (#103). Until the seats are equal, the league plays every pair in both
+seats. Two findings for the bodies: the strike reach is the sword's 3.5
 blocks for every weapon, but daggers land only within 2.0, so dagger bodies never hit; and against a guard on every
 wind-up the slow battleaxe and mace almost never land.
+
+**L2 status (2026-10-20).** The coordinator's style programs landed at 0b22cda. Their controllers are
+`tasks/league.py`: COUNTER, PRESSURE and HIT_AND_RUN, with the scripted priority as PRIORITY, closing in by
+keep_range with the pursuit body's search turn, and no charged holds yet. The round robin plays 32 placements per
+ordered pair in both seats, 768 bouts, as one batch of 384 lanes in about 25 s. Its gate cannot be judged while the
+seats are unequal: seat 0 scores 0.91 on gen 5 and 0.81 on gen 7, so a pair played in both seats scores near one half
+whatever the styles. On gen 5 no style beats another by 2 SE. On gen 7 PRESSURE and PRIORITY each beat HIT_AND_RUN
+(0.66 ± 0.06), there is no cycle, and no style dominates. It is re-run when #103 lands.
 
 **L3 status (2026-10-20).** The lookahead teacher is `teaching/lookahead.py`; its CLI reproduces the scratchpad
 prototype's measurement exactly on gen 5 and gen 7. On gen 7 it meets L3's gate against the opponents that exist
