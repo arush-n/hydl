@@ -141,7 +141,7 @@ the phase already names each window, and a rule that fired once per attack would
 the evader (``EVADER_PRIORITY``, 0.5) above the phase rules (``COMBAT_PHASE_PRIORITY``, 0.4) above ``sword``
 (``SWORD_PRIORITY``, 0.3), so damage always wins. ``P_COMBAT`` is ``PROGRAMS['COMBAT']`` (``NA_PROGRAM=COMBAT``, 2026-10-19). It runs on the combat catalogue
 (``skill_library.library.build_combat_registry``) with ``--arms jprog`` alone, which the composition CLI enforces.
-Its scalars: sword's ``hold_seconds`` is 0.0 (a tap), keep_range's band is (3.0, 4.0).
+Its scalars: sword's ``hold_seconds`` is 0.0 (a tap), keep_range's band is KEEP_RANGE_BAND, (3.1, 3.6).
 """
 
 from __future__ import annotations
@@ -219,10 +219,14 @@ TARGET_ENTITY: int = 0
 #: target's own reach is not measured. The learner's base attack is switched off (``observation/v3/encoding/encoder.py``
 #: 470-476), so this is not the strike reach.
 MELEE_REACH_BLOCKS: float = 3.0
-#: Reach of a strike through an ability slot, in blocks: the skill layer measured ability choice 1 landing at 2.5 blocks
-#: (not reproduced here). The 0.7.2 melee selectors end at 2.5 blocks most often (``hytalegym/sim/gen7/data/
-#: weapons.json``: 42 of the 112 ``EndDistance`` values). Within reach means strictly closer, as ``distance_below`` reads.
-STRIKE_REACH_BLOCKS: float = 2.5
+#: Reach of a strike through an ability slot, in blocks. Measured by the skill layer on 2026-10-19 on both engines
+#: (iron sword, first ability pressed every tick at an inert target straight ahead, 8 lanes at stepped distances):
+#: hits from 3.4 to 3.7 blocks centre to centre, none from 3.8; 3.5 keeps 0.2 under the measured maximum. The
+#: opponent's own hits landed at 2.54 to 3.00 blocks (MELEE_REACH_BLOCKS 3.0 confirmed as the sweep reach).
+STRIKE_REACH_BLOCKS: float = 3.5
+#: keep_range's band (band_min, band_max): outside the opponent's 3.0 sweep and inside the 3.7 strike reach, so the
+#: agent can hit without being hit (the skill layer's measurement above).
+KEEP_RANGE_BAND: tuple[float, float] = (3.1, 3.6)
 #: The target's attack phases as the legal observation publishes them (``target_i32`` ``attack_phase``): the legacy
 #: controller's codes (``hytalegym/jax/combat/opponents/legacy/controller.py``).
 ATTACK_PHASE_CODES: dict[str, int] = {"idle": 0, "windup": 1, "sweep": 2, "recovery": 3, "cooldown": 4}
@@ -372,7 +376,7 @@ P_COMBAT = Program(
         EVADE_ON_DAMAGE,
         Interrupt("guard", COMBAT_PHASE_PRIORITY, TargetPhase("windup")),
         Interrupt("punish", COMBAT_PHASE_PRIORITY, TargetPhase("recovery", STRIKE_REACH_BLOCKS)),
-        Interrupt("keep_range", COMBAT_PHASE_PRIORITY, TargetPhase("sweep", MELEE_REACH_BLOCKS), params=(3.0, 4.0)),
+        Interrupt("keep_range", COMBAT_PHASE_PRIORITY, TargetPhase("sweep", MELEE_REACH_BLOCKS), params=KEEP_RANGE_BAND),
         Interrupt("sword", SWORD_PRIORITY, Predicate("distance_below", STRIKE_REACH_BLOCKS), params=(0.0,)),
     ),
 )
@@ -978,6 +982,7 @@ __all__ = [
     "Interrupt",
     "LaneInformationRequest",
     "MAX_PROGRAM_STEPS",
+    "KEEP_RANGE_BAND",
     "MELEE_REACH_BLOCKS",
     "PROGRAMS",
     "P_COMBAT",
