@@ -19,7 +19,7 @@ body strikes or guards what it cannot see.
 | Verb | Scopes | What it does |
 |---|---|---|
 | ``evader`` | locomotion, hands | turns away from the target, seen or remembered, and runs; sprints once facing away; with the threat neither seen nor remembered (behind it, out of the view sector) it keeps sprinting the way it faces, which it turned away from the threat |
-| ``sword`` | hands, abilities_magic | presses the weapon's first ability (its primary attack; in the gym a weapon attacks through its ability slots) while the target is within reach (3.5 blocks) and within 60 degrees of the body's front; ``hold_seconds`` is accepted, and charged holds are not built yet |
+| ``sword`` | hands, abilities_magic | presses the weapon's first ability (its primary attack; in the gym a weapon attacks through its ability slots) while the target is within the weapon's reach (``reach``: 3.5 blocks for the sword and the mace, 3.25 for the battleaxe, 2.2 for the daggers) and within 60 degrees of the body's front; ``hold_seconds`` is accepted, and charged holds are not built yet |
 | ``guard`` | posture_defence | guards while the target winds up within 5 blocks |
 | ``punish`` | hands, abilities_magic | the same strike, only while the target is in its recovery |
 | ``keep_range`` | locomotion | holds the band ``band_min`` to ``band_max`` blocks (``band_max`` defaults to one block more) from the target, seen or remembered: runs in when farther, walks out when nearer, faces the target |
@@ -59,12 +59,21 @@ from hytalegym.jax.combat.observation.v3.policy import (
 )
 from hytalegym.jax.combat.observation.v3.policy.layout import neutral_arsenal_policy_action_factors
 from hytalegym.jax.combat.observation.v3.policy.look_deltas import encode_look_delta
+from hytalegym.jax.combat.observation.v3.schema.contract import ABILITY_INTEGER_FEATURES
 from hytalegym.jax.combat.types import GAIT_RUN, GAIT_SNEAK, GAIT_SPRINT, GAIT_WALK
 
 REACH_BLOCKS = 3.5
 """The strike's reach in blocks, centre to centre, less a 0.2 margin: the iron sword's first ability hit a still
 target from 3.4 to 3.7 blocks and never from 3.8 (measured 2026-10-19 on gen 5 and gen 7, open flat, microticks 1).
-The opponent's hits land within 3.0, so a strike from 3.0 to 3.5 lands out of its reach."""
+The opponent's hits land within 3.0, so a strike from 3.0 to 3.5 lands out of its reach. It is also the reach of a
+weapon ``MELEE_REACH_BLOCKS`` does not list."""
+MELEE_REACH_BLOCKS: dict[str, float] = {"iron_sword": 3.5, "iron_daggers": 2.2, "iron_mace": 3.5,
+                                        "iron_battleaxe": 3.25}
+"""Each melee weapon's strike reach, centre to centre, less a 0.25 margin: its first ability's longest hit on a still
+body straight ahead, one tap in 0.05-block steps (measured 2026-10-20, the same on gen 5 and the gen-7 render and
+for either attacker role): 3.75, 2.45, 3.75 and 3.5 blocks against a Trork; 3.55, 2.3, 3.55 and 3.35 against the
+smaller Kweebec, which every entry also clears. Not the selector's end distance (2.75, 2.0, 3.0 and 3.0): the reach
+beyond it differs by weapon. ``reach`` picks the entry by the first ability's id."""
 FRONT_DEGREES = 60.0
 GUARD_RANGE_BLOCKS = 5.0
 MAXIMUM_TURN_DEGREES = 45.0
@@ -195,9 +204,34 @@ def evader(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Arr
     return legal(_onward(factors, GAIT_SPRINT, ~threat.known), mask)
 
 
+_ABILITY_ID = ABILITY_INTEGER_FEATURES.index("ability_id")
+
+
+@cache
+def _reach_table() -> tuple[np.ndarray, np.ndarray]:
+    """(the first ability's id, its reach) for each weapon of ``MELEE_REACH_BLOCKS``, the ids read once from the
+    running engine's compiled loadouts."""
+
+    names = list(MELEE_REACH_BLOCKS)
+    with jax.ensure_compile_time_eval():  # concrete even when first called inside a traced body
+        loadout = hytale_0_5_7_loadouts(names)
+    return (np.asarray(loadout.ability_id)[:, 0, 0],
+            np.asarray([MELEE_REACH_BLOCKS[name] for name in names], np.float32))
+
+
+def reach(observation: Any) -> jax.Array:
+    """float32[B]: the strike reach of the weapon the body holds, found by its first ability's id in the body's own
+    ability rows (``MELEE_REACH_BLOCKS``; ``REACH_BLOCKS`` for a weapon it does not list)."""
+
+    ids, reaches = _reach_table()
+    held = observation.ability_i32[:, 0, 0, _ABILITY_ID]  # own row, slot 0
+    match = held[:, None] == jnp.asarray(ids)[None, :]
+    return jnp.where(match.any(axis=1), jnp.asarray(reaches)[jnp.argmax(match, axis=1)], jnp.float32(REACH_BLOCKS))
+
+
 def _strike(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array, when: jax.Array) -> jax.Array:
     seen = target(observation)
-    ready = seen.seen & (seen.distance <= REACH_BLOCKS) & (jnp.abs(seen.bearing) <= FRONT_DEGREES) & when
+    ready = seen.seen & (seen.distance <= reach(observation)) & (jnp.abs(seen.bearing) <= FRONT_DEGREES) & when
     return legal(_set(idle(observation, mask, ticks, scalars), "ability_none_plus_slots", jnp.int32(PRIMARY_ABILITY),
                       ready), mask)
 
@@ -482,8 +516,8 @@ row publishes the angle as ``head_facing_error``, degrees over 180."""
 REPORTS: tuple[str, ...] = ("seen", "distance", "facing_me", "in_reach", "acting")
 """What a body reports each tick, by name; the list is append-only, as the verb ids are (IDEAS.md idea 8). ``seen``:
 the target is perceived (0 or 1). ``distance``: its distance in blocks, 0 when unseen. ``facing_me``: it faces the
-agent (``FACING_ME_DEGREES``). ``in_reach``: a strike would land (the strike's gate: within ``REACH_BLOCKS`` and
-``FRONT_DEGREES``). ``acting``: the body moves some head away from neutral this tick; a granted body that never acts
+agent (``FACING_ME_DEGREES``). ``in_reach``: a strike would land (the strike's gate: within the weapon's ``reach``
+and ``FRONT_DEGREES``). ``acting``: the body moves some head away from neutral this tick; a granted body that never acts
 is waiting, for reach, a wind-up or a sight of the target."""
 
 
@@ -493,7 +527,7 @@ def reports(observation: Any, factors: jax.Array, neutral: jax.Array) -> jax.Arr
 
     seen = target(observation)
     facing = jnp.abs(observation.base.entity_f32[:, 0, _FLOAT["head_facing_error"]]) * 180.0 <= FACING_ME_DEGREES
-    in_reach = seen.seen & (seen.distance <= REACH_BLOCKS) & (jnp.abs(seen.bearing) <= FRONT_DEGREES)
+    in_reach = seen.seen & (seen.distance <= reach(observation)) & (jnp.abs(seen.bearing) <= FRONT_DEGREES)
     columns = (seen.seen, jnp.where(seen.seen, seen.distance, 0.0), seen.seen & facing, in_reach,
                jnp.any(factors != neutral, axis=1))
     return jnp.stack([jnp.asarray(column, jnp.float32) for column in columns], axis=1)
@@ -502,6 +536,7 @@ assert HEAD["locomotion_gait_compass"] == LOCOMOTION_HEAD and HEAD["body_yaw_del
 
 __all__ = ["AIM_HEIGHT_BLOCKS", "AIM_TOLERANCE_DEGREES", "ARROW_LAUNCH_HEIGHTS", "ASSUMED_LAUNCH_HEIGHT",
            "AVOID_BAND_BLOCKS", "BODIES", "FACING_ME_DEGREES", "HIDE_ARRIVED_BLOCKS", "HIDE_SNEAK_BLOCKS",
-           "LEAD_LAG_TICKS", "REPORTS", "SHORTBOW_THRESHOLD_SECONDS", "ArrowAim", "BowTiers", "Position", "Target",
-           "arrow_pitch", "avoid", "body_frame", "bow_tiers", "draw_tier", "evader", "guard", "hide", "idle",
-           "keep_range", "legal", "punish", "reports", "shortbow", "sword", "target", "velocity_scales"]
+           "LEAD_LAG_TICKS", "MELEE_REACH_BLOCKS", "REPORTS", "SHORTBOW_THRESHOLD_SECONDS", "ArrowAim", "BowTiers",
+           "Position", "Target", "arrow_pitch", "avoid", "body_frame", "bow_tiers", "draw_tier", "evader", "guard",
+           "hide", "idle", "keep_range", "legal", "punish", "reach", "reports", "shortbow", "sword", "target",
+           "velocity_scales"]

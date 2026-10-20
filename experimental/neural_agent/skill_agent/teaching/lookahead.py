@@ -129,21 +129,24 @@ class LookaheadTeacher:
 def scripted_priority(observation: Any, mask: jax.Array) -> jax.Array:
     """The baseline: the decision layer's ``P_COMBAT`` rules (``jev/programs.py``) as one controller over the skill
     layer's bodies, on the legal observation, without P_COMBAT's evade gate and with keep_range closing in place of
-    pursuit. Guard the opponent's wind-up within ``sb.GUARD_RANGE_BLOCKS``, punish its recovery within reach, hold 3.1
-    to 3.6 blocks in its sweep within 3, strike within reach, else close to 1.5 to 2.5 blocks facing it."""
+    pursuit. Guard the opponent's wind-up within ``sb.GUARD_RANGE_BLOCKS``, punish its recovery within reach (the held
+    weapon's, ``sb.reach``), hold 3.1 to 3.6 blocks in its sweep within 3, strike within reach, else close to 1.5 to
+    2.5 blocks, no farther than the reach, facing it."""
 
     batch = mask.shape[0]
     ticks, none = jnp.zeros(batch, jnp.int32), jnp.zeros((batch, 4), jnp.float32)
     band = jnp.broadcast_to(jnp.asarray([3.1, 3.6, 0.0, 0.0], jnp.float32), (batch, 4))
-    close = jnp.broadcast_to(jnp.asarray([1.5, 2.5, 0.0, 0.0], jnp.float32), (batch, 4))
     seen = sb.target(observation)
+    reach = sb.reach(observation)
+    zeros = jnp.zeros(batch, jnp.float32)
+    close = jnp.stack([jnp.full(batch, 1.5, jnp.float32), jnp.minimum(reach, 2.5), zeros, zeros], axis=1)
     options = [
         (seen.seen & (seen.phase == sb.WINDUP) & (seen.distance <= sb.GUARD_RANGE_BLOCKS),
          sb.guard(observation, mask, ticks, none)),
-        (seen.seen & (seen.phase == sb.RECOVERY) & (seen.distance <= sb.REACH_BLOCKS),
+        (seen.seen & (seen.phase == sb.RECOVERY) & (seen.distance <= reach),
          sb.punish(observation, mask, ticks, none)),
         (seen.seen & (seen.phase == SWEEP) & (seen.distance <= 3.0), sb.keep_range(observation, mask, ticks, band)),
-        (seen.seen & (seen.distance <= sb.REACH_BLOCKS), sb.sword(observation, mask, ticks, none)),
+        (seen.seen & (seen.distance <= reach), sb.sword(observation, mask, ticks, none)),
     ]
     chosen = sb.keep_range(observation, mask, ticks, close)
     for when, factors in reversed(options):
