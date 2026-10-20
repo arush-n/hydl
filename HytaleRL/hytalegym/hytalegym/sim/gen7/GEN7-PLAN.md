@@ -505,6 +505,19 @@ first, 12 are unmeasured, 1 matches. Nothing trains on gen 7 before phases 1 and
 | 6 | stamp, retraining lineage, native transfer, default flip | `execution_valid` with a skill checkpoint on 0.7.2 |
 | on demand | climbing, doors, swimming, gliding, riding | a differential each, before the verb's results count |
 
+**Phases 5 and 6, state on 2026-10-19 (evening).** Phase 5 is complete for the certification gate: the eleven World source
+audits are accepted on 0.7.2 (`f74968e`; per-line claim text `7a260d2`, host contracts per version `8be0e7c`, the verifier keyed
+by the audited JAR `455c7a2`, the live compares gated by the per-line pin `2d1e993`), and the 0.7.2 World evidence is captured
+and promoted: recertification first-capture mode (`02540a4`, `b9a1d75`), the pointers keyed by profile (`7ab2139`), live run 4
+passed end to end and `promote_world_evidence.py` (`895224a`) promoted it (receipt `world-evidence-history/460054A8/
+publication-v12.json`; identities Region `9DCA3C71`, traversal `CC613B12`, world token `9A216202`). The 0.7.2 line now
+recertifies in compare mode like 0.5.7. Products: the task zoo is built; the path-distance tables, the Arsenal Region suite v7
+and the 0.7-line recorded tests are in flight. Phase 6 still waits on the owner's training: the content stamp (#79) and the
+default flip (#80) follow a gen-7 checkpoint that passes live; before that checkpoint can run against hit-interrupt NPCs the
+render must declare the eight `Hit_Interrupt_*` statuses (FIDELITY (an); task #69). Open bridge gaps from the capture: the
+world-action verifier refuses every bound place on both lines and the synthetic break cell is not advertised at reset (#91).
+The skill layer's seven observation asks are accepted as a gen-7 extension channel after certification (#92).
+
 ## 5. The next generation, in one page
 
 Add `server_versions/vN.py` and `sim/genN/profile.py` with the switches set from the release notes.

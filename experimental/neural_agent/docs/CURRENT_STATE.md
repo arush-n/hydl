@@ -222,6 +222,16 @@ native-AI duel measured the Eligible refresh (about 0.27 s) but its club hits ar
 asset values unless a flagged NPC attack exists (last probe round). Running: run 2 of the first capture, the pointer keying
 lane (#89), the probe's last round. Next: promotion with the tool, then products (#90), suites v7 (#88), pointers (#89).
 
+Night of 2026-10-19: the 0.7.2 World evidence is captured and promoted. Live run 4 of the first capture passed end to end
+(after run 2 exposed the pointer keying's effect on the world-token identity, fixed by exporting the staged traversal manifest,
+`b9a1d75`, and the tokens module's override and intermediate state, `7ab2139`; and run 3 exposed the block-use probe's unbound
+typed requests, now bound from the capture with the bridge's closures recorded, task #91). `promote_world_evidence.py`
+promoted it (receipt `460054A8/publication-v12.json`; Region `9DCA3C71`, traversal `CC613B12`, world token `9A216202`), and
+the 0.7.2 line recertifies in compare mode. Certification status: audits accepted, evidence promoted, pointers keyed; in flight
+the suite v7 (#88), the path-distance tables (#90) and the 0.7-line recorded tests; the stamp (#79) and the default flip (#80)
+wait for the owner's training and a gen-7 checkpoint that passes live. The peer session's seven perception asks are accepted
+as a gen-7 extension channel (#92, after certification). Nothing is pushed.
+
 ## 7. Decisions taken and still open (2026-10-18, evening)
 
 Resolved today under the owner's delegation ("manage the remaining commits the best way you think"):

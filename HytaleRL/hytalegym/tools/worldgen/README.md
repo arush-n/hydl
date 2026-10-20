@@ -175,7 +175,13 @@ Line numbers are for `recertification.py` after the first-capture change of 2026
 Current state:
 
 - 0.5.7: compare mode, unchanged. All four references exist, so the run is the same as before. The cascade output is byte-identical before and after the change. The real 0.5 dry run stops at the bridge-identity check, because no 0.5 bridge build exists on this machine (see "Dry runs").
-- 0.7.2: first-capture mode, implemented and tested with synthetic fixtures (no server). A real 0.7.2 run has not been made. The source-pin gate stops it first: at the committed pins (HEAD 7a260d2) at audit 1 (perception); at the audit lane's uncommitted working-tree pins at audit 6 (mutable_blocks). See "Dry runs".
+- 0.7.2: compare mode since 2026-10-19 19:45. The first capture (live run 4, 19:26 to 19:42) passed end to end and was promoted
+  with `promote_world_evidence.py` (receipt `world-evidence-history/460054A8/publication-v12.json`, 62 files: 14 fixtures under
+  `fixtures/world/v0_7/`, the 42-file `traversal-v2/` and `world-token-capacity.json` in `region-library-pilot-v2-072/`, the
+  manifest, source-pin report, cascade and difference report copied beside the receipt). Identities: Region `9DCA3C71`,
+  traversal `CC613B12` (identical across runs 1 to 4), world token `9A216202`; seed-570057 projection `408D5FB2` with 3
+  fluid-only cells of a cap of 6; stationary captures byte-identical; block-use `typed_synthetic_status` `closed_by_bridge`
+  (task #91). A dry run after promotion passes the gate, writes the cascade and stops at the listener, as the 0.5 line does.
 
 ### Per-line fixture root
 
@@ -337,6 +343,11 @@ First capture adds the capacity benchmark (measured 2026-10-19 on the 0.7.2 libr
   the current typed transport (v5, on both bridges) requires; the bridge fails closed with
   `native_policy_world_action_evidence_required`. The 0.5.7 fixture predates that rule. A repair lane binds the expectations
   from the world-action capture channel in the block-use and capabilities probes.
+- Run 4 (19:26 to 19:42): passed end to end (`WORLD_EVIDENCE_RECERTIFICATION_PASS published=false`), 19 candidate rows, the
+  `first_capture` block with the expected digests. The repaired block-use probe binds its typed requests from the capture and
+  records the bridge's closures verbatim (place: `rotation_zero_destination_geometry_unavailable`; the synthetic break cell:
+  `block_primary_unavailable`) with the Use path certified; the capabilities probe passes unchanged. Promoted at 19:44 (the
+  tool's 44 checks all passed; every destination was absent). Rollback: the receipt's `created_paths`.
 
 ### Blockers and what changed
 
