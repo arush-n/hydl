@@ -139,15 +139,16 @@ code of ``ATTACK_PHASE_CODES`` and only while the target is visible. The belief 
 ten features are ``contracts.BELIEF_FEATURE_NAMES``. The attack index (``target_i32`` ``attack_index``) is not read:
 the phase already names each window, and a rule that fired once per attack would need per-lane memory. Priorities:
 the evader (``EVADER_PRIORITY``, 0.5) above the phase rules (``COMBAT_PHASE_PRIORITY``, 0.4) above ``sword``
-(``SWORD_PRIORITY``, 0.3). The evader stays ungated in ``P_COMBAT``, so a hit always opens its window. A gate on it is
-expressible in this predicate language: ``Predicate("self_health_below", t)`` reads the belief's
-``self_health_fraction``, ``Not`` and ``AllOf`` combine conditions, and an interrupt takes any of them. Measured on
-``combat_open_flat`` (gen 5, seeds 0 to 2, lane #94), holding the evader back while the agent is healthy (``t`` 0.5 or
-0.7) cut the evader's share of lane-ticks by 16 to 43% but raised HP taken and deaths, and gating it on the target's
-recovery and reach moved the share by under 3%. The sword, guard, punish and keep_range goals are idle bodies in this
-package (``DeclaredVerbSkill``, ``skill_library/library.py``), so the agent stands still in reach under them; evading
-costs the least HP per lane-tick (14.8 against 68 per 100 lane-ticks for those goals, baseline seed 0). A gate waits for
-those bodies. ``P_COMBAT`` is ``PROGRAMS['COMBAT']`` (``NA_PROGRAM=COMBAT``, 2026-10-19). It runs on the combat catalogue
+(``SWORD_PRIORITY``, 0.3). ``P_COMBAT``'s evader is gated (``EVADE_WHEN_HURT``, 2026-10-20): it fires while damaged
+only when the agent's own health is below ``EVADE_HEALTH_FRACTION`` (0.5), through ``AllOf((Predicate("on_damage"),
+Predicate("self_health_below", 0.5)))``; ``Predicate("self_health_below", t)`` reads the belief's ``self_health_fraction``,
+``Not`` and ``AllOf`` combine conditions, and an interrupt takes any of them. Under this package's idle verb bodies
+(``DeclaredVerbSkill``, ``skill_library/library.py``; gen 5, seeds 0 to 2, lane #94) the gate looked worse, since no goal
+dealt damage and evading cost the least HP per lane-tick (14.8 against 68 per 100 lane-ticks). Under the skill layer's
+bodies (the referee run, gen 7, ``combat_open_flat``, 8 lanes x 1023 ticks, seed 0) it won by a wide margin: evader share
+56% to 3.5%, HP dealt 957 to 3665, HP taken 1687 to 1544, kills 7 to 55, deaths 13 to 2; the 0.7 threshold gave 21 kills 9 deaths, and a gate on the target's recovery and reach moved
+nothing. ``P_J0`` and ``P_SEQ`` keep the ungated ``EVADE_ON_DAMAGE``. ``P_COMBAT`` is ``PROGRAMS['COMBAT']``
+(``NA_PROGRAM=COMBAT``, 2026-10-19). It runs on the combat catalogue
 (``skill_library.library.build_combat_registry``) with ``--arms jprog`` alone, which the composition CLI enforces.
 Its scalars: sword's ``hold_seconds`` is 0.0 (a tap), keep_range's band is KEEP_RANGE_BAND, (3.1, 3.6).
 """
@@ -178,6 +179,7 @@ from experimental.neural_agent.contracts import (
     feature_index,
     make_goal,
 )
+from experimental.neural_agent.belief.target_memory import host_target_memory, target_arguments
 from experimental.neural_agent.executive.goal_language import ALWAYS, Predicate
 from experimental.neural_agent.jev.correspondence import (
     Advance,
@@ -437,6 +439,15 @@ class Program:
 
 #: The composition executive's conditional goal: evade while damaged, at the evader's priority.
 EVADE_ON_DAMAGE = Interrupt(EVADER_SKILL, EVADER_PRIORITY, Predicate(EVADER_CONSTRAINT))
+#: The combat program's evader (2026-10-20): evade while damaged only when the agent's own health is below half; the
+#: skill layer's referee judged it under its bodies (gen 7, combat_open_flat, 8 lanes x 1023 ticks): evader share 56%
+#: to 3.5%, HP dealt 957 to 3665, HP taken 1687 to 1544, kills 7 to 55, deaths 13 to 2; the 0.7 threshold gave 21/9.
+EVADE_HEALTH_FRACTION = 0.5
+EVADE_WHEN_HURT = Interrupt(
+    EVADER_SKILL,
+    EVADER_PRIORITY,
+    AllOf((Predicate(EVADER_CONSTRAINT), Predicate("self_health_below", EVADE_HEALTH_FRACTION))),
+)
 #: J0 as a program: pursue (no exit fires within a horizon), evade on damage.
 P_J0 = Program(steps=(ProgramStep(PURSUIT_SKILL, exit=EXIT_DONE),), interrupts=(EVADE_ON_DAMAGE,))
 #: Sequencing and resumption: pursue until within 3 blocks, idle 1 s, pursue again; evade on damage.
@@ -448,11 +459,12 @@ P_SEQ = Program(
     ),
     interrupts=(EVADE_ON_DAMAGE,),
 )
-#: The combat program (module docstring): evade on damage; guard, punish and keep range by the target's phase; sword in reach.
+#: The combat program (module docstring): evade on damage below half health; guard, punish and keep range by the
+#: target's phase; sword in reach.
 P_COMBAT = Program(
     steps=(ProgramStep(PURSUIT_SKILL, exit=EXIT_DONE),),
     interrupts=(
-        EVADE_ON_DAMAGE,
+        EVADE_WHEN_HURT,
         Interrupt("guard", COMBAT_PHASE_PRIORITY, TargetPhase("windup")),
         Interrupt("punish", COMBAT_PHASE_PRIORITY, TargetPhase("recovery", STRIKE_REACH_BLOCKS)),
         Interrupt("keep_range", COMBAT_PHASE_PRIORITY, TargetPhase("sweep", MELEE_REACH_BLOCKS), params=KEEP_RANGE_BAND),
@@ -753,7 +765,10 @@ class ProgramExecutor:
         self.decisions += 1
         self.lane_calls += lanes
         if bound:
-            self._issue_requests(tick, skill, params, version, slot, executive_version, arrays, features, known)
+            self._issue_requests(
+                tick, skill, params, version, slot, executive_version, arrays, features, known,
+                host_target_memory(step.belief_update),
+            )
         minimum, maximum, mask = control_for(self._control, jnp.asarray(skill))
         return make_goal(
             jnp.asarray(skill),
@@ -967,8 +982,12 @@ class ProgramExecutor:
         arrays: ExecutiveArrays,
         features: np.ndarray,
         known: np.ndarray,
+        target_memory: Any,
     ) -> None:
-        """Replace each lane's live request with one for its goal in force, and write S_t's requests (item 9)."""
+        """Replace each lane's live request with one for its goal in force, and write S_t's requests (item 9).
+
+        ``target_memory`` is the belief's remembered target position as numpy arrays (``host_target_memory``), or None.
+        """
 
         priorities = np.asarray(arrays.priority, dtype=np.float64)
         for lane in range(self._lanes):
@@ -992,6 +1011,7 @@ class ProgramExecutor:
             contract = None if self._contracts is None else self._contracts[index]
             schema = ARGUMENT_SCHEMAS.get(verb)
             named = 0 if contract is None else len(contract.param_names)
+            target_entity, target_position = target_arguments(schema, features[lane], target_memory, lane, TARGET_ENTITY)
             request = ActionRequest(
                 request_id=int(self._next_request[lane]),
                 agent=lane,
@@ -999,7 +1019,8 @@ class ProgramExecutor:
                 expires_tick=tick + int(self.host_cadence_ticks),
                 verb=verb,
                 args=RequestArgs(
-                    entity=TARGET_ENTITY if schema is not None and schema.entity else None,
+                    entity=target_entity,
+                    position=target_position,
                     scalars=tuple(float(value) for value in params[lane, :named]),
                 ),
                 mode=MODE_INTERRUPT if interrupt else MODE_PARALLEL,
@@ -1051,6 +1072,8 @@ __all__ = [
     "ATTACK_PHASE_CODES",
     "COMBAT_PHASE_PRIORITY",
     "EVADE_ON_DAMAGE",
+    "EVADE_HEALTH_FRACTION",
+    "EVADE_WHEN_HURT",
     "EXIT_DONE",
     "EXIT_TIMER",
     "AllOf",

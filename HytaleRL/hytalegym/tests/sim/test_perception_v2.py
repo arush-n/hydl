@@ -20,6 +20,7 @@ import numpy as np
 import pytest
 
 from hytalegym.jax.combat.contracts.semantic import semantic_id
+from hytalegym.jax.combat.types import AGENT_ENTITY, TARGET_ENTITY
 from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.common.profile import Constructs
@@ -56,8 +57,8 @@ class _Engine:
             loadout, specialize=False, sensor_range=self.params.sensor_range, **overrides
         )
 
-    def reset(self, yaw=(0.0, 0.0), target=(0.0, 0.0, -2.5), config=None):
-        position = jnp.asarray([[[0.0, 0.0, 0.0], list(target)]], dtype=jnp.float32)
+    def reset(self, yaw=(0.0, 0.0), target=(0.0, 0.0, -2.5), config=None, agent=(0.0, 0.0, 0.0)):
+        position = jnp.asarray([[list(agent), list(target)]], dtype=jnp.float32)
         health = jnp.asarray([[self.params.agent_max_health, self.params.target_max_health]], dtype=jnp.float32)
         state, _ = self.arsenal.reset_arsenal_batch(
             jax.random.split(jax.random.key(SEED), 1),
@@ -213,6 +214,7 @@ def test_shapes_and_dtypes(engine, capacity) -> None:
         "inventory_mask": ((1, 76), jnp.bool_),
         "body_yaw_sin": ((1,), jnp.float32),
         "body_yaw_cos": ((1,), jnp.float32),
+        "self_position": ((1, 3), jnp.float32),
     }
     assert channel._fields == tuple(expected)
     for name, (shape, dtype) in expected.items():
@@ -313,3 +315,33 @@ def test_inventory_item_ids_are_semantic_ids(engine) -> None:
     ids = np.asarray(channel.inventory_i32)[0, :, 2]
     assert item in ids[present].tolist()
     assert not np.any(ids[~present])
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Task #96 (2026-10-19): the agent's own position, the last field of the channel. Ruling: a player reads their own
+# coordinates, so it is legal; it is gen-7 only, like the rest of the channel.
+# ---------------------------------------------------------------------------------------------------------------------
+
+
+def test_self_position_is_the_combat_state_agent_position(engine) -> None:
+    state = engine.reset(agent=(3.5, 1.0, -2.25))
+    observation = engine.observe(state, encode=engine.on)
+    position = observation.perception_v2.self_position
+    assert position.dtype == jnp.float32 and tuple(position.shape) == (1, 3)
+    np.testing.assert_array_equal(np.asarray(position), np.asarray(state.combat.position[:, AGENT_ENTITY]))
+    assert not np.allclose(np.asarray(position)[0], np.asarray(state.combat.position[0, TARGET_ENTITY]))
+
+
+def test_self_position_is_appended_and_the_older_fields_keep_their_order() -> None:
+    assert perception_v2.PerceptionV2._fields == (
+        "entity_kind", "entity_role_id", "entity_held_item_id", "inventory_i32", "inventory_f32", "inventory_mask",
+        "body_yaw_sin", "body_yaw_cos", "self_position",
+    )
+
+
+def test_gen5_keeps_its_construct_absent() -> None:
+    def original(*args, **kwargs):
+        return args, kwargs
+
+    assert GEN5.constructs.perception_v2 is False
+    assert perception_v2.construct(original, GEN5) is original

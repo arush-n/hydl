@@ -229,12 +229,12 @@ class ArgumentSchema:
 ARGUMENT_SCHEMAS: Mapping[str, ArgumentSchema] = MappingProxyType(
     {
         SKILL_IDLE: ArgumentSchema(),
-        "pursuit": ArgumentSchema(entity=True, scopes=("locomotion", "gaze")),
-        "evader": ArgumentSchema(entity=True, scopes=("locomotion", "hands")),
+        "pursuit": ArgumentSchema(any_of=(("entity", "position"),), scopes=("locomotion", "gaze")),
+        "evader": ArgumentSchema(any_of=(("entity", "position"),), scopes=("locomotion", "hands")),
         "sword": ArgumentSchema(entity=True, scopes=("hands", "abilities_magic")),
         "guard": ArgumentSchema(entity=True, scopes=("posture_defence",)),
         "punish": ArgumentSchema(entity=True, scopes=("hands", "abilities_magic")),
-        "keep_range": ArgumentSchema(entity=True, scopes=("locomotion",)),
+        "keep_range": ArgumentSchema(any_of=(("entity", "position"),), scopes=("locomotion",)),
     }
 )
 """The schemas of the proof-of-concept skills (``skill_library/``) and of the four combat verbs (2026-10-19), keyed
@@ -246,7 +246,10 @@ uncommitted at 2026-10-19.
 
 Pursuit closes on a target and the evader keeps its distance from one
 (``skill_library/descriptions.py``). Today both read the belief's single target, so the entity names
-which one is meant. Idle needs nothing and drives nothing. The module docstring says where the scopes
+which one is meant. Idle needs nothing and drives nothing.
+(Task #96, in effect 2026-10-20: pursuit, evader and keep_range take ``any_of`` entity or position, so the belief's
+remembered target position stands in while the target is unseen; the skill layer's library copies the ``any_of``
+groups, d4c6cc1, so its entity-unknown check still fires when the entity is the argument.) The module docstring says where the scopes
 come from. Replace this mapping with the catalogue parser's by passing ``schemas=`` to :func:`validate`.
 """
 

@@ -2,7 +2,7 @@
 
 When the switch is on, the render's hook on ``encode_learner_observation_v3`` returns the v3 observation with one more
 field, ``perception_v2``: the target's kind (NPC or player), its held weapon (a semantic id), the agent's inventory
-tokens and its body yaw. The role id is a placeholder (0) until the runtime keeps role ids (a named seam). Every entity
+tokens, its body yaw and its own world-frame position. The role id is a placeholder (0) until the runtime keeps role ids (a named seam). Every entity
 field is blanked where the observation's entity row is blanked: the row is the same gate the learner already applies
 (target perception, line of sight with the detail-hitbox rule, and the opt-in view sector and sensor range, which reach
 ``line_of_sight``), so the channel adds no perception of its own. The v3 fields are passed through unchanged.
@@ -41,6 +41,7 @@ class PerceptionV2(NamedTuple):
     inventory_mask: Any  # bool [B, S]
     body_yaw_sin: Any  # float32 [B]
     body_yaw_cos: Any  # float32 [B]
+    self_position: Any  # float32 [B, 3]: the agent's own world-frame position (ruling 2026-10-19, PERCEPTION_V2.md section 2)
 
 
 def _rendered_root(original) -> str:
@@ -139,6 +140,7 @@ def channel(root: str, state, config, observation, *, entity_capacity: int = ENT
         inventory_mask=tokens.token_mask,
         body_yaw_sin=jnp.sin(yaw),
         body_yaw_cos=jnp.cos(yaw),
+        self_position=state.combat.position[:, AGENT_ENTITY].astype(jnp.float32),
     )
 
 

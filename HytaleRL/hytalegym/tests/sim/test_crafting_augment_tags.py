@@ -125,6 +125,8 @@ def engine(rendered):
 def _assets(engine: str, grants, tmp_path: Path):
     """Compile from a private snapshot of the recording: other lanes regenerate the fixture directory, so the
     expected bridge pin and the compile input must come from the same bytes."""
+    if not (os.environ.get("HYTALE_ASSETS_ZIP") or os.environ.get("APPDATA")):
+        pytest.skip("the Region fieldcraft compile reads the recipe table from the 0.7.2 archive: set HYTALE_ASSETS_ZIP or APPDATA")
     crafting = import_module(f"{engine}.combat.arsenal.world_actions.crafting")
     inventory = import_module(f"{engine}.combat.inventory")
     snapshot = tmp_path / RECORDING.name

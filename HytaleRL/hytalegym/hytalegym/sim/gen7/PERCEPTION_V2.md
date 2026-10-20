@@ -30,6 +30,7 @@ B = batch; C = entity capacity (default 16); S = inventory token capacity, 76 (`
 | `inventory_f32` | float32 | [B, S, 7] | the v3 inventory token features, unchanged | filled | actor validity |
 | `inventory_mask` | bool | [B, S] | token present | filled | actor validity |
 | `body_yaw_sin`, `body_yaw_cos` | float32 | [B] | sin and cos of the body yaw `state.combat.yaw[:, AGENT]` (degrees, converted to radians); forward = (-sin yaw, 0, -cos yaw) | filled | none (self) |
+| `self_position` | float32 | [B, 3] | the agent's own world-frame position (x, y, z in blocks), `state.combat.position[:, AGENT]`. Appended last, after `body_yaw_cos` (task #96, 2026-10-19; ruling in section 7) | filled | none (self) |
 
 Row 0 of the entity arrays is the target. The two-entity path publishes one entity row (the v1 encoder writes
 slot 0 only; `combat_scene_from_state` and `encode_learner_observation`), so rows 1..C-1 are 0 until a multi-entity
@@ -108,6 +109,9 @@ gated by actor validity (`observation.valid`), as the v3 carry already does (`ar
 - Entity ids: 0 for padded rows and for any row the gate blanks. A non-zero id on a blanked row is a leak.
 - Kinds: 0 none, 1 NPC, 2 PLAYER. A player kind on a row means the target is player-backed (`player_backed_actor_mask`).
 - The inventory and body yaw arrays are the same values the v3 inventory tokens and the self yaw carry.
+- `self_position` (task #96, 2026-10-19) is the agent's own position, the value of `state.combat.position[:, AGENT]`. Ruling
+  (coordinator, 2026-10-19): a player reads their own coordinates, so the field is legal. It is gen-7 only, like the rest of
+  the channel, and it is appended after `body_yaw_cos`, so no existing field moves (append-only).
 
 ## 8. Test plan
 
@@ -120,6 +124,8 @@ Ours (`tests/sim/test_perception_v2.py`):
 - body yaw equals sin and cos of the body yaw in radians;
 - inventory tokens equal `inventory_policy_tokens_from_state`'s floats;
 - defaults bit-identical: `test_render_identity.py` and the rollout fingerprints `d8477b63...` and `b02ee274...`.
+- task #96 (2026-10-19): `self_position` equals `state.combat.position[:, AGENT]` for a non-origin agent; the field order is
+  the eight older fields, then `self_position`; gen 5 keeps its construct absent (`construct(original, GEN5) is original`).
 
 Peer's (from `PERCEPTION_ASKS.md`):
 - the three-world leakage test over each field (target visible; target hidden behind a wall; no target), each filled field
@@ -173,3 +179,16 @@ Results (2026-10-19, after the shared edits; logs in tmp/perception_v2/after/ an
   test_hit_interrupt_statuses.py 14 of 14 and test_crafting_augment_tags.py 2 passed, 5 failed (other lanes). The five
   failures name symbols the tree lacks for that lane (Constructs.crafting_augment_tags, bench_augment_mask,
   bench_augment_tags); none touches perception_v2.
+
+Task #96 (2026-10-19): `self_position` (float32 [B, 3], the agent's `state.combat.position[:, AGENT]`) is the last field of
+`PerceptionV2`, after `body_yaw_cos`. Ruling by the coordinator, 2026-10-19: a player reads their own coordinates, so the
+field is legal; gen 7 only, like the channel; append-only. Results (2026-10-19, same tree before and after the change unless
+noted):
+- `tests/sim/test_perception_v2.py`: 19 of 19 passed (after). Three cases are new: the self position equals the combat
+  state's agent position, the field order, and gen 5's construct staying absent.
+- `tests/sim`, full run (`JAX_PLATFORMS=cpu`, `-p no:cacheprovider`): before 3 failed, 360 passed, 1 skipped, exit 1; after
+  3 failed, 363 passed, 1 skipped, exit 1. The three failures are the same in both runs, all in
+  `test_crafting_augment_tags.py` (another lane); the +3 are the new cases.
+- Identity gate, `tests/sim/test_render_identity.py`, run on its own: before 4 passed (exit 0); after 4 passed (exit 0).
+- Rollout fingerprints (`tools/sim_bench/rollout.py`, batches 8 and 64, 64 steps): before `d8477b63…bd4b` and
+  `b02ee274…d8e7`; after the same two values. Unchanged.

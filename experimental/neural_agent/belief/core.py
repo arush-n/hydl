@@ -26,6 +26,12 @@ import jax.numpy as jnp
 from adk.architecture.components import BeliefUpdate
 from adk.architecture.inputs import ActorPolicyInput
 from experimental.neural_agent.belief.features import observation_readings, positive_scale
+from experimental.neural_agent.belief.target_memory import (
+    TargetMemory,
+    initial_target_memory,
+    sighting,
+    update_target_memory,
+)
 from experimental.neural_agent.contracts import (
     ACTION_HEADS,
     BELIEF_FEATURE_COUNT,
@@ -73,12 +79,15 @@ class SharedBeliefCarry(NamedTuple):
             drop. Starts at TICKS_SATURATION and is saturated at that value.
         ticks_since_seen: float32[B], ticks since the target was last visible.
             Starts at TICKS_SATURATION and is saturated at that value.
+        target_memory: TargetMemory, the remembered target position and whether it is known
+            (``belief/target_memory.py``, task #96). Nothing is known before the first sighting.
     """
 
     latent: jax.Array
     previous_self_health: jax.Array
     ticks_since_damage: jax.Array
     ticks_since_seen: jax.Array
+    target_memory: TargetMemory
 
 
 class BeliefParams(NamedTuple):
@@ -228,6 +237,9 @@ def _require_carry(state: Any, lanes: int) -> None:
         actual = tuple(getattr(state, name).shape)
         if actual != shape:
             raise ValueError(f"state.{name} must have shape {shape}, got {actual}")
+    memory = state.target_memory
+    if tuple(memory.position.shape) != (lanes, 3) or tuple(memory.known.shape) != (lanes,):
+        raise ValueError(f"state.target_memory must hold position shape ({lanes}, 3) and known shape ({lanes},)")
 
 
 def _require_previous_action(previous_action: Any, lanes: int) -> jax.Array:
@@ -318,6 +330,7 @@ class SharedBelief:
             previous_self_health=jnp.full((lanes,), -1.0, dtype=jnp.float32),
             ticks_since_damage=jnp.full((lanes,), TICKS_SATURATION, dtype=jnp.float32),
             ticks_since_seen=jnp.full((lanes,), TICKS_SATURATION, dtype=jnp.float32),
+            target_memory=initial_target_memory(lanes),
         )
 
     def __call__(
@@ -396,6 +409,8 @@ class SharedBelief:
             0.0,
             jnp.minimum(state.ticks_since_seen + elapsed_ticks, TICKS_SATURATION),
         )
+        position, recorded = sighting(actor_input.legal_observation, readings.valid, readings.visible)
+        target_memory = update_target_memory(state.target_memory, position, recorded)
         next_previous_health = jnp.where(
             readings.valid,
             jnp.maximum(readings.self_health, 0.0),
@@ -433,6 +448,7 @@ class SharedBelief:
             previous_self_health=next_previous_health,
             ticks_since_damage=ticks_since_damage,
             ticks_since_seen=ticks_since_seen,
+            target_memory=target_memory,
         )
         return BeliefUpdate(
             state=next_state,

@@ -120,6 +120,18 @@ def positive_scale(name: str, scale: float | None) -> float | None:
     return value
 
 
+def _is_learner_observation(value: Any) -> bool:
+    """True for a LearnerCombatObservationV3, or for that type with the gen-7 perception channel appended.
+
+    The channel's observation type (``sim/gen7/mechanics/perception_v2.observation_type``) is not a subclass of the v3
+    type, so the check compares fields: the v3 fields, then ``perception_v2`` (task #96, 2026-10-19).
+    """
+
+    if isinstance(value, LearnerCombatObservationV3):
+        return True
+    return tuple(getattr(value, "_fields", ())) == LearnerCombatObservationV3._fields + ("perception_v2",)
+
+
 def observation_readings(
     legal_observation: LearnerCombatObservationV3,
     *,
@@ -167,7 +179,7 @@ def observation_readings(
             shape, or a scale is not positive and finite.
     """
 
-    if not isinstance(legal_observation, LearnerCombatObservationV3):
+    if not _is_learner_observation(legal_observation):
         raise TypeError("legal_observation must be a LearnerCombatObservationV3")
     gait = positive_scale("maximum_gait_speed", maximum_gait_speed)
     chase = positive_scale("chase_speed", chase_speed)
