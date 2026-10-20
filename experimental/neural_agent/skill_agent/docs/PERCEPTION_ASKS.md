@@ -52,7 +52,10 @@ before any field lands.
 switches it on in one process. The gate is the entity row's own (`base.entity_mask`): line of sight, the 24-block
 radius, and the view sector and sensor range only where the arena passes `view_sector_full_angle_radians` and
 `legal_observation_sensor_range=True` to `geometry_arsenal_world_capabilities`. The composition's open-flat arena
-passed neither, so an agent there perceived a target behind it; since ff7ef22 it passes both (a 120-degree sector).
+passed neither, so an agent there perceived a target behind it. Since ff7ef22 it passes the sensor range, which takes
+effect (a target 20 blocks ahead is blanked), and a 120-degree sector set on the returned capabilities, which does not
+reach the row gate yet: a target dead behind the agent, or 90 degrees to its side, is still published (probe at
+9159cfd; reported to the coordinator).
 
 ## Already published, and read by the v2 adapter
 
