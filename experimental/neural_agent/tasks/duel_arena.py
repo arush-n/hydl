@@ -38,6 +38,7 @@ from hytalegym.jax.combat import (
     default_combat_params,
     hytale_0_5_7_loadouts,
 )
+from hytalegym.rulesets import load_combat_ruleset
 from adk.policy import fields as schema
 from hytalegym.jax.combat.arsenal.environment import (
     open_flat_arsenal_world_capabilities,
@@ -71,6 +72,26 @@ _COMBAT_AGENT_HEALTH = schema.field_index("combat_f32", "agent_health_fraction")
 _COMBAT_TARGET_HEALTH = schema.field_index("combat_f32", "visible_target_health_fraction")
 _COMBAT_FORWARD = schema.field_index("combat_f32", "agent_forward_velocity")
 _COMBAT_RIGHT = schema.field_index("combat_f32", "agent_right_velocity")
+
+#: The CombatParams fields X that have both ``agent_X`` and ``target_X`` of one shape, enumerated from
+#: ``CombatParams`` (hytalegym/jax/combat/types.py) on 2026-10-20. ``damage`` is left out: it has a counterpart
+#: by name only, since agent_damage is a scalar and target_damage a five-entry table per attack.
+ROLE_PAIRED_FIELDS: tuple[str, ...] = (
+    "acceleration",
+    "attack_pause_max_seconds",
+    "attack_pause_min_seconds",
+    "bounds",
+    "damage_reward_scale",
+    "eye_offset",
+    "head_pitch_max_degrees",
+    "head_pitch_min_degrees",
+    "head_yaw_max_degrees",
+    "head_yaw_min_degrees",
+    "max_head_rotation_degrees",
+    "max_health",
+    "max_speed",
+    "turn_speed_degrees",
+)
 
 
 class DuelArena(NamedTuple):
@@ -236,6 +257,30 @@ def _factor_rows(value, batch: int, name: str) -> jax.Array:
     return factors
 
 
+def _matchup_roles() -> tuple[str, str]:
+    """The matchup's (agent role, target role) ids, read from the loaded ruleset."""
+
+    matchup = load_combat_ruleset()["matchup"]
+    return matchup["agent_role"], matchup["target_role"]
+
+
+def _role_paired_params(params, roles, agent_role):
+    """Give each slot the paired fields of the role it plays (``roles`` is the pair of role ids).
+
+    Slot 0 is read through ``agent_X`` and slot 1 through ``target_X``. A slot whose role is the agent role keeps its
+    values; a slot playing the target role takes the counterpart value, so after the rebuild both slots hold the value
+    of the role they play.
+    """
+
+    update = {}
+    for name in ROLE_PAIRED_FIELDS:
+        agent_value = getattr(params, f"agent_{name}")
+        target_value = getattr(params, f"target_{name}")
+        update[f"agent_{name}"] = agent_value if roles[0] == agent_role else target_value
+        update[f"target_{name}"] = agent_value if roles[1] == agent_role else target_value
+    return params._replace(**update)
+
+
 def make_duel_arena(
     batch: int,
     loadouts: Sequence[str | Sequence[str]],
@@ -244,6 +289,7 @@ def make_duel_arena(
     legal_observation_sensor_range: bool,
     combat_params: Any | None = None,
     max_health: tuple[float, float] | None = None,
+    roles: tuple[str, str] | None = None,
 ) -> DuelArena:
     """Build the two-entity duel on the open-flat fixture.
 
@@ -260,6 +306,23 @@ def make_duel_arena(
             ``agent_max_health`` and ``target_max_health`` (the league's equal roles,
             2026-10-20); the reset health defaults follow them, and so do the
             fractions each entity reads.
+        roles: ``(entity 0 role, entity 1 role)``, each the matchup's agent or target role id as the loaded ruleset
+            names them; any other value raises ``ValueError``. It sets the statuses (``entity_role_ids``) and gives
+            each slot the paired fields of the role it plays (:data:`ROLE_PAIRED_FIELDS`): a slot playing the target
+            role takes the ``target_X`` value, a slot playing the agent role keeps ``agent_X``. It applies before
+            ``max_health``. ``None`` keeps the matchup as it is.
+
+            The fields ``roles`` leaves as they are (no counterpart): the agent-only fields (``knockback_scale``, the
+            walk, air-drag and force-drag fields, ``hit_delays``, ``attack_ranges``, ``half_angles``,
+            ``jump_velocity``, ``min_walk_speed``, ``min_hit_slowdown``, ``maximum_gait_speed``,
+            ``movement_velocity_resistance``, ``steering_relative_turn_speed``, ``spawn``, ``motion_model``,
+            ``variable_jump_fall_gravity``); the target-only fields (``knockback_force``, ``knockback_relative_x``,
+            ``knockback_relative_z``, ``knockback_velocity_y``, the chase, maintain, strafe, activation, attack-table
+            and sweep fields, ``offset``, ``initial_distance``, ``active``); and ``damage`` (a scalar against a
+            five-entry table). The motion kernel runs every entity row through the agent slot
+            (``multi_actor/locomotion.py``, ``_materialize_entity_zero``) and reads ``agent_max_speed`` for both
+            slots, so a role pair moves both bodies through ``agent_*``; the ``target_*`` motion fields are read only by
+            the built-in target's motion, which ``params.target_active`` switches on (see tasks/README.md).
 
     Returns:
         A :class:`DuelArena`. ``reset(keys, *, entity_position=None, entity_health=None,
@@ -284,6 +347,13 @@ def make_duel_arena(
     params = default_combat_params(microticks=1) if combat_params is None else combat_params
     if int(params.microticks) != 1:
         raise ValueError("combat_params.microticks must be 1: the duel takes one decision per tick")
+    if roles is not None:
+        agent_role, target_role = _matchup_roles()
+        if len(roles) != ENTITY_COUNT or any(role not in (agent_role, target_role) for role in roles):
+            raise ValueError(
+                f"roles must be two role ids, each {agent_role!r} or {target_role!r}, got {tuple(roles)!r}"
+            )
+        params = _role_paired_params(params, tuple(roles), agent_role)
     if max_health is not None:
         if len(max_health) != ENTITY_COUNT or any(float(value) <= 0.0 for value in max_health):
             raise ValueError("max_health must be two positive maxima, (entity 0, entity 1)")
@@ -298,6 +368,7 @@ def make_duel_arena(
         ),
         opponent_controller_mask=jnp.zeros((batch, ENTITY_COUNT), dtype=jnp.bool_),
         legal_observation=True,
+        entity_role_ids=None if roles is None else tuple(roles),
     )
     entity_index = jnp.tile(jnp.arange(ENTITY_COUNT, dtype=jnp.int32), (batch, 1))
     assignment = policy_actor_assignment(
@@ -422,4 +493,4 @@ def make_duel_arena(
     return DuelArena(reset=reset, step=jax.jit(step))
 
 
-__all__ = ["DuelArena", "ENTITY_COUNT", "factors_are_legal", "make_duel_arena"]
+__all__ = ["DuelArena", "ENTITY_COUNT", "ROLE_PAIRED_FIELDS", "factors_are_legal", "make_duel_arena"]

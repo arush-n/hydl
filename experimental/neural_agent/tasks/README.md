@@ -60,3 +60,34 @@ normalisers (gait speed, fall speed, chase speed, the attack table, drop height,
 counterpart in CombatParams and stay on the agent's scale; they are listed in the lane's DUEL_RECIPE.txt under G1 RESIDUAL, and
 a target-role gait maximum in the engine's actor-first view is the fix.
 
+### Roles and measured gaps (task #103b, 2026-10-20)
+
+`make_duel_arena(..., roles=(entity 0 role, entity 1 role))` sets each slot's statuses (`entity_role_ids`) and rebuilds
+the fields in `ROLE_PAIRED_FIELDS` so that a slot playing the target role takes the `target_X` value. The residual and
+the physics caveat are in the function docstring. `roles=None` is bit-identical to the matchup (reset and 64 steps,
+checked against the pre-edit code). Measured on gen 5 (not in the tests):
+
+- A role pair does not give a slot its own movement. The motion kernel runs every entity row through the agent slot
+  (`multi_actor/locomotion.py`, `_materialize_entity_zero`), so a walking body follows `agent_max_speed`. Entity 1 walks
+  0.331 blocks in 8 ticks under the default and under (Kweebec, Kweebec), and 0.391 under (Trork, Trork) and under
+  (Trork, Kweebec): slot 1 playing the Kweebec moves at the Trork's speed.
+- The built-in target still moves entity 1, so entity 1 is not inert under neutral factors. Its motion
+  (`opponents/legacy/motion.py`, `_tick_target_motion`, called from `runtime/step.py` and applied where
+  `params.target_active`, default True) starts at the reset-drawn `target_ai_activation_tick` (36 to 44 in the ruleset).
+  With neutral factors and entities 6 blocks apart, entity 1 first moves at tick 41 (key 0) and drifts 0.652 blocks in
+  100 ticks; with `target_active=False` the drift is 0.000 and entity 0 does not move at any separation. The
+  opponent-controller mask does not gate this motion. Candidate one-line fix, not applied here: `target_active=False`
+  in the duel's default params. It changes the follow-up hits: with it, the sword-1 third hit lands in 4 of 16 seeds
+  and the mace-1 second hit never lands.
+- Knockback responds by role in the engine, not by parameter. The agent slot takes the force-pushed branch
+  (`runtime/agent.py`, `force_pushed`, set only for damage to the agent in `arsenal/runtime.py` near 2563), the target
+  slot takes the applied-velocity path (`mechanics/runtime/kernel.py`, `apply_damage_forces`). `target_knockback_*` is
+  read only by the legacy opponent attack and does not change any hit tick (16 seeds, sword and mace).
+- The one-tick first-hit lag of sword 1 is joint selector geometry. The clock, the acceptance tick and the head yaw are
+  identical in both lanes. The progressive selector takes its origin from the source's eye offset (`events.py`,
+  `_progressive_selector_result`: `agent_eye_offset` for slot 0, `target_eye_offset` for slot 1) and tests the target's
+  box (`agent_bounds` or `target_bounds`) in `horizontal_selector_intersects_aabb` (`programs/selectors.py`). Tick 7
+  needs origin 1.0 with the Trork box; every other combination tested gives tick 8.
+- The follow-up hits depend on reset draws, not per-tick draws or the damage jitter: the activation tick above and the
+  motion-timing profile (`runtime/reset.py`, the timing draw next to the activation draw). Without knockback there is no
+  seat difference and no key dependence.
