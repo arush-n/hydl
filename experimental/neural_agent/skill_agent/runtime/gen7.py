@@ -7,10 +7,9 @@ re-rendered in place by the port's coordinator, so this launcher renders its own
 first imported, so this module imports no ``hytalegym`` code at its top. The launcher then runs the target module or
 script as ``__main__``.
 
-One workaround: the redirect does not carry the v3 observation package's legacy module aliases
-(``observation/v3/__init__.py`` registers ``world_tokens`` and fourteen others under the rendered package's name, so
-``adk``'s ``from hytalegym.jax.combat.observation.v3.world_tokens import ...`` would fail). After mounting, the
-launcher registers the package's module attributes under the ``hytalegym`` names. Reported to the coordinator.
+The redirect serves the v3 observation package's legacy module aliases (``world_tokens`` and the others that
+``observation/v3/__init__.py`` registers) under the source package's name (``render.py``, 780b5de), so ``adk``'s
+``from hytalegym.jax.combat.observation.v3.world_tokens import ...`` resolves to the rendered module.
 
 CLI (from the repo root)::
 
@@ -23,18 +22,15 @@ CLI (from the repo root)::
 from __future__ import annotations
 
 import argparse
-import importlib
 import importlib.util
 import runpy
 import subprocess
 import sys
-import types
 from pathlib import Path
 from typing import Sequence
 
 REPO = Path(__file__).resolve().parents[4]
 RENDER_PY = REPO / "HytaleRL/hytalegym/hytalegym/sim/common/render.py"
-V3 = "hytalegym.jax.combat.observation.v3"
 
 
 def render(engine: Path) -> None:
@@ -45,7 +41,7 @@ def render(engine: Path) -> None:
 
 
 def mount(engine: Path) -> None:
-    """Make every ``hytalegym.jax`` import load the render at ``engine``, with the v3 aliases restored."""
+    """Make every ``hytalegym.jax`` import load the render at ``engine``."""
 
     if any(name == "hytalegym" or name.startswith("hytalegym.") for name in sys.modules):
         raise RuntimeError("mount must run before hytalegym is imported")
@@ -53,10 +49,6 @@ def mount(engine: Path) -> None:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     module.redirect_imports(engine)
-    package = importlib.import_module(V3)
-    for attribute, value in vars(package).items():
-        if isinstance(value, types.ModuleType):
-            sys.modules.setdefault(f"{V3}.{attribute}", value)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
