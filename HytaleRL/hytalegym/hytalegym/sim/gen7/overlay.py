@@ -242,7 +242,34 @@ _DIAGRAM = (
 )
 
 
+_AUGMENT = (
+    "tests/sim/test_crafting_augment_tags.py: a tagged recipe is refused at a bare GoblinLab_Workbench and accepted with the "
+    "grants; the 50 tagged recipes are enumerated from the 0.7.2 archive; the defaults leave every other recipe bit-identical",
+)
+
 PATCHES = (
+    # Row 11x, augment tags (construct crafting_augment_tags): the grant bits ride the context and the assets; the gate is a hook.
+    Patch("augment_context_field", "crafting/types.py",
+          "    input_mode: Array\n",
+          "    input_mode: Array\n"
+          "    # Gen 7 (row 11x): the bench's granted augment-tag bits (crafting_augment_tags.gate_hook); None without a bench.\n"
+          "    bench_augment_mask: Array = None\n",
+          "11x", _AUGMENT, "the bench context carries its grant bits; the fieldcraft context keeps None (no bench, no grants)"),
+    Patch("augment_assets_field", "combat/arsenal/world_actions/crafting.py",
+          "    bench_valid: jax.Array\n",
+          "    bench_valid: jax.Array\n"
+          "    # Gen 7 (row 11x): the scenario's granted augment-tag bits per bench row (crafting_augment_tags.compile_hook).\n"
+          "    bench_augment_mask: jax.Array = None\n",
+          "11x", _AUGMENT, "the per-row grant bits; gen 5 has no field"),
+    Patch("augment_bench_context", "combat/arsenal/world_actions/crafting.py",
+          "        bench_tier_level=jnp.where(\n",
+          "        bench_augment_mask=None if assets.bench_augment_mask is None else jnp.where(\n"
+          "            available,\n"
+          "            assets.bench_augment_mask[row],\n"
+          "            jnp.uint32(0),\n"
+          "        ),\n"
+          "        bench_tier_level=jnp.where(\n",
+          "11x", _AUGMENT, "each in-reach bench context carries its row's grant bits"),
     Patch("sword_swing_left_knockback", PROFILE_JAX,
           "    push = (0.0, 1.0, -1.0, 6.0)\n",
           "    push = (0.0, 0.2, -1.0, 4.3)\n",
@@ -686,6 +713,12 @@ PATCHES = (
 
 _MECHANICS = "hytalegym.sim.gen7.mechanics"
 HOOKS = (
+    Hook("crafting_augment_assets", "combat/arsenal/world_actions/crafting.py", "compile_region_fieldcraft_assets",
+         f"{_MECHANICS}.crafting_augment_tags:compile_hook", "crafting_augment_tags", "active", "11x", _AUGMENT,
+         "the scenario's grants (bench_augment_tags=) as one bit mask per bench row, from the 0.7.2 tag table; default none"),
+    Hook("crafting_augment_gate", "crafting/runtime.py", "_recipe_precondition",
+         f"{_MECHANICS}.crafting_augment_tags:gate_hook", "crafting_augment_tags", "active", "11x", _AUGMENT,
+         "a requirement slot whose tags the context's bench does not grant is cleared before the engine's precondition"),
     Hook("hit_interrupt_flinch", "combat/mechanics/runtime/kernel.py", "resolve_damage_events",
          f"{_MECHANICS}.hit_interrupt:construct", "hit_interrupt", "stub", "5a",
          "interrupt/flinch differential against an eligible NPC (Skeleton_Fighter or Goblin_Scrapper): "
@@ -876,6 +909,11 @@ HOOKS = (
          "and the returned observation equals observe_batch of the state; entity_yaw None and gen 5 are unchanged",
          "an Arsenal reset given entity_yaw (entity-position path) seeds agent_head_yaw and target_head_yaw from the stored "
          "body yaw (pitch unchanged) and rebuilds the returned observation from that state; gen 5 returns the original"),
+    Hook("perception_v2", "combat/observation/v3/encoding/encoder.py", "encode_learner_observation_v3",
+         f"{_MECHANICS}.perception_v2:construct", "perception_v2", "active",
+         differential="tests/sim/test_perception_v2.py: channel layout, row gate (view sector, occluder), ids, inventory "
+         "floats, body yaw; the switch-off identity gate and the rollout fingerprints are unchanged",
+         note="sim/gen7/PERCEPTION_V2.md: opt-in beside the v3 fields; the role id is a seam (no role ids on the runtime config)"),
 )
 
 OVERLAY = Overlay(

@@ -128,6 +128,10 @@ class Constructs:
     # tick) or "click_craft" (a zero-time craft at an in-reach Armory commits two ticks after its request). Owner:
     # sim/gen7/mechanics/diagram_crafting.py (row 11q, stage 5).
     diagram_crafting: str = "absent"
+    # Region augment tags (0.7.2 benchHasRequiredAugmentTags): "absent" (HEAD: a requirement's augment tags are not checked)
+    # or "bench_grants" (a requirement's tags must all be granted by its bench; the grants are the scenario's, default none).
+    # Owner: sim/gen7/mechanics/crafting_augment_tags.py (row 11x).
+    crafting_augment_tags: str = "absent"
     # Guard re-entry cooldown after a claim: "none" (HEAD: no cooldown) or "claim_0_35s" (gen 7: a new claim waits 0.35 s
     # from the previous claim). Owner: sim/gen7/mechanics/guard_cooldown.py (row 5d, timing lane).
     guard_reentry_cooldown: str = "none"
@@ -146,6 +150,10 @@ class Constructs:
     # an Arsenal reset given entity_yaw seeds agent_head_yaw and target_head_yaw from the stored body yaw). Owner:
     # sim/gen7/mechanics/reset_head_heading.py (row 5g, FIDELITY section (ak)).
     reset_head_heading: str = "none"
+    # Perception channel (sim/gen7/PERCEPTION_V2.md): the learner observation carries a perception_v2 field beside the v3
+    # fields (role seam, held item, player kind, inventory tokens, body yaw); every entity field is gated by the entity row.
+    # Opt-in: False in gen 5 and gen 7. Owner: sim/gen7/mechanics/perception_v2.py.
+    perception_v2: bool = False
 
 
 @dataclass(frozen=True)

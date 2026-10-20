@@ -28,9 +28,13 @@ FAMILY_MODULES = (
     "npc_roles",
 )
 
+#: Explicit families: extracted only when named (``--families``), never part of the content manifest. The gen-7
+#: construct reads their checked-in table directly (see crafting_augment_tags.py).
+EXTRA_FAMILY_MODULES = ("crafting_augment_tags",)
+
 
 def family_module(name: str):
-    if name not in FAMILY_MODULES:
+    if name not in FAMILY_MODULES + EXTRA_FAMILY_MODULES:
         raise KeyError(f"unknown content family {name!r}")
     return import_module(f"{__name__}.{name}")
 

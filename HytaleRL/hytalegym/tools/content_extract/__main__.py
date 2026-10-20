@@ -56,11 +56,14 @@ def main(argv: list[str] | None = None) -> int:
         tables = extract_tables(archive, families)
         if args.command == "extract":
             written = write_tables(tables, args.out)
-            manifest = build_manifest(tables, archive)
-            write_manifest(manifest, args.out)
             for path in written:
                 print(f"wrote {path} ({path.stat().st_size} bytes)")
-            print(f"content_sha256 {manifest['content_sha256']}")
+            if set(FAMILY_MODULES) <= set(families):
+                manifest = build_manifest(tables, archive)
+                write_manifest(manifest, args.out)
+                print(f"content_sha256 {manifest['content_sha256']}")
+            else:
+                print("partial family list: no manifest written (the manifest lists all FAMILY_MODULES)")
             return 0
         stale = []
         for family, table in tables.items():

@@ -57,6 +57,8 @@ PROFILE = SimProfile(
         crafting_time="timed_job",
         processing_benches="ticking_bench",
         diagram_crafting="click_craft",
+        # Row 11x (crafting_augment_tags.py): a bench grants only the augment tags the scenario names (default none).
+        crafting_augment_tags="bench_grants",
         # Timing (section (ad), live 0.7.2 receipts): the guard's 0.35 s claim cooldown, the one-drain chain start, and
         # the shortbow's empty reset.
         guard_reentry_cooldown="claim_0_35s",
