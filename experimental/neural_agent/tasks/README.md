@@ -110,3 +110,25 @@ gave the mirror hit on 14 and, with 64 arrows, two taps spawning on 9 and 49 and
 
 Caveat: the shortbow's range per tier (the spawn and hit ticks of tiers 0 to 4, and how far a shot reaches) is the skill layer's
 measurement, not this arena's. The tests here check tier 0 at 2.5 blocks only.
+
+### Entity 1's attack facing (task #112, 2026-10-20)
+
+The engine's progressive attack selector aims slot 0 with `combat.yaw` (the body) and slot 1 with `combat.target_head_yaw`
+(`arsenal/effects/events.py:809-821`). Only the built-in target AI writes that leaf, and it is off in the duel, so the leaf
+kept its reset seed while entity 1's body turned, up to 58.7 degrees off. `step` now sets it to entity 1's body yaw
+(`_target_head_on_body`) on the state it receives and on the state it returns. No lag at the selector: the engine
+resolves attacks before either body turns that tick (`arsenal/runtime.py:1302` before `:1519`, entity 1's turn after
+the engine step), so both slots aim with their start-of-tick body yaw. Pitch is not synced; both seats' selector pitch
+is level for the whole duel.
+
+Measured (gen 5, 64 lanes, seed 0, 600 ticks, roles (Trork_Brawler, Trork_Brawler), knockback 0). Sword PRESSURE mirror:
+entity 0's dealt difference +21.2 ± 3.2 before, +11.0 ± 2.5 after. Mace HIT_AND_RUN with the seats exchanged: pairs won
+by the same seat both ways 23 before, 1 after. Both match an in-process engine patch giving slot 1 its body yaw, lane by
+lane. Fixed-placement held probes (one seat presses, 200 ticks) are unchanged in both seats (sword hits on 7, 20, 33, ...;
+mace 21, 57, 93). The rest of the seat gap is engine-only: an agent-only control lock on any damage to entity 0 and
+agent-only regeneration (task #108).
+
+Caveat (read from the code; arrows not measured): the same leaf sets entity 1's projectile muzzle (`arsenal/environment.py`,
+`muzzle_yaw`), and its pitch reads the level `target_head_pitch`. Entity 1's arrows therefore leave along its body yaw,
+level, where entity 0's leave along its look (before this change they left along its spawn heading). Shortbow numbers
+from entity 1 are not valid; shoot from entity 0. Entity 0's view of entity 1's yaw (the legacy path in `multi_actor/views.py`) now shows the body yaw too.

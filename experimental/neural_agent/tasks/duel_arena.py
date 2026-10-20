@@ -304,6 +304,40 @@ def _arrow_inventory(config, arrows):
     return inventory._replace(quantity=jnp.where(arrow_slot, counts, inventory.quantity))
 
 
+def _target_head_on_body(arsenal):
+    """Set ``combat.target_head_yaw`` to entity 1's body yaw, ``combat.yaw[:, TARGET_ENTITY]`` (#112).
+
+    Why: the progressive attack selector (``arsenal/effects/events.py``, ``_progressive_selector_result``) takes
+    slot 0's facing from ``combat.yaw`` (the body) and slot 1's from ``combat.target_head_yaw``. The built-in
+    target AI, the only writer of that leaf in the engine, is off in the duel (``target_active`` False), so the
+    leaf kept its reset seed while entity 1's body turned. Measured on the mirror placement (sword PRESSURE, 200
+    ticks): entity 1's body turned 36 degrees and the leaf stayed at its spawn heading, up to 58.7 degrees off.
+
+    The same leaf also sets entity 1's view sector (``arsenal/environment.py``, ``head_yaw`` from ``combat.yaw``),
+    which now follows the body as slot 0's does. It also sets entity 1's projectile muzzle yaw (``environment.py``,
+    ``muzzle_yaw``) and entity 0's observation of the target's yaw (``multi_actor/views.py``, the legacy actor's
+    ``target_yaw``). Slot 0's muzzle reads its look (``agent_head_yaw``) and entity 1's observation as seen by entity
+    0 is read from its look by the engine's non-legacy path. In the duel the look and the body differ by up to 45
+    degrees (measured), so entity 1's arrows now leave along its body, not its look. Nothing in the engine serves the
+    selector (body, as slot 0's is) and the muzzle (look) from one leaf; this sync keeps the selector.
+
+    When: ``step`` calls this on the state it receives, before the projection, the decode and the engine step, and
+    on the state it returns, before the next projection, so the next observation is current. ``reset`` is not
+    changed: its ``entity_yaw`` seed stands. Lag: none at the selector. The selector reads both slots' yaw before
+    the agent's own motion (``process_direct_events`` at ``arsenal/runtime.py:1302``, ``_microtick`` at ``:1519``),
+    and entity 1's locomotion turn runs after the engine step (``multi_actor/runtime.py``), so both read the
+    start-of-tick body yaw (measured: the selector's yaw equals the step input for both slots, max difference 0.0).
+
+    Pitch is not synced. Slot 0's selector pitch is ``combat.pitch``, the agent's body pitch, which the engine holds
+    level (``runtime/agent.py``, ``pitch = zeros_like``). Entity 1 has no body-pitch leaf: its look pitch lives in
+    the locomotion bank, which the selector does not read for either seat. ``target_head_pitch`` is zero for the
+    whole duel (seeded at ``runtime/reset.py:157``, never written with ``target_active`` False), which matches.
+    """
+
+    combat = arsenal.combat
+    return arsenal._replace(combat=combat._replace(target_head_yaw=combat.yaw[:, TARGET_ENTITY]))
+
+
 def make_duel_arena(
     batch: int,
     loadouts: Sequence[str | Sequence[str]],
@@ -485,6 +519,9 @@ def make_duel_arena(
         )
 
     def step(arena, factors_entity0, factors_entity1, keys):
+        """One duel tick. Entity 1's selector facing is synced first (:func:`_target_head_on_body`)."""
+
+        arena = arena._replace(arsenal=_target_head_on_body(arena.arsenal))
         factors = jnp.stack(
             (
                 _factor_rows(factors_entity0, batch, "factors_entity0"),
@@ -509,7 +546,10 @@ def make_duel_arena(
         transition = step_multi_actor_arena(
             arena, controls, assignment, keys, params, commands, config
         )
-        next_observation, _ = project(transition.state)
+        next_state = transition.state._replace(
+            arsenal=_target_head_on_body(transition.state.arsenal)
+        )
+        next_observation, _ = project(next_state)
         legal = jnp.stack(
             [
                 factors_are_legal(observation.action_mask[:, slot], factors[:, slot])
@@ -527,7 +567,7 @@ def make_duel_arena(
         done = jnp.any(transition.terminated | transition.truncated, axis=1)
         (observation0, mask0), (observation1, mask1) = policy_rows(next_observation)
         return (
-            transition.state,
+            next_state,
             observation0,
             observation1,
             mask0,
