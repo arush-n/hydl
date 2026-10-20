@@ -52,7 +52,11 @@ stops the loop. Measured (tests/experimental/neural_agent/test_na_duel_arena.py,
 factors, neutral factors keep both still for 100 ticks with the AI off, a sword tap damages entity 1 and both views track it,
 the sector hides a target behind either entity, the sensor range hides both, masks are per entity. The stock open-flat scene has
 no geometry window (geometry_exhausted stays False at 8.5 blocks): the 4-block window of the bow recipe comes from the tests'
-exact flat geometry. Known gap: entity 1's health fractions use the other role's maximum (observation/v1 encoder divides the
-self row by agent_max_health and the target row by target_max_health; the actor-first view does not swap them), pinned by a
-strict xfail until the adapter rescales them.
+exact flat geometry. Entity 1's health fractions and its combat-block forward and right velocity are rescaled to its own maxima
+(`_entity_one_on_its_own_maxima`: self and combat agent health by target_max_health, the target row and the combat visible
+target health by agent_max_health with the encoder's clip and wire rounding, the velocities by target_max_speed; six columns,
+checked against the engine's encoder with the same-shape agent and target parameters swapped). The remaining role-scaled
+normalisers (gait speed, fall speed, chase speed, the attack table, drop height, the status rows' max health) have no
+counterpart in CombatParams and stay on the agent's scale; they are listed in the lane's DUEL_RECIPE.txt under G1 RESIDUAL, and
+a target-role gait maximum in the engine's actor-first view is the fix.
 

@@ -18,12 +18,12 @@ Approximations and engine gaps (each is pinned by a test or measured while build
   agent row only, and the multi-actor view blanks them for every other actor.
   Entity 1 copies entity 0's row, which on the flat fixture is the same floor
   (:func:`_observe`).
-* Not fixed here (engine): the encoder divides health by ``params.agent_max_health``
-  for the self row and by ``params.target_max_health`` for the target row, and the
-  actor-first view does not swap those maxima. Entity 1's own health fraction is
-  therefore divided by entity 0's maximum, and its view of entity 0 by entity 1's.
-  Entity 1's health fractions are on the wrong scale (its self row divides by entity 0's
-  maximum, its view of entity 0 by entity 1's, clipped at 1). The direction of change is right.
+* The encoder divides a row by the maximum of the role it plays in the view, and the
+  actor-first view keeps the agent's parameters. Entity 1's health fractions (self row,
+  target row, combat block) and its agent velocity are therefore recomputed on its own
+  maxima (:func:`_entity_one_on_its_own_maxima`). The gait-speed, fall-speed, chase-speed
+  and attack-table normalisers have no role counterpart in ``CombatParams``, so they are
+  not rescaled.
 """
 
 from __future__ import annotations
@@ -38,12 +38,14 @@ from hytalegym.jax.combat import (
     default_combat_params,
     hytale_0_5_7_loadouts,
 )
+from adk.policy import fields as schema
 from hytalegym.jax.combat.arsenal.environment import (
     open_flat_arsenal_world_capabilities,
 )
 from hytalegym.jax.combat.arsenal.factory import empty_arsenal_commands
 from hytalegym.jax.combat.arsenal.runtime import reset_arsenal_batch
 from hytalegym.jax.combat.observation.v3.policy import ARSENAL_POLICY_ACTION_HEAD_SIZES
+from hytalegym.jax.combat.runtime.math import _round_to_scale, _unit_fraction
 from hytalegym.jax.combat.types import AGENT_ENTITY, TARGET_ENTITY
 from hytalegym.jax.training.multi_actor import (
     decode_policy_actor_factors_flat,
@@ -62,6 +64,13 @@ _HEAD_SIZES: tuple[int, ...] = tuple(ARSENAL_POLICY_ACTION_HEAD_SIZES)
 _HEAD_STARTS: tuple[int, ...] = tuple(
     sum(_HEAD_SIZES[:index]) for index in range(len(_HEAD_SIZES))
 )
+_SELF_HEALTH = schema.field_index("self_f32", "health_fraction")
+_TARGET_HEALTH = schema.field_index("target_f32", "health_fraction")
+_TARGET_VISIBLE = schema.field_index("target_f32", "visible")
+_COMBAT_AGENT_HEALTH = schema.field_index("combat_f32", "agent_health_fraction")
+_COMBAT_TARGET_HEALTH = schema.field_index("combat_f32", "visible_target_health_fraction")
+_COMBAT_FORWARD = schema.field_index("combat_f32", "agent_forward_velocity")
+_COMBAT_RIGHT = schema.field_index("combat_f32", "agent_right_velocity")
 
 
 class DuelArena(NamedTuple):
@@ -135,6 +144,66 @@ def _capabilities(arsenal, locomotion, params, config, *, sector, sensor_range):
     )
 
 
+def _entity_one_on_its_own_maxima(structured, arsenal, locomotion, params):
+    """Recompute entity 1's role-dependent columns from the raw state, on entity 1's own maxima.
+
+    The encoder divides by the maximum of the role a row plays, and the actor-first view
+    keeps the agent's parameters. For entity 1 the agent role is its own, so its self health
+    divides by ``target_max_health``, its target row (entity 0) by ``agent_max_health``, and its
+    combat block the same way. Velocities divide by ``max_speed`` for the agent role, so entity 1
+    divides by ``target_max_speed``. Each value uses the encoder's helpers (``_unit_fraction``
+    clamps to the unit interval, ``_round_to_scale`` is the wire rounding of the combat block),
+    and the target columns stay zero unless entity 0 is perceived (the ``visible`` column).
+    """
+
+    combat = arsenal.combat
+    own_health = combat.health[:, TARGET_ENTITY]
+    other_health = combat.health[:, AGENT_ENTITY]
+    visible = structured.base.target_f32[:, TARGET_ENTITY, _TARGET_VISIBLE] > jnp.float32(0.5)
+    yaw = jnp.deg2rad(locomotion.head_yaw[:, TARGET_ENTITY])
+    velocity = combat.velocity[:, TARGET_ENTITY]
+    forward = (
+        velocity[:, 0] * -jnp.sin(yaw) + velocity[:, 2] * -jnp.cos(yaw)
+    ) / params.target_max_speed
+    right = (
+        velocity[:, 0] * jnp.cos(yaw) + velocity[:, 2] * -jnp.sin(yaw)
+    ) / params.target_max_speed
+    base = structured.base
+    combat_f32 = (
+        base.combat_f32.at[:, TARGET_ENTITY, _COMBAT_AGENT_HEALTH]
+        .set(_unit_fraction(own_health, params.target_max_health))
+        .at[:, TARGET_ENTITY, _COMBAT_TARGET_HEALTH]
+        .set(
+            jnp.where(
+                visible,
+                _unit_fraction(
+                    _round_to_scale(other_health, params.wire_fixed_point_scale),
+                    params.agent_max_health,
+                ),
+                jnp.float32(0.0),
+            )
+        )
+        .at[:, TARGET_ENTITY, _COMBAT_FORWARD]
+        .set(forward)
+        .at[:, TARGET_ENTITY, _COMBAT_RIGHT]
+        .set(right)
+    )
+    base = base._replace(
+        self_f32=base.self_f32.at[:, TARGET_ENTITY, _SELF_HEALTH].set(
+            own_health / jnp.maximum(jnp.abs(params.target_max_health), jnp.float32(1.0e-6))
+        ),
+        target_f32=base.target_f32.at[:, TARGET_ENTITY, _TARGET_HEALTH].set(
+            jnp.where(
+                visible,
+                _unit_fraction(other_health, params.agent_max_health),
+                jnp.float32(0.0),
+            )
+        ),
+        combat_f32=combat_f32,
+    )
+    return structured._replace(base=base)
+
+
 def _observe(arena, capabilities, params, config, assignment):
     """Per-actor learner-v3 structure and action mask, actor-major ``[B, 2, ...]``."""
 
@@ -151,6 +220,9 @@ def _observe(arena, capabilities, params, config, assignment):
         actor_world_mask=structured.actor_world_mask.at[:, TARGET_ENTITY].set(
             structured.actor_world_mask[:, AGENT_ENTITY]
         ),
+    )
+    structured = _entity_one_on_its_own_maxima(
+        structured, arena.arsenal, arena.locomotion, params
     )
     return observation._replace(structured=structured)
 
