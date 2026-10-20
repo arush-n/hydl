@@ -2086,6 +2086,33 @@ Per run (all four): learner requests at env ticks 1, 15 and 29; the first two ar
 - The learner's `resource_values[3]` (SignatureEnergy) steps by 1 at each target hit: the on-hit gain goes to the source. [measured]
 - Mean engine tick over 300 ticks: 0.03421 s, so 14 ticks is 0.479 s at the mean. [measured]
 
+### Part 1 (2026-10-20, 01:18 to 01:31): the eligible hit measured (receipts `~/.claude/jobs/31947bd7/tmp/hit_interrupt_part1/receipts/`)
+
+Four learner-row receipts on the bridge `6EB44F30` (5558/25576; the window opened at a 1-minute load of 5.85 and each run
+started below 4.0): a Skeleton_Fighter target, the learner's iron sword, six ability requests at a period of 14 ticks
+(seeds 570057 and 913771, 90 steps) or 20 ticks (seed 570057, 90 and 120 steps). Every request was accepted one tick later
+and the learner's gate stayed nominal (no failure bits, observation valid, applied legal) in all four runs. [confirmed]
+
+| run | landed hits (env tick, health) | `Hit_Interrupt_Eligible` on the target | interrupt |
+|---|---|---|---|
+| s570057 period 14 | 9 (70 to 60), 23 (to 50), 37 (to 40) | added at tick 43 (java 1388), refreshed every 8 trace frames | none: every hit landed before eligibility; `Red_Flash` 0.2 s each |
+| s913771 period 14 | 9, 23, 37 (same values) | added at tick 43 (java 1480) | none |
+| s570057 period 20 | 9, 29, 49 (70 to 40) | added at tick 42; the hit at 49 lands 7 ticks into it | yes, at the tick-49 hit |
+| s570057 period 20, 120 steps | 9, 29, 49 | added at tick 42 | yes, at the tick-49 hit (same java-tick pattern) |
+
+The interrupt (both period-20 receipts, trace index 47, one java tick): `Hit_Interrupt_Stunned` 0.0 to 0.7,
+`Hit_Interrupt_Recent_Reaction_A` 0.0 to 4.0 and `Hit_Interrupt_Flinch` 0.0 to 0.5 are added together; the flinch is removed
+15 trace frames later (0.5 s; index 62) and the stun 21 frames later (0.7 s; index 68); `Eligible` keeps refreshing through
+it. [confirmed] Not reached: `Recent_Reaction_B`, `Recovery_Pending`, `Enraged`, `Protected_Attack` (one flinch per run), and
+the attack-root cancel (the target stayed `Idle.Default`; it never attacked). The asset values for the three measured
+effects hold exactly (stun 0.7 s, flinch 0.5 s, reaction A 4 s). The three later requests of the period-14 runs (43, 57, 71)
+were accepted but landed no hit (health stayed at 40): the knockback of the third hit put the target out of the sword's
+reach, which the period-20 spacing did not. [inferred: positions are in the receipts but were not read for this block]
+
+Part 2 (designed, not run): three eligible hits in one run, swinging from tick 43 at period 20 (hits at about 51, 71 and
+91), to measure the third-flinch `Recovery_Pending` 2 s and `Enraged` 8 s, and a target under native AI that attacks, to
+measure the cancel of its Attack-tagged root.
+
 ### Native rows against gen-5 (round 4, native-AI duel)
 
 Labels: [native-duel] = FIDELITY 5a configuration (native Goblin_Scrapper agent, Skeleton_Fighter target, hit_interrupt_duel, combat_target_active True, no learner profile), receipts `receipts_native/duel_native_570057.json` and `duel_native_913771.json`; [learner] = earlier learner-row runs; [asset] = 0.7.2 asset reading; [code] = gen-5 code read.
@@ -2168,6 +2195,9 @@ Labels: [native-duel] = FIDELITY 5a configuration (native Goblin_Scrapper agent,
 - `status_modifiers` (`mechanics/runtime/access.py:197-208`) returns flags and the product of speed multipliers; consumers are `statuses.py:573` and `arsenal/runtime.py:1046`. No hit path writes a speed multiplier. [confirmed; whether it reaches NPC motion is not read]
 
 ### Stays unmeasured
+
+(2026-10-20: the eligible-hit row is measured in Part 1 above: stun, flinch and reaction A; the third-flinch rows and the
+attack-root cancel remain.)
 
 - Every eligible-target row (R1 to R7). The harness never hits an eligible target, because the opponent is the task's Trork_Brawler.
 - The third swing: refused by the mask from tick 26 in every run (cause not identified).
