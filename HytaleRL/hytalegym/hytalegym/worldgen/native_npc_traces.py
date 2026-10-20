@@ -15,6 +15,7 @@ import numpy as np
 import numpy.typing as npt
 
 from hytalegym.geometry.contract import CELL_COUNT, CELL_RADIUS, parse_geometry
+from hytalegym.server_versions import server_profile
 from hytalegym.worldgen.native_channels import (
     NATIVE_PERCEPTION_CHANNEL_SCHEMA,
     NATIVE_PERCEPTION_CHANNEL_VERSION,
@@ -248,8 +249,16 @@ NATIVE_NPC_OBSERVATION_ALL_GROUP_BITS = (1 << 27) - 1
 NATIVE_NPC_ACTOR_EVIDENCE_SCHEMA = "hytalerl_native_learner_v3_actor_evidence_inputs_v4"
 NATIVE_NPC_ACTOR_EVIDENCE_VERSION = 4
 NATIVE_NPC_ACTOR_EVIDENCE_DEFENSE_VALUE_COUNT = 8
+# Learner-v3 actor-evidence contract per server line. The 0.7.2 value embeds the
+# 0.7.2 Region library (world_geometry_source), so it differs from 0.5.7.
+_NATIVE_NPC_ACTOR_EVIDENCE_CONTRACT_SHA256_BY_SERVER = {
+    "0.5.7": "D47E87B2D163F74C5093F94F209C14282A320D90AA3E5FC896E528250CFDA5AA",
+    "0.7.2": "E93BBEBE48FB3122FBB1FC07DCA95F2B8C0E2F2C8F0ED473CBE96F0A1A9DFB65",
+}
 NATIVE_NPC_ACTOR_EVIDENCE_CONTRACT_SHA256 = (
-    "D47E87B2D163F74C5093F94F209C14282A320D90AA3E5FC896E528250CFDA5AA"
+    _NATIVE_NPC_ACTOR_EVIDENCE_CONTRACT_SHA256_BY_SERVER[
+        server_profile().certified_version
+    ]
 )
 _NATIVE_NPC_OBSERVATION_CONTRACT = {
     "schema": NATIVE_NPC_OBSERVATION_SCHEMA,

@@ -42,8 +42,11 @@ public record NpcObservationSnapshot(
 ) {
     public static final String SCHEMA = "hytalerl_native_npc_observation_v5";
     public static final int VERSION = 5;
+    // Host observation contract of Server 0.7.2 (set 2026-10-19). It embeds the
+    // 0.7.2 learner-v3 actor-evidence contract. The 0.5.7 value was
+    // 1C53B327234B92637A222BCAAFE270865F7531100AA85FA8CC0540316CFCCEC5.
     public static final String CONTRACT_SHA256 =
-        "1C53B327234B92637A222BCAAFE270865F7531100AA85FA8CC0540316CFCCEC5";
+        "3D080DE99568F57AF2EE0A6D7CAB802F8BA233BDE580FA4CF3FBF12BA9EBDE11";
     public static final int ATTACK_CANDIDATE_CAPACITY = 64;
     public static final int PERCEPTIBLE_NPC_CAPACITY = 256;
     public static final int PERCEPTIBLE_ENTITY_CAPACITY = 512;

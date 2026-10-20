@@ -34,8 +34,12 @@ public record NativeActorEvidenceFrame(
     public static final String SCHEMA =
         "hytalerl_native_learner_v3_actor_evidence_inputs_v4";
     public static final int VERSION = 4;
+    // Host learner-v3 actor-evidence contract of Server 0.7.2 (set 2026-10-19).
+    // It embeds the 0.7.2 Region library (world_geometry_source), so it differs
+    // from 0.5.7. The 0.5.7 value was
+    // D47E87B2D163F74C5093F94F209C14282A320D90AA3E5FC896E528250CFDA5AA.
     public static final String CONTRACT_SHA256 =
-        "D47E87B2D163F74C5093F94F209C14282A320D90AA3E5FC896E528250CFDA5AA";
+        "E93BBEBE48FB3122FBB1FC07DCA95F2B8C0E2F2C8F0ED473CBE96F0A1A9DFB65";
     public static final int ENTITY_COUNT = 2;
     public static final int RESOURCE_COUNT = 7;
     public static final int STATUS_CAPACITY = 8;

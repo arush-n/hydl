@@ -121,6 +121,38 @@ above, `mutable_block_cells` during a held break can fail with
 `ArithmeticException: long overflow` (`Duration.toNanos` in
 `RegionGeometryCapture.mutableBlockRow`).
 
+## Host contracts the 0.7.2 bridge pins (2026-10-19)
+
+The bridge refuses a session when a host contract it pins differs from the value the Python host
+computes. The 0.7.2 values below are computed with `HYTALERL_SERVER_VERSION=0.7.2` (full values in the
+Java source); the 0.5.7 column is what the default line still computes.
+
+| Host contract | Bridge pin (`src/main/java/com/hytalerlbridge/...`) | 0.7.2 host value | 0.5.7 host value |
+|---|---|---|---|
+| Learner-v3 actor evidence (reset negotiation, frame echo) | `observation/NativeActorEvidenceFrame.CONTRACT_SHA256` | `E93BBEBE…` (changed) | `D47E87B2…` |
+| NPC observation contract | `imitation/NpcObservationSnapshot.CONTRACT_SHA256` | `3D080DE9…` (changed) | `1C53B327…` |
+| NPC trace action / event / lifecycle | `imitation/NpcTraceBatch.*_CONTRACT_SHA256` (computed) | `DE0A63AD…` / `7065A3BF…` / `5D6D0C26…` | same |
+| NPC inventory frame | `observation/NativeInventoryFrame.CONTRACT_SHA256` | `CC393B3E…` | same |
+| Policy world-action capture | `worldgen/policyactions/capture/model/NativePolicyWorldActionCapture.CONTRACT_SHA256` | `5E6672AD…` | same |
+| World-verb transport | `action/NativeWorldVerbRequest.CONTRACT_SHA256` | `72AA4849…` | same |
+| World-verb lifecycle | `nativebackend/WorldVerbTelemetry.CONTRACT_SHA256` | `99E83A86…` | same |
+| Synthetic world interaction | `nativebackend/SyntheticWorldInteractionEvidence.CONTRACT_SHA256` | `F41C1386…` | same |
+| Falling-block trace | `nativebackend/NativeFallingBlockTrace.CONTRACT_SHA256` | `AB46D1D6…` | same |
+| Group action (computed) | `action/group/NativeGroupActionContract.sha256()` | `BB94B65F…` | same |
+| Block affordance dictionary | `worldgen/BlockAffordanceContract.DICTIONARY_SHA256` (already the 0.7.2 value) | `a09b9441…` | `4f2104af…` |
+| Chunk API shape (not a hash; runtime `ChunkUtil`: BITS 5, SIZE 32, HEIGHT 320, chunk range -2^26..2^26-1) | `worldgen/ChunkApiContract` | equal (javap on the 0.7.2 server jar) | equal |
+
+The first two rows changed on 2026-10-19. The block-affordance row also differs by line, but its Java pin
+already held the 0.7.2 value. The Python pins that differ by line are keyed by
+`server_profile().certified_version`: `hytalegym/worldgen/native_npc_traces.py` (the actor-evidence pin;
+the observation contract follows it) and `tests/jax/combat/observation/v3/native/test_native_actor_evidence.py`
+(the Java source it reads). The block-affordance pin was already keyed.
+
+Rule: the 0.7.2 plugin pins the 0.7.2 host values. A Java pin that the host compares is set to the value the
+host computes under 0.7.2, and the 0.5.7 value stays in a comment beside it with the date. The 0.5 plugin
+(`../hytale-plugin`) is not changed. The bridge's own jar hash (`bridge_jar_sha256` in
+`hytalegym/hytalegym/server_versions/v0_7.py`) is a separate pin and is re-pinned after the final build.
+
 ## Outside this folder
 
 Done (see `TRAINING-0.7.2.md`): `hytalegym/hytalegym/server_versions/` keys the
