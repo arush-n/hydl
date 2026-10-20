@@ -33,12 +33,16 @@ port's own document (the model is PORT-0.7.2.md, "What 0.7.2 changed, and how th
 
 ## 2. Wire numbering
 
-- `NativeInteractionTypes.WIRE_TYPES` keeps the 0.5 numbering: 25 names at indices 0 to 24. Wire messages, evidence
-  and masks use it. 0.7.2 inserted `Ability4` at 5 and shifted `Use` through `GameModeSwap` in the server enum; the
-  bridge keeps the 0.5 indices (the class header comment).
+- `NativeInteractionTypes.WIRE_TYPES` keeps the 0.5 numbering at indices 0 to 24. Wire messages, evidence and masks
+  use it. 0.7.2 inserted `Ability4` at 5 and shifted `Use` through `GameModeSwap` up by one in the server enum; the
+  bridge does not follow that order. It appends `Ability4` (25), `OnBreak` (26) and `OnBreakImpact` (27), so the wire
+  table has 28 entries on 0.7.2 and 25 on 0.5 (the class header comment). The trigger capacity is
+  `NativeItemInteractionEvidence.TRIGGER_CAPACITY` (28 on 0.7.2).
 - A new constant travels by name. The crossbow reload was requested as `Ability4` by name, and
-  `InteractionType.valueOf` resolves it. The 25-entry wire table and the Python `INTERACTION_TYPE_NAMES` did not change
-  (commit 9f12f0d).
+  `InteractionType.valueOf` resolves it (commit 9f12f0d, which first kept the 25-entry table). The Python
+  `INTERACTION_TYPE_NAMES` and `NATIVE_ITEM_TRIGGER_CAPACITY` (`hytalegym/worldgen/native_interactions/`) are keyed by
+  `server_profile().certified_version`: 25 and 25 on 0.5, 28 and 28 on 0.7.2. Gen-5 contract shas and rollout
+  fingerprints do not move.
 
 ## 3. Components a new server adds to players
 
