@@ -22,15 +22,22 @@ import com.hypixel.hytale.server.core.inventory.container.CombinedItemContainer;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.entity.entities.player.windows
     .MaterialExtraResourcesSection;
+import com.hypixel.hytale.server.core.modules.block.BlockModule;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.chunk.section.BlockComponentSection;
 import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hytalerlbridge.action.NativeWorldVerbRequest;
+import com.hytalerlbridge.nativebackend.NativeCraftingOracleLedger.AugmentVerdict;
 import com.hytalerlbridge.nativebackend.support.NativeWorldAccess;
 import com.hytalerlbridge.nativebackend.worldactions.capture.NativeFieldcraftLegality;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
+import org.joml.Vector3i;
 
 /**
  * Native CraftingManager adapter for an opt-in headless Adventure context.
@@ -106,7 +113,8 @@ final class NativeHeadlessCrafting {
                     recipe.getBenchRequirement(),
                     BenchType.Crafting,
                     "Fieldcraft",
-                    0
+                    0,
+                    () -> List.of()
                 )
             ) {
                 return StartResult.rejected(
@@ -133,7 +141,13 @@ final class NativeHeadlessCrafting {
                     recipe.getBenchRequirement(),
                     bench.benchAsset().getType(),
                     bench.benchAsset().getId(),
-                    bench.benchBlock().getTierLevel()
+                    bench.benchBlock().getTierLevel(),
+                    () -> grantedAugmentTags(
+                        world,
+                        request.benchX(),
+                        request.benchY(),
+                        request.benchZ()
+                    )
                 )
             ) {
                 return StartResult.rejected(
@@ -347,15 +361,19 @@ final class NativeHeadlessCrafting {
 
     /**
      * Mirrors CraftingManager.isValidBenchForRecipe's resolved bench
-     * predicate. The native manager repeats this check during execution; this
-     * preflight keeps rejection typed and guarantees that no inventory work
-     * begins for a mismatched request context.
+     * predicate: a requirement matches on type, id and tier, and the bench
+     * grants each of its requiredAugmentTags. The granted tags are read only
+     * when a matching requirement names tags, as the native check reads them.
+     * The native manager repeats this check during execution; this preflight
+     * keeps rejection typed and guarantees that no inventory work begins for a
+     * mismatched request context.
      */
     static boolean matchesBenchRequirements(
         BenchRequirement[] requirements,
         BenchType benchType,
         String benchId,
-        int benchTier
+        int benchTier,
+        Supplier<? extends Collection<String>> grantedAugmentTags
     ) {
         if (
             requirements == null
@@ -371,11 +389,103 @@ final class NativeHeadlessCrafting {
                     && requirement.type == benchType
                     && benchId.equals(requirement.id)
                     && requirement.requiredTierLevel <= benchTier
+                    && augmentTagsGranted(requirement, grantedAugmentTags)
             ) {
                 return true;
             }
         }
         return false;
+    }
+
+    /**
+     * The augment verdict for one craft at a bench, over the requirements that
+     * match its type, id and tier (the native check reaches the augment clause
+     * only for those). It is admitted when a matching requirement has every tag
+     * granted and reports that requirement; otherwise it reports the first
+     * matching requirement and the tags the bench does not grant. Null when no
+     * requirement matches.
+     */
+    static AugmentVerdict augmentVerdict(
+        BenchRequirement[] requirements,
+        int benchType,
+        String benchId,
+        int benchTier,
+        Collection<String> granted
+    ) {
+        if (requirements == null || benchId == null || benchTier < 0) {
+            return null;
+        }
+        AugmentVerdict first = null;
+        for (BenchRequirement requirement : requirements) {
+            if (
+                requirement == null
+                    || requirement.type == null
+                    || requirement.type.ordinal() != benchType
+                    || !benchId.equals(requirement.id)
+                    || requirement.requiredTierLevel > benchTier
+            ) {
+                continue;
+            }
+            List<String> required = requiredAugmentTags(requirement);
+            List<String> missing = required.stream()
+                .filter(tag -> !granted.contains(tag))
+                .toList();
+            AugmentVerdict candidate = new AugmentVerdict(
+                missing.isEmpty(),
+                required,
+                missing
+            );
+            if (candidate.admitted()) {
+                return candidate;
+            }
+            if (first == null) {
+                first = candidate;
+            }
+        }
+        return first;
+    }
+
+    /**
+     * The bench's granted augment tags, sorted: the BenchBlock set after the
+     * refresh from the AugmentBlocks near it, which getBenchGrantedAugmentTags
+     * runs before it reads the set. Empty when the position holds no BenchBlock.
+     */
+    static List<String> grantedAugmentTags(World world, int x, int y, int z) {
+        Ref<ChunkStore> reference = BlockModule.getBlockEntity(world, x, y, z);
+        if (reference == null || !reference.isValid()) {
+            return List.of();
+        }
+        Store<ChunkStore> chunkStore = world.getChunkStore().getStore();
+        BenchBlock bench = chunkStore.getComponent(
+            reference,
+            BenchBlock.getComponentType()
+        );
+        if (bench == null) {
+            return List.of();
+        }
+        BenchBlock.refreshGrantedAugmentTags(
+            chunkStore,
+            reference,
+            new Vector3i(x, y, z)
+        );
+        return bench.getGrantedAugmentTags().stream().sorted().toList();
+    }
+
+    private static boolean augmentTagsGranted(
+        BenchRequirement requirement,
+        Supplier<? extends Collection<String>> grantedAugmentTags
+    ) {
+        List<String> required = requiredAugmentTags(requirement);
+        return required.isEmpty()
+            || grantedAugmentTags.get().containsAll(required);
+    }
+
+    private static List<String> requiredAugmentTags(
+        BenchRequirement requirement
+    ) {
+        return requirement.requiredAugmentTags == null
+            ? List.of()
+            : Arrays.asList(requirement.requiredAugmentTags);
     }
 
     /** The bench window open in the actor's WindowManager at the request's bench, or null. */

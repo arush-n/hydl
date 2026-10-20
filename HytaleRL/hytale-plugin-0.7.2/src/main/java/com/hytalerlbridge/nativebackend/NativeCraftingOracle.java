@@ -9,6 +9,7 @@ import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.bench.Bench;
+import com.hypixel.hytale.server.core.asset.type.item.config.CraftingRecipe;
 import com.hypixel.hytale.server.core.inventory.InventoryComponent;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
@@ -82,17 +83,24 @@ final class NativeCraftingOracle {
             )
             : null;
         List<Slot> before = actorSlots(actor, store);
-        return new NativeCraftingOracle(
-            new NativeCraftingOracleLedger(
-                request.recipeId(),
-                request.craftingContext(),
-                bench,
-                requestedTick,
-                before
-            ),
-            actor,
-            store
+        NativeCraftingOracleLedger ledger = new NativeCraftingOracleLedger(
+            request.recipeId(),
+            request.craftingContext(),
+            bench,
+            requestedTick,
+            before
         );
+        CraftingRecipe recipe = bench == null ? null : NativeHeadlessCrafting.recipe(request.recipeId());
+        if (recipe != null) {
+            ledger.augmentVerdict(NativeHeadlessCrafting.augmentVerdict(
+                recipe.getBenchRequirement(),
+                bench.type(),
+                bench.benchId(),
+                bench.tier(),
+                bench.augmentTags()
+            ));
+        }
+        return new NativeCraftingOracle(ledger, actor, store);
     }
 
     void refuse(String reason, long tick) {
@@ -450,6 +458,7 @@ final class NativeCraftingOracle {
         info.put("native_crafting_bench_x", bench.x());
         info.put("native_crafting_bench_y", bench.y());
         info.put("native_crafting_bench_z", bench.z());
+        info.put("native_crafting_bench_augment_tags", bench.augmentTags());
     }
 
     /**
@@ -534,14 +543,23 @@ final class NativeCraftingOracle {
     static BenchReadout readBench(World world, int x, int y, int z) {
         BlockType block = NativeWorldAccess.getBlockType(world, x, y, z);
         if (block == null) {
-            return new BenchReadout("", "", -1, -1, x, y, z);
+            return new BenchReadout("", "", -1, -1, x, y, z, List.of());
         }
         Bench asset = block.getBench();
         String benchId = asset == null ? "" : asset.getId();
         int type = asset == null ? -1 : asset.getType().ordinal();
         BenchBlock component = benchComponent(world, x, y, z);
         int tier = component == null ? -1 : component.getTierLevel();
-        return new BenchReadout(block.getId(), benchId, type, tier, x, y, z);
+        return new BenchReadout(
+            block.getId(),
+            benchId,
+            type,
+            tier,
+            x,
+            y,
+            z,
+            NativeHeadlessCrafting.grantedAugmentTags(world, x, y, z)
+        );
     }
 
     static BenchBlock benchComponent(World world, int x, int y, int z) {

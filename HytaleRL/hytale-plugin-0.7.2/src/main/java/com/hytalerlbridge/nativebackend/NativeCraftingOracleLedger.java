@@ -16,7 +16,7 @@ import java.util.Map;
  */
 final class NativeCraftingOracleLedger {
 
-    static final String SCHEMA = "hytalerl_crafting_oracle_v1";
+    static final String SCHEMA = "hytalerl_crafting_oracle_v2";
 
     /** One container slot: the item asset id ("" when empty) and its quantity. */
     record Slot(String container, int slot, String itemId, int quantity) {
@@ -42,8 +42,26 @@ final class NativeCraftingOracleLedger {
         }
     }
 
-    /** The bench a request resolved against; the ids are native asset ids. */
-    record BenchReadout(String blockId, String benchId, int type, int tier, int x, int y, int z) {}
+    /**
+     * The bench a request resolved against; the ids are native asset ids. The augment tags are the bench's
+     * granted set, refreshed from the AugmentBlocks near it, sorted.
+     */
+    record BenchReadout(
+        String blockId,
+        String benchId,
+        int type,
+        int tier,
+        int x,
+        int y,
+        int z,
+        List<String> augmentTags
+    ) {}
+
+    /**
+     * The augment clause of CraftingManager.isValidBenchForRecipe for one craft at a bench: the requirement the
+     * verdict reports, its required tags and the ones the bench does not grant. admitted is true when none is missing.
+     */
+    record AugmentVerdict(boolean admitted, List<String> requiredTags, List<String> missingTags) {}
 
     /** One slot whose item or quantity changed on a tick, with its state before and after. */
     record Change(
@@ -90,6 +108,7 @@ final class NativeCraftingOracleLedger {
     private long firstRemovedTick = -1L;
     private long firstAddedTick = -1L;
     private String extraFields = "";
+    private AugmentVerdict augment;
 
     NativeCraftingOracleLedger(
         String recipeId,
@@ -163,6 +182,11 @@ final class NativeCraftingOracleLedger {
     /** Pre-encoded JSON members, each starting with a comma, appended to the record; empty by default. */
     void extraFields(String members) {
         extraFields = members == null ? "" : members;
+    }
+
+    /** The augment verdict at the bench the request resolved against; null when no requirement matches it. */
+    void augmentVerdict(AugmentVerdict verdict) {
+        augment = verdict;
     }
 
     String status() {
@@ -269,8 +293,12 @@ final class NativeCraftingOracleLedger {
             out.append(",\"x\":").append(bench.x());
             out.append(",\"y\":").append(bench.y());
             out.append(",\"z\":").append(bench.z());
+            out.append(",\"augment_tags\":");
+            appendStrings(out, bench.augmentTags());
             out.append('}');
         }
+        out.append(",\"augment\":");
+        appendAugment(out, augment);
         out.append(",\"first_removed_tick\":").append(firstRemovedTick);
         out.append(",\"first_added_tick\":").append(firstAddedTick);
         out.append(",\"lifecycle\":[");
@@ -335,6 +363,28 @@ final class NativeCraftingOracleLedger {
 
     private static void appendField(StringBuilder out, String name, String value) {
         out.append('"').append(name).append("\":\"").append(escape(value)).append('"');
+    }
+
+    private static void appendAugment(StringBuilder out, AugmentVerdict verdict) {
+        if (verdict == null) {
+            out.append("null");
+            return;
+        }
+        out.append("{\"admitted\":").append(verdict.admitted());
+        out.append(",\"required_tags\":");
+        appendStrings(out, verdict.requiredTags());
+        out.append(",\"missing_tags\":");
+        appendStrings(out, verdict.missingTags());
+        out.append('}');
+    }
+
+    private static void appendStrings(StringBuilder out, List<String> values) {
+        out.append('[');
+        for (int index = 0; index < values.size(); index++) {
+            if (index > 0) out.append(',');
+            out.append('"').append(escape(values.get(index))).append('"');
+        }
+        out.append(']');
     }
 
     static String escape(String value) {

@@ -153,6 +153,45 @@ host computes under 0.7.2, and the 0.5.7 value stays in a comment beside it with
 (`../hytale-plugin`) is not changed. The bridge's own jar hash (`bridge_jar_sha256` in
 `hytalegym/hytalegym/server_versions/v0_7.py`) is a separate pin and is re-pinned after the final build.
 
+## Crafting oracle: granted augment tags and the augment verdict (2026-10-20)
+
+The oracle reads the bench's granted augment tags and reports, for each `craft_recipe` at a bench, the augment
+verdict. The record schema is `hytalerl_crafting_oracle_v2`. The Python reader
+(`hytalegym/worldgen/native_world_actions.py`) reads v2 and still accepts v1 records, which carry no augment fields.
+
+Wire:
+
+- Reset info: `native_crafting_bench_augment_tags`, a list of strings, sorted. It sits beside the other
+  `native_crafting_bench_*` keys and is read after `BenchBlock.refreshGrantedAugmentTags`, the refresh the native
+  check runs before it reads the set.
+- Record: `bench.augment_tags` (the same list, read when the request begins) and `augment`, which is
+  `{"admitted": bool, "required_tags": [...], "missing_tags": [...]}` or `null` when the request names no bench.
+  The verdict covers the recipe's requirements that match the bench's type, id and tier, because the native check
+  reaches the augment clause only for those. It is admitted when one matching requirement has every tag granted,
+  and then reports that requirement. Otherwise it reports the first matching requirement and the tags the bench
+  does not grant.
+
+Preflight: `NativeHeadlessCrafting.matchesBenchRequirements` gained the augment clause, so a recipe whose required
+tags the bench does not grant is refused before any inventory work, with `craft_recipe_not_available_at_bench`. The
+native manager refused the same request as `native_crafting_manager_rejected`: `isValidBenchForRecipe` runs before any
+input is removed, in `queueCraft` and in `craftItem`. The outcome is the same (refused, no inventory change);
+only the reason changes, on the production craft path too. The granted tags are read only when a matching
+requirement names tags.
+
+Server API (0.7.2 `HytaleServer.jar`, javap): `protocol.BenchRequirement.requiredAugmentTags` (String[]);
+`BenchBlock.getGrantedAugmentTags()` (Set<String>); `BenchBlock.refreshGrantedAugmentTags(Store, Ref, Vector3i)`
+(static, delegates to a refresher that `AugmentBlocksPlugin.setup()` installs). `CraftingManager`'s
+`isValidBenchForRecipe`, `benchHasRequiredAugmentTags` and `getBenchGrantedAugmentTags` are private, so the bridge
+mirrors them.
+
+Open: the refresher is set by a builtin plugin's setup. If it were absent, the refresh would throw in the readout
+and in the native check for a tagged recipe alike. The live run confirms it is set. The bench block for the
+GoblinLab workbench is `GoblinLab_Tinkering_Bench` (its `Bench.Id` is `GoblinLab_Workbench`), from the asset
+file name; the live run confirms the block id.
+
+The bridge jar changes with this build, so `bridge_jar_sha256` in `hytalegym/hytalegym/server_versions/v0_7.py`
+is re-pinned after the final build.
+
 ## Outside this folder
 
 Done (see `TRAINING-0.7.2.md`): `hytalegym/hytalegym/server_versions/` keys the

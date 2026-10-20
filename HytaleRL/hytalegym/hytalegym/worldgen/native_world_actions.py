@@ -245,7 +245,9 @@ def native_world_verb_reset_options(
     return options
 
 
-_CRAFTING_ORACLE_SCHEMA = "hytalerl_crafting_oracle_v1"
+_CRAFTING_ORACLE_SCHEMA_V1 = "hytalerl_crafting_oracle_v1"
+_CRAFTING_ORACLE_SCHEMA = "hytalerl_crafting_oracle_v2"
+_CRAFTING_ORACLE_SCHEMAS = (_CRAFTING_ORACLE_SCHEMA_V1, _CRAFTING_ORACLE_SCHEMA)
 _CRAFTING_ORACLE_STATUSES = ("pending", "finished", "refused", "cancelled")
 _CRAFTING_ORACLE_CONTEXTS = ("bench", "fieldcraft")
 _CRAFTING_ORACLE_EVENT_KINDS = ("reach_out", "second_craft", "damage")
@@ -351,7 +353,11 @@ def _crafting_oracle_event(event: object) -> dict[str, object]:
 
 @dataclass(frozen=True, slots=True)
 class NativeCraftingBenchReadout:
-    """The crafting bench the bridge reports for a crafting-oracle probe."""
+    """The crafting bench the bridge reports for a crafting-oracle probe.
+
+    ``augment_tags`` is the bench's granted augment tags, sorted; None on a bridge that
+    does not report them (the v1 wire).
+    """
 
     block_id: str
     bench_id: str
@@ -360,6 +366,16 @@ class NativeCraftingBenchReadout:
     x: int
     y: int
     z: int
+    augment_tags: tuple[str, ...] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class NativeCraftingAugmentVerdict:
+    """A craft's augment clause at its bench: the tags the matched requirement names, and those the bench does not grant."""
+
+    admitted: bool
+    required_tags: tuple[str, ...]
+    missing_tags: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -423,6 +439,20 @@ def _optional_info_str(info: Mapping[str, object], key: str) -> str | None:
     raise ValueError(f"{key} must be a string")
 
 
+def _str_tuple(value: object, name: str) -> tuple[str, ...]:
+    if not isinstance(value, (list, tuple)) or not all(
+        isinstance(item, str) for item in value
+    ):
+        raise ValueError(f"{name} must be a list of strings")
+    return tuple(value)
+
+
+def _optional_info_str_tuple(
+    info: Mapping[str, object], key: str
+) -> tuple[str, ...] | None:
+    return None if info.get(key) is None else _str_tuple(info[key], key)
+
+
 def _crafting_bench(info: Mapping[str, object]) -> NativeCraftingBenchReadout | None:
     block_id = _optional_info_str(info, "native_crafting_bench_block_id")
     if block_id is None:
@@ -438,6 +468,9 @@ def _crafting_bench(info: Mapping[str, object]) -> NativeCraftingBenchReadout | 
         x=_integer(info, "native_crafting_bench_x"),
         y=_integer(info, "native_crafting_bench_y"),
         z=_integer(info, "native_crafting_bench_z"),
+        augment_tags=_optional_info_str_tuple(
+            info, "native_crafting_bench_augment_tags"
+        ),
     )
 
 
@@ -450,11 +483,48 @@ def _crafting_oracle_records(text: str | None) -> tuple[dict[str, object], ...]:
     ):
         raise ValueError("native_craft_oracle_records_json must be a list of objects")
     for record in parsed:
-        if record.get("schema") != _CRAFTING_ORACLE_SCHEMA:
+        if record.get("schema") not in _CRAFTING_ORACLE_SCHEMAS:
             raise ValueError("crafting oracle record has an unexpected schema")
         if record.get("status") not in _CRAFTING_ORACLE_STATUSES:
             raise ValueError("crafting oracle record has an unexpected status")
+        if record["schema"] == _CRAFTING_ORACLE_SCHEMA:
+            _check_augment_members(record)
     return tuple(dict(record) for record in parsed)
+
+
+def _check_augment_members(record: Mapping[str, object]) -> None:
+    """A v2 record names its augment verdict (null when the request names no bench) and its bench's granted tags."""
+
+    if "augment" not in record:
+        raise ValueError("crafting oracle v2 record has no augment member")
+    crafting_augment_verdict(record)
+    bench = record.get("bench")
+    if isinstance(bench, Mapping):
+        _str_tuple(bench.get("augment_tags"), "bench augment_tags")
+
+
+def crafting_augment_verdict(
+    record: Mapping[str, object],
+) -> NativeCraftingAugmentVerdict | None:
+    """The augment verdict of one crafting-oracle record; None on the v1 wire and for a request with no bench."""
+
+    raw = record.get("augment")
+    if record.get("schema") == _CRAFTING_ORACLE_SCHEMA_V1 or raw is None:
+        return None
+    if not isinstance(raw, Mapping):
+        raise ValueError("crafting oracle augment must be an object or null")
+    admitted = raw.get("admitted")
+    required = _str_tuple(raw.get("required_tags"), "augment required_tags")
+    missing = _str_tuple(raw.get("missing_tags"), "augment missing_tags")
+    if (
+        not isinstance(admitted, bool)
+        or admitted != (not missing)
+        or not set(missing) <= set(required)
+    ):
+        raise ValueError("crafting oracle augment verdict is inconsistent")
+    return NativeCraftingAugmentVerdict(
+        admitted=admitted, required_tags=required, missing_tags=missing
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -2495,6 +2565,7 @@ __all__ = [
     "NATIVE_SYNTHETIC_WORLD_INTERACTION_VERSION",
     "NATIVE_SYNTHETIC_WORLD_INTERACTION_VERBS",
     "NativeBlockUseEvidence",
+    "NativeCraftingAugmentVerdict",
     "NativeCraftingBenchReadout",
     "NativeCraftingOracleReadout",
     "NativeSyntheticWorldInteractionEvidence",
@@ -2505,6 +2576,7 @@ __all__ = [
     "NativeWorldVerbRequest",
     "NativeWorldVerbTransportSession",
     "NativeWorldVerbTelemetry",
+    "crafting_augment_verdict",
     "native_block_use_evidence_contract",
     "native_block_use_evidence_contract_sha256",
     "native_crafting_oracle_reset_options",
