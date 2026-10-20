@@ -59,7 +59,10 @@ SHOT_HOLD_SECONDS: float = 0.2
 whose authored charge threshold (0.1, 0.3, 0.6, 0.9, 1.2 s for the 0.5.7 iron shortbow) is at most the hold, and a hold
 below the first threshold is tier 0. 0.2 s selects tier 0, the quick shot (the arrow spawns at tick 9), and would also
 under the two spawn-tick readings that were in play before the contract pinned the mapping (tiers from 0.41 s at 0.045 s
-a tick, or from 0.3 s at 30 ticks a second), since it sits below their first tier. The body is not built yet."""
+a tick, or from 0.3 s at 30 ticks a second), since it sits below their first tier. The body is not built yet. Provisional
+(task #105): gen 7 authors 1, 2, 4, 7, 19 damage for the tiers (0.5.7: 6, 9, 12, 16, 19), so tier 0 is a 1-damage arrow
+there; the hold moves to the tier the skill layer's per-tier damage-per-second and hit-rate measurement favours (the full
+1.2 s draw expected), and the thresholds are confirmed on both lines by the sim's adapter (shortbow_tiers)."""
 AVOID_PRIORITY: float = EVADER_PRIORITY
 SHOT_PRIORITY: float = COMBAT_PHASE_PRIORITY
 HIDE_PRIORITY: float = 0.3
