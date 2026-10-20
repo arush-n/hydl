@@ -38,6 +38,8 @@ import jax
 FLAT_PURSUIT: str = "flat_pursuit"
 COMBAT_BASELINE: str = "combat_baseline"
 COMBAT_OPEN_FLAT: str = "combat_open_flat"
+#: The legal view sector of the combat arena: 120 degrees, as the certified legal observation uses (2026-10-19).
+COMBAT_OPEN_FLAT_VIEW_SECTOR_RADIANS: float = 2.0943951023931953
 #: The arena names that :func:`build_arena` accepts.
 ARENA_NAMES: tuple[str, ...] = (FLAT_PURSUIT, COMBAT_BASELINE, COMBAT_OPEN_FLAT)
 #: The AgentKit name this module registers for the open-flat combat scene, the
@@ -212,6 +214,7 @@ def _combat_open_flat(batch: int, ticks: int, seed: int) -> BuiltArena:
     from adk.runtime.scenes import OPEN_FLAT_CONTROL_SCENE, JaxScene
     from hytalegym.jax.combat import arsenal_runtime_config, hytale_0_5_7_loadouts
     from hytalegym.jax.combat.types import AGENT_ENTITY, TARGET_ENTITY
+    from hytalegym.jax.combat.arsenal.environment import open_flat_arsenal_world_capabilities
 
     kit = AgentKit()
     spec = AgentSpec(name=COMBAT_OPEN_FLAT_AGENT, scene=COMBAT_OPEN_FLAT_LEGAL_SCENE)
@@ -220,12 +223,34 @@ def _combat_open_flat(batch: int, ticks: int, seed: int) -> BuiltArena:
     # adk's build() takes a scene's runtime_config over the default one (env_adapter.py).
     # Scenes live on the kit instance while agent names are process-wide, so the scene is
     # registered on every fresh kit (register_scene is idempotent for an identical scene).
+    def _open_flat_legal_capabilities(state, params, *, config=None):
+        # The legal-observation terms the entity-row gate reads (environment.py, the two-entity path): the
+        # opponent beyond the sensor range is blanked, and the view sector is 120 degrees, so a target behind
+        # the agent is not perceived (the skill layer's acceptance of perception_v2, 2026-10-19, found the
+        # arena line-of-sight only). The open-flat fixture otherwise stays the permissive control.
+        capabilities = open_flat_arsenal_world_capabilities(
+            state, params, config=config, legal_observation_sensor_range=True
+        )
+        if "view_sector_full_angle_radians" in getattr(capabilities, "_fields", ()):
+            import jax.numpy as jnp
+
+            sector = jnp.full_like(
+                capabilities.view_sector_full_angle_radians, COMBAT_OPEN_FLAT_VIEW_SECTOR_RADIANS
+            )
+            capabilities = capabilities._replace(view_sector_full_angle_radians=sector)
+        return capabilities
+
     legal_scene = JaxScene(
         name=COMBAT_OPEN_FLAT_LEGAL_SCENE,
         contract_sha256=hashlib.sha256(
-            f"{OPEN_FLAT_CONTROL_SCENE.contract_sha256}:legal_observation=true".encode("ascii")
+            f"{OPEN_FLAT_CONTROL_SCENE.contract_sha256}:legal_observation=true"
+            f":view_sector_full_angle_radians={COMBAT_OPEN_FLAT_VIEW_SECTOR_RADIANS!r}"
+            ":legal_observation_sensor_range=true".encode("ascii")
         ).hexdigest(),
-        environment_kwargs=OPEN_FLAT_CONTROL_SCENE.environment_kwargs,
+        environment_kwargs={
+            **OPEN_FLAT_CONTROL_SCENE.environment_kwargs,
+            "world_capability_provider": _open_flat_legal_capabilities,
+        },
         runtime_config=arsenal_runtime_config(
             hytale_0_5_7_loadouts([spec.loadout] * batch), legal_observation=True
         ),
@@ -248,6 +273,8 @@ def _combat_open_flat(batch: int, ticks: int, seed: int) -> BuiltArena:
         "scene": handle.spec.scene,
         "base_scene": COMBAT_OPEN_FLAT_SCENE,
         "legal_observation": True,
+        "view_sector_full_angle_radians": COMBAT_OPEN_FLAT_VIEW_SECTOR_RADIANS,
+        "legal_observation_sensor_range": True,
         "loadout": handle.spec.loadout,
         "batch": batch,
         "seed": seed,
