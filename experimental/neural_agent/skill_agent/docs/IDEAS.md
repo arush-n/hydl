@@ -242,6 +242,17 @@ charge tiers and costs (`BUILD.md` section 3.1).
 - **Measuring skill, not damage alone.** Damage dealt per damage taken; hits per swing; punishes and blocks landed;
   the variety of moves used (their entropy); and whether a style beats the opponents it should beat.
 
+**Remembered context, the skill side (2026-10-19 night).** The coordinator ruled the agent's own world position legal
+on gen 7 (`perception_v2` gains `self_position`), and its belief passes the target's last-known world position as
+the request's `position` while the target is unseen.
+- The bodies turn that position into the body frame with the channel's own position and body yaw, so the evader
+  flees it, keep_range holds its band from it and pursuit walks to it. No body strikes or guards what it cannot see.
+- The trained pursuit reached a remembered NPC it never saw within 60 ticks.
+- With nothing known, pursuit turns to search: 18 degrees a tick, so a target behind the view sector comes into it
+  within about 7 ticks.
+- New bodies, under the catalogue names the coordinator registered: `avoid` (retreat beyond a band) and `hide` (to a
+  cover point, else retreat).
+
 ## A proposed order, if approved (architecture only; training stays paused)
 
 **The owner's picks (2026-10-19 night):** build first the skills' reports (idea 8) and the guerrilla proof (idea 5);

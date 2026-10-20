@@ -1,21 +1,30 @@
 """Scripted bodies (2026-10-19; owner: scripted first, neural later): the skill layer's own bodies for the decision
 layer's combat verbs and for ``evader`` and ``idle``, so no stand-in skill acts.
 
-Each body is pure JAX over the batch: ``body(observation, mask, ticks, scalars) -> factors int32[B, 12]``, with its
-request's scalar arguments ``scalars`` float32[B, PARAM_WIDTH] in its contract's ``param_names`` order. It reads only
-the legal observation (the target's entity row, in the body frame, and its attack phase) and the action mask, sets the
-heads of its verb's scopes, leaves every other head neutral, and replaces any choice the mask forbids with the neutral
-one. The target is the entity in row 0, the decision layer's convention (``TARGET_ENTITY``). Wind-up and recovery are
-the observation's attack phases ``windup`` and ``recovery`` (``contract/surface.py``, ``ATTACK_PHASES``), the signals
-the decision layer's combat program reads too.
+Each body is pure JAX over the batch: ``body(observation, mask, ticks, scalars, position=None) -> factors
+int32[B, 12]``, with its request's scalar arguments ``scalars`` float32[B, PARAM_WIDTH] in its contract's
+``param_names`` order and its request's world ``position`` (``Position``). It reads only the legal observation (the
+target's entity row, in the body frame, and its attack phase) and the action mask, sets the heads of its verb's
+scopes, leaves every other head neutral, and replaces any choice the mask forbids with the neutral one. The target is
+the entity in row 0, the decision layer's convention (``TARGET_ENTITY``). Wind-up and recovery are the observation's
+attack phases ``windup`` and ``recovery`` (``contract/surface.py``, ``ATTACK_PHASES``), the signals the decision
+layer's combat program reads too.
+
+A target out of sight is remembered: when the row is unseen and the request carries a position (the decision layer
+passes the target's last-known world position, 2026-10-19 night), ``target`` turns it into the body frame with the
+perception channel's own position and body yaw (``perception_v2``: ``self_position``, ``body_yaw_sin``,
+``body_yaw_cos``; gen 7). It is then ``known`` but not ``seen``: a body can move toward it or away from it, and no
+body strikes or guards what it cannot see.
 
 | Verb | Scopes | What it does |
 |---|---|---|
-| ``evader`` | locomotion, hands | turns away from the target and runs; sprints once facing away |
+| ``evader`` | locomotion, hands | turns away from the target, seen or remembered, and runs; sprints once facing away |
 | ``sword`` | hands, abilities_magic | presses the weapon's first ability (its primary attack; in the gym a weapon attacks through its ability slots) while the target is within reach (3.5 blocks) and within 60 degrees of the body's front; ``hold_seconds`` is accepted, and charged holds are not built yet |
 | ``guard`` | posture_defence | guards while the target winds up within 5 blocks |
 | ``punish`` | hands, abilities_magic | the same strike, only while the target is in its recovery |
-| ``keep_range`` | locomotion | holds the band ``band_min`` to ``band_max`` blocks (``band_max`` defaults to one block more): runs in when farther, walks out when nearer, faces the target |
+| ``keep_range`` | locomotion | holds the band ``band_min`` to ``band_max`` blocks (``band_max`` defaults to one block more) from the target, seen or remembered: runs in when farther, walks out when nearer, faces the target |
+| ``avoid`` | locomotion | retreats from the target, seen or remembered, until beyond the band (``band_min``, ``band_max``; ``AVOID_BAND_BLOCKS`` when the request names none): sprints inside the near edge, runs inside the far edge, beyond it holds and faces the target |
+| ``hide`` | locomotion | with a cover point in its request (``position``), runs to it, sneaks the last blocks and stops there; with none, retreats from the threat as ``avoid`` does (cover found from the geometry comes with the cover arena) |
 | ``idle`` | none | every head neutral |
 
 Conventions (``neural_skills/walk_to/teacher.py``): a target at bearing ``b`` degrees, positive to the right, is
@@ -44,7 +53,7 @@ from hytalegym.jax.combat.observation.v3.policy import (
 )
 from hytalegym.jax.combat.observation.v3.policy.layout import neutral_arsenal_policy_action_factors
 from hytalegym.jax.combat.observation.v3.policy.look_deltas import encode_look_delta
-from hytalegym.jax.combat.types import GAIT_RUN, GAIT_SPRINT, GAIT_WALK
+from hytalegym.jax.combat.types import GAIT_RUN, GAIT_SNEAK, GAIT_SPRINT, GAIT_WALK
 
 REACH_BLOCKS = 3.5
 """The strike's reach in blocks, centre to centre, less a 0.2 margin: the iron sword's first ability hit a still
@@ -65,8 +74,16 @@ _FLOAT = {name: index for index, name in enumerate(ENTITY_FLOAT_FEATURES)}
 _INTEGER = {name: index for index, name in enumerate(ENTITY_INTEGER_FEATURES)}
 
 
+class Position(NamedTuple):
+    """A request's world position (the game's frame) and whether the request carries one."""
+
+    world: jax.Array  # float32[B, 3]
+    present: jax.Array  # bool[B]
+
+
 class Target(NamedTuple):
-    """The target as the observation publishes it: body-frame blocks, bearing in degrees (positive right)."""
+    """The target in the body frame: blocks, bearing in degrees (positive right). ``seen``: its row is published;
+    ``known``: seen, or remembered from the request's position."""
 
     forward: jax.Array
     right: jax.Array
@@ -74,17 +91,42 @@ class Target(NamedTuple):
     bearing: jax.Array
     seen: jax.Array
     phase: jax.Array
+    known: jax.Array
 
 
-def target(observation: Any) -> Target:
-    """The target's row 0 of the learner observation."""
+def body_frame(observation: Any, world: jax.Array) -> tuple[jax.Array, jax.Array, bool]:
+    """A world point [B, 3] as (forward, right) blocks in the body frame, from the perception channel's own position
+    and body yaw; the frame is the gym's (forward = (-sin yaw, 0, -cos yaw), right = (cos yaw, 0, -sin yaw)). The flag
+    is False, and both zero, when the observation carries no ``self_position``."""
+
+    channel = getattr(observation, "perception_v2", None)
+    if channel is None or not hasattr(channel, "self_position"):
+        zero = jnp.zeros(observation.base.entity_mask.shape[0], jnp.float32)
+        return zero, zero, False
+    yaw = jnp.arctan2(channel.body_yaw_sin, channel.body_yaw_cos)
+    offset = jnp.asarray(world, jnp.float32) - jnp.asarray(channel.self_position, jnp.float32)
+    return (-offset[:, 0] * jnp.sin(yaw) - offset[:, 2] * jnp.cos(yaw),
+            offset[:, 0] * jnp.cos(yaw) - offset[:, 2] * jnp.sin(yaw), True)
+
+
+def target(observation: Any, position: Position | None = None) -> Target:
+    """The target's row 0 of the learner observation; while the row is unseen, the request's remembered position
+    (module docstring)."""
 
     row = observation.base.entity_f32[:, 0]
     forward = row[:, _FLOAT["relative_forward"]] * NEARBY_ENTITY_RADIUS_BLOCKS
     right = row[:, _FLOAT["relative_right"]] * NEARBY_ENTITY_RADIUS_BLOCKS
-    return Target(forward, right, jnp.hypot(forward, right), jnp.rad2deg(jnp.arctan2(right, forward)),
-                  observation.base.entity_mask[:, 0].astype(jnp.bool_),
-                  observation.base.entity_i32[:, 0, _INTEGER["attack_phase"]])
+    seen = observation.base.entity_mask[:, 0].astype(jnp.bool_)
+    known = seen
+    if position is not None:
+        remembered_forward, remembered_right, available = body_frame(observation, position.world)
+        if available:
+            remembered = ~seen & jnp.asarray(position.present, jnp.bool_)
+            forward = jnp.where(remembered, remembered_forward, forward)
+            right = jnp.where(remembered, remembered_right, right)
+            known = seen | remembered
+    return Target(forward, right, jnp.hypot(forward, right), jnp.rad2deg(jnp.arctan2(right, forward)), seen,
+                  observation.base.entity_i32[:, 0, _INTEGER["attack_phase"]], known)
 
 
 def legal(factors: jax.Array, mask: jax.Array) -> jax.Array:
@@ -113,20 +155,29 @@ def _set(neutral: jax.Array, head: str, value: jax.Array, where: jax.Array) -> j
     return neutral.at[:, HEAD[head]].set(jnp.where(where, value, neutral[:, HEAD[head]]).astype(jnp.int32))
 
 
-def idle(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array) -> jax.Array:
+def idle(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array,
+         position: Position | None = None) -> jax.Array:
     return neutral_arsenal_policy_action_factors(observation.base.entity_mask.shape[0])
 
 
-def evader(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array) -> jax.Array:
-    seen = target(observation)
-    away = seen.bearing + jnp.where(seen.bearing > 0.0, -180.0, 180.0)  # the bearing directly away
+def _flee(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array, threat: Target, flee: jax.Array,
+          fast: jax.Array) -> jax.Array:
+    """Run directly away from ``threat`` where ``flee``: sprinting (where ``fast``) once facing away, else running in
+    the away sector; the body turns away."""
+
+    away = threat.bearing + jnp.where(threat.bearing > 0.0, -180.0, 180.0)  # the bearing directly away
     facing = jnp.abs(away) <= 22.5
-    gait = jnp.where(facing, GAIT_SPRINT, GAIT_RUN)
+    gait = jnp.where(facing & fast, GAIT_SPRINT, GAIT_RUN)
     direction = jnp.where(facing, 1, _direction(away))
     factors = idle(observation, mask, ticks, scalars)
-    factors = _set(factors, "locomotion_gait_compass", (gait - 1) * COMPASS_DIRECTIONS + direction, seen.seen)
-    factors = _set(factors, "body_yaw_delta_bins", _turn(away), seen.seen)
-    return legal(factors, mask)
+    factors = _set(factors, "locomotion_gait_compass", (gait - 1) * COMPASS_DIRECTIONS + direction, flee)
+    return _set(factors, "body_yaw_delta_bins", _turn(away), flee)
+
+
+def evader(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array,
+           position: Position | None = None) -> jax.Array:
+    threat = target(observation, position)
+    return legal(_flee(observation, mask, ticks, scalars, threat, threat.known, threat.known), mask)
 
 
 def _strike(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array, when: jax.Array) -> jax.Array:
@@ -136,36 +187,77 @@ def _strike(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Ar
                       ready), mask)
 
 
-def sword(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array) -> jax.Array:
+def sword(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array,
+          position: Position | None = None) -> jax.Array:
     return _strike(observation, mask, ticks, scalars, jnp.ones(observation.base.entity_mask.shape[0], jnp.bool_))
 
 
-def punish(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array) -> jax.Array:
+def punish(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array,
+           position: Position | None = None) -> jax.Array:
     return _strike(observation, mask, ticks, scalars, target(observation).phase == RECOVERY)
 
 
-def guard(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array) -> jax.Array:
+def guard(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array,
+          position: Position | None = None) -> jax.Array:
     seen = target(observation)
     on = seen.seen & (seen.phase == WINDUP) & (seen.distance <= GUARD_RANGE_BLOCKS)
     return legal(_set(idle(observation, mask, ticks, scalars), "guard_off_on", jnp.int32(1), on), mask)
 
 
-def keep_range(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array) -> jax.Array:
-    seen = target(observation)
+def keep_range(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array,
+               position: Position | None = None) -> jax.Array:
+    seen = target(observation, position)
     near = scalars[:, 0]
     far = jnp.where(scalars[:, 1] > near, scalars[:, 1], near + 1.0)
-    closing, opening = seen.seen & (seen.distance > far), seen.seen & (seen.distance < near)
+    closing, opening = seen.known & (seen.distance > far), seen.known & (seen.distance < near)
     away = seen.bearing + jnp.where(seen.bearing > 0.0, -180.0, 180.0)
     locomotion = jnp.where(closing, (GAIT_RUN - 1) * COMPASS_DIRECTIONS + _direction(seen.bearing),
                            (GAIT_WALK - 1) * COMPASS_DIRECTIONS + _direction(away))
     factors = idle(observation, mask, ticks, scalars)
     factors = _set(factors, "locomotion_gait_compass", locomotion, closing | opening)
-    factors = _set(factors, "body_yaw_delta_bins", _turn(seen.bearing), seen.seen)
+    factors = _set(factors, "body_yaw_delta_bins", _turn(seen.bearing), seen.known)
     return legal(factors, mask)
 
 
+AVOID_BAND_BLOCKS = (6.0, 10.0)
+"""``avoid``'s band (near, far) in blocks when its request names none."""
+HIDE_ARRIVED_BLOCKS = 0.5
+"""``hide`` stops within this distance of its cover point."""
+HIDE_SNEAK_BLOCKS = 3.0
+"""``hide`` sneaks the last blocks to its cover point, and runs before them."""
+
+
+def avoid(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array,
+          position: Position | None = None) -> jax.Array:
+    threat = target(observation, position)
+    near = jnp.where(scalars[:, 0] > 0.0, scalars[:, 0], AVOID_BAND_BLOCKS[0])
+    far = jnp.where(scalars[:, 1] > near, scalars[:, 1], jnp.maximum(near, AVOID_BAND_BLOCKS[1]))
+    retreat = threat.known & (threat.distance < far)
+    factors = _flee(observation, mask, ticks, scalars, threat, retreat, threat.distance < near)
+    factors = _set(factors, "body_yaw_delta_bins", _turn(threat.bearing), threat.known & ~retreat)
+    return legal(factors, mask)
+
+
+def hide(observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array,
+         position: Position | None = None) -> jax.Array:
+    fallback = avoid(observation, mask, ticks, scalars, None)
+    if position is None:
+        return fallback
+    forward, right, available = body_frame(observation, position.world)
+    if not available:
+        return fallback
+    distance, bearing = jnp.hypot(forward, right), jnp.rad2deg(jnp.arctan2(right, forward))
+    has_point = jnp.asarray(position.present, jnp.bool_)
+    moving = has_point & (distance > HIDE_ARRIVED_BLOCKS)
+    gait = jnp.where(distance > HIDE_SNEAK_BLOCKS, GAIT_RUN, GAIT_SNEAK)
+    factors = idle(observation, mask, ticks, scalars)
+    factors = _set(factors, "locomotion_gait_compass", (gait - 1) * COMPASS_DIRECTIONS + _direction(bearing), moving)
+    factors = _set(factors, "body_yaw_delta_bins", _turn(bearing), moving)
+    return legal(jnp.where(has_point[:, None], factors, fallback), mask)
+
+
 BODIES = {"idle": idle, "evader": evader, "sword": sword, "guard": guard, "punish": punish,
-          "keep_range": keep_range}
+          "keep_range": keep_range, "avoid": avoid, "hide": hide}
 """Verb -> scripted body."""
 
 FACING_ME_DEGREES = 60.0
@@ -194,5 +286,6 @@ def reports(observation: Any, factors: jax.Array, neutral: jax.Array) -> jax.Arr
 
 assert HEAD["locomotion_gait_compass"] == LOCOMOTION_HEAD and HEAD["body_yaw_delta_bins"] == BODY_YAW_HEAD
 
-__all__ = ["BODIES", "FACING_ME_DEGREES", "REPORTS", "Target", "evader", "guard", "idle", "keep_range", "legal",
+__all__ = ["AVOID_BAND_BLOCKS", "BODIES", "FACING_ME_DEGREES", "HIDE_ARRIVED_BLOCKS", "HIDE_SNEAK_BLOCKS", "REPORTS",
+           "Position", "Target", "avoid", "body_frame", "evader", "guard", "hide", "idle", "keep_range", "legal",
            "punish", "reports", "sword", "target"]

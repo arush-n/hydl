@@ -46,6 +46,9 @@ from experimental.neural_agent.skill_agent.model.generalist import GeneralistCon
 from experimental.neural_agent.skill_agent.model.observation_adapter import legal_tokens
 from experimental.neural_agent.skill_agent.neural_skills.look_at.task import LOOK_TOLERANCE_DEGREES, LookAtGoals
 from experimental.neural_agent.skill_agent.neural_skills.walk_to.task import WalkToGoals
+from experimental.neural_agent.skill_agent.runtime.scripted_bodies import MAXIMUM_TURN_DEGREES, YAW_BINS
+from experimental.neural_agent.skill_agent.runtime.scripted_bodies import legal as legal_choices
+from experimental.neural_agent.skill_agent.teaching.teachers import BODY_YAW_HEAD
 from experimental.neural_agent.skill_agent.tasks.simple_tasks import AGENT_EYE_HEIGHT
 from experimental.neural_agent.skill_agent.training import distill
 from experimental.neural_agent.skill_agent.training.blocks import load_params
@@ -60,9 +63,14 @@ from hytalegym.jax.combat.observation.v1.schema.contract import (
     ENTITY_FLOAT_FEATURES,
     SELF_FLOAT_FEATURES,
 )
+from hytalegym.jax.combat.observation.v3.policy.look_deltas import encode_look_delta
 from hytalegym.jax.combat.types import GAIT_RUN
 
 PURSUIT_SKILL_ID = "pursuit"
+SEARCH_TURN_DEGREES = 45.0
+"""With the target neither seen nor remembered, the body-yaw head asks for this turn each tick (its largest step).
+Measured on the flat world: the simulator turns the body 18 degrees a tick, so a full look around takes 20 ticks
+(0.9 s) and a target behind the 120-degree view sector comes into it within about 7."""
 RUN_DIR = Path(__file__).resolve().parents[4] / "agent_skills/training_runs/skill_agent_a2/a2cp_6x128x2000_9b9169e"
 """The A2 C' run (``docs/LEDGER.md``, 2026-10-19): its ``params.npz`` and ``report.json``."""
 RADIUS_BLOCKS = 0.5
@@ -108,17 +116,29 @@ def body_yaw(observation: Any) -> jax.Array:
 
 
 def pursuit_factors(params: dict, observation: Any, legal: jax.Array, ticks: jax.Array, *, encoder: EncoderConfig,
-                    generalist: GeneralistConfig) -> jax.Array:
+                    generalist: GeneralistConfig, position: Any = None) -> jax.Array:
     """The skill's factors int32[B, 12] for one tick, from the learner observation, the legal mask bool[B, 124]
-    (the runtime mask inside the scope) and the ticks since the skill was entered, int32[B]."""
+    (the runtime mask inside the scope) and the ticks since the skill was entered, int32[B].
+
+    With the perception channel (gen 7) the body yaw is the channel's. While the target is unseen and the request
+    carries its remembered world ``position`` (``scripted_bodies.Position``), the network walks to that point and looks
+    at it; with nothing known, the body turns to search (``SEARCH_TURN_DEGREES`` per tick)."""
 
     row = observation.base.self_f32
     head_yaw = jnp.rad2deg(jnp.arctan2(row[:, _SELF["yaw_sin"]], row[:, _SELF["yaw_cos"]]))
     head_pitch = row[:, _SELF["pitch"]] * 90.0  # the observation publishes pitch / 90
-    yaw = body_yaw(observation)
+    channel = getattr(observation, "perception_v2", None)
+    yaw = (body_yaw(observation) if channel is None
+           else jnp.rad2deg(jnp.arctan2(channel.body_yaw_sin, channel.body_yaw_cos)))
     tokens = legal_tokens(observation, capacities=CAPACITIES, body_yaw_degrees=yaw)
     entity, seen = tokens["entity"][0][:, 0, _FORWARD:_FORWARD + 3], tokens["entity"][1][:, 0]
     target = _world(entity, yaw)
+    known = seen
+    if position is not None and channel is not None and hasattr(channel, "self_position"):
+        remembered = ~seen & jnp.asarray(position.present, jnp.bool_)
+        offset = jnp.asarray(position.world, jnp.float32) - jnp.asarray(channel.self_position, jnp.float32)
+        target = jnp.where(remembered[:, None], offset, target)
+        known = seen | remembered
     batch = target.shape[0]
     walk = WalkToGoals(target_xz=target[:, (0, 2)], radius=jnp.full((batch,), RADIUS_BLOCKS, jnp.float32),
                        gait=jnp.full((batch,), GAIT_RUN, jnp.int32), horizon_ticks=jnp.full((batch,), _HORIZON))
@@ -126,11 +146,15 @@ def pursuit_factors(params: dict, observation: Any, legal: jax.Array, ticks: jax
                        tolerance_degrees=jnp.full((batch,), LOOK_TOLERANCE_DEGREES, jnp.float32),
                        horizon_ticks=jnp.full((batch,), _HORIZON))
     episode = distill.make_episodes(walk, look, jnp.full((batch,), distill.BOTH, jnp.int32), yaw)
-    episode = episode._replace(walk_active=seen, look_active=seen)
+    episode = episode._replace(walk_active=known, look_active=known)
     age = ticks.astype(jnp.float32)[:, None]  # per lane: each lane entered the skill on its own tick
     requests = distill.build_requests(episode, jnp.zeros((batch, 3), jnp.float32), yaw, age, head_yaw,
                                       head_pitch, look_direction=True, look_frame="head")
-    return distill.student_factors(params, legal, tokens, requests, seen, seen, encoder, generalist)
+    factors = distill.student_factors(params, legal, tokens, requests, known, known, encoder, generalist)
+    search = encode_look_delta(jnp.full((batch,), -SEARCH_TURN_DEGREES, jnp.float32), YAW_BINS,
+                               maximum_degrees=MAXIMUM_TURN_DEGREES)
+    searched = factors.at[:, BODY_YAW_HEAD].set(jnp.where(known, factors[:, BODY_YAW_HEAD], search))
+    return legal_choices(searched, legal)
 
 
 class NeuralPursuitSkill:
@@ -146,12 +170,13 @@ class NeuralPursuitSkill:
 
         return jnp.zeros((validate_batch(batch), SKILL_STATE_WIDTH), dtype=jnp.float32)
 
-    def body(self, observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array | None = None) -> jax.Array:
+    def body(self, observation: Any, mask: jax.Array, ticks: jax.Array, scalars: jax.Array | None = None,
+             position: Any = None) -> jax.Array:
         """The skill as an array body (``granted_actor.py``): factors int32[B, 12] from the learner observation, the
         flat action mask bool[B, 124] (restricted here to the scope) and the ticks since its grant, int32[B]; pursuit
         takes no scalar arguments."""
 
-        return self._act(observation, self._scope.restrict(jnp.asarray(mask, dtype=jnp.bool_)), ticks)
+        return self._act(observation, self._scope.restrict(jnp.asarray(mask, dtype=jnp.bool_)), ticks, position)
 
     def __call__(self, state: jax.Array, belief: SharedBeliefState, actor_input: ActorPolicyInput, params: jax.Array,
                  key: jax.Array) -> tuple[jax.Array, jax.Array]:
@@ -192,10 +217,10 @@ def load_neural_pursuit(run_dir: Path = RUN_DIR) -> NeuralPursuitSkill:
         maximum_duration_seconds=10.0,
         emergency_events=("DAMAGE_RECEIVED", "TARGET_DIED", "NPC_STUCK"),
     )
-    act = jax.jit(lambda observation, legal, ticks: pursuit_factors(params, observation, legal, ticks,
-                                                                    encoder=encoder, generalist=generalist))
+    act = jax.jit(lambda observation, legal, ticks, position=None: pursuit_factors(
+        params, observation, legal, ticks, encoder=encoder, generalist=generalist, position=position))
     return NeuralPursuitSkill(contract, act, scope)
 
 
-__all__ = ["PURSUIT_SKILL_ID", "RUN_DIR", "NeuralPursuitSkill", "body_yaw", "load_neural_pursuit", "pursuit_factors",
-           "run_configs"]
+__all__ = ["PURSUIT_SKILL_ID", "RUN_DIR", "SEARCH_TURN_DEGREES", "NeuralPursuitSkill", "body_yaw", "load_neural_pursuit",
+           "pursuit_factors", "run_configs"]

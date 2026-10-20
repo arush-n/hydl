@@ -28,12 +28,13 @@ import jax.numpy as jnp
 from adk.architecture.components import ActorDecision
 from experimental.neural_agent.skill_agent.contract.surface import SCOPE_NAMES, scope_of
 from experimental.neural_agent.skill_agent.runtime.combiner import ActiveRequestTable, BodyStep, CombinedStep
-from experimental.neural_agent.skill_agent.runtime.scripted_bodies import BODIES, idle
+from experimental.neural_agent.skill_agent.runtime.scripted_bodies import BODIES, Position, idle
 from experimental.neural_agent.skill_agent.runtime.scripted_bodies import reports as body_reports
 from hytalegym.jax.combat.observation.v3.policy import ARSENAL_POLICY_ACTION_HEAD_NAMES
 
-ArrayBody = Callable[[Any, jax.Array, jax.Array, jax.Array], jax.Array]
-"""``body(observation, mask bool[B, 124], ticks int32[B], scalars float32[B, PARAM_WIDTH]) -> factors int32[B, 12]``;
+ArrayBody = Callable[[Any, jax.Array, jax.Array, jax.Array, Position], jax.Array]
+"""``body(observation, mask bool[B, 124], ticks int32[B], scalars float32[B, PARAM_WIDTH], position) -> factors
+int32[B, 12]``; ``position`` is the granted request's world position (``scripted_bodies.Position``);
 ``scalars`` are the granted request's scalar arguments, in its contract's ``param_names`` order."""
 
 HEAD_SCOPES = tuple(SCOPE_NAMES.index(scope_of(name)) for name in ARSENAL_POLICY_ACTION_HEAD_NAMES)
@@ -72,7 +73,8 @@ def _granted(table: ActiveRequestTable, observation: Any, mask: jax.Array,
     for verb, body in enumerate(bodies):
         scope = jnp.argmax(table.verb == verb, axis=1)  # the scope it is granted on (any one: they share a request)
         outputs.append(body(observation, mask, table.ticks_since_grant[lanes, scope].astype(jnp.int32),
-                            table.scalars[lanes, scope]))
+                            table.scalars[lanes, scope],
+                            Position(table.position[lanes, scope], table.position_present[lanes, scope])))
     columns = []
     neutral = idle(observation, mask, table.ticks_since_grant[:, 0], table.scalars[:, 0])
     for head, scope in enumerate(HEAD_SCOPES):
