@@ -1,8 +1,16 @@
-"""Canonical publication stamp for the complete Combat dependency tuple."""
+"""Canonical publication stamp for the complete Combat dependency tuple.
+
+``hytalerl_combat_contract_stamp_v2`` adds the simulator content of the active
+server line. ``generation`` names the simulator generation that the registry
+selects for ``server_profile()`` (``gen5`` for 0.5.7, ``gen7`` for 0.7.2), and
+``identities["content"]`` is that generation's ``CONTENT_SHA256``. Both are read
+at call time, so a content change moves the stamp digest and its directory name.
+"""
 
 from __future__ import annotations
 
 import hashlib
+from importlib import import_module
 import json
 import os
 from pathlib import Path
@@ -32,6 +40,7 @@ from hytalegym.jax.combat.observation.v3.schema.spec import (
 )
 from hytalegym.rulesets import combat_ruleset_sha256
 from hytalegym.server_versions import server_profile
+from hytalegym.sim.common.content.registry import GENERATION_MODULES, sim_profile
 from hytalegym.worldgen.region import current_native_evidence_jar_sha256
 from hytalegym.worldgen.region.recertification import derive_contract_cascade
 
@@ -408,7 +417,11 @@ def combat_contract_stamp(
     *,
     repository_git_sha: str,
 ) -> dict[str, object]:
-    """Join the shared cascade and Combat surface into one immutable stamp."""
+    """Join the shared cascade, Combat surface and simulator content into one stamp.
+
+    ``generation`` and ``identities["content"]`` name the simulator generation the
+    registry selects for the active server line and its CONTENT_SHA256.
+    """
 
     root = Path(repository_root)
     publication = combat_publication_snapshot(
@@ -416,11 +429,14 @@ def combat_contract_stamp(
     )
     bridge = str(publication["identities"]["bridge"])
     cascade = derive_contract_cascade(root, bridge)
+    simulator = sim_profile(server_profile())
+    simulator_module = import_module(GENERATION_MODULES[simulator.release_line])
     identities = {
         "bridge": bridge,
         **cascade["identities"],
         "action_surface": publication["identities"]["action_surface"],
         "combat_ruleset": publication["identities"]["combat_ruleset"],
+        "content": simulator_module.CONTENT_SHA256,
         "learner_observation_v3_actor_evidence": publication["identities"][
             "learner_observation_v3_actor_evidence"
         ],
@@ -429,8 +445,9 @@ def combat_contract_stamp(
         ],
     }
     return {
-        "schema": "hytalerl_combat_contract_stamp_v1",
+        "schema": "hytalerl_combat_contract_stamp_v2",
         "repository_git_sha": repository_git_sha,
+        "generation": simulator.generation,
         "identities": identities,
         "shape": publication["shape"],
         "publication": cascade["publication"],
@@ -578,6 +595,8 @@ def publish_combat_contract_stamp(
                     f"Content address: `{digest}`",
                     f"Repository base: `{repository_git_sha}`",
                     f"Canonical bridge: `{bridge}`",
+                    f"Simulator generation: `{stamp['generation']}`",
+                    f"Simulator content: `{stamp['identities']['content']}`",
                     "",
                     "The publisher verified the explicitly selected built and ",
                     "runtime bridge bytes before and after assembling the three ",

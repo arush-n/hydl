@@ -130,7 +130,8 @@ jar and assets. **Gate:** all 11 pass on 0.7.2.
 - New ruleset bytes change `combat_ruleset_sha256` and `hytale_version`, which
   invalidates every checkpoint through `combat_checkpoint_contract_errors`
   (`B/jax/training/checkpoint.py:72,208`) and `combat_contract_stamp`
-  (`B/jax/combat/contracts/publication.py:406`).
+  (`B/jax/combat/contracts/publication.py:415`). A content change (`CONTENT_SHA256`,
+  `identities.content`) moves the stamp digest; checkpoint metadata does not carry it.
 - Checkpoint lineage (owner decision 2026-10-17): RETRAIN the flat-to-terrain
   lineage on the 0.7.2 simulator; no re-stamped carry-over.
 - Native transfer (`examples/jax_arsenal_native_transfer.py`) exact-current on

@@ -252,10 +252,12 @@ calibrated only when its row passes.
 
 The effective content identity is `hytalegym.sim.common.content.content_sha256(profile)` (gen 5:
 tables plus calibration overlay; gen 7: tables), pinned as `CONTENT_SHA256` in `sim/genN/profile.py`
-(gen 5 `BF735B65...`, gen 7 `FE91CAEF...`; `tests/sim/test_registry.py` fails on drift). It joins `hytale_version` and the ruleset SHA in the
-combat contract stamp (`jax/combat/contracts/publication.py`, `combat_contract_stamp`; that file is
-uncommitted by another session, so the field is not wired yet). A new stamp invalidates every
-checkpoint through `combat_checkpoint_contract_errors`.
+(gen 5 `BF735B65...`, gen 7 `FE91CAEF...`; `tests/sim/test_registry.py` fails on drift). It is wired
+into the combat contract stamp (`jax/combat/contracts/publication.py`, `combat_contract_stamp`,
+schema `hytalerl_combat_contract_stamp_v2`) as `identities.content`, beside the top-level `generation`
+of the active server line. The stamp carries the ruleset SHA (`identities.combat_ruleset`) but not
+`hytale_version`. Checkpoint metadata carries neither the stamp nor `identities.content`, so linking a
+content change to checkpoint validity is not built.
 
 ## 8. Retrain, then flip
 
