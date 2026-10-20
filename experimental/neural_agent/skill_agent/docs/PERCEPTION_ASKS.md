@@ -45,6 +45,7 @@ before any field lands.
 | 5 | accepted, scheduled after certification (2026-10-19) | `entity_held_item_id` (i32; 0 when none or not legally observed) |
 | 6 | accepted, scheduled after certification (2026-10-19) | `fluid_id` per geometry token (i32; visible fluids only) |
 | 7 | answered (2026-10-19) | `weapon_id` is already the held weapon's semantic id (`jax/combat/arsenal/profiles/hytale_0_5_7.py:989`, checked); a held item that is not a weapon comes through `entity_held_item_id`. The adapter can read the held weapon now (a follow-up). |
+| 8 | sent (2026-10-19, owner's yes) | The agent's own body yaw: `body_yaw_sin`, `body_yaw_cos` in the gen-7 channel. Today the self row's yaw is the head's (`v1/runtime/encoder.py:323`) and the body yaw is published nowhere; the trained walk/look network reads it. The agent knows its heading. Until it lands, the gen-5 spine reads it from the environment, a labelled non-legal stopgap. |
 
 ## Already published, and read by the v2 adapter
 
