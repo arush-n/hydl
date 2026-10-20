@@ -10,12 +10,12 @@ are kept to what the mask allows (``scripted_bodies.legal``).
 
 ``mirrored`` places each lane's pair symmetrically under a half turn about the vertical axis through the pair's
 centre: ``distance`` blocks apart on an axis at a random angle, both turned by the same random offset from facing each
-other, at equal health; ``arena`` gives both roles the same maximum health. With the same controller on both bodies, a
-fair arena gives each entity the same chance. The mirror check (L1's gate, restated with the coordinator on 2026-10-20
-because the duel has no built-in AI to reproduce) counts wins and damage per entity and tests both for parity within 2
-standard errors. Each entity waits its own random start delay, drawn from the same distribution for both: in an exact
-mirror the scripted priority swings on the same tick as its twin, each guards the other's wind-up, and no hit lands
-(measured: 0 damage over 300 ticks on 8 lanes).
+other, at equal health; ``arena`` puts both bodies in the same role (``ROLES``) at the same maximum health. With the
+same controller on both bodies, a fair arena gives each entity the same chance. The mirror check (L1's gate, restated
+with the coordinator on 2026-10-20 because the duel has no built-in AI to reproduce) counts wins and damage per entity
+and tests both for parity within 2 standard errors. Each entity waits its own random start delay, drawn from the same
+distribution for both: in an exact mirror the scripted priority swings on the same tick as its twin, each guards the
+other's wind-up, and no hit lands (measured: 0 damage over 300 ticks on 8 lanes).
 
 CLI (the mirror check, one JSON line per weapon; gen 7 through ``../runtime/gen7.py``)::
 
@@ -47,6 +47,12 @@ CENTRE_XZ = (0.5, 0.0)
 """Where each lane's pair is centred."""
 HEALTH = 61.0
 """Both roles' maximum and starting health (the target role's default maximum)."""
+ROLES = ("Trork_Brawler", "Trork_Brawler")
+"""Both bodies play the matchup's target role (the coordinator's ``roles=``, f2f5957), so both slots take the same
+paired fields: box, eye height, speed, turn rate, head limits. In the default matchup (Kweebec_Razorleaf against
+Trork_Brawler) the eye heights and boxes differ and a mirrored pair's first hits land a tick apart (#103b). The
+seat gaps the roles do not close are in the duel step and the engine (#110: slot 1's selector aims with a stale
+target head yaw, #112; the control lock after damage to slot 0 and regeneration on slot 0 only, #108)."""
 
 
 class Context(NamedTuple):
@@ -74,12 +80,13 @@ class Bout(NamedTuple):
     dealt: np.ndarray
 
 
-def arena(batch: int, loadouts: Sequence[str] = ("iron_sword", "iron_sword")) -> Any:
-    """The duel with the open-flat combat arena's legal view sector and the sensor range on, both roles at
-    ``HEALTH`` maximum health."""
+def arena(batch: int, loadouts: Sequence[str] = ("iron_sword", "iron_sword"),
+          roles: tuple[str, str] | None = ROLES) -> Any:
+    """The duel with the open-flat combat arena's legal view sector and the sensor range on, both bodies in
+    ``roles`` (``None``: the matchup's Kweebec against Trork) at ``HEALTH`` maximum health."""
 
     return make_duel_arena(batch, tuple(loadouts), view_sector_full_angle_radians=VIEW_SECTOR_RADIANS,
-                           legal_observation_sensor_range=True, max_health=(HEALTH, HEALTH))
+                           legal_observation_sensor_range=True, max_health=(HEALTH, HEALTH), roles=roles)
 
 
 def mirrored(batch: int, seed: int, *, distance: tuple[float, float] = (3.0, 9.0), offset_degrees: float = 60.0,
@@ -176,8 +183,8 @@ def main(argv: Sequence[str] | None = None) -> None:
                                       delay_ticks=args.delay_ticks)), flush=True)
 
 
-__all__ = ["BODY_Y", "CENTRE_XZ", "HEALTH", "NEVER_DAMAGED", "Bout", "Context", "Controller", "arena", "fight", "main",
-           "mirror_check", "mirrored", "priority"]
+__all__ = ["BODY_Y", "CENTRE_XZ", "HEALTH", "NEVER_DAMAGED", "ROLES", "Bout", "Context", "Controller", "arena", "fight",
+           "main", "mirror_check", "mirrored", "priority"]
 
 
 if __name__ == "__main__":
