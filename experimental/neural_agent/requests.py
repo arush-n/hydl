@@ -75,7 +75,10 @@ release at 30 ticks a second (release_tick = ceil(threshold x 30) + 6: ticks 9, 
 not part of the hold. (Pinned 2026-10-20 after three readings of the tiers were in play; the skill layer confirms or
 objects when it builds the body.) ``avoid`` takes the entity and drives
 locomotion, with the scalars ``band_min`` and ``band_max``: it retreats beyond the band, away from the target. The skill
-layer writes their bodies; ``shortbow`` has none yet (``skill_agent/runtime/scripted_bodies.py``, ``BODIES``).
+layer writes their bodies (``skill_agent/runtime/scripted_bodies.py``, ``BODIES``); its shortbow body landed on 2026-10-20
+(ebf4092): ``hold_seconds`` picks the tier by the mapping above, the head aims through the gaze heads (yaw from the
+head-frame bearing, pitch from the engine's arrow model), and the tier is tapped once both errors are within a degree;
+its catalogue gives shortbow the gaze scope, as this schema does.
 """
 
 from __future__ import annotations
