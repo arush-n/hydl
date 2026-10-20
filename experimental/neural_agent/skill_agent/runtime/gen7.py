@@ -14,9 +14,14 @@ The redirect serves the v3 observation package's legacy module aliases (``world_
 CLI (from the repo root)::
 
     PYTHONPATH=/Users/arush/hydl:/Users/arush/hydl/HytaleRL/hytalegym JAX_PLATFORMS=cpu .venv/bin/python -m \\
-        experimental.neural_agent.skill_agent.runtime.gen7 --engine DIR [--render] -- MODULE_OR_SCRIPT [ARGS...]
+        experimental.neural_agent.skill_agent.runtime.gen7 --engine DIR [--render] [--construct NAME ...] \\
+        -- MODULE_OR_SCRIPT [ARGS...]
 
 ``--render`` (re)renders the gen-7 engine into DIR first (about 10 seconds); without it DIR must hold a render.
+``--construct NAME`` switches one gen-7 construct on in this process only (for example ``perception_v2``, the
+perception channel of ``sim/gen7/PERCEPTION_V2.md``, off by default): the render's hooks read the gen-7 profile when
+the rendered engine is first imported, so the launcher replaces the profile after mounting and before the target runs.
+The shared profile is untouched; switching it is the port coordinator's call.
 """
 
 from __future__ import annotations
@@ -51,16 +56,32 @@ def mount(engine: Path) -> None:
     module.redirect_imports(engine)
 
 
+def switch_on(constructs: Sequence[str]) -> None:
+    """Turn the named gen-7 constructs on in this process; run it after ``mount``, before the engine is imported."""
+
+    if not constructs:
+        return
+    import dataclasses
+
+    from hytalegym.sim.gen7 import profile
+
+    profile.PROFILE = dataclasses.replace(
+        profile.PROFILE, constructs=dataclasses.replace(profile.PROFILE.constructs, **dict.fromkeys(constructs, True)))
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--engine", type=Path, required=True, help="the private render's directory")
     parser.add_argument("--render", action="store_true", help="render the gen-7 engine into --engine first")
+    parser.add_argument("--construct", action="append", default=[], metavar="NAME",
+                        help="switch a gen-7 construct on in this process (repeatable), e.g. perception_v2")
     parser.add_argument("target", help="a module (a.b.c) or a script (path.py) to run as __main__")
     parser.add_argument("args", nargs=argparse.REMAINDER)
     options = parser.parse_args(argv)
     if options.render:
         render(options.engine)
     mount(options.engine)
+    switch_on(options.construct)
     sys.argv = [options.target, *[arg for arg in options.args if arg != "--"]]
     if options.target.endswith(".py"):
         runpy.run_path(options.target, run_name="__main__")
@@ -73,4 +94,4 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 
-__all__ = ["main", "mount", "render"]
+__all__ = ["main", "mount", "render", "switch_on"]

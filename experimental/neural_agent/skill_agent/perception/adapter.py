@@ -7,24 +7,35 @@ mask bool[B, N_t])}`` for ``encoder.trunk_types(TOKEN_SCHEMA_V2)``, the encoder'
 
 Filled today
 ------------
-* ``self``: the v1 self token's features (the v1 adapter's), then the maximum health, ``holds`` and the held item's row
-  at 0: the observation publishes neither the agent's maximum health nor its held item's id (``PERCEPTION_ASKS.md``,
-  ask 7).
+* ``self``: the v1 self token's features (the v1 adapter's), then the maximum health at 0 (unpublished, ask 7), and
+  with registry ``tables`` what the agent holds: ``holds`` and the held item's row, from the observation's
+  ``weapon_i32`` ``weapon_id`` of the agent's row (the held weapon's semantic id); without them both stay 0.
 * ``entity``: every published nearby-entity row, up to the capacity (the observation carries 16; slots above that stay
   invalid until ask 3): the position in blocks and the velocity in the body frame, visible, last-seen age 0 (the
   observation has no memory), health, alive, its facing relative to the body (its world yaw, published as sine and
-  cosine, minus the body yaw), its attack phase and progress. Its role is not published (ask 1), so ``known``, its
-  attitude, ``player``, the health ratio, its kind's row and description stay 0, and what it holds is ``unknown``
-  (ask 5).
-* ``block_candidate``, ``inventory_slot``, ``geometry``, ``kit``: invalid. The observation carries no block candidates
-  (ask 4) and no inventory (ask 2); geometry and kit stay as the v1 adapter leaves them.
+  cosine, minus the body yaw), its attack phase and progress. Without the perception channel its kind, role and held
+  item are not published (asks 1 and 5), so ``known``, its attitude, ``player``, its kind's row and description stay 0
+  and what it holds is ``unknown``. The health ratio stays 0: it needs the agent's maximum health (ask 7).
+* ``block_candidate``, ``geometry``, ``kit``: invalid. The observation carries no block candidates (ask 4); geometry
+  and kit stay as the v1 adapter leaves them. ``inventory_slot``: invalid without the perception channel.
 
-Ready for the asks
-------------------
+The gen-7 perception channel
+----------------------------
+When the observation carries ``perception_v2`` (the gen-7 render with the construct on, ``runtime/gen7.py --construct
+perception_v2``; ``HytaleRL/hytalegym/hytalegym/sim/gen7/PERCEPTION_V2.md``), the adapter also reads it:
+
+* ``entity``: ``player`` from the row's kind; what it holds from its held item id: ``nothing`` for an id of 0 or
+  below, ``unknown`` for an id the registry does not hold, else the first of the item's categories (block, tool,
+  weapon, armor, consumable) or ``other``; and for a role id the registry holds, ``known``, the role's attitude toward
+  players, its kind's row and description. Only rows the observation publishes (``base.entity_mask``) take any of it.
+* ``inventory_slot``: the agent's items, present tokens first in the channel's order (container, then slot), up to
+  the capacity: container, slot, quantity, durability and ``held`` (the active slot), and with ``tables`` ``known``,
+  the item's row and description.
+* the body yaw, from the channel's sine and cosine, when the caller passes none.
+
 ``registry_tables`` puts the registry on the device keyed by semantic id (the gym's ``semantic_id``: 31-bit FNV-1a of
 the asset id, the scheme the observation's item ids use); ``lookup`` maps ids to table rows inside ``jit``, row 0 being
-the unknown row of zeros; ``tool_relations`` compares the agent's tools with block candidates. When an ask lands, the
-adapter reads the new field and gathers its rows.
+the unknown row of zeros; ``tool_relations`` compares the agent's tools with block candidates.
 """
 
 from __future__ import annotations
@@ -38,12 +49,15 @@ import numpy as np
 
 from experimental.neural_agent.skill_agent.contract.surface import (
     ATTACK_PHASES,
+    ATTITUDES,
     BLOCK_PROPERTIES,
+    CONTAINERS,
     CREATURE_PROPERTIES,
     DESCRIPTION_WIDTH,
     ITEM_PROPERTIES,
     TOKEN_SCHEMA_V2,
     EntityTokenV2,
+    InventorySlotTokenV2,
     SelfTokenV2,
 )
 from experimental.neural_agent.skill_agent.model import observation_adapter
@@ -55,11 +69,23 @@ from hytalegym.jax.combat.observation.v1.schema.contract import (
     ENTITY_INTEGER_FEATURES,
     NEARBY_ENTITY_RADIUS_BLOCKS,
 )
+from hytalegym.jax.combat.observation.v3.schema.contract import WEAPON_INTEGER_FEATURES
 from hytalegym.jax.combat.observation.v3.schema.types import LearnerCombatObservationV3
+from hytalegym.jax.combat.observation.v3.tokens.inventory import INVENTORY_POLICY_FLOAT_FEATURES
+from hytalegym.jax.combat.types import AGENT_ENTITY
+
+PLAYER_KIND = 2
+"""The perception channel's kind of a player-backed entity (``PERCEPTION_V2.md`` section 2: 0 none, 1 NPC)."""
+
+HELD_CATEGORIES = ("block", "tool", "weapon", "armor", "consumable")
+"""The item categories an entity's ``held_*`` features name, in the order the first one an item has is taken."""
 
 _FLOAT = {name: index for index, name in enumerate(ENTITY_FLOAT_FEATURES)}
 _INTEGER = {name: index for index, name in enumerate(ENTITY_INTEGER_FEATURES)}
 _ENTITY = {name: index for index, name in enumerate(EntityTokenV2.FEATURES)}
+_SELF = {name: index for index, name in enumerate(SelfTokenV2.FEATURES)}
+_INVENTORY = {name: index for index, name in enumerate(InventorySlotTokenV2.FEATURES)}
+_INVENTORY_FLOAT = {name: index for index, name in enumerate(INVENTORY_POLICY_FLOAT_FEATURES)}
 _V1_SELF_ONLY = {name: 1 if name in ("entity", "self") else 0 for name, _ in TRUNK_TYPES}
 
 
@@ -190,26 +216,35 @@ def legal_tokens_v2(
     observation: LearnerCombatObservationV3,
     *,
     capacities: Mapping[str, int],
-    body_yaw_degrees: jax.Array,
+    body_yaw_degrees: jax.Array | None = None,
+    tables: RegistryTables | None = None,
 ) -> dict[str, tuple[jax.Array, jax.Array]]:
     """Build the ``skill_tokens_v2`` token sets of B agents from their legal observation.
 
     Args:
-        observation: The learner observation of ``ArsenalEnvironment.step``. It is never the simulator state.
+        observation: The learner observation of ``ArsenalEnvironment.step``. It is never the simulator state. With
+            ``perception_v2`` (the gen-7 perception channel) its fields fill more (module docstring).
         capacities: Slots per token type; must name every type of ``trunk_types(TOKEN_SCHEMA_V2)``. ``entity`` and
             ``self`` need at least one slot.
-        body_yaw_degrees: float32[B], each agent's body yaw in degrees (the observation does not publish it).
+        body_yaw_degrees: float32[B], each agent's body yaw in degrees; None takes it from the perception channel.
+        tables: From ``registry_tables``: the rows of the published ids. None leaves every registry row unknown.
 
     Returns:
         ``{type: (features float32[B, N_t, F_t], mask bool[B, N_t])}`` in the encoder's layout.
 
     Raises:
-        ValueError: If ``entity`` or ``self`` has no slot, or ``body_yaw_degrees`` is not shaped (B,).
+        ValueError: If ``entity`` or ``self`` has no slot, ``body_yaw_degrees`` is not shaped (B,), or it is None and
+            the observation carries no perception channel.
     """
 
     for name in ("entity", "self"):
         if capacities[name] < 1:
             raise ValueError(f"capacities[{name!r}] must be at least 1, got {capacities[name]}")
+    channel = getattr(observation, "perception_v2", None)
+    if body_yaw_degrees is None:
+        if channel is None:
+            raise ValueError("body_yaw_degrees is required: the observation carries no perception_v2 channel")
+        body_yaw_degrees = jnp.rad2deg(jnp.arctan2(channel.body_yaw_sin, channel.body_yaw_cos))
     v1 = observation_adapter.legal_tokens(observation, capacities=_V1_SELF_ONLY, body_yaw_degrees=body_yaw_degrees)
     v1_self = v1["self"][0][:, 0, :]
     batch = v1_self.shape[0]
@@ -219,17 +254,81 @@ def legal_tokens_v2(
         features = jnp.zeros((batch, capacity, len(cls.FEATURES)), dtype=jnp.float32)
         mask = jnp.zeros((batch, capacity), dtype=jnp.bool_)
         if name == "self":
-            # v1's features but its last (marked), then the maximum health, holds and the held row, all unpublished.
+            # v1's features but its last (marked), then the maximum health (unpublished), holds and the held row.
             features = features.at[:, 0, :v1_self.shape[1] - 1].set(v1_self[:, :-1])
-            features = features.at[:, 0, SelfTokenV2.FEATURES.index("marked")].set(v1_self[:, -1])
+            features = features.at[:, 0, _SELF["marked"]].set(v1_self[:, -1])
+            if tables is not None:
+                row, holds = lookup(tables.item_keys, tables.item_rows,
+                                    observation.weapon_i32[:, AGENT_ENTITY, WEAPON_INTEGER_FEATURES.index("weapon_id")])
+                start = _SELF["holds"] + 1
+                features = features.at[:, 0, _SELF["holds"]].set(holds.astype(jnp.float32))
+                features = features.at[:, 0, start:start + len(ITEM_PROPERTIES)].set(tables.item_features[row])
             mask = mask.at[:, 0].set(True)
         elif name == "entity":
             count = min(capacity, observation.base.entity_f32.shape[1])
             rows, present = _entity_rows(observation.base, jnp.asarray(body_yaw_degrees, jnp.float32), count)
+            if channel is not None:
+                rows = _entity_content(rows, present, channel, tables, count)
+            features = features.at[:, :count, :].set(rows)
+            mask = mask.at[:, :count].set(present)
+        elif name == "inventory_slot" and channel is not None and capacity > 0:
+            rows, present = _inventory_rows(channel, tables, capacity)
+            count = rows.shape[1]
             features = features.at[:, :count, :].set(rows)
             mask = mask.at[:, :count].set(present)
         tokens[name] = (features, mask)
     return tokens
+
+
+def _entity_content(features: jax.Array, present: jax.Array, channel, tables: RegistryTables | None,
+                    count: int) -> jax.Array:
+    """The perception channel's columns (module docstring) set on the first ``count`` entity rows; a row the
+    observation does not publish stays zeros whatever the channel holds."""
+
+    kind = channel.entity_kind[:, :count]
+    held = channel.entity_held_item_id[:, :count]
+    columns = {"player": kind == PLAYER_KIND, "held_nothing": held <= 0, "held_unknown": held > 0}
+    if tables is not None:
+        row, found = lookup(tables.item_keys, tables.item_rows, held)
+        flags = tables.item_features[row][..., [ITEM_PROPERTIES.index(name) for name in HELD_CATEGORIES]] > 0
+        first, known = jnp.argmax(flags, axis=-1), found & (held > 0)
+        columns["held_unknown"] = (held > 0) & ~found
+        columns |= {f"held_{name}": known & flags.any(axis=-1) & (first == index)
+                    for index, name in enumerate(HELD_CATEGORIES)}
+        columns["held_other"] = known & ~flags.any(axis=-1)
+        creature, role_known = lookup(tables.creature_keys, tables.creature_rows, channel.entity_role_id[:, :count])
+        attitude = jnp.where(role_known, tables.attitude_to_player[creature], -1)
+        columns |= {"known": role_known, **{f"attitude_{name}": attitude == index for index, name in enumerate(ATTITUDES)}}
+        properties, descriptions = tables.creature_features[creature], tables.creature_descriptions[creature]
+        columns |= {f"kind_{name}": properties[..., index] for index, name in enumerate(CREATURE_PROPERTIES)}
+        columns |= {f"description_{index}": descriptions[..., index] for index in range(DESCRIPTION_WIDTH)}
+    for name, value in columns.items():
+        features = features.at[..., _ENTITY[name]].set(jnp.where(present, value.astype(jnp.float32), 0.0))
+    return features
+
+
+def _inventory_rows(channel, tables: RegistryTables | None, capacity: int) -> tuple[jax.Array, jax.Array]:
+    """The channel's inventory tokens as ``InventorySlotTokenV2`` features [B, min(capacity, S), F] and their
+    presence: present tokens first, in the channel's order."""
+
+    order = jnp.argsort(~channel.inventory_mask, axis=1, stable=True)[:, :capacity]
+    present = jnp.take_along_axis(channel.inventory_mask, order, axis=1).astype(jnp.bool_)
+    ids = jnp.take_along_axis(channel.inventory_i32, order[..., None], axis=1)
+    floats = jnp.take_along_axis(channel.inventory_f32, order[..., None], axis=1)
+    columns = {f"container_{name}": ids[..., 0] == index for index, name in enumerate(CONTAINERS)}
+    columns |= {"slot_fraction": floats[..., _INVENTORY_FLOAT["container_slot_fraction"]],
+                "quantity": floats[..., _INVENTORY_FLOAT["quantity_log2_fraction"]],
+                "durability": floats[..., _INVENTORY_FLOAT["durability_fraction"]],
+                "held": floats[..., _INVENTORY_FLOAT["active"]]}
+    if tables is not None:
+        row, found = lookup(tables.item_keys, tables.item_rows, ids[..., 2])
+        properties, descriptions = tables.item_features[row], tables.item_descriptions[row]
+        columns |= {"known": found, **{f"item_{name}": properties[..., index] for index, name in enumerate(ITEM_PROPERTIES)}}
+        columns |= {f"description_{index}": descriptions[..., index] for index in range(DESCRIPTION_WIDTH)}
+    features = jnp.zeros((*present.shape, len(InventorySlotTokenV2.FEATURES)), dtype=jnp.float32)
+    for name, value in columns.items():
+        features = features.at[..., _INVENTORY[name]].set(jnp.where(present, value.astype(jnp.float32), 0.0))
+    return features, present
 
 
 def _entity_rows(base, body_yaw_degrees: jax.Array, count: int) -> tuple[jax.Array, jax.Array]:
@@ -263,6 +362,8 @@ def _entity_rows(base, body_yaw_degrees: jax.Array, count: int) -> tuple[jax.Arr
 
 
 __all__ = [
+    "HELD_CATEGORIES",
+    "PLAYER_KIND",
     "RegistryTables",
     "legal_tokens_v2",
     "lookup",

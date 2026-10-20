@@ -38,14 +38,21 @@ before any field lands.
 
 | # | Status | Field, as proposed by the simulator side |
 |---|---|---|
-| 1 | accepted, scheduled after certification (2026-10-19) | `entity_role_id` (i32; 0 for a player); `entity_kind` gains `ENTITY_KIND_PLAYER` |
-| 2 | accepted, scheduled after certification (2026-10-19) | `inventory_i32`, `inventory_f32`: the v3 inventory tokens republished unchanged |
-| 3 | accepted, scheduled after certification (2026-10-19) | `entity_capacity`, a configuration (16 by default, 32 and above), rows padded with id 0 |
-| 4 | accepted, scheduled after certification (2026-10-19) | `block_candidate_i32` rows (cell x, y, z, face, block_id, reachable) and `block_candidate_capacity`, mirroring the bridge's native world-action capture |
-| 5 | accepted, scheduled after certification (2026-10-19) | `entity_held_item_id` (i32; 0 when none or not legally observed) |
-| 6 | accepted, scheduled after certification (2026-10-19) | `fluid_id` per geometry token (i32; visible fluids only) |
-| 7 | answered (2026-10-19) | `weapon_id` is already the held weapon's semantic id (`jax/combat/arsenal/profiles/hytale_0_5_7.py:989`, checked); a held item that is not a weapon comes through `entity_held_item_id`. The adapter can read the held weapon now (a follow-up). |
-| 8 | sent (2026-10-19, owner's yes); low priority since the same day | The agent's own body yaw: `body_yaw_sin`, `body_yaw_cos` in the gen-7 channel. Today the self row's yaw is the head's (`v1/runtime/encoder.py:323`). Found after sending: while the target is visible the body yaw is recoverable from published fields, the head yaw minus (the target's head-frame bearing in the combat prefix minus its body-frame bearing in the entity row), exactly on 960 samples (`runtime/neural_pursuit.py`, `body_yaw`); the spine uses that, so no stopgap reads the environment. The ask still covers the case with no target in view. |
+| 1 | channel built (2026-10-19 night); the role id is a seam | `entity_kind` filled (1 NPC, 2 player; read as `player`); `entity_role_id` is 0 until the runtime keeps role ids (the seam in `PERCEPTION_V2.md` section 6), so `known` waits on it. The adapter resolves a role the registry holds (unit test with a synthetic channel). |
+| 2 | channel built and read (2026-10-19 night) | `inventory_i32`, `inventory_f32`, `inventory_mask`: the adapter's `inventory_slot` tokens. |
+| 3 | channel built as a configuration | `entity_capacity` (16 by default, any C >= 1); rows 1 and up stay 0 until a multi-entity encoder (seam). |
+| 4 | reserved (seam) | `block_candidate_i32` and `block_candidate_capacity`: the engine inputs are named in `PERCEPTION_V2.md` section 6. |
+| 5 | channel built and read (2026-10-19 night) | `entity_held_item_id`. A target without a weapon published -1 in the open-flat arena (its loadout's sentinel); reported, and the coordinator fixed the channel to 0 (with the channel's commit). The adapter reads any id of 0 or below as nothing held. |
+| 6 | reserved (seam) | `fluid_id` per geometry token. |
+| 7 | read (2026-10-19 night) | The agent's row of `weapon_i32` (`weapon_id`) fills the self token's `holds` and the held item's registry row. |
+| 8 | channel built and read (2026-10-19 night) | `body_yaw_sin`, `body_yaw_cos`: the adapter takes the body yaw from them when the caller passes none. |
+
+**2026-10-19 night: the channel is built** (`HytaleRL/hytalegym/hytalegym/sim/gen7/PERCEPTION_V2.md`,
+`sim/gen7/mechanics/perception_v2.py`), opt-in and off in both profiles; `runtime/gen7.py --construct perception_v2`
+switches it on in one process. The gate is the entity row's own (`base.entity_mask`): line of sight, the 24-block
+radius, and the view sector and sensor range only where the arena passes `view_sector_full_angle_radians` and
+`legal_observation_sensor_range=True` to `geometry_arsenal_world_capabilities`. The composition's open-flat arena
+passed neither, so an agent there perceived a target behind it; since ff7ef22 it passes both (a 120-degree sector).
 
 ## Already published, and read by the v2 adapter
 
@@ -59,3 +66,11 @@ and the resource meters, as the v1 adapter reads them.
 The three-world leakage test over the new field (an entity hidden behind a wall, or none, must not change it); the
 adapter's `known` feature turning on; a registry lookup of the published id giving the asset's properties (for
 example, an iron pickaxe in the hotbar gives power 0.25 against iron ore).
+
+Results (2026-10-19 night, `test_sa_perception_v2.py`; a private gen-7 render with the channel on, the gym's wall
+geometry, a 120-degree view sector and the sensor range on): with the target in the open the row is published (kind
+1, held 0, read as nothing held); behind a wall, absent, and behind the agent outside the sector, kind, held item and
+role are 0 in every row and the adapter's entity tokens are all zeros. `known`: blocked on the role seam. The engine's
+own hotbar sword is published as `semantic_id("Weapon_Sword_Iron")` (so the inventory's item ids are the assets'
+semantic ids, which `PERCEPTION_V2.md` section 4 had inferred) and resolves as a known weapon; an iron pickaxe placed in
+hotbar slot 1 is published as `semantic_id("Tool_Pickaxe_Iron")` and gives power 0.25 against `Ore_Iron_Basalt`.
