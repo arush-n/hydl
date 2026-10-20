@@ -224,21 +224,15 @@ def _combat_open_flat(batch: int, ticks: int, seed: int) -> BuiltArena:
     # Scenes live on the kit instance while agent names are process-wide, so the scene is
     # registered on every fresh kit (register_scene is idempotent for an identical scene).
     def _open_flat_legal_capabilities(state, params, *, config=None):
-        # The legal-observation terms the entity-row gate reads (environment.py, the two-entity path): the
-        # opponent beyond the sensor range is blanked, and the view sector is 120 degrees, so a target behind
-        # the agent is not perceived (the skill layer's acceptance of perception_v2, 2026-10-19, found the
-        # arena line-of-sight only). The open-flat fixture otherwise stays the permissive control.
-        capabilities = open_flat_arsenal_world_capabilities(
+        # The sensor-range term of the entity-row gate (environment.py, the two-entity path): the opponent
+        # beyond params.sensor_range is blanked. The view sector is not a capability field; it is the
+        # environment's own argument (view_sector_full_angle_radians, below), read by the gate before the
+        # capabilities are returned, so it is passed through the scene's environment kwargs (the skill
+        # layer's acceptance of perception_v2, 2026-10-19, found the arena line-of-sight only, and its
+        # second probe showed a field replaced here after the fact has no effect).
+        return open_flat_arsenal_world_capabilities(
             state, params, config=config, legal_observation_sensor_range=True
         )
-        if "view_sector_full_angle_radians" in getattr(capabilities, "_fields", ()):
-            import jax.numpy as jnp
-
-            sector = jnp.full_like(
-                capabilities.view_sector_full_angle_radians, COMBAT_OPEN_FLAT_VIEW_SECTOR_RADIANS
-            )
-            capabilities = capabilities._replace(view_sector_full_angle_radians=sector)
-        return capabilities
 
     legal_scene = JaxScene(
         name=COMBAT_OPEN_FLAT_LEGAL_SCENE,
@@ -250,6 +244,8 @@ def _combat_open_flat(batch: int, ticks: int, seed: int) -> BuiltArena:
         environment_kwargs={
             **OPEN_FLAT_CONTROL_SCENE.environment_kwargs,
             "world_capability_provider": _open_flat_legal_capabilities,
+            # 120 degrees: a target behind the agent is not perceived (make_arsenal_environment's own argument).
+            "view_sector_full_angle_radians": COMBAT_OPEN_FLAT_VIEW_SECTOR_RADIANS,
         },
         runtime_config=arsenal_runtime_config(
             hytale_0_5_7_loadouts([spec.loadout] * batch), legal_observation=True
