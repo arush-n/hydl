@@ -1,5 +1,5 @@
 {
- "head": "53a4f415a5d0a4e46bf5ccba24ea40e87ea9d036",
+ "head": "2591899944fa287c3584f791e9d5a83cf95ac80d",
  "redirect_count": 90,
  "redirects": [
   {
@@ -1516,7 +1516,7 @@
     "token": "motion_delta_seconds"
    },
    {
-    "head_line": 3473,
+    "head_line": 3520,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/environment.py",
     "scope": "engine",
@@ -1525,7 +1525,7 @@
     "token": "_motion_delta"
    },
    {
-    "head_line": 3628,
+    "head_line": 3675,
     "kind": "tick_rate_constant",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/environment.py",
     "scope": "engine",
@@ -1534,7 +1534,7 @@
     "token": "server_ticks_per_second"
    },
    {
-    "head_line": 3931,
+    "head_line": 3978,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/environment.py",
     "scope": "engine",
@@ -1543,7 +1543,7 @@
     "token": "_motion_delta"
    },
    {
-    "head_line": 3951,
+    "head_line": 3998,
     "kind": "tick_rate_constant",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/environment.py",
     "scope": "engine",
@@ -4378,7 +4378,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 645,
+    "head_line": 654,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
@@ -4387,7 +4387,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 1029,
+    "head_line": 1038,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
@@ -4396,7 +4396,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 1249,
+    "head_line": 1258,
     "kind": "timing_key",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
@@ -4405,7 +4405,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 1249,
+    "head_line": 1258,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
@@ -4414,7 +4414,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 1316,
+    "head_line": 1325,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
@@ -4423,7 +4423,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 1316,
+    "head_line": 1325,
     "kind": "timing_key",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
