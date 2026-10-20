@@ -20,6 +20,7 @@ from experimental.neural_agent.contracts import (
     SkillControlTable,
     control_table,
 )
+from experimental.neural_agent.requests import COMBAT_CONTRACTS, COMBAT_VERBS
 from experimental.neural_agent.skill_library._common import validate_batch
 from experimental.neural_agent.skill_library.evader import ScriptedEvaderSkill
 from experimental.neural_agent.skill_library.idle import IdleSkill
@@ -121,4 +122,34 @@ def build_default_registry(batch: int) -> SkillRegistry:
     return SkillRegistry((IdleSkill(), load_pursuit_skill(lanes), ScriptedEvaderSkill()))
 
 
-__all__ = ["SkillRegistry", "build_default_registry"]
+class DeclaredVerbSkill(IdleSkill):
+    """A combat verb's catalogue slot: the idle body under the verb's declared contract (2026-10-19).
+
+    Its outputs are the idle body's neutral choices, so the slot never acts in this package. The verb's own body is
+    the skill layer's (``skill_agent/runtime/scripted_bodies.py``, commit 1bd804a).
+    """
+
+    def __init__(self, contract: SkillContract) -> None:
+        self.contract = contract
+
+
+def build_combat_registry(batch: int) -> SkillRegistry:
+    """Return the catalogue of the combat program: idle, pursuit, evader, then the four combat verbs.
+
+    The verbs come from ``COMBAT_CONTRACTS`` in ``COMBAT_VERBS`` order (sword, guard, punish, keep_range), so their
+    dispatcher indexes are 3 to 6. The default three are unchanged, so an arm that does not run the combat program
+    keeps its catalogue.
+
+    Args:
+        batch: Number of lanes B, a positive int (the pursuit loader checks its pinned memory with it).
+
+    Raises:
+        TypeError: If ``batch`` is not an integer.
+        ValueError: If the pinned pursuit files fail their checks.
+    """
+
+    base = build_default_registry(batch)
+    return SkillRegistry((*base.skills, *(DeclaredVerbSkill(COMBAT_CONTRACTS[verb]) for verb in COMBAT_VERBS)))
+
+
+__all__ = ["DeclaredVerbSkill", "SkillRegistry", "build_combat_registry", "build_default_registry"]

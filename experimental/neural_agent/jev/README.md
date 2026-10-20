@@ -10,7 +10,7 @@ names are in brackets (`../eval/arms.py`).
 | File | Lines | What it is |
 |---|---:|---|
 | `scripted.py` | 312 | J0, the scripted rule: pursue; evade on damage within 40 ticks with a 2 s commitment. The baseline every arm is measured against. [`j0`] |
-| `programs.py` | 882 | Behaviour programs: a short series of skill steps with exits (predicate, done, timer), interrupts by priority and resumption (and the combat program `P_COMBAT`, 2026-10-19), executed exactly on the host fast path; it writes `ActionRequest`s into the scratchpad and applies the correspondence rules to the combiner's statuses. [`jprog`, program by `NA_PROGRAM`] |
+| `programs.py` | 882 | Behaviour programs: a short series of skill steps with exits (predicate, done, timer), interrupts by priority and resumption (and the combat program `P_COMBAT`, `PROGRAMS['COMBAT']`, 2026-10-19), executed exactly on the host fast path; it writes `ActionRequest`s into the scratchpad and applies the correspondence rules to the combiner's statuses. [`jprog`, program by `NA_PROGRAM`] |
 | `correspondence.py` | 279 | How the middle layer reacts to the lower layer's status stream: advance, resample a step, raise urgency, drop, ask the LLM (`../docs/SYSTEM_ONE.md` 9.10). |
 | `typed_rule.py` | 285 | The exact typed path: typed conditions (or the legacy constraint labels, or the words through the rule reader) evaluated on the belief, the priority rule as `goal_language.teacher`. Equals the teacher on every decision; J0's rate online. [`jtyped`] |
 | `system_one/` | | J-S1, our own System One decision model, and the reading experiments. Its own `README.md`. [`js1`] |

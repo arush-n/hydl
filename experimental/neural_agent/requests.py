@@ -57,7 +57,8 @@ Combat verbs (2026-10-19). ``sword`` (melee combos), ``guard`` (block on the tar
 the target's recovery) and ``keep_range`` (step out of its reach) take the target entity. Sword and punish drive hands and abilities_magic: a weapon attacks through its
 ability slots, so the strike drives the ability head (the peer's catalogue rule, uncommitted at 2026-10-19).
 Guard drives posture_defence, keep_range drives locomotion. No skill implements them yet, so their contracts are
-declared here (``COMBAT_CONTRACTS``: no scalars, the contract's default control, no checkpoint). ``dodge`` is deferred:
+declared here (``COMBAT_CONTRACTS``: sword takes ``hold_seconds``, keep_range takes ``band_min`` and ``band_max``, the others
+none; the contract's default control; no checkpoint). ``dodge`` is deferred:
 the gen-7 dodge head is still a stub, so a dodge request has no schema here and ``validate`` returns ``verb_unknown``.
 The id ``guard`` is the catalogue's own (section 12, scoped posture_defence by its section, per the skill layer,
 2026-10-19); no rename on either side.
@@ -237,7 +238,8 @@ ARGUMENT_SCHEMAS: Mapping[str, ArgumentSchema] = MappingProxyType(
     }
 )
 """The schemas of the proof-of-concept skills (``skill_library/``) and of the four combat verbs (2026-10-19), keyed
-by skill id. The combat verbs take the target entity. Their scopes match the peer's catalogue parser where it names
+by skill id. The combat verbs take the target entity; their scalars are the ``param_names`` of ``COMBAT_CONTRACTS``, not part of the
+schema. Their scopes match the peer's catalogue parser where it names
 one (``VERB_SCOPES``: keep_range locomotion; it names punish hands, and the strike rule adds abilities_magic, which
 these declarations use for sword and punish). The rule is the peer's ``WEAPON_SECTIONS`` and ``STRIKE_VERBS``,
 uncommitted at 2026-10-19.
@@ -252,7 +254,9 @@ COMBAT_VERBS: tuple[str, ...] = ("sword", "guard", "punish", "keep_range")
 """The combat verbs with a schema here. ``dodge`` is deferred (module docstring)."""
 
 
-def _combat_contract(verb: str, observation_groups: tuple[str, ...], success: str, failure: str) -> SkillContract:
+def _combat_contract(
+    verb: str, observation_groups: tuple[str, ...], success: str, failure: str, scalars: tuple[str, ...] = ()
+) -> SkillContract:
     """Declare one combat verb's contract: no scalars, the contract's default control, no checkpoint.
 
     ``action_scope_sha256`` is a digest of the verb and its declared scopes, not of a learned action scope: no
@@ -265,7 +269,7 @@ def _combat_contract(verb: str, observation_groups: tuple[str, ...], success: st
         version="declared",
         observation_groups=observation_groups,
         action_scope_sha256=digest,
-        param_names=(),
+        param_names=scalars,
         termination=("goal_replaced",),
         success_signals=(success,),
         failure_signals=(failure,),
@@ -275,7 +279,7 @@ def _combat_contract(verb: str, observation_groups: tuple[str, ...], success: st
 
 COMBAT_CONTRACTS: Mapping[str, SkillContract] = MappingProxyType(
     {
-        "sword": _combat_contract("sword", ("belief", "action_mask"), "target_hit", "target_out_of_reach"),
+        "sword": _combat_contract("sword", ("belief", "action_mask"), "target_hit", "target_out_of_reach", ("hold_seconds",)),
         "guard": _combat_contract(
             "guard", ("belief", "target_i32", "action_mask"), "attack_blocked", "target_not_winding_up"
         ),
@@ -283,13 +287,15 @@ COMBAT_CONTRACTS: Mapping[str, SkillContract] = MappingProxyType(
             "punish", ("belief", "target_i32", "action_mask"), "target_hit", "target_out_of_reach"
         ),
         "keep_range": _combat_contract(
-            "keep_range", ("belief", "target_i32", "action_mask"), "distance_kept", "target_not_visible"
+            "keep_range", ("belief", "target_i32", "action_mask"), "distance_kept", "target_not_visible", ("band_min", "band_max")
         ),
     }
 )
 """The declared contracts of the combat verbs, keyed by id. Nothing else in the decision layer or the skill layer
 declares these ids yet (checked 2026-10-19). ``target_i32`` is the legal observation's target integer group, which
-holds ``attack_phase`` and ``attack_index``. The success and failure labels are placeholders for the lower layer."""
+holds ``attack_phase`` and ``attack_index``. The success and failure labels are placeholders for the lower layer.
+Scalars (2026-10-19): sword takes ``hold_seconds`` (the catalogue's section-9 group default), keep_range takes
+``band_min`` and ``band_max`` (the catalogue's section-12 band tactics); punish and guard take none."""
 
 
 # ---- the records ----

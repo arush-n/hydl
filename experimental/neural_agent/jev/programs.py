@@ -139,8 +139,9 @@ code of ``ATTACK_PHASE_CODES`` and only while the target is visible. The belief 
 ten features are ``contracts.BELIEF_FEATURE_NAMES``. The attack index (``target_i32`` ``attack_index``) is not read:
 the phase already names each window, and a rule that fired once per attack would need per-lane memory. Priorities:
 the evader (``EVADER_PRIORITY``, 0.5) above the phase rules (``COMBAT_PHASE_PRIORITY``, 0.4) above ``sword``
-(``SWORD_PRIORITY``, 0.3), so damage always wins. ``P_COMBAT`` needs a catalogue that holds the four verbs, and the
-skill layer implements none of them yet, so it cannot run in a session today.
+(``SWORD_PRIORITY``, 0.3), so damage always wins. ``P_COMBAT`` is ``PROGRAMS['COMBAT']`` (``NA_PROGRAM=COMBAT``, 2026-10-19). It runs on the combat catalogue
+(``skill_library.library.build_combat_registry``) with ``--arms jprog`` alone, which the composition CLI enforces.
+Its scalars: sword's ``hold_seconds`` is 0.0 (a tap), keep_range's band is (3.0, 4.0).
 """
 
 from __future__ import annotations
@@ -180,6 +181,7 @@ from experimental.neural_agent.jev.correspondence import (
 )
 from experimental.neural_agent.requests import (
     ARGUMENT_SCHEMAS,
+    COMBAT_VERBS,
     MODE_INTERRUPT,
     MODE_PARALLEL,
     SCOPES,
@@ -370,11 +372,18 @@ P_COMBAT = Program(
         EVADE_ON_DAMAGE,
         Interrupt("guard", COMBAT_PHASE_PRIORITY, TargetPhase("windup")),
         Interrupt("punish", COMBAT_PHASE_PRIORITY, TargetPhase("recovery", STRIKE_REACH_BLOCKS)),
-        Interrupt("keep_range", COMBAT_PHASE_PRIORITY, TargetPhase("sweep", MELEE_REACH_BLOCKS)),
-        Interrupt("sword", SWORD_PRIORITY, Predicate("distance_below", STRIKE_REACH_BLOCKS)),
+        Interrupt("keep_range", COMBAT_PHASE_PRIORITY, TargetPhase("sweep", MELEE_REACH_BLOCKS), params=(3.0, 4.0)),
+        Interrupt("sword", SWORD_PRIORITY, Predicate("distance_below", STRIKE_REACH_BLOCKS), params=(0.0,)),
     ),
 )
-PROGRAMS: dict[str, Program] = {"J0": P_J0, "SEQ": P_SEQ}
+PROGRAMS: dict[str, Program] = {"J0": P_J0, "SEQ": P_SEQ, "COMBAT": P_COMBAT}
+
+
+def program_uses_combat(program: Program) -> bool:
+    """True when the program names a combat verb (``COMBAT_VERBS``) as a step or an interrupt."""
+
+    verbs = {step.skill_id for step in program.steps} | {interrupt.skill_id for interrupt in program.interrupts}
+    return bool(verbs & set(COMBAT_VERBS))
 
 
 class LaneInformationRequest(NamedTuple):
@@ -982,4 +991,5 @@ __all__ = [
     "TARGET_ENTITY",
     "TICK_COLUMNS",
     "TargetPhase",
+    "program_uses_combat",
 ]

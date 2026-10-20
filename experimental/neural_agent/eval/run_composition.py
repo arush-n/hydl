@@ -38,6 +38,7 @@ import csv
 import dataclasses
 import importlib.util
 import math
+import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -289,10 +290,35 @@ def missing_siblings() -> list[str]:
     return missing
 
 
+def combat_catalogue_needed(arms: Sequence[str]) -> bool:
+    """True when the run's ``jprog`` arm would run a program with combat verbs (``NA_PROGRAM``).
+
+    Only a run that requests ``jprog`` needs the combat catalogue. Every arm of a run shares the run's catalogue, so such
+    a run must be ``--arms jprog`` alone; a stray ``NA_PROGRAM`` leaves the other runs untouched.
+
+    Raises:
+        ValueError: If the program needs the combat catalogue and another arm is requested too.
+    """
+
+    from experimental.neural_agent.eval.arms import PROGRAM_ENV
+    from experimental.neural_agent.jev.programs import PROGRAMS, program_uses_combat
+
+    name = os.environ.get(PROGRAM_ENV, "J0")
+    program = PROGRAMS.get(name)
+    if "jprog" not in arms or program is None or not program_uses_combat(program):
+        return False
+    if tuple(arms) != ("jprog",):
+        raise ValueError(
+            f"{PROGRAM_ENV}={name} needs the combat catalogue, which every arm of a run shares: run --arms jprog alone"
+        )
+    return True
+
+
 def load_context(
     batch: int,
     ticks: int,
     *,
+    combat: bool = False,
     seed: int = 0,
     lm_backend: str = "fake",
     j1_params: str | Path | None = None,
@@ -314,10 +340,10 @@ def load_context(
         ValueError: From :func:`build_arm_context` when the catalogue is not idle-first.
     """
 
-    from experimental.neural_agent.skill_library.library import build_default_registry
+    from experimental.neural_agent.skill_library.library import build_combat_registry, build_default_registry
     from experimental.neural_agent.tasks.composition import CompositionTask
 
-    registry = build_default_registry(batch)
+    registry = build_combat_registry(batch) if combat else build_default_registry(batch)
     task = CompositionTask(tick_budget=ticks)
     skill_ids = tuple(registry.ids)
     ctx = build_arm_context(
@@ -1304,9 +1330,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     if host_arms and args.runner == "compiled":
         sys.stderr.write(host_arm_refusal(host_arms) + "\n")
         return 2
+    try:
+        combat = combat_catalogue_needed(args.arms)
+    except ValueError as error:
+        sys.stderr.write(f"{error}\n")
+        return 2
     ctx, task = load_context(
         args.batch,
         args.ticks,
+        combat=combat,
         seed=args.seed,
         lm_backend=args.lm_backend,
         j1_params=args.j1_params,

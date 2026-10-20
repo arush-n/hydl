@@ -44,7 +44,7 @@ present in this clone).
 | [`jev/system_one/`](jev/system_one/README.md) | J-S1, our own System One model, and the reading experiments (interpret, fine-tune pilot, catalogue matching, decoder readers, the deterministic fallback reader). | `test_na_system_one.py`, `test_na_interpret.py`, `test_na_condition_rules.py`, ... |
 | [`eval/`](eval/README.md) | The composition driver (`run_composition`), the arm registry, metrics, datasets, DAgger relabelling; `out/` (ignored). | `test_na_eval.py`, `test_na_eager_loop.py`, `test_na_record_*.py` |
 | [`tasks/`](tasks/README.md) | The composition task (pursue, evade when damaged, resume) and its arenas. | `test_na_tasks.py`, `test_na_arenas.py` |
-| [`skill_library/`](skill_library/README.md) | Level 1 stand-ins: pursuit, evader, idle, the dispatcher and catalogue. | `test_na_skills.py` |
+| [`skill_library/`](skill_library/README.md) | Level 1 stand-ins: pursuit, evader, idle, the dispatcher and catalogue, and the combat catalogue (`build_combat_registry`, 2026-10-19). | `test_na_skills.py` |
 | [`skill_agent/`](skill_agent/README.md) | The real skill library's build (another session): surface, catalogue parser, protocol, combiner, library, freezing, traces, behaviour cloning. | `test_sa_*.py` |
 | [`probes/`](probes/README.md) | Early measurement scripts; not a build target; `out/` (ignored). | none |
 | [`docs/`](docs/README.md) | Thesis, architecture, formulas, orchestration, references, System One, the middle layer's status, the ledger, the current state. | `test_na_docs.py`, `test_na_docs_folders.py` |
