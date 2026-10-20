@@ -334,3 +334,19 @@ v7 suite line was re-frozen for the new bridge (`493FD07E`, 8a873fa). The combat
 training: the combat program's evade gate (#94), the bridge augment-tag readout (#93), the world-action residuals (#91) and the
 content identity in the contract stamp (#79). The hit-interrupt probes (#69) wait for a quiet machine. #80 (the default flip)
 still needs a gen-7 checkpoint that passes live. Nothing is pushed.
+
+Status at 02:10 on 2026-10-20. The 0.7.2 line is certified modulo training under the bridge `1CB4F651` (the host-contract pins,
+the fixture aim, the augment readout and the request-tick fix): recertification run 10 passed on a quiet machine with the seed
+projection exactly equal (the cross-reset fluid drift is load-driven: 3, 5, 6, 7 cells under load, 0 quiet) and was promoted with
+supersede (receipt `world-evidence-history/1CB4F651/publication-v12.json`); the v7 suite line is `703ED690`; the Combat contract
+stamp v2 (generation and content identity) is published for 0.7.2 at `combat-contract-stamp-e5046b63`. The hit-interrupt Part 1
+measurement is in the fidelity record (eligibility at tick 42 to 43; an eligible hit adds the 0.7 s stun, 0.5 s flinch and 4 s
+reaction A) and its construct is being implemented (#102). For the skill layer: the combat arena's sector reaches the row gate
+(2591899), combat_cover (9046a78), the remembered target position in requests with perception_v2 self_position (f808d3f), the
+gated combat evader (adopted on the referee's numbers), the bow recipe (#97), the duel arena seam for the league (bc69536,
+#101; its health-fraction rescale in progress). Lanes running: combat styles (#100), the guerrilla verbs and program (#99), the
+hit-interrupt construct (#102). Filed for the owner, not applied: the fluid-cell cap (an owner knob; runs now wait for a quiet
+machine), the legal mask's missing inventory term and the silent geometry freeze (engine design gaps found by the bow lane), the
+place feature behind the contract gate (#91), cover at range through the Region geometry route, #80 (the default flip) after a
+gen-7 checkpoint that passes live. Nothing is pushed.
+

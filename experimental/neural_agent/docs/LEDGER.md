@@ -958,3 +958,8 @@ command: tasks/duel_arena.py make_duel_arena(batch, loadouts, view sector, senso
 result: 14 tests pass on disk (per-entity motion; 100 neutral ticks still with the AI off; a sword tap damages entity 1 and both views track it; the sector and sensor range gate both entities; per-entity masks; a 64-tick loop). Gaps: entity 1's health fractions use the other role's maximum in the v1 encoder (strict xfail; adapter rescale in progress); the stock open-flat scene has no geometry window; perception_v2 is a sim-layer construct the adapter does not produce; the sector and range do not change ability legality on this fixture.
 verdict: BUILT; the league's first step has its seam. No training on this side.
 
+## 2026-10-20 — coordinator: recertification run 10 and the promotion under 1CB4F651; v7 703ED690; stamp e5046b63 (b2845be)
+command: run 10 on a quiet machine (1-minute load 3.0 at launch) against the bridge 1CB4F651; promote_world_evidence.py --apply --supersede; the v7 one-command check; publish_combat_contract_stamp at b2845be.
+result: the seed projection matched exactly (zero fluid-only cells; runs 4 to 9 under load gave 3, 5, 6, 7), the capture compare wrote no difference report and the promotion tool now treats an absent report as the exact case; 34 checks, 59 files, the 6EB44F30 evidence superseded; the block-use recording regenerated with the probe's slot selection (the synthetic break executes; the bound place stays closed by the contract gate); v7 re-frozen 493FD07E to 703ED690; the stamp republished (12 publication tests on 0.7.2).
+verdict: the 0.7.2 line is certified modulo training under 1CB4F651. The fluid-cell cap is an owner knob; until it is revisited, recertification runs wait for a quiet machine.
+
