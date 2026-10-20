@@ -325,3 +325,12 @@ release mask, `025ee62` structural crafting (1,168 recipes), `325f938` type 3 on
 The package map is the top-level `README.md`; every folder has a `README.md`; the formulas and citations
 that used to sit in the README are `ORCHESTRATION.md`. The scratchpad became a package (`shared_state/`:
 sections, document, views, writers) on 2026-10-18 with its import path unchanged; no other module moved.
+
+Status at 23:45 on 2026-10-19 (owner: do not wait for training; continue the other work). The 0.7.2 bridge pins the 0.7.2 host
+contracts (b682e33: actor evidence `E93BBEBE`, NPC observation `3D080DE9`; jar pin `6EB44F30`); recertification run 8 passed in
+compare mode against it and was promoted with supersede (receipt `world-evidence-history/6EB44F30/publication-v12.json`); the
+v7 suite line was re-frozen for the new bridge (`493FD07E`, 8a873fa). The combat arena's 120-degree sector reaches the row gate
+(2591899; opt-in keyword on the open-flat fixture, gen 5 bit-identical by default). Lanes launched for the items that need no
+training: the combat program's evade gate (#94), the bridge augment-tag readout (#93), the world-action residuals (#91) and the
+content identity in the contract stamp (#79). The hit-interrupt probes (#69) wait for a quiet machine. #80 (the default flip)
+still needs a gen-7 checkpoint that passes live. Nothing is pushed.
