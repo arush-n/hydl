@@ -102,7 +102,7 @@ DEFAULT_ARMS: tuple[str, ...] = ("flat", "j0", "shuffled")
 DEFAULT_OUT_DIR: Path = Path(__file__).resolve().parent / "out"
 
 #: The names of ``tasks/arenas.py`` ARENA_NAMES, repeated so that ``--help`` needs no sibling.
-ARENA_CHOICES: tuple[str, ...] = ("flat_pursuit", "combat_baseline", "combat_open_flat")  # must match tasks.arenas.ARENA_NAMES
+ARENA_CHOICES: tuple[str, ...] = ("flat_pursuit", "combat_baseline", "combat_open_flat", "combat_cover")  # must match tasks.arenas.ARENA_NAMES
 DEFAULT_ARENA: str = "combat_open_flat"  # the shipped scene where the target is visible and damage occurs
 RUNNER_CHOICES: tuple[str, ...] = ("compiled", "eager")
 DEFAULT_RUNNER: str = "compiled"
@@ -142,6 +142,14 @@ COLUMNS: tuple[str, ...] = (
     "catches",
     "catches_per_episode",
     "damage_events",
+    "lane_ticks",
+    "evader_ticks",
+    "evader_share",
+    "evader_entries",
+    "hp_dealt",
+    "hp_taken",
+    "kills",
+    "deaths",
     "goal_switches_per_lane_run",
     "core_switches_per_lane_run",
     "interrupt_onsets",
@@ -186,6 +194,9 @@ s0                           = 0 with no evade entry; else the first pursuit ent
                                (after the first evade entry if none was triggered); none: no re-engagement  [src: tasks/composition.py reengage_start_tick]
 re-engagements               = completed episodes with a reengaged_tick; the catches columns on the combat arenas  [src: run_composition._score_run]
 damage_events                = sum over completed episodes of the rising edges of DAMAGE_RECEIVED in the episode  [src: metrics.completed_episodes]
+evader_share                 = evader_ticks / lane_ticks;  evader_ticks = lane-ticks whose goal in force is the evader;  evader_entries = its rising edges  [src: run_composition._score_run]
+hp_dealt, hp_taken           = sums over the timed run of the agent's damage dealt and received, absolute HP (arsenal entity counters, row AGENT_ENTITY)  [src: run_composition._score_run]
+kills, deaths                = completed episodes whose last tick is terminated: a kill when the target's health there is <= 0, else a death  [src: run_composition._score_run]
 damage_ticks                 = episode ticks t with DAMAGE_RECEIVED active and known at t  [src: run_composition._score_run]
 pursuit_entry_ticks          = episode ticks t with skill[t] = pursuit and skill[t-1] != pursuit (the first tick counts)  [src: run_composition._score_run]
 goal_switches_per_lane_run   = sum over lane-runs of sum_{t=1}^{T-1} [skill[t] != skill[t-1]] * [goal_valid[t]] / lane_runs  [src: metrics.goal_switches]
@@ -265,6 +276,17 @@ class _Totals:
     #: Episodes that reached the objective: catches, or re-engagements on combat_baseline.
     catches: int = 0
     damage_events: int = 0
+    #: Lane-ticks of the timed run, those whose goal in force was the evader, and the evader's rising edges.
+    lane_ticks: int = 0
+    evader_ticks: int = 0
+    evader_entries: int = 0
+    #: Whether the arena publishes its damage counters (combat arenas). Then the agent's absolute HP dealt and taken,
+    #: and the episodes that ended with a kill (target health at or below 0) or a death.
+    combat_known: bool = False
+    hp_dealt: float = 0.0
+    hp_taken: float = 0.0
+    kills: int = 0
+    deaths: int = 0
     #: Lane-ticks with the re-engagement distance known, and lane-ticks read (combat_baseline).
     distance_known: int = 0
     distance_ticks: int = 0
@@ -449,7 +471,10 @@ def composition_record_fn() -> Callable[[HierarchicalLoopTransition], dict[str, 
     runners record the same keys.
     """
 
+    from hytalegym.jax.combat.types import AGENT_ENTITY
+
     distance_column = feature_index("target_distance_blocks")
+    health_column = feature_index("self_health_fraction")
 
     def record(transition: HierarchicalLoopTransition) -> dict[str, jax.Array]:
         step = transition.hierarchy_step
@@ -461,7 +486,7 @@ def composition_record_fn() -> Callable[[HierarchicalLoopTransition], dict[str, 
             if boundary.split_known
             else _terminated_flag(transition.info)
         )
-        return {
+        records = {
             "active_skill": step.active_goal.payload.skill_index,
             "goal_switched": step.goal_switched,
             "goal_valid": runtime.valid,
@@ -477,7 +502,17 @@ def composition_record_fn() -> Callable[[HierarchicalLoopTransition], dict[str, 
             "reward": transition.reward,
             "target_distance_blocks": belief.features[:, distance_column],
             "target_distance_known": belief.feature_known[:, distance_column],
+            "self_health_fraction": belief.features[:, health_column],
+            "self_health_known": belief.feature_known[:, health_column],
         }
+        arsenal = getattr(transition.info, "arsenal_info", None)
+        combat = getattr(transition.info, "combat_info", None)
+        if arsenal is not None and combat is not None:
+            # The agent's row of the per-entity damage counters (combat/arsenal/runtime.py) and the target's absolute health.
+            records["damage_dealt"] = arsenal.entity_damage_dealt[:, AGENT_ENTITY]
+            records["damage_received"] = arsenal.entity_damage_received[:, AGENT_ENTITY]
+            records["target_health"] = combat.target_health
+        return records
 
     return record
 
@@ -569,6 +604,16 @@ def _score_run(
     )
     composed, composed_loose, pursue_only = _verdict_names()
     skills = np.asarray(host["active_skill"])
+    evading = skills == evader_index
+    rising = np.zeros_like(evading)
+    rising[1:] = evading[:-1]
+    totals.lane_ticks += int(evading.size)
+    totals.evader_ticks += int(np.count_nonzero(evading))
+    totals.evader_entries += int(np.count_nonzero(evading & ~rising))
+    if "damage_received" in host:
+        totals.combat_known = True
+        totals.hp_dealt += float(np.sum(host["damage_dealt"], dtype=np.float64))
+        totals.hp_taken += float(np.sum(host["damage_received"], dtype=np.float64))
     if reengage:
         distance = np.asarray(host["target_distance_blocks"])
         known = np.asarray(host["target_distance_known"])
@@ -598,6 +643,12 @@ def _score_run(
         totals.pursue_only += int(verdict == pursue_only)
         totals.catches += int(metrics["caught"] or metrics.get("reengaged_tick") is not None)
         totals.damage_events += episode["damage_events"]
+        if totals.combat_known and host["terminated"][episode["end"], lane]:
+            # The episode's last tick is a natural ending: the target is down (a kill) or the agent is (a death).
+            if host["target_health"][episode["end"], lane] <= 0.0:
+                totals.kills += 1
+            else:
+                totals.deaths += 1
         totals.episodes.append(
             {"lane": lane, "start": episode["start"], "end": episode["end"], **metrics, "verdict": verdict}
         )
@@ -732,6 +783,14 @@ def _arm_row(
         **metrics,
         "composed_loose": totals.composed_loose,
         "damage_events": totals.damage_events,
+        "lane_ticks": totals.lane_ticks,
+        "evader_ticks": totals.evader_ticks,
+        "evader_share": totals.evader_ticks / totals.lane_ticks if totals.lane_ticks else None,
+        "evader_entries": totals.evader_entries,
+        "hp_dealt": totals.hp_dealt if totals.combat_known else None,
+        "hp_taken": totals.hp_taken if totals.combat_known else None,
+        "kills": totals.kills if totals.combat_known else None,
+        "deaths": totals.deaths if totals.combat_known else None,
         "jev_lane_failures": lane_failures,
     }
 
@@ -1013,18 +1072,23 @@ def _caveats(runs: Sequence[ArmRun], *, arena: str, runner: str) -> list[str]:
             "an episode cannot be composed without an injected damage event.",
         ]
     else:
-        from experimental.neural_agent.tasks.arenas import COMBAT_BASELINE_AGENT, COMBAT_OPEN_FLAT, COMBAT_OPEN_FLAT_SCENE
+        from experimental.neural_agent.tasks.arenas import COMBAT_BASELINE_AGENT, COMBAT_COVER, COMBAT_COVER_AGENT, COMBAT_OPEN_FLAT, COMBAT_OPEN_FLAT_SCENE
 
         # Before 2026-10-17 this branch named combat_baseline for every combat arena.
-        kit_name = COMBAT_OPEN_FLAT_SCENE if arena == COMBAT_OPEN_FLAT else COMBAT_BASELINE_AGENT
+        kit_name = {COMBAT_OPEN_FLAT: COMBAT_OPEN_FLAT_SCENE, COMBAT_COVER: COMBAT_COVER_AGENT}.get(arena, COMBAT_BASELINE_AGENT)
         damage_note = (
             "" if arena == COMBAT_OPEN_FLAT
             else " (`probes/out/events.json`: 17 of 1,024 lane-steps for a neutral actor)"
         )
+        # combat_cover (2026-10-20): DAMAGE_RECEIVED is not probed there, so no damage claim is written for it.
+        damage_claim = (
+            "DAMAGE_RECEIVED is not probed on this arena, so this run's damage column is its first measurement"
+            if arena == COMBAT_COVER
+            else f"DAMAGE_RECEIVED fires there without injection{damage_note}, so the evade trigger and the interrupt columns are live"
+        )
         lines += [
             f"- The arena is `{arena}` (`tasks/arenas.py`): AgentKit's `{kit_name}` with an episode "
-            f"limit of `ticks`" + (" in the Gym's legal observation mode (`legal_observation=True`, 2026-10-17)" if arena == COMBAT_OPEN_FLAT else "") + f". DAMAGE_RECEIVED fires there without injection{damage_note}, so the evade "
-            "trigger and the interrupt columns are live.",
+            f"limit of `ticks`" + (" in the Gym's legal observation mode (`legal_observation=True`, 2026-10-17)" if arena == COMBAT_OPEN_FLAT else "") + f". {damage_claim}.",
             f"- Nothing can be caught on `{arena}`: `terminated` is a death or a world error "
             "(`adk/runtime/env_adapter.py` BuiltAgent.step_detailed), so it is never read as a catch. The objective "
             "there is re-engagement (owner decision, 2026-10-16): the known target distance, read from the belief's "
@@ -1036,6 +1100,11 @@ def _caveats(runs: Sequence[ArmRun], *, arena: str, runner: str) -> list[str]:
             "re-engagements here. Damage injection stays an ablation.",
             "- The distance feature is known only while the target is visible (`belief/features.py`), so a tick "
             "without sight breaks a re-engagement run.",
+            "- HP dealt and taken are the agent's per-tick damage counters (`arsenal_info.entity_damage_dealt` and "
+            "`entity_damage_received`, row AGENT_ENTITY), summed over the timed run in absolute HP. Kills and deaths "
+            "read the episode's last tick: `terminated` there with the target at or below 0 health is a kill, any other "
+            "natural ending a death, so a world error would count as a death (none is expected here: inferred from "
+            "`arsenal/runtime.py` `_arsenal_terminated`).",
         ]
     if runner == "compiled":
         lines.append(
@@ -1210,7 +1279,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help=(
             "combat_open_flat (default): the target is visible and DAMAGE_RECEIVED fires, so "
             "re-engagement can be scored; combat_baseline: damage fires but the target is never "
-            "visible (the fail_closed scene); flat_pursuit: a catch ends an episode, no damage happens"
+            "visible (the fail_closed scene); flat_pursuit: a catch ends an episode, no damage happens; "
+            "combat_cover: open flat with solid pillars in the geometry window (line of sight is occluded there)"
         ),
     )
     parser.add_argument(

@@ -139,7 +139,15 @@ code of ``ATTACK_PHASE_CODES`` and only while the target is visible. The belief 
 ten features are ``contracts.BELIEF_FEATURE_NAMES``. The attack index (``target_i32`` ``attack_index``) is not read:
 the phase already names each window, and a rule that fired once per attack would need per-lane memory. Priorities:
 the evader (``EVADER_PRIORITY``, 0.5) above the phase rules (``COMBAT_PHASE_PRIORITY``, 0.4) above ``sword``
-(``SWORD_PRIORITY``, 0.3), so damage always wins. ``P_COMBAT`` is ``PROGRAMS['COMBAT']`` (``NA_PROGRAM=COMBAT``, 2026-10-19). It runs on the combat catalogue
+(``SWORD_PRIORITY``, 0.3). The evader stays ungated in ``P_COMBAT``, so a hit always opens its window. A gate on it is
+expressible in this predicate language: ``Predicate("self_health_below", t)`` reads the belief's
+``self_health_fraction``, ``Not`` and ``AllOf`` combine conditions, and an interrupt takes any of them. Measured on
+``combat_open_flat`` (gen 5, seeds 0 to 2, lane #94), holding the evader back while the agent is healthy (``t`` 0.5 or
+0.7) cut the evader's share of lane-ticks by 16 to 43% but raised HP taken and deaths, and gating it on the target's
+recovery and reach moved the share by under 3%. The sword, guard, punish and keep_range goals are idle bodies in this
+package (``DeclaredVerbSkill``, ``skill_library/library.py``), so the agent stands still in reach under them; evading
+costs the least HP per lane-tick (14.8 against 68 per 100 lane-ticks for those goals, baseline seed 0). A gate waits for
+those bodies. ``P_COMBAT`` is ``PROGRAMS['COMBAT']`` (``NA_PROGRAM=COMBAT``, 2026-10-19). It runs on the combat catalogue
 (``skill_library.library.build_combat_registry``) with ``--arms jprog`` alone, which the composition CLI enforces.
 Its scalars: sword's ``hold_seconds`` is 0.0 (a tap), keep_range's band is KEEP_RANGE_BAND, (3.1, 3.6).
 """
@@ -317,19 +325,90 @@ class TargetPhase:
         return bool(known[_DISTANCE_COLUMN]) and float(features[_DISTANCE_COLUMN]) < self.within_blocks
 
 
+def _check_condition(condition: Any, owner: str) -> None:
+    """Raise TypeError unless ``condition`` is a Predicate, a TargetPhase, a Not or an AllOf."""
+
+    if not isinstance(condition, (Predicate, TargetPhase, Not, AllOf)):
+        raise TypeError(f"{owner} takes a Predicate, a TargetPhase, a Not or an AllOf, got {condition!r}")
+
+
+def _holds(condition: Any, features: Sequence[float], known: Sequence[bool], code: int) -> bool:
+    """Return whether a condition holds on one lane. A Predicate reads the belief row; the others also read ``code``."""
+
+    if isinstance(condition, Predicate):
+        return condition.evaluate(features, known)
+    return condition.holds(features, known, code)
+
+
+def _reads_target_phase(condition: Any) -> bool:
+    """True when the condition reads the target's attack phase: a TargetPhase, also inside a Not or an AllOf."""
+
+    if isinstance(condition, TargetPhase):
+        return True
+    if isinstance(condition, Not):
+        return _reads_target_phase(condition.part)
+    if isinstance(condition, AllOf):
+        return any(_reads_target_phase(part) for part in condition.parts)
+    return False
+
+
+@dataclass(frozen=True)
+class Not:
+    """The condition ``part`` does not hold. A feature that is unknown makes ``part`` False, so its negation holds.
+
+    Raises:
+        TypeError: If ``part`` is not a Predicate, a TargetPhase, a Not or an AllOf.
+    """
+
+    part: Any
+
+    def __post_init__(self) -> None:
+        _check_condition(self.part, "Not")
+
+    def holds(self, features: Sequence[float], known: Sequence[bool], code: int) -> bool:
+        """Return whether ``part`` does not hold on one lane (``code`` is the target's phase code, or -1)."""
+
+        return not _holds(self.part, features, known, code)
+
+
+@dataclass(frozen=True)
+class AllOf:
+    """The conjunction of conditions: it holds where every part holds.
+
+    Raises:
+        ValueError: If there are no parts.
+        TypeError: If a part is not a Predicate, a TargetPhase, a Not or an AllOf.
+    """
+
+    parts: tuple[Any, ...]
+
+    def __post_init__(self) -> None:
+        parts = tuple(self.parts)
+        if not parts:
+            raise ValueError("AllOf needs at least one part")
+        for part in parts:
+            _check_condition(part, "AllOf")
+        object.__setattr__(self, "parts", parts)
+
+    def holds(self, features: Sequence[float], known: Sequence[bool], code: int) -> bool:
+        """Return whether every part holds on one lane (``code`` is the target's phase code, or -1)."""
+
+        return all(_holds(part, features, known, code) for part in self.parts)
+
+
 @dataclass(frozen=True)
 class Interrupt:
     """A conditional goal of the executive: ``skill_id`` pre-empts the program while ``predicate`` holds."""
 
     skill_id: str
     priority: float
-    predicate: Predicate | TargetPhase
+    predicate: Predicate | TargetPhase | Not | AllOf
     params: tuple[float, ...] = ()
 
     def __post_init__(self) -> None:
         _skill_id(self.skill_id, "Interrupt")
-        if not isinstance(self.predicate, (Predicate, TargetPhase)) or self.predicate == ALWAYS:
-            raise ValueError("Interrupt.predicate must be a Predicate other than 'always', or a TargetPhase")
+        if not isinstance(self.predicate, (Predicate, TargetPhase, Not, AllOf)) or self.predicate == ALWAYS:
+            raise ValueError("Interrupt.predicate must be a Predicate other than 'always', a TargetPhase, a Not or an AllOf")
         priority = float(self.priority)
         if not math.isfinite(priority):
             raise ValueError(f"Interrupt.priority must be finite, got {self.priority!r}")
@@ -482,7 +561,7 @@ class ProgramExecutor:
         self._used_skills = sorted(
             {0} | {k for row in self._step_skill for k in row} | {k for row in self._interrupt_skill for k in row}
         )
-        self._reads_phase = any(isinstance(i.predicate, TargetPhase) for p in programs for i in p.interrupts)
+        self._reads_phase = any(_reads_target_phase(i.predicate) for p in programs for i in p.interrupts)
         self._minimum = np.asarray(self._control.minimum_commitment_seconds, dtype=np.float32)
         self._maximum = np.asarray(self._control.maximum_duration_seconds, dtype=np.float32)
         self._no_reissue = window
@@ -776,12 +855,7 @@ class ProgramExecutor:
             skill = self._interrupt_skill[lane][position]
             if self._blocked[lane, skill] > 0.0 or interrupt.priority <= best:
                 continue
-            holds = (
-                interrupt.predicate.holds(features, known, code)
-                if isinstance(interrupt.predicate, TargetPhase)
-                else interrupt.predicate.evaluate(features, known)
-            )
-            if holds:
+            if _holds(interrupt.predicate, features, known, code):
                 chosen, best = position, interrupt.priority
         if chosen >= 0:
             return self._interrupt_skill[lane][chosen], program.interrupts[chosen].params, _INTERRUPT, best
@@ -979,6 +1053,7 @@ __all__ = [
     "EVADE_ON_DAMAGE",
     "EXIT_DONE",
     "EXIT_TIMER",
+    "AllOf",
     "Interrupt",
     "LaneInformationRequest",
     "MAX_PROGRAM_STEPS",
@@ -988,6 +1063,7 @@ __all__ = [
     "P_COMBAT",
     "P_J0",
     "P_SEQ",
+    "Not",
     "Program",
     "ProgramExecutor",
     "ProgramStep",
