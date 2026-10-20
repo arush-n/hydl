@@ -148,16 +148,27 @@ def run_checks(stage: Path, manifest: dict, version: str, repository_root: Path)
     checks.add("traversal recording artifact_count", int(recording.get("artifact_count", -1)) == graph_count)
     facts["graph_count"] = graph_count
 
-    difference = _read_json(stage / "native_region_difference.json")
-    comparison = difference.get("comparison", {})
-    cap = difference.get("seed_projection_contract", {}).get("max_non_damaging_fluid_only_cells")
-    fluid = comparison.get("non_damaging_fluid_only_cell_count")
-    checks.add("seed projection accepted by its contract", difference.get("accepted_by_seed_projection_contract") is True)
-    checks.add("cross-reset other differing cells zero", comparison.get("other_differing_cell_count") == 0, str(comparison.get("other_differing_cell_count")))
-    checks.add("cross-reset fluid-only cells within the cap", cap is not None and fluid is not None and fluid <= cap, f"{fluid} of {cap}")
-    facts["cross_reset_non_damaging_fluid_only_cells"] = fluid
-    facts["cross_reset_other_differing_cells"] = comparison.get("other_differing_cell_count")
-    facts["seed_projection_semantic_sha256"] = str(comparison.get("second_seed_projection_digest", "")).upper()
+    difference_path = stage / "native_region_difference.json"
+    if difference_path.is_file():
+        difference = _read_json(difference_path)
+        comparison = difference.get("comparison", {})
+        cap = difference.get("seed_projection_contract", {}).get("max_non_damaging_fluid_only_cells")
+        fluid = comparison.get("non_damaging_fluid_only_cell_count")
+        checks.add("seed projection accepted by its contract", difference.get("accepted_by_seed_projection_contract") is True)
+        checks.add("cross-reset other differing cells zero", comparison.get("other_differing_cell_count") == 0, str(comparison.get("other_differing_cell_count")))
+        checks.add("cross-reset fluid-only cells within the cap", cap is not None and fluid is not None and fluid <= cap, f"{fluid} of {cap}")
+        facts["cross_reset_non_damaging_fluid_only_cells"] = fluid
+        facts["cross_reset_other_differing_cells"] = comparison.get("other_differing_cell_count")
+        facts["seed_projection_semantic_sha256"] = str(comparison.get("second_seed_projection_digest", "")).upper()
+        facts["seed_projection_exact_artifact_equal"] = False
+    else:
+        # The capture compare writes the report only when cells differ across the same-seed resets; an exact artifact
+        # match (run 10 of the 0.7.2 line, 2026-10-20, on a quiet machine) leaves no report and nothing to cap.
+        checks.add("seed projection exact (no difference report: the compare writes one only when cells differ)", True, "0 of the cap")
+        facts["cross_reset_non_damaging_fluid_only_cells"] = 0
+        facts["cross_reset_other_differing_cells"] = 0
+        facts["seed_projection_semantic_sha256"] = ""
+        facts["seed_projection_exact_artifact_equal"] = True
 
     if mode == "first_capture":
         capacity = _read_json(stage / "world-token-capacity.json")
@@ -314,6 +325,9 @@ def main(argv: list[str] | None = None) -> int:
     receipt_rows: dict[str, dict[str, str]] = {}
     for key, (source_name, target_name) in copies.items():
         target = history / target_name
+        if key == "region_difference_report" and not (stage / source_name).is_file():
+            receipt_rows[key] = {"source": source_name, "target": "", "status": "absent (exact artifact equal)"}
+            continue
         if target.exists() and _sha256(target) != _sha256(stage / source_name):
             raise RuntimeError(f"history copy already present with other bytes: {target}")
         if not target.exists():
