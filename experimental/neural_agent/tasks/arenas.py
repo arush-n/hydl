@@ -118,7 +118,13 @@ def _whole(value: Any, name: str, *, minimum: int | None) -> int:
 
 
 def build_arena(
-    name: str, batch: int, ticks: int, seed: int, *, loadout: str | None = None
+    name: str,
+    batch: int,
+    ticks: int,
+    seed: int,
+    *,
+    loadout: str | None = None,
+    arrows: int | None = None,
 ) -> BuiltArena:
     """Build the named arena with ``batch`` lanes and an episode horizon of ``ticks``.
 
@@ -132,6 +138,10 @@ def build_arena(
         loadout: The agent's loadout, for ``combat_cover`` only, one of
             :data:`COMBAT_COVER_LOADOUTS`. ``None`` keeps the default ``iron_sword``.
             Any other arena refuses a loadout.
+        arrows: The agent's arrow stack at reset, for ``combat_cover`` only: a non-negative int, the quantity of
+            its ``Weapon_Arrow_Crude`` stack. ``None`` keeps the reset's bare inventory, which holds no arrows, so a
+            shortbow tap spawns nothing. A positive count on a loadout with no arrow stack (``iron_sword``) raises.
+            Any other arena refuses arrows.
 
     Returns:
         A :class:`BuiltArena`. ``describe()["arena"]`` is ``name``.
@@ -148,11 +158,14 @@ def build_arena(
     root = _whole(seed, "seed", minimum=None)
     if loadout is not None and name != COMBAT_COVER:
         raise ValueError(f"loadout is selectable for {COMBAT_COVER} only, not {name!r}")
+    if arrows is not None and name != COMBAT_COVER:
+        raise ValueError(f"arrows is selectable for {COMBAT_COVER} only, not {name!r}")
+    count = None if arrows is None else _whole(arrows, "arrows", minimum=0)
     if name == COMBAT_COVER:
         profile = COMBAT_COVER_DEFAULT_LOADOUT if loadout is None else loadout
         if profile not in COMBAT_COVER_LOADOUTS:
             raise ValueError(f"loadout must be one of {COMBAT_COVER_LOADOUTS}, got {loadout!r}")
-        return _combat_cover(lanes, horizon, root, profile)
+        return _combat_cover(lanes, horizon, root, profile, count)
     if name == FLAT_PURSUIT:
         return _flat_pursuit(lanes, horizon, root)
     if name == COMBAT_OPEN_FLAT:
@@ -379,7 +392,7 @@ def _cover_geometry(params: Any) -> Any:
     return geometry_state_from_numpy(frame)
 
 
-def _combat_cover(batch: int, ticks: int, seed: int, loadout: str) -> BuiltArena:
+def _combat_cover(batch: int, ticks: int, seed: int, loadout: str, arrows: int | None = None) -> BuiltArena:
     """Build combat_cover through AgentKit, with an episode limit of ``ticks``.
 
     The scene binds ``geometry_provider`` (:func:`_cover_geometry`) and a world-capability provider that
@@ -387,7 +400,8 @@ def _combat_cover(batch: int, ticks: int, seed: int, loadout: str) -> BuiltArena
     combat_open_flat's legal scene uses. The reset is the default one and the opponent is the default melee
     NPC, so the agent's loadout is the only input that changes. The environment calls the provider with
     the state and the params only, and the geometry path needs the runtime config, so the closure binds this
-    batch's config.
+    batch's config. With ``arrows``, every reset seeds the agent's arrow stack (``inventory_reset_provider``), and the
+    names, the manifest and the description carry the count; ``None`` leaves all of them as the default build's.
     """
 
     import hashlib
@@ -401,8 +415,10 @@ def _combat_cover(batch: int, ticks: int, seed: int, loadout: str) -> BuiltArena
     from hytalegym.jax.combat.arsenal.environment import geometry_arsenal_world_capabilities
     from hytalegym.jax.combat.types import AGENT_ENTITY, TARGET_ENTITY, default_combat_params
 
-    agent_name = f"neural_agent/cover_{loadout}"
-    scene_name = f"neural_agent/cover_legal_{loadout}"
+    # Agent names are process-wide and the scene's environment kwargs differ with arrows, so an arrows build gets its own.
+    suffix = "" if arrows is None else f"_arrows{arrows}"
+    agent_name = f"neural_agent/cover_{loadout}{suffix}"
+    scene_name = f"neural_agent/cover_legal_{loadout}{suffix}"
     spec = AgentSpec(name=agent_name, scene=scene_name, loadout=loadout)
     params = default_combat_params(microticks=spec.microticks)
     origin = _cover_origin(params)
@@ -436,16 +452,29 @@ def _combat_cover(batch: int, ticks: int, seed: int, loadout: str) -> BuiltArena
         "legal_observation_sensor_range": True,
         "loadout": loadout,
     }
+    environment_kwargs = {
+        "geometry_provider": geometry,
+        "world_capability_provider": _cover_capabilities,
+    }
+    if arrows is not None:
+        from experimental.neural_agent.tasks.duel_arena import _arrow_inventory
+
+        manifest["arrows"] = arrows
+        # The agent holds the stack and the opponent none (count 0). The environment calls this provider from every
+        # reset, and the autoreset of the collectors resets through the same call.
+        seeded = _arrow_inventory(runtime, (arrows, 0))
+
+        def _cover_inventory(keys, config):
+            return seeded
+
+        environment_kwargs["inventory_reset_provider"] = _cover_inventory
     contract = hashlib.sha256(
         json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode("ascii")
     ).hexdigest()
     scene = JaxScene(
         name=scene_name,
         contract_sha256=contract,
-        environment_kwargs={
-            "geometry_provider": geometry,
-            "world_capability_provider": _cover_capabilities,
-        },
+        environment_kwargs=environment_kwargs,
         runtime_config=runtime,
         expected_batch=batch,
         expected_loadout=loadout,
@@ -500,6 +529,8 @@ def _combat_cover(batch: int, ticks: int, seed: int, loadout: str) -> BuiltArena
         "learner_role_index": AGENT_ENTITY,
         "opponent_role_index": TARGET_ENTITY,
     }
+    if arrows is not None:
+        description["arrows"] = arrows
     return BuiltArena(
         built=handle.built,
         reset_keys=jax.random.split(jax.random.key(seed), batch),

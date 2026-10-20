@@ -20,7 +20,7 @@ Known measurement facts: `j0` on seed 0 at 512 ticks, batch 8, 8 episodes is 43/
 
 ## Arena `combat_cover` (task #98, 2026-10-20)
 
-`build_arena("combat_cover", batch, ticks, seed, loadout=None)` in `arenas.py`; `--arena combat_cover` in `eval/run_composition.py`.
+`build_arena("combat_cover", batch, ticks, seed, loadout=None, arrows=None)` in `arenas.py`; `--arena combat_cover` in `eval/run_composition.py`.
 It is the `combat_open_flat` legal scene (default reset, default melee opponent, 120-degree sector, sensor range 16) with local
 geometry added through `geometry_arsenal_world_capabilities` and `geometry_provider`:
 
@@ -33,8 +33,14 @@ geometry added through `geometry_arsenal_world_capabilities` and `geometry_provi
   on an axis (a pillar at 3 blocks hides a target at 4) and 4.24 (sqrt 18) on the diagonal (pillar (3,3) hides (4,4)).
 - Consequence (read in `hytalegym/jax/combat/arsenal/runtime.py` 2240 and 2364-2368, not run): `geometry_exhausted` is sticky
   and truncates the episode, so an actor that leaves the window ends the episode. Measured only for a target placed at offset 5.
-- Loadout: `iron_sword` (default) or `iron_shortbow`, through `build_arena(..., loadout=...)`. The CLI has no loadout flag, so
-  composition runs use the default. The opponent's loadout is unchanged.
+- Loadout: `iron_sword` (default) or `iron_shortbow`, through `build_arena(..., loadout=...)`, and `--loadout` on the CLI.
+  The opponent's loadout is unchanged.
+- Arrows (task #111, 2026-10-20): `build_arena(..., arrows=N)` seeds the agent's `Weapon_Arrow_Crude` stack with N at every reset,
+  through `inventory_reset_provider` in the scene's environment kwargs (`_arrow_inventory` of `duel_arena.py`). The collectors'
+  autoreset resets through the same call. `None` (default) keeps the bare inventory, which holds no arrows, so a shortbow tap
+  spawns nothing. A positive N on `iron_sword` raises. An arrows build is named `neural_agent/cover_<loadout>_arrows<N>` (scene
+  `..._legal_...`), because agent names are process-wide. CLI: `--arrows N`. Measured on gen 5 (2026-10-20): reset holds N,
+  one tier-4 tap spawns at tick 42 and takes one arrow.
 - Gate: `tests/experimental/neural_agent/test_na_arenas.py` (cover layout and digest, loadout, and the behavioural case).
 
 ## duel_arena.py (2026-10-20, task #101, the skill layer's league ask L1)

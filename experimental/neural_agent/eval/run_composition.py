@@ -16,6 +16,10 @@ horizon is ``--ticks``, the same number that
 ``CompositionTask.tick_budget`` takes. The default is 256 ticks: the 256-tick
 gate run (``eval/out/gate256``) caught once per episode on ``flat_pursuit``.
 
+``--loadout`` and ``--arrows`` apply to ``combat_cover`` only: the agent's loadout (``iron_sword``, the default, or
+``iron_shortbow``) and the arrow stack it holds at reset. A shortbow tap spawns nothing without arrows, so a shortbow run
+passes ``--arrows``.
+
 Each arm is composed as ``HierarchicalAgentCore(belief, manager, actor,
 manager_cadence_seconds=0.5)``. ``--runner compiled``, the default, runs it
 through ``compile_hierarchical_collector``. Run ``e`` uses the key
@@ -103,6 +107,8 @@ DEFAULT_OUT_DIR: Path = Path(__file__).resolve().parent / "out"
 
 #: The names of ``tasks/arenas.py`` ARENA_NAMES, repeated so that ``--help`` needs no sibling.
 ARENA_CHOICES: tuple[str, ...] = ("flat_pursuit", "combat_baseline", "combat_open_flat", "combat_cover")  # must match tasks.arenas.ARENA_NAMES
+#: The names of ``tasks/arenas.py`` COMBAT_COVER_LOADOUTS, repeated for the same reason (the ``--loadout`` choices).
+LOADOUT_CHOICES: tuple[str, ...] = ("iron_sword", "iron_shortbow")  # must match tasks.arenas.COMBAT_COVER_LOADOUTS
 DEFAULT_ARENA: str = "combat_open_flat"  # the shipped scene where the target is visible and damage occurs
 RUNNER_CHOICES: tuple[str, ...] = ("compiled", "eager")
 DEFAULT_RUNNER: str = "compiled"
@@ -381,17 +387,27 @@ def load_context(
     return ctx, task
 
 
-def load_arena(name: str, batch: int, seed: int, ticks: int) -> Any:
+def load_arena(
+    name: str, batch: int, seed: int, ticks: int, *, loadout: str | None = None, arrows: int | None = None
+) -> Any:
     """Return the named arena (``tasks/arenas.py`` ``BuiltArena``), with horizon ``ticks``.
+
+    ``loadout`` and ``arrows`` reach ``build_arena`` only when they are given, so the default call is unchanged.
 
     Raises:
         ImportError: If ``experimental.neural_agent.tasks.arenas`` is missing.
-        ValueError: If the name is unknown, or ``ticks`` is outside the arena's range.
+        ValueError: If the name is unknown, or ``ticks`` is outside the arena's range, or the loadout or arrows
+            do not apply to the arena.
     """
 
     from experimental.neural_agent.tasks.arenas import build_arena
 
-    return build_arena(name, batch, ticks, seed)
+    options: dict[str, Any] = {}
+    if loadout is not None:
+        options["loadout"] = loadout
+    if arrows is not None:
+        options["arrows"] = arrows
+    return build_arena(name, batch, ticks, seed, **options)
 
 
 def _component_state(component: Any, role: str, batch: int) -> Any:
@@ -1052,8 +1068,12 @@ def _latency_ms_cell(row: Mapping[str, Any]) -> str:
     return f"{row['jev_latency_ms_p50']:.3f} / {row['jev_latency_ms_p95']:.3f}"
 
 
-def _caveats(runs: Sequence[ArmRun], *, arena: str, runner: str) -> list[str]:
-    """Return the caveat lines for this arena, runner and set of arms."""
+def _caveats(runs: Sequence[ArmRun], *, arena: str, runner: str, agent: str | None = None) -> list[str]:
+    """Return the caveat lines for this arena, runner and set of arms.
+
+    ``agent`` is the AgentKit name the run built (``BuiltArena.describe()["agent"]``); on ``combat_cover`` it names
+    the loadout's and arrows' own build in place of the default ``iron_sword`` one.
+    """
 
     from experimental.neural_agent.tasks.composition import REENGAGE_DISTANCE_BLOCKS, REENGAGE_RUN_STEPS
 
@@ -1076,6 +1096,8 @@ def _caveats(runs: Sequence[ArmRun], *, arena: str, runner: str) -> list[str]:
 
         # Before 2026-10-17 this branch named combat_baseline for every combat arena.
         kit_name = {COMBAT_OPEN_FLAT: COMBAT_OPEN_FLAT_SCENE, COMBAT_COVER: COMBAT_COVER_AGENT}.get(arena, COMBAT_BASELINE_AGENT)
+        if arena == COMBAT_COVER and agent:
+            kit_name = agent
         damage_note = (
             "" if arena == COMBAT_OPEN_FLAT
             else " (`probes/out/events.json`: 17 of 1,024 lane-steps for a neutral actor)"
@@ -1168,6 +1190,7 @@ def render_report(
     generated_at: str,
     arena: str = DEFAULT_ARENA,
     runner: str = DEFAULT_RUNNER,
+    agent: str | None = None,
 ) -> str:
     """Return the text of REPORT.md for the runs.
 
@@ -1219,7 +1242,7 @@ def render_report(
         "",
         "## Status and caveats",
         "",
-        *_caveats(runs, arena=arena, runner=runner),
+        *_caveats(runs, arena=arena, runner=runner, agent=agent),
         "",
         "## Thesis",
         "",
@@ -1281,6 +1304,21 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "re-engagement can be scored; combat_baseline: damage fires but the target is never "
             "visible (the fail_closed scene); flat_pursuit: a catch ends an episode, no damage happens; "
             "combat_cover: open flat with solid pillars in the geometry window (line of sight is occluded there)"
+        ),
+    )
+    parser.add_argument(
+        "--loadout",
+        choices=LOADOUT_CHOICES,
+        default=None,
+        help="combat_cover only: the agent's loadout, iron_sword (the default) or iron_shortbow",
+    )
+    parser.add_argument(
+        "--arrows",
+        type=_non_negative_int,
+        default=None,
+        help=(
+            "combat_cover only: the agent's arrow stack at reset, a non-negative count (default: none, so a shortbow "
+            "fires nothing); a positive count needs a loadout with an arrow stack, such as iron_shortbow"
         ),
     )
     parser.add_argument(
@@ -1414,7 +1452,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         j1_params=args.j1_params,
         js1_heads=args.js1_heads,
     )
-    arena = load_arena(args.arena, args.batch, args.seed, args.ticks)
+    arena = load_arena(args.arena, args.batch, args.seed, args.ticks, loadout=args.loadout, arrows=args.arrows)
     run = run_arm if args.runner == "compiled" else run_arm_eager
     runs = [
         run(
@@ -1450,6 +1488,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     config = {
         "arms": ", ".join(result.row["arm"] for result in runs),
         "arena": args.arena,
+        **({"loadout": args.loadout} if args.loadout is not None else {}),
+        **({"arrows at reset": args.arrows} if args.arrows is not None else {}),
         "runner": args.runner,
         "episodes per arm": args.episodes,
         "batch (lanes)": args.batch,
@@ -1489,6 +1529,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         arena=args.arena,
         runner=args.runner,
+        agent=arena.describe().get("agent"),
     )
     (out_dir / "REPORT.md").write_text(report, encoding="utf-8")
     sys.stdout.write(f"wrote {out_dir / 'metrics.csv'} and {out_dir / 'REPORT.md'}\n")
@@ -1507,6 +1548,7 @@ __all__ = [
     "DEFAULT_RUNNER",
     "DEFAULT_TICKS",
     "INTERRUPT_EVENTS",
+    "LOADOUT_CHOICES",
     "MANAGER_CADENCE_SECONDS",
     "RUNNER_CHOICES",
     "composition_record_fn",
