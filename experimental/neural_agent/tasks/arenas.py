@@ -26,10 +26,15 @@ Arenas (:data:`ARENA_NAMES`):
   step index 127. The scene is ``combat/fail_closed`` (``adk/core/spec.py``),
   which, by the comment in ``adk/environments/config.py``, denies line of sight
   and target selection, so the learner has no attack there (not tested here).
+* ``combat_cover`` is the open-flat legal scene (same reset, opponent and sector) with
+  solid pillars in the local geometry window (:func:`_combat_cover`). Line of sight is
+  occluded by the pillars. The window is 9 by 9 blocks about the spawn block, so the
+  pillars sit within 4 blocks of the spawn on each axis, not at the 5 to 15 blocks asked for.
 """
 
 from __future__ import annotations
 
+import math
 import numbers
 from typing import Any, Mapping, NamedTuple
 
@@ -38,10 +43,11 @@ import jax
 FLAT_PURSUIT: str = "flat_pursuit"
 COMBAT_BASELINE: str = "combat_baseline"
 COMBAT_OPEN_FLAT: str = "combat_open_flat"
+COMBAT_COVER: str = "combat_cover"
 #: The legal view sector of the combat arena: 120 degrees, as the certified legal observation uses (2026-10-19).
 COMBAT_OPEN_FLAT_VIEW_SECTOR_RADIANS: float = 2.0943951023931953
 #: The arena names that :func:`build_arena` accepts.
-ARENA_NAMES: tuple[str, ...] = (FLAT_PURSUIT, COMBAT_BASELINE, COMBAT_OPEN_FLAT)
+ARENA_NAMES: tuple[str, ...] = (FLAT_PURSUIT, COMBAT_BASELINE, COMBAT_OPEN_FLAT, COMBAT_COVER)
 #: The AgentKit name this module registers for the open-flat combat scene, the
 #: one shipped scene where the target is visible AND damage events occur
 #: (adk/DEV.md scene table: fail_closed never shows the target; probes/out/events.json:
@@ -56,6 +62,21 @@ COMBAT_OPEN_FLAT_LEGAL_SCENE: str = "neural_agent/open_flat_legal"
 COMBAT_BASELINE_AGENT: str = "combat/baseline"
 COMBAT_BASELINE_SCHEMA: str = "experimental-neural-agent-combat-baseline-v1"
 COMBAT_OPEN_FLAT_SCHEMA: str = "experimental-neural-agent-combat-open-flat-v2"  # v2: legal observation mode
+#: combat_cover (task #98, 2026-10-20): the open-flat legal scene plus solid pillars in the local geometry window.
+#: ``build_arena(..., loadout=...)`` selects one of COMBAT_COVER_LOADOUTS; the opponent's loadout never changes.
+COMBAT_COVER_DEFAULT_LOADOUT: str = "iron_sword"
+COMBAT_COVER_LOADOUTS: tuple[str, ...] = (COMBAT_COVER_DEFAULT_LOADOUT, "iron_shortbow")
+#: The default loadout's AgentKit names. Other loadouts use neural_agent/cover_<loadout> and
+#: neural_agent/cover_legal_<loadout>, because agent names are process-wide.
+COMBAT_COVER_AGENT: str = "neural_agent/cover_iron_sword"
+COMBAT_COVER_SCENE: str = "neural_agent/cover_legal_iron_sword"
+COMBAT_COVER_SCHEMA: str = "experimental-neural-agent-combat-cover-v1"
+#: Pillar columns as block offsets (dx, dz) from the spawn block (the agent stands at its centre). Each column is
+#: one block square and COMBAT_COVER_PILLAR_HEIGHT blocks high. Every cell lies inside the local window
+#: (hytalegym.geometry.contract CELL_RADIUS 4). No column overlaps the default target's spawn footprint
+#: (block (0, -2)), so the default reset starts clear. The radii are in the description record.
+COMBAT_COVER_PILLARS: tuple[tuple[int, int], ...] = ((3, 0), (1, 3), (-1, 3), (-3, 0), (-1, -3), (1, -3))
+COMBAT_COVER_PILLAR_HEIGHT: int = 3
 
 
 class BuiltArena(NamedTuple):
@@ -96,7 +117,9 @@ def _whole(value: Any, name: str, *, minimum: int | None) -> int:
     return int(value)
 
 
-def build_arena(name: str, batch: int, ticks: int, seed: int) -> BuiltArena:
+def build_arena(
+    name: str, batch: int, ticks: int, seed: int, *, loadout: str | None = None
+) -> BuiltArena:
     """Build the named arena with ``batch`` lanes and an episode horizon of ``ticks``.
 
     Args:
@@ -106,6 +129,9 @@ def build_arena(name: str, batch: int, ticks: int, seed: int) -> BuiltArena:
             accepts 9 to 1000 (its stage config refuses fewer).
         seed: Seed of the first reset keys, an int. ``jax.random.key(seed)`` is
             split into ``batch`` keys.
+        loadout: The agent's loadout, for ``combat_cover`` only, one of
+            :data:`COMBAT_COVER_LOADOUTS`. ``None`` keeps the default ``iron_sword``.
+            Any other arena refuses a loadout.
 
     Returns:
         A :class:`BuiltArena`. ``describe()["arena"]`` is ``name``.
@@ -120,6 +146,13 @@ def build_arena(name: str, batch: int, ticks: int, seed: int) -> BuiltArena:
     lanes = _whole(batch, "batch", minimum=1)
     horizon = _whole(ticks, "ticks", minimum=1)
     root = _whole(seed, "seed", minimum=None)
+    if loadout is not None and name != COMBAT_COVER:
+        raise ValueError(f"loadout is selectable for {COMBAT_COVER} only, not {name!r}")
+    if name == COMBAT_COVER:
+        profile = COMBAT_COVER_DEFAULT_LOADOUT if loadout is None else loadout
+        if profile not in COMBAT_COVER_LOADOUTS:
+            raise ValueError(f"loadout must be one of {COMBAT_COVER_LOADOUTS}, got {loadout!r}")
+        return _combat_cover(lanes, horizon, root, profile)
     if name == FLAT_PURSUIT:
         return _flat_pursuit(lanes, horizon, root)
     if name == COMBAT_OPEN_FLAT:
@@ -195,6 +228,11 @@ __all__ = [
     "COMBAT_OPEN_FLAT_SCENE",
     "COMBAT_OPEN_FLAT_LEGAL_SCENE",
     "COMBAT_OPEN_FLAT_SCHEMA",
+    "COMBAT_COVER",
+    "COMBAT_COVER_AGENT",
+    "COMBAT_COVER_SCENE",
+    "COMBAT_COVER_SCHEMA",
+    "COMBAT_COVER_LOADOUTS",
 ]
 
 def _combat_open_flat(batch: int, ticks: int, seed: int) -> BuiltArena:
@@ -283,6 +321,182 @@ def _combat_open_flat(batch: int, ticks: int, seed: int) -> BuiltArena:
             "fires without injection: probes/out/events.json, 17 of 1,024 lane-steps, "
             "neutral actor, batch 8, 128 steps"
         ),
+        "learner_role_index": AGENT_ENTITY,
+        "opponent_role_index": TARGET_ENTITY,
+    }
+    return BuiltArena(
+        built=handle.built,
+        reset_keys=jax.random.split(jax.random.key(seed), batch),
+        learner_role_index=AGENT_ENTITY,
+        opponent_role_index=TARGET_ENTITY,
+        catch_from_terminated=False,
+        description=description,
+    )
+
+
+def _cover_origin(params: Any) -> tuple[int, int, int]:
+    """Return the block that holds the spawn: the window's centre cell, ``floor(agent_spawn)``."""
+
+    return tuple(math.floor(float(value)) for value in params.agent_spawn)
+
+
+def _cover_geometry(params: Any) -> Any:
+    """Return combat_cover's local geometry: a solid floor over the window, and the pillar columns.
+
+    The window spans ``CELL_RADIUS`` blocks each way about :func:`_cover_origin`, 9 by 9 by 9 cells.
+    The floor is the layer one block below the spawn, so its top face is the agent's feet at
+    ``agent_spawn[1]``. Pillar cells are solid and opaque. The numpy frame follows the engine's exact-floor
+    test fixture (``_flat_exact_geometry`` in tests/jax/combat/arsenal/tests/environment).
+    """
+
+    import numpy as np
+
+    from hytalegym.geometry.contract import CELL_RADIUS, FLAG_OPAQUE, FLAG_SOLID, cell_index, empty_geometry
+    from hytalegym.jax.world import geometry_state_from_numpy
+
+    frame = empty_geometry()
+    frame["available"] = 1
+    frame["exact_collision_shapes"] = 1
+    frame["origin"][:] = _cover_origin(params)
+    frame["cell_mask"][:] = 1
+    frame["agent_bounds"][:] = np.asarray(params.agent_bounds)
+    frame["target_bounds"][:] = np.asarray(params.target_bounds)
+    frame["agent_los_offset"][:] = np.asarray(params.agent_eye_offset)
+    frame["target_los_offset"][:] = np.asarray(params.target_eye_offset)
+    solid = [
+        (x, -1, z)
+        for x in range(-CELL_RADIUS, CELL_RADIUS + 1)
+        for z in range(-CELL_RADIUS, CELL_RADIUS + 1)
+    ]
+    solid += [
+        (dx, y, dz) for dx, dz in COMBAT_COVER_PILLARS for y in range(COMBAT_COVER_PILLAR_HEIGHT)
+    ]
+    for x, y, z in solid:
+        index = cell_index(x, y, z)
+        frame["flags"][index] = FLAG_SOLID | FLAG_OPAQUE
+        frame["collision_boxes"][index, 0] = (0, 0, 0, 1, 1, 1)
+        frame["collision_box_mask"][index, 0] = 1
+    return geometry_state_from_numpy(frame)
+
+
+def _combat_cover(batch: int, ticks: int, seed: int, loadout: str) -> BuiltArena:
+    """Build combat_cover through AgentKit, with an episode limit of ``ticks``.
+
+    The scene binds ``geometry_provider`` (:func:`_cover_geometry`) and a world-capability provider that
+    calls ``geometry_arsenal_world_capabilities`` with the 120-degree sector and the sensor-range flag that
+    combat_open_flat's legal scene uses. The reset is the default one and the opponent is the default melee
+    NPC, so the agent's loadout is the only input that changes. The environment calls the provider with
+    the state and the params only, and the geometry path needs the runtime config, so the closure binds this
+    batch's config.
+    """
+
+    import hashlib
+    import json
+
+    from adk.api import AgentKit
+    from adk.core.spec import AgentSpec
+    from adk.runtime.scenes import JaxScene
+    from hytalegym.geometry.contract import CELL_RADIUS
+    from hytalegym.jax.combat import arsenal_runtime_config, hytale_0_5_7_loadouts
+    from hytalegym.jax.combat.arsenal.environment import geometry_arsenal_world_capabilities
+    from hytalegym.jax.combat.types import AGENT_ENTITY, TARGET_ENTITY, default_combat_params
+
+    agent_name = f"neural_agent/cover_{loadout}"
+    scene_name = f"neural_agent/cover_legal_{loadout}"
+    spec = AgentSpec(name=agent_name, scene=scene_name, loadout=loadout)
+    params = default_combat_params(microticks=spec.microticks)
+    origin = _cover_origin(params)
+    geometry = _cover_geometry(params)
+    runtime = arsenal_runtime_config(hytale_0_5_7_loadouts([loadout] * batch), legal_observation=True)
+
+    def _cover_capabilities(state, combat_params):
+        return geometry_arsenal_world_capabilities(
+            state,
+            combat_params,
+            geometry=geometry,
+            config=runtime,
+            view_sector_full_angle_radians=COMBAT_OPEN_FLAT_VIEW_SECTOR_RADIANS,
+            legal_observation_sensor_range=True,
+        )
+
+    manifest = {
+        "schema": COMBAT_COVER_SCHEMA,
+        "name": scene_name,
+        "base": "combat/open_flat_control reset, opponent and legal observation",
+        "geometry": {
+            "origin": list(origin),
+            "cell_radius": CELL_RADIUS,
+            "floor_offset_y": -1,
+            "pillars": [list(column) for column in COMBAT_COVER_PILLARS],
+            "pillar_height": COMBAT_COVER_PILLAR_HEIGHT,
+        },
+        "world_capabilities": "geometry_arsenal_world_capabilities",
+        "view_sector_full_angle_radians": COMBAT_OPEN_FLAT_VIEW_SECTOR_RADIANS,
+        "legal_observation": True,
+        "legal_observation_sensor_range": True,
+        "loadout": loadout,
+    }
+    contract = hashlib.sha256(
+        json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode("ascii")
+    ).hexdigest()
+    scene = JaxScene(
+        name=scene_name,
+        contract_sha256=contract,
+        environment_kwargs={
+            "geometry_provider": geometry,
+            "world_capability_provider": _cover_capabilities,
+        },
+        runtime_config=runtime,
+        expected_batch=batch,
+        expected_loadout=loadout,
+    )
+    kit = AgentKit()
+    kit.register_scene(scene)
+    if agent_name not in kit.list_agents():
+        kit.register(spec)
+    handle = kit.build(agent_name, batch=batch).with_episode_limit(ticks)
+    radii = [math.hypot(dx, dz) for dx, dz in COMBAT_COVER_PILLARS]
+    description = {
+        "schema": COMBAT_COVER_SCHEMA,
+        "arena": COMBAT_COVER,
+        "built_by": (
+            f"AgentKit().register_scene(<{scene_name}: geometry_provider + "
+            "geometry_arsenal_world_capabilities, legal_observation=True>)"
+            f".register(AgentSpec({agent_name!r}, scene={scene_name!r})).build(..., batch=B)"
+            ".with_episode_limit(ticks).built"
+        ),
+        "agent": agent_name,
+        "scene": scene_name,
+        "contract_sha256": contract,
+        "legal_observation": True,
+        "view_sector_full_angle_radians": COMBAT_OPEN_FLAT_VIEW_SECTOR_RADIANS,
+        "legal_observation_sensor_range": True,
+        "window_origin": list(origin),
+        "window_radius_blocks": CELL_RADIUS,
+        "pillars": [
+            {
+                "offset": [dx, dz],
+                "radius_blocks": math.hypot(dx, dz),
+                "angle_degrees": math.degrees(math.atan2(dz, dx)),
+            }
+            for dx, dz in COMBAT_COVER_PILLARS
+        ],
+        "pillar_count": len(COMBAT_COVER_PILLARS),
+        "pillar_size_blocks": [1, 1],
+        "pillar_height_blocks": COMBAT_COVER_PILLAR_HEIGHT,
+        "pillar_radius_range_blocks": [min(radii), max(radii)],
+        "radius_note": (
+            "5 to 15 blocks is beyond the local geometry window: a cell outside origin +/- CELL_RADIUS is "
+            "unavailable, and a line of sight through it is not clear (hytalegym/jax/world/perception/los.py)"
+        ),
+        "loadout": loadout,
+        "opponent": "combat_open_flat's default melee NPC; no opponent provider, loadout unchanged",
+        "batch": batch,
+        "seed": seed,
+        "ticks": ticks,
+        "terminated": "death or world error (adk/runtime/env_adapter.py BuiltAgent.step_detailed); not a catch",
+        "truncated": "the episode limit of `ticks` steps",
+        "damage_received": "not probed on this arena; the composition run's damage column is the measurement",
         "learner_role_index": AGENT_ENTITY,
         "opponent_role_index": TARGET_ENTITY,
     }
