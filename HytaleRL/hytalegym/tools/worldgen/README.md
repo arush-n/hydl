@@ -300,7 +300,15 @@ profile's capacity report path), copies the manifest, the source-pin report, the
 `world-evidence-history/<bridge8>/` with the schema version suffix, and writes `publication-v<N>.json` there with the
 checks and `created_paths` (the rollback list). Smoke test on 2026-10-19: against the 0.5.7 publication folder
 `5A54A8F5` as a stage, all 26 checks pass and the plan reports every fixture identical and `traversal-v2` present, so it
-refuses, as it should. Pointers and defaults are never touched by the tool.
+refuses, as it should. Pointers and defaults are never touched by the tool. A new bridge on an already promoted line is
+promoted with `--apply --supersede`: the present evidence (identified by the bridge recorded in the line's traversal manifest or
+projection contract) is moved into `world-evidence-history/<old bridge8>/superseded/` first and the receipt lists the moves
+under `superseded_paths`; the sequence for a rebuilt bridge is: pin the new sha in `server_versions/v0_7.py`, write the
+seed-570057 projection contract for it (`recapture_region.py --skip-capture --fluid-only-cap 6`, one fresh server launch),
+run the first capture into a fresh stage (the line's promoted state does not change the mode decision until the supersede
+moves it aside, so run the capture with `HYTALERL_TRAVERSAL_MANIFEST` unset and the references temporarily absent, or run
+it in compare mode against the previous bridge's evidence if the world did not change), then promote with `--supersede` and
+re-freeze the Arsenal Region suite (its content carries the bridge pin).
 
 Who reads the promoted 0.7.2 evidence: the routed readers, when run with `HYTALERL_SERVER_VERSION=0.7.2`. The sim and the JAX world tokens read the Region library by fixed path (`hytalegym/jax/world/tokens/__init__.py:87-96`, `hytalegym/sim/common/bench.py:62-63`), and those pointers stay on 0.5 until the swap. `hytalegym/jax/world/region/provider.py` selects a library by its digest and does not read these paths.
 

@@ -19,8 +19,10 @@ Destinations, by server line (``hytalegym/server_versions``):
 - The receipt ``publication-v<N>.json`` and copies of the manifest, the source-pin report and the cascade:
   ``artifacts/worldgen/world-evidence-history/<bridge8>/`` (N is the recertification schema version).
 
-Every destination must be absent (or byte-identical, in which case it is skipped). Rollback: remove the paths the
-receipt lists under ``created_paths``; nothing else is changed. All of these folders are gitignored, so promotion is
+Every destination must be absent (or byte-identical, in which case it is skipped); ``--supersede`` instead moves a
+previous bridge's promotion into ``world-evidence-history/<old bridge8>/superseded/`` first (the receipt lists the moves
+under ``superseded_paths``). Rollback: remove the paths the receipt lists under ``created_paths`` and move the superseded
+paths back; nothing else is changed. All of these folders are gitignored, so promotion is
 local state, not a commit.
 """
 
@@ -205,6 +207,18 @@ def copy_plan(stage: Path, manifest: dict, version: str, repository_root: Path) 
     return plan
 
 
+def _present_bridge(plan: list[tuple[Path, Path]], version: str, repository_root: Path) -> str:
+    """Return the bridge sha256 the line's present evidence was captured with (from its traversal manifest or contract)."""
+
+    for source, destination in plan:
+        if destination.name == "traversal-v2" and (destination / "traversal-manifest.json").is_file():
+            return str(_read_json(destination / "traversal-manifest.json").get("native_evidence_jar_sha256", "")).upper()
+    for source, destination in plan:
+        if destination.name == "native_region_seed_projection_contract.json" and destination.is_file():
+            return str(_read_json(destination).get("evidence_bridge_sha256", "")).upper()
+    raise RuntimeError("cannot tell which bridge the present evidence belongs to; supersede by hand")
+
+
 def _destination_state(source: Path, destination: Path) -> str:
     if not destination.exists():
         return "absent"
@@ -228,6 +242,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--server-version", default=os.environ.get("HYTALERL_SERVER_VERSION", "0.7.2"))
     parser.add_argument("--repository-root", type=Path, default=HYTALEGYM.parent, help="the HytaleRL directory")
     parser.add_argument("--apply", action="store_true", help="copy the targets and write the receipt (default: dry run)")
+    parser.add_argument(
+        "--supersede",
+        action="store_true",
+        help=(
+            "with --apply: move the line's present evidence (a previous bridge's promotion) into "
+            "world-evidence-history/<old bridge8>/superseded/ before copying, instead of refusing"
+        ),
+    )
     args = parser.parse_args(argv)
 
     stage = args.stage.resolve()
@@ -242,6 +264,10 @@ def main(argv: list[str] | None = None) -> int:
     for source, destination in plan:
         print(f"  {states[destination]:9s} {source.relative_to(stage)} -> {destination}")
     blocked = [d for d, state in states.items() if state in ("exists", "differs")]
+    if blocked and args.supersede:
+        old_bridge = _present_bridge(plan, args.server_version, repository_root)
+        print(f"\nSupersede: {len(blocked)} present destination(s) belong to bridge {old_bridge[:8]} and will be moved aside.")
+        blocked = []
     if checks.failed or blocked:
         print(f"\nNOT PROMOTABLE: {len(checks.failed)} failed check(s), {len(blocked)} destination(s) already present.")
         return 1
@@ -250,6 +276,19 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     created: list[str] = []
+    superseded: list[str] = []
+    if args.supersede:
+        old_bridge = _present_bridge(plan, args.server_version, repository_root)
+        aside = repository_root / "artifacts" / "worldgen" / "world-evidence-history" / old_bridge[:8] / "superseded"
+        for source, destination in plan:
+            if states[destination] in ("exists", "differs"):
+                target = aside / destination.name
+                if target.exists():
+                    raise RuntimeError(f"superseded copy already present: {target}")
+                aside.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(destination), str(target))
+                superseded.append(f"{destination} -> {target}")
+                states[destination] = "absent"
     for source, destination in plan:
         if states[destination] == "identical":
             continue
@@ -307,6 +346,7 @@ def main(argv: list[str] | None = None) -> int:
         "block_use_typed_synthetic_status": facts.get("block_use_typed_synthetic_status"),
         "checks": [{"name": name, "passed": ok, "detail": detail} for name, ok, detail in checks.rows],
         "created_paths": created,
+        "superseded_paths": superseded,
         **receipt_rows,
     }
     receipt_path = history / f"publication-v{number}.json"
