@@ -28,24 +28,50 @@ current input at a time so it flows seamlessly."
 | LLM | The intent and the persona: "harass their camp, hit and run, never get pinned"; a cautious, stealthy, moderately aggressive style. |
 | Decision layer | The workflow it writes from that: reach cover near the target, wait for an opening, shoot, fall back to the next cover when spotted or hit. Its triggers: spotted, damaged, the target exposed. |
 | Neural layer, every tick | Several skills at once on their own body parts: feet along a route out of the enemy's sight, eyes on the threat, hands firing when the shot is clean, posture low. Each sees the others' requests, so retreating while watching while taking a parting shot is one motion. It writes back what it finds: spotted, no clean shot from here, cover lost, path blocked. |
-| Around the blackboard | A skill's "spotted" changes the decision layer's next step (fall back). The LLM marking "their scout is alone" changes the workflow's target, and the skills read the mark. A request changes what the skills do. No layer only gives orders and none only takes them. |
+| The flows | The LLM marking "their scout is alone" changes the decision layer's workflow, which sends the skills the scout as their new target; the skills never read the mark. A skill's "spotted" reaches the decision layer at once (fall back) and the LLM as an event (rethink the approach). Requests go down; reports go up to both. |
 
-## Idea 0: every layer reads and writes one shared blackboard, in every direction (owner, 2026-10-19 night)
+## Idea 0: one shared blackboard; the LLM and the decision layer feed each other, the neural layer takes only the decision layer's requests and reports back to both (owner, 2026-10-19 night)
 
 The owner, correcting this session's first reading (a top-down split of judgement by time scale): "the idea is through
 the shared blackboard or information layer. all the models feed to and read from that layer so if the llm sees
 something that it marks as important or the state that the neural layer feed back is key to the decision layer
-information/instructions change; it is not one way rather it is multi directional."
+information/instructions change; it is not one way rather it is multi directional." And then, on the shape: "the llm
+feeds to the middle layer and those two feed to one another, the middle layer feeds to the neural layer and the neural
+layer just writes back ... one way down to the neural layer but not up ... decision and llm feed to one another,
+neural only gets the decision layer but feeds information back to llm and middle. think of the utility of the
+information and where it is needed."
+
+                 reads every section                         reads every section
+    LLM  <------------------------->  BLACKBOARD S_t  <------------------------->  decision layer
+          writes `executive`                ^    |              writes `decision`, `requests`
+                                            |    | `requests` (the only section it reads)
+                         writes `skills`    |    v
+                         (its reports)  +---+----------+
+                                        | neural layer |
+                                        +--------------+
+
+The owner: "the llm reads the blackboard and information on the blackboard so does the decision layer". The LLM and
+the decision layer each read the whole blackboard through their own views (`views/llm.py` and `views/briefing.py` for
+the LLM, `views/jev.py` for the decision layer), so the neural layer's reports reach both. The neural layer reads
+only the `requests` the decision layer writes.
 
 The blackboard is S_t (`experimental/neural_agent/shared_state/`): one versioned document of six sections, each with
 one writer, and one view per reader. The LLM writes `executive`, the decision layer `decision` and `requests`, the
-skill layer `skills`, the belief module `belief`, the runtime `events`. Control is not a chain of command. The LLM
-marking something important changes the decision layer's instructions; a skill reporting what it found does too; the
-decision layer's requests change what the skills do; and around again.
+skill layer `skills`, the belief module `belief`, the runtime `events`.
+
+Each piece of information goes where it is useful, in the form that reader can use, at the rate it needs:
+
+| Flow | What | Why there | Rate |
+|---|---|---|---|
+| LLM to decision layer | goals, priorities, marks, the persona | the decision layer builds its workflows from the intent | the LLM's cadence |
+| decision layer to LLM | how each goal was read, decisions, questions, outcomes | the LLM plans on what actually happened, and answers what the decision layer cannot settle | the decision layer's cadence |
+| decision layer to neural layer | requests: verb and typed arguments (target, position, region, a remembered last-seen position), the style scalars, urgency | everything a skill needs beyond its own perception: what to do, on what, how | each decision; a re-goal on any tick |
+| neural layer to decision layer | statuses, progress, chance of success, events (spotted, no clean shot, cover lost, path blocked) | the fast loop: switch, re-goal or give up on them | every tick |
+| neural layer to LLM | the salient events and outcomes, summarised by its view | what changes a plan (pinned down, target escaped, a skill failing again and again), not tick-level telemetry | the LLM's cadence |
 
 Today the neural layer takes a small part. It writes request statuses (accepted, rejected, deferred, running, done,
 aborted) to `skills`, and reads only its requests: the skills' view (`shared_state/views/skills.py`) is the goal
-payload per lane. Idea 8 widens both.
+payload per lane. Idea 8 widens what it writes, and what the decision layer passes down.
 
 ## Idea 1: the bar is five properties, and heuristics never ship
 
@@ -132,29 +158,38 @@ For the decision layer to write its own workflows, it needs to know what each sk
 well it works. That is the capability card per verb `BUILD.md` section 3.4 already names: success and time to success
 per environment family, preconditions, failure modes, calibration.
 
-## Idea 8: the neural layer on the blackboard, reading and writing
+## Idea 8: the neural layer's inputs and reports
 
-- **Reads**: the entries that matter for acting, beside the trunk's tokens and not only through requests: what the
-  LLM marked (an entity, a place, a danger), the belief's last-seen positions, the active events, and the persona
-  (idea 2).
-- **Writes**: what it perceives and judges, beyond statuses:
-  - events: spotted, exposed, target lost (and where), no clean shot, cover lost, path blocked, low on ammunition;
-  - its calibrated chance of success and time left, from the status heads `BUILD.md` section 3.2 names.
-- **The one-writer rule holds**: the skill layer writes `skills`. Reading the LLM's marks means widening the skills'
-  view, which is the coordinator's file.
-- **Inputs only, never text** (owner: "the neural layer has to feed from inputs so it cannot read natural language but
-  the idea is there"). The LLM's words reach the neural layer only as typed fields: an entity handle, a position or
-  region, a flag, a scalar. The executive section already holds them beside the words (`GoalEntry`: the typed goal
-  fields plus the LLM's words, `shared_state/sections/executive.py`), and the decision layer lowers them into what the
-  skills read. A described target (idea 3) arrives as a vector from the text encoder and projection the registry
-  uses for its own descriptions, so matching it against what the agent sees is arithmetic, not reading. The same
-  holds upward: the skills write events and numbers, and the views turn them into words for the LLM
-  (`shared_state/views/briefing.py`).
+- **In, from the decision layer only.** A skill's inputs are its own perception and its requests; it never reads the
+  LLM's section. Everything else it needs reaches it as request fields the decision layer chose to pass:
+  - what to do and on what: the verb and its typed arguments;
+  - remembered context: a last-seen position from the belief;
+  - the persona's style scalars (idea 2), set by the LLM and forwarded;
+  - urgency.
+
+  The LLM's marks reach a skill only when the decision layer turns them into such a field. So the request format
+  widens, not the skills' view.
+- **Out, to both.**
+  - To the decision layer, every tick: statuses, progress, calibrated chance of success and time left (the status
+    heads `BUILD.md` section 3.2 names), and events: spotted, exposed, target lost (and where), no clean shot, cover
+    lost, path blocked, low on ammunition.
+  - To the LLM: the same reports, summarised by its view (`shared_state/views/briefing.py`) into the salient changes.
+  - The skill layer writes only `skills` (the one-writer rule).
+- **Inputs only, never text** (owner: "the neural layer has to feed from inputs so it cannot read natural language
+  but the idea is there"). The LLM's words reach a skill only as typed fields:
+  - the executive section already holds them beside the words (`GoalEntry`: the typed goal fields plus the LLM's
+    words, `shared_state/sections/executive.py`);
+  - the decision layer lowers them into request arguments;
+  - a described target (idea 3) arrives as a vector from the text encoder and projection the registry uses for its
+    own descriptions, so matching it against what the agent sees is arithmetic, not reading.
+
+  Upward the same holds: the skills write events and numbers, and the views turn them into words for the LLM.
 
 ## A proposed order, if approved (architecture only; training stays paused)
 
-1. The neural layer on the blackboard (idea 8): richer reports into `skills`, and the marks and the belief in the
-   skills' view (the view with the coordinator).
+1. The neural layer's reports (idea 8): events and calibrated chances into `skills`, routed per reader by utility;
+   and the request fields the decision layer passes down (remembered positions, style, urgency), with the
+   coordinator.
 2. Behaviour scalars in the request format and the module inputs, with the teacher knobs.
 3. The scripted guerrilla set through the referee under a guerrilla program, on gen 7, with the skills' reports
    driving the program's switches.
