@@ -382,3 +382,23 @@ the built 0.5 bridge against its pin, the stamp tests on the default line), the 
 gliding, riding, swimming), grants beyond none for the augment differential, the 0.5-only replays on 0.7, and #105 to #108. No
 training on either side.
 
+
+Status at 21:30 on 2026-10-20 (coordinator). Decision layer: interrupts may carry companion requests on disjoint scopes
+(`Interrupt.beside`, `5bd3fc1`); GUERRILLA is the referee's pick (`732ed9a`: the clean shot at 0.6 above avoid, keep_range
+(6, 10) beside it; the old program never shot a chaser), with the shot window 6 to 10 and the 1.2 s full draw (`102a8cf`);
+avoid takes the entity or the remembered position (`2c290fa`); the combat programs strike and punish on the body's
+weapon-aware `in_reach` report with the old 3.5-block rule as the belief fallback (`a45bcfc`, bit-identical without reports).
+Known limit #114: a goal with a companion ends by its maximum duration, not COMPLETED. Arenas and runner: combat_cover takes
+`arrows=` and run_composition `--loadout` / `--arrows` (`dfdceb7`); a death needs the agent's health at 0, with
+`terminated_alive` for world-error ends, and combat_cover's front pillars no longer box the NPC (`cd11af1`). Not answered by
+any arena yet: whether a bow kites a same-speed melee chaser (combat_cover's 9x9 window ends a retreat past about 4 blocks and
+has no NPC navigation provider; on open ground the chaser follows at 3.4 to 3.9 blocks); this needs cover at range (the
+Region route). The duel: entity 1's attack facing synced every step (`b5ee120`; the sword mirror's edge for entity 0 fell from
++21.2 to +11.0, equal to the engine patch lane by lane). The seat gaps that remain are engine-only, mapped in #108 for the
+owner: the agent-only control lock (measured: the sword lean to entity 1 after the sync, −9.4 → −2.5 with it off), agent-only
+regeneration (small), slot 0's body yaw held while knocked back (#115: most of the mace lean, −7.8 → about −2 when slot 0
+may turn, but the sword control then moves toward seat 0; native turning under knockback is unknown and needs a live check
+first), and entity 1's arrows leaving along its body at level pitch (shoot from entity 0). Simulator: the hit-interrupt
+construct is wired on the gen-7 render (`5e68c47`, IMPLEMENTED True; tests/sim 387 passed, the identity gate green, the gen-5
+fingerprints unchanged). Package gate at the last change: 1222 passed, 2 skipped, 1 xfailed. Owner items: #108 (and its native
+turning check), #80, cover at range, the fluid-cell cap; plus the list in the 16:31 block above.
