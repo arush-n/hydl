@@ -59,7 +59,9 @@ def view_for_skills(state: SharedState) -> SkillsView:
 
 #: The bodies' report names, in the order of ``skill_agent/runtime/scripted_bodies.py`` ``REPORTS`` (append-only there).
 #: Mirrored rather than imported: the decision layer does not import the skill layer's runtime (a test checks they agree).
-REPORT_NAMES: tuple[str, ...] = ("seen", "distance", "facing_me", "in_reach", "acting")
+#: ``position_used`` (2026-10-20): the body could place its request's position (a body that reads one and the perception
+#: channel that locates it); 0 means a position argument was ignored and the body acted as if none was given.
+REPORT_NAMES: tuple[str, ...] = ("seen", "distance", "facing_me", "in_reach", "acting", "position_used")
 
 
 def lane_reports(statuses: Sequence[RequestStatus], request_ids: Collection[int]) -> dict[str, float] | None:

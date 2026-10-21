@@ -357,7 +357,7 @@ class TargetPhase:
 
 #: The flag reports a Report condition reads (it holds when the report reads 1), and the two distance kinds (their
 #: argument is in blocks; ``distance`` is 0 when the target is unseen).
-REPORT_FLAGS: tuple[str, ...] = ("seen", "facing_me", "in_reach", "acting")
+REPORT_FLAGS: tuple[str, ...] = ("seen", "facing_me", "in_reach", "acting", "position_used")
 REPORT_DISTANCES: tuple[str, ...] = ("distance_above", "distance_below")
 #: The belief resets ``ticks_since_target_seen`` to 0 when the target is visible (``belief/core.py``), so below half a tick.
 _SEEN_HALF_TICK: float = 0.5
@@ -367,7 +367,8 @@ _SEEN_HALF_TICK: float = 0.5
 class Report:
     """A condition on one report of the lane's live request, with the belief as the fallback (module docstring).
 
-    ``kind`` is a flag report (``seen``, ``facing_me``, ``in_reach`` or ``acting``, which holds when the report reads 1),
+    ``kind`` is a flag report (``seen``, ``facing_me``, ``in_reach``, ``acting`` or ``position_used``, which holds when the
+    report reads 1),
     or a distance (``distance_above`` or ``distance_below``, comparing the ``distance`` report with ``argument`` in blocks).
     A report is absent when no status of the lane's live request carries it yet, or the body does not publish it. Then the
     belief answers:
@@ -377,7 +378,7 @@ class Report:
     - ``in_reach``: ``target_distance_blocks`` below STRIKE_REACH_BLOCKS (3.5), the default weapon's reach, with no facing
       check (task #113). The body's own report also needs the target seen and within 60 degrees of its front, and it
       uses the held weapon's reach;
-    - ``facing_me`` and ``acting``: the belief has no reading, so the condition does not hold.
+    - ``facing_me``, ``acting`` and ``position_used``: the belief has no reading, so the condition does not hold.
 
     Raises:
         ValueError: If the kind is unknown, a distance kind has no finite argument, or another kind has one.
