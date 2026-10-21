@@ -352,6 +352,87 @@ NATIVE_NPC_OBSERVATION_COMPATIBLE_IDENTITIES = frozenset(
         ),
     }
 )
+
+
+@dataclass(frozen=True)
+class _PrePin072Chunks:
+    """Chunks from the pre-pin 0.7.2 bridge, admitted on the 0.7.2 line only.
+
+    The 32 recorded 0.7.2 traces came from this bridge, before the #95 re-pin.
+    Its observation and actor-evidence contracts embed the 0.5.7 actor-evidence
+    hash (D47E87...), not the 0.7.2 one (E93BBEBE...). The schema, version,
+    capacities and layout are equal, so a chunk from this bridge is admitted
+    under the identities below. Every other bridge keeps the current rules, and
+    on the 0.5.7 line nothing changes.
+    """
+
+    bridge_sha256: str = (
+        "686BC4BC3DAE481AE857875961DAE75C02E2F4102B75B9B4193E60246EF80012"
+    )
+    observation_identity: tuple[str, int, str] = (
+        NATIVE_NPC_OBSERVATION_SCHEMA,
+        NATIVE_NPC_OBSERVATION_VERSION,
+        "1C53B327234B92637A222BCAAFE270865F7531100AA85FA8CC0540316CFCCEC5",
+    )
+    actor_evidence_contract_sha256: str = (
+        "D47E87B2D163F74C5093F94F209C14282A320D90AA3E5FC896E528250CFDA5AA"
+    )
+
+
+_PRE_PIN_072 = _PrePin072Chunks()
+
+
+def _is_pre_pin_072(bridge_sha256: str) -> bool:
+    return (
+        server_profile().certified_version == "0.7.2"
+        and bridge_sha256.upper() == _PRE_PIN_072.bridge_sha256
+    )
+
+
+def native_npc_observation_identity_admitted(
+    identity: tuple[Any, Any, Any], bridge_sha256: str
+) -> bool:
+    """Whether a chunk's observation identity is admitted on this server line.
+
+    A chunk from the pre-pin 0.7.2 bridge (``_PrePin072Chunks``) is admitted with
+    that bridge's identity only; every other chunk with
+    ``NATIVE_NPC_OBSERVATION_COMPATIBLE_IDENTITIES``.
+    """
+
+    if _is_pre_pin_072(bridge_sha256):
+        return identity == _PRE_PIN_072.observation_identity
+    return identity in NATIVE_NPC_OBSERVATION_COMPATIBLE_IDENTITIES
+
+
+def _pre_pin_072_frame(
+    frame: Mapping[str, Any], provenance: Mapping[str, Any]
+) -> Mapping[str, Any]:
+    """A pre-pin 0.7.2 row's capability frame, restamped for the frame parser.
+
+    The pre-pin bridge stamped every frame with the actor-evidence hash it
+    stamped its chunk header with (``_PrePin072Chunks``); the parser checks the
+    current line's. Only the stamp changes: the parser still checks the schema,
+    version, capacities and every row. Any other frame is returned unchanged.
+    """
+
+    if frame.get(
+        "evidence_contract_sha256"
+    ) != _PRE_PIN_072.actor_evidence_contract_sha256 or not _is_pre_pin_072(
+        str(provenance.get("bridge_sha256", ""))
+    ):
+        return frame
+    from hytalegym.jax.combat.observation.v3.schema.spec import (
+        learner_observation_v3_actor_evidence_contract_sha256,
+    )
+
+    return {
+        **frame,
+        "evidence_contract_sha256": (
+            learner_observation_v3_actor_evidence_contract_sha256()
+        ),
+    }
+
+
 NATIVE_NPC_TRACE_STATE_WIDTH = 14
 NATIVE_NPC_TRACE_CONTROL_WIDTH = 9
 NATIVE_NPC_TRACE_DEFAULT_CAPACITY = 4096
@@ -771,6 +852,8 @@ class NativeNpcTraceCapture:
             != NATIVE_NPC_WORLDVIEW_ENTITY_LAYOUT
         ):
             raise ValueError("unsupported NPC trace worldview contract")
+        bridge_sha256 = _text(source, "bridge_sha256")
+        pre_pin = _is_pre_pin_072(bridge_sha256)
         observation_identity = (
             source.get("observation_schema"),
             source.get("observation_version"),
@@ -781,8 +864,12 @@ class NativeNpcTraceCapture:
             NATIVE_NPC_OBSERVATION_VERSION,
             NATIVE_NPC_OBSERVATION_CONTRACT_SHA256,
         )
+        if pre_pin:
+            current_observation = _PRE_PIN_072.observation_identity
         if (
-            observation_identity not in NATIVE_NPC_OBSERVATION_COMPATIBLE_IDENTITIES
+            not native_npc_observation_identity_admitted(
+                observation_identity, bridge_sha256
+            )
             or source.get("observation_group_layout")
             != NATIVE_NPC_OBSERVATION_GROUP_LAYOUT
             or source.get("observation_attack_candidate_capacity")
@@ -810,16 +897,20 @@ class NativeNpcTraceCapture:
         status = _text(source, "status")
         if status not in _STATUSES:
             raise ValueError(f"unknown NPC trace status: {status}")
-        bridge_sha256 = _text(source, "bridge_sha256")
         if re.fullmatch(r"[0-9A-Fa-f]{64}", bridge_sha256) is None:
             raise ValueError("bridge_sha256 must be a SHA-256")
         actor_schema = _text(source, "actor_evidence_schema")
         actor_version = _integer(source, "actor_evidence_version")
         actor_contract = _text(source, "actor_evidence_contract_sha256").upper()
+        actor_expected = (
+            _PRE_PIN_072.actor_evidence_contract_sha256
+            if pre_pin
+            else NATIVE_NPC_ACTOR_EVIDENCE_CONTRACT_SHA256
+        )
         if (
             actor_schema != NATIVE_NPC_ACTOR_EVIDENCE_SCHEMA
             or actor_version != NATIVE_NPC_ACTOR_EVIDENCE_VERSION
-            or actor_contract != NATIVE_NPC_ACTOR_EVIDENCE_CONTRACT_SHA256
+            or actor_contract != actor_expected
         ):
             raise ValueError("unsupported NPC trace actor-evidence contract")
 
@@ -1573,6 +1664,7 @@ def _observation(
     capability_wire = row["action_capability_evidence"]
     if not isinstance(capability_wire, Mapping):
         raise TypeError(f"{key}.action_capability_evidence must be an object")
+    capability_wire = _pre_pin_072_frame(capability_wire, provenance)
     # Unavailable capability rows carry no learner values.  Older v4 captures
     # remain safe to decode after the live actor-evidence contract advances;
     # available rows still require the exact current parser and hash.
@@ -2943,6 +3035,7 @@ __all__ = [
     "NativeNpcWorldEntity",
     "NativeNpcWorldSnapshot",
     "concatenate_native_npc_traces",
+    "native_npc_observation_identity_admitted",
     "native_npc_trace_poll_request",
     "native_npc_trace_start_request",
     "native_npc_trace_stop_request",

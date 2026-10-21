@@ -47,6 +47,7 @@ from experimental.neural_agent.skill_library._common import (
     validate_batch,
     validate_skill_inputs,
 )
+from hytalegym.server_versions import server_profile
 
 PURSUIT_SKILL_ID: str = "pursuit"
 PURSUIT_VERSION: str = "v0001"
@@ -143,7 +144,16 @@ def load_pursuit_skill(batch: int) -> PursuitSkill:
     from arena.training.contracts.pursuit import pursuit_learner_action_scope
 
     lanes = validate_batch(batch)
-    policy_function, memory = pursuit_policy.load(lanes)
+    try:
+        policy_function, memory = pursuit_policy.load(lanes)
+    except ValueError as error:
+        line = server_profile().certified_version
+        if "Policy contract differs" not in str(error) or line == "0.5.7":
+            raise
+        raise ValueError(
+            "the stand-in pursuit checkpoint is a 0.5.7 policy; set "
+            f"HYTALERL_SERVER_VERSION=0.5.7 to use it (this runtime is {line})"
+        ) from error
     if tuple(memory.shape) != (lanes, SKILL_STATE_WIDTH):
         raise ValueError(
             f"pursuit memory must have shape {(lanes, SKILL_STATE_WIDTH)}, got {tuple(memory.shape)}"

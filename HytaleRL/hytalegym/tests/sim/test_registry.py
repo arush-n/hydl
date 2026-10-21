@@ -28,9 +28,9 @@ def test_unsupported_versions_fail_closed() -> None:
 
 def test_environment_default_follows_server_versions(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv(SERVER_VERSION_ENV, raising=False)
-    assert sim_profile().generation == "gen5"
-    monkeypatch.setenv(SERVER_VERSION_ENV, "0.7.2")
     assert sim_profile().generation == "gen7"
+    monkeypatch.setenv(SERVER_VERSION_ENV, "0.5.7")
+    assert sim_profile().generation == "gen5"
 
 
 def test_every_server_release_line_has_a_generation() -> None:

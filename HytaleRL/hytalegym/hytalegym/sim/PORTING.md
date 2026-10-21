@@ -265,6 +265,8 @@ Retrain the skill lineage on generation N (owner rule 2026-10-17: no re-stamped 
 `DEFAULT_SERVER_VERSION` in `server_versions/__init__.py` and mark the previous generation
 `deprecated=True`; keep its profile, data and overlay until the owner retires it.
 
+Flipped 2026-10-20 by owner ruling, before retraining: `DEFAULT_SERVER_VERSION` is 0.7.2 now, and 0.5.7 stays selectable with `HYTALERL_SERVER_VERSION=0.5.7`.
+
 ## What stays bit-exact
 
 - The committed gen-5 source (never edited; renders read `HEAD`).

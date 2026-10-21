@@ -12,7 +12,7 @@ a new release line means adding one module and one ``_MODULES`` entry.
 
 The active line comes from the version a live server reports (for example
 ``info["native_server_version"]``) or, for checks made before connecting, from
-the ``HYTALERL_SERVER_VERSION`` environment variable (default 0.5.7).
+the ``HYTALERL_SERVER_VERSION`` environment variable (default 0.7.2).
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ import os
 from pathlib import Path
 
 SERVER_VERSION_ENV = "HYTALERL_SERVER_VERSION"
-DEFAULT_SERVER_VERSION = "0.5.7"
+DEFAULT_SERVER_VERSION = "0.7.2"
 
 _MODULES = {
     (0, 5): "hytalegym.server_versions.v0_5",

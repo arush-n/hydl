@@ -1,7 +1,7 @@
 """Server version / ``ServerProfile`` -> generation profile -> data directory.
 
 Selection follows ``hytalegym.server_versions``: the release line of the given
-version (or of ``HYTALERL_SERVER_VERSION``, default 0.5.7). A new generation is
+version (or of ``HYTALERL_SERVER_VERSION``, default 0.7.2). A new generation is
 one ``sim/genN/profile.py`` plus one ``GENERATION_MODULES`` entry, mirroring
 the server profile registry.
 """

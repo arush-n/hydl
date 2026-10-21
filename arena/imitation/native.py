@@ -29,7 +29,6 @@ from hytalegym.worldgen import (
     NATIVE_NPC_LIFECYCLE_SOURCE_ACTOR_LIFECYCLE,
     NATIVE_NPC_TRACE_INTERACTION_LAYOUT,
     NATIVE_NPC_TRACE_INTERNAL_LAYOUT,
-    NATIVE_NPC_OBSERVATION_COMPATIBLE_IDENTITIES,
     NATIVE_NPC_OBSERVATION_GROUP_LAYOUT,
     NATIVE_NPC_TRACE_SCHEMA,
     NATIVE_NPC_TRACE_STATE_LAYOUT,
@@ -40,6 +39,7 @@ from hytalegym.worldgen import (
     NATIVE_NPC_WORLDVIEW_SCHEMA,
     NATIVE_NPC_WORLDVIEW_VERSION,
     NativeNpcTraceCapture,
+    native_npc_observation_identity_admitted,
 )
 from hytalegym.jax.combat.observation.v3.native.channels.events import (
     NativeDamageEventBatch,
@@ -266,7 +266,9 @@ def native_trace_sequence(
         capture.observation_version,
         capture.observation_contract_sha256,
     )
-    if observation_identity not in NATIVE_NPC_OBSERVATION_COMPATIBLE_IDENTITIES:
+    if not native_npc_observation_identity_admitted(
+        observation_identity, capture.bridge_sha256
+    ):
         raise ValueError("unsupported native semantic-observation contract")
     time_to_attack, time_to_attack_valid = _time_to_event(
         capture.attack_activation, capture.delta_seconds

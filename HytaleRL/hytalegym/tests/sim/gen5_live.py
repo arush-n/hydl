@@ -16,7 +16,7 @@ from hytalegym.server_versions import world_fixture_root
 HYTALEGYM = Path(__file__).resolve().parents[2]
 PACKAGE = HYTALEGYM / "hytalegym"
 ITEM_PROGRAMS = PACKAGE / "jax/combat/arsenal/assets/hytale_0_5_7_item_programs_v1.json"
-CRAFTING_RECORDING = world_fixture_root(HYTALEGYM) / "native_crafting_catalog_recording.json"
+CRAFTING_RECORDING = world_fixture_root(HYTALEGYM, "0.5.7") / "native_crafting_catalog_recording.json"
 
 
 def player_locomotion() -> dict[str, Any]:
