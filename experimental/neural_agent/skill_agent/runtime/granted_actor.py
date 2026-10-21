@@ -28,7 +28,7 @@ import jax.numpy as jnp
 from adk.architecture.components import ActorDecision
 from experimental.neural_agent.skill_agent.contract.surface import SCOPE_NAMES, scope_of
 from experimental.neural_agent.skill_agent.runtime.combiner import ActiveRequestTable, BodyStep, CombinedStep
-from experimental.neural_agent.skill_agent.runtime.scripted_bodies import BODIES, Position, idle
+from experimental.neural_agent.skill_agent.runtime.scripted_bodies import BODIES, POSITION_BODIES, Position, idle
 from experimental.neural_agent.skill_agent.runtime.scripted_bodies import reports as body_reports
 from hytalegym.jax.combat.observation.v3.policy import ARSENAL_POLICY_ACTION_HEAD_NAMES
 
@@ -65,16 +65,17 @@ def granted_factors(table: ActiveRequestTable, observation: Any, mask: jax.Array
 
 
 def _granted(table: ActiveRequestTable, observation: Any, mask: jax.Array,
-             bodies: Sequence[ArrayBody]) -> tuple[jax.Array, list[jax.Array], jax.Array]:
-    """The merged action, every body's own choices (in verb order) and the neutral choices."""
+             bodies: Sequence[ArrayBody]) -> tuple[jax.Array, list[jax.Array], jax.Array, list[Position]]:
+    """The merged action, every body's own choices (in verb order), the neutral choices and every body's position."""
 
-    outputs = []
+    outputs, positions = [], []
     lanes = jnp.arange(table.verb.shape[0])
     for verb, body in enumerate(bodies):
         scope = jnp.argmax(table.verb == verb, axis=1)  # the scope it is granted on (any one: they share a request)
+        granted = table.verb[lanes, scope] == verb  # where it holds no scope, it has no request and no position
+        positions.append(Position(table.position[lanes, scope], table.position_present[lanes, scope] & granted))
         outputs.append(body(observation, mask, table.ticks_since_grant[lanes, scope].astype(jnp.int32),
-                            table.scalars[lanes, scope],
-                            Position(table.position[lanes, scope], table.position_present[lanes, scope])))
+                            table.scalars[lanes, scope], positions[-1]))
     columns = []
     neutral = idle(observation, mask, table.ticks_since_grant[:, 0], table.scalars[:, 0])
     for head, scope in enumerate(HEAD_SCOPES):
@@ -82,7 +83,7 @@ def _granted(table: ActiveRequestTable, observation: Any, mask: jax.Array,
         for verb, output in enumerate(outputs):
             choice = jnp.where(granted == verb, output[:, head], choice)
         columns.append(choice)
-    return jnp.stack(columns, axis=1).astype(jnp.int32), outputs, neutral
+    return jnp.stack(columns, axis=1).astype(jnp.int32), outputs, neutral, positions
 
 
 class GrantedActor:
@@ -105,9 +106,10 @@ class GrantedActor:
     def __call__(self, state: ActiveRequestTable, belief: Any, goal_payload: Any, actor_input: Any, key: jax.Array,
                  /) -> ActorDecision:
         observation = actor_input.legal_observation
-        factors, outputs, neutral = _granted(state, observation, jnp.asarray(actor_input.action_mask, jnp.bool_),
-                                             self._bodies)
-        reports = jnp.stack([body_reports(observation, output, neutral) for output in outputs], axis=1)
+        factors, outputs, neutral, positions = _granted(
+            state, observation, jnp.asarray(actor_input.action_mask, jnp.bool_), self._bodies)
+        reports = jnp.stack([body_reports(observation, output, neutral, position if verb in POSITION_BODIES else None)
+                             for verb, output, position in zip(self.verbs, outputs, positions)], axis=1)
         lanes = factors.shape[0]
         zeros = jnp.zeros((lanes,), dtype=jnp.float32)
         return ActorDecision(state=state, action_factors=factors, logits=None, behavior_log_probability=zeros,

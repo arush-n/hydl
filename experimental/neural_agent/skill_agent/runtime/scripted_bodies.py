@@ -508,35 +508,47 @@ BODIES = {"idle": idle, "evader": evader, "sword": sword, "guard": guard, "punis
           "keep_range": keep_range, "avoid": avoid, "hide": hide, "shortbow": shortbow}
 """Verb -> scripted body."""
 
+POSITION_BODIES: frozenset[str] = frozenset({"evader", "keep_range", "avoid", "hide"})
+"""The bodies that read their request's position: the first three as the remembered target, ``hide`` as its cover
+point. The others ignore it (the shortbow aims at the seen row only)."""
+
 FACING_ME_DEGREES = 60.0
 """A target faces the agent when its head turns within this angle of the bearing to the agent: half the 120-degree
 view sector of the gym's legal observation, so the agent stands in the sector the target looks through. The entity
 row publishes the angle as ``head_facing_error``, degrees over 180."""
 
-REPORTS: tuple[str, ...] = ("seen", "distance", "facing_me", "in_reach", "acting")
+REPORTS: tuple[str, ...] = ("seen", "distance", "facing_me", "in_reach", "acting", "position_used")
 """What a body reports each tick, by name; the list is append-only, as the verb ids are (IDEAS.md idea 8). ``seen``:
 the target is perceived (0 or 1). ``distance``: its distance in blocks, 0 when unseen. ``facing_me``: it faces the
 agent (``FACING_ME_DEGREES``). ``in_reach``: a strike would land (the strike's gate: within the weapon's ``reach``
 and ``FRONT_DEGREES``). ``acting``: the body moves some head away from neutral this tick; a granted body that never acts
-is waiting, for reach, a wind-up or a sight of the target."""
+is waiting, for reach, a wind-up or a sight of the target. ``position_used`` (2026-10-20): the body can place its
+request's position, which needs a request that carries one, a body that reads it (``POSITION_BODIES``) and the
+perception channel's own position in the observation (``body_frame``; the gen-7 ``perception_v2`` construct). A
+request that sent a position and reads 0 has it ignored: a remembered target counts as unknown, and ``hide`` takes
+``avoid``'s retreat."""
 
 
-def reports(observation: Any, factors: jax.Array, neutral: jax.Array) -> jax.Array:
+def reports(observation: Any, factors: jax.Array, neutral: jax.Array, position: Position | None = None) -> jax.Array:
     """``REPORTS`` of one body this tick, float32[B, len(REPORTS)], from the legal observation and the body's choices
-    ``factors`` int32[B, 12] against the neutral choices ``neutral``."""
+    ``factors`` int32[B, 12] against the neutral choices ``neutral``. ``position``: the granted request's position for
+    a body in ``POSITION_BODIES``, None for the others."""
 
     seen = target(observation)
     facing = jnp.abs(observation.base.entity_f32[:, 0, _FLOAT["head_facing_error"]]) * 180.0 <= FACING_ME_DEGREES
     in_reach = seen.seen & (seen.distance <= reach(observation)) & (jnp.abs(seen.bearing) <= FRONT_DEGREES)
+    used = jnp.zeros_like(seen.seen)
+    if position is not None:
+        used = jnp.asarray(position.present, jnp.bool_) & body_frame(observation, position.world)[2]
     columns = (seen.seen, jnp.where(seen.seen, seen.distance, 0.0), seen.seen & facing, in_reach,
-               jnp.any(factors != neutral, axis=1))
+               jnp.any(factors != neutral, axis=1), used)
     return jnp.stack([jnp.asarray(column, jnp.float32) for column in columns], axis=1)
 
 assert HEAD["locomotion_gait_compass"] == LOCOMOTION_HEAD and HEAD["body_yaw_delta_bins"] == BODY_YAW_HEAD
 
 __all__ = ["AIM_HEIGHT_BLOCKS", "AIM_TOLERANCE_DEGREES", "ARROW_LAUNCH_HEIGHTS", "ASSUMED_LAUNCH_HEIGHT",
            "AVOID_BAND_BLOCKS", "BODIES", "FACING_ME_DEGREES", "HIDE_ARRIVED_BLOCKS", "HIDE_SNEAK_BLOCKS",
-           "LEAD_LAG_TICKS", "MELEE_REACH_BLOCKS", "REPORTS", "SHORTBOW_THRESHOLD_SECONDS", "ArrowAim", "BowTiers",
-           "Position", "Target", "arrow_pitch", "avoid", "body_frame", "bow_tiers", "draw_tier", "evader", "guard",
-           "hide", "idle", "keep_range", "legal", "punish", "reach", "reports", "shortbow", "sword", "target",
-           "velocity_scales"]
+           "LEAD_LAG_TICKS", "MELEE_REACH_BLOCKS", "POSITION_BODIES", "REPORTS", "SHORTBOW_THRESHOLD_SECONDS",
+           "ArrowAim", "BowTiers", "Position", "Target", "arrow_pitch", "avoid", "body_frame", "bow_tiers", "draw_tier",
+           "evader", "guard", "hide", "idle", "keep_range", "legal", "punish", "reach", "reports", "shortbow", "sword",
+           "target", "velocity_scales"]
