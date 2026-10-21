@@ -81,7 +81,8 @@ def counter() -> Program:
     Rule order (the priority list):
       1. guard, COMBAT_PHASE_PRIORITY (0.4): the target winds up, at any distance. The skill layer's guard body acts
          only within GUARD_RANGE_BLOCKS (5.0, ``scripted_bodies.py``), so beyond 5 blocks the verb idles.
-      2. punish, COMBAT_PHASE_PRIORITY (0.4): the target is in its recovery and within STRIKE_REACH_BLOCKS.
+      2. punish, COMBAT_PHASE_PRIORITY (0.4): the target is in its recovery and the body reports it in reach
+         (``in_reach``, task #113; with no report, the belief's distance below STRIKE_REACH_BLOCKS).
       3. sword, SWORD_PRIORITY (0.3), charge COUNTER_HOLD_SECONDS: the same recovery window in reach. The skill layer's
          ``punish`` is this strike gated to the recovery (``scripted_bodies.py``, line 24), so rule 3 acts only where rule 2
          cannot: when punish is blocked by the feedback rule (``programs.py`` item 3, a no_reissue window above 0 s). With
@@ -91,15 +92,16 @@ def counter() -> Program:
     """
 
     lang = _language()
+    recovery_in_reach = lang.AllOf((lang.TargetPhase("recovery"), lang.Report("in_reach")))
     return lang.Program(
         steps=(lang.ProgramStep("keep_range", params=lang.KEEP_RANGE_BAND, exit=lang.EXIT_DONE),),
         interrupts=(
             lang.Interrupt("guard", lang.COMBAT_PHASE_PRIORITY, lang.TargetPhase("windup")),
-            lang.Interrupt("punish", lang.COMBAT_PHASE_PRIORITY, lang.TargetPhase("recovery", lang.STRIKE_REACH_BLOCKS)),
+            lang.Interrupt("punish", lang.COMBAT_PHASE_PRIORITY, recovery_in_reach),
             lang.Interrupt(
                 "sword",
                 lang.SWORD_PRIORITY,
-                lang.TargetPhase("recovery", lang.STRIKE_REACH_BLOCKS),
+                recovery_in_reach,
                 params=(COUNTER_HOLD_SECONDS,),
             ),
         ),
@@ -112,7 +114,8 @@ def pressure() -> Program:
     Rule order (the priority list):
       1. evader, EVADER_PRIORITY (0.5): the agent is damaged and its self health is below PRESSURE_EVADE_FRACTION (0.3).
       2. guard, COMBAT_PHASE_PRIORITY (0.4): the target winds up and self health is below PRESSURE_GUARD_FRACTION (0.5).
-      3. sword, SWORD_PRIORITY (0.3), a tap (PRESSURE_HOLD_SECONDS): the target is within STRIKE_REACH_BLOCKS, in any phase.
+      3. sword, SWORD_PRIORITY (0.3), a tap (PRESSURE_HOLD_SECONDS): the body reports the target in reach (``in_reach``,
+         task #113; with no report, the belief's distance below STRIKE_REACH_BLOCKS), in any phase.
       step. pursuit, exit done: close on the target until a rule holds.
     """
 
@@ -133,7 +136,7 @@ def pressure() -> Program:
             lang.Interrupt(
                 "sword",
                 lang.SWORD_PRIORITY,
-                Predicate("distance_below", lang.STRIKE_REACH_BLOCKS),
+                lang.Report("in_reach"),
                 params=(PRESSURE_HOLD_SECONDS,),
             ),
         ),
@@ -143,10 +146,11 @@ def pressure() -> Program:
 def hit_and_run() -> Program:
     """HIT_AND_RUN: strike from the band where the sword outranges the target's sweep, then back out.
 
-    The strike band is 3.1 to 3.5 blocks: from KEEP_RANGE_BAND's near edge, 0.1 outside the target's sweep reach
-    (MELEE_REACH_BLOCKS 3.0), to the sword's press reach (STRIKE_REACH_BLOCKS 3.5). The brief's 3.6 is KEEP_RANGE_BAND's
-    far edge; the skill layer's sword presses only within 3.5 (``scripted_bodies.py``, REACH_BLOCKS), so a strike band to
-    3.6 would hold a sword that does not press.
+    The strike band runs from KEEP_RANGE_BAND's near edge, 0.1 outside the target's sweep reach (MELEE_REACH_BLOCKS 3.0),
+    to the sword's press reach: the body's ``in_reach`` report (task #113; the held weapon's reach, skill layer commit
+    eb48407). With no report that reach is STRIKE_REACH_BLOCKS (3.5), so the band is 3.1 to 3.5 blocks. The brief's 3.6
+    is KEEP_RANGE_BAND's far edge, not the strike band's: the skill layer's sword presses only within its weapon's reach
+    (``scripted_bodies.py``, REACH_BLOCKS), so a strike band to 3.6 would hold a sword that does not press.
 
     Rule order (the priority list):
       1. evader, EVADER_PRIORITY (0.5): EVADE_WHEN_HURT (on damage and self health below EVADE_HEALTH_FRACTION).
@@ -164,7 +168,7 @@ def hit_and_run() -> Program:
     lang = _language()
     strike_band = lang.AllOf(
         (
-            Predicate("distance_below", lang.STRIKE_REACH_BLOCKS),
+            lang.Report("in_reach"),
             lang.Not(Predicate("distance_below", lang.KEEP_RANGE_BAND[0])),
         )
     )
@@ -191,7 +195,8 @@ def ambush(hide_verb: str = "hide") -> Program:
 
     Rule order (the priority list):
       1. evader, EVADER_PRIORITY (0.5): EVADE_WHEN_HURT.
-      2. sword, SWORD_PRIORITY (0.3), charge AMBUSH_HOLD_SECONDS: the target is within STRIKE_REACH_BLOCKS.
+      2. sword, SWORD_PRIORITY (0.3), charge AMBUSH_HOLD_SECONDS: the body reports the target in reach (``in_reach``,
+         task #113; with no report, the belief's distance below STRIKE_REACH_BLOCKS).
       step. ``hide_verb``, exit done: stay in cover. Risk for its designers: if the verb reports completion on arrival,
          the step ends and the program idles at cover, so the bodies must hold the cover point without reporting it.
     """
@@ -205,7 +210,7 @@ def ambush(hide_verb: str = "hide") -> Program:
             lang.Interrupt(
                 "sword",
                 lang.SWORD_PRIORITY,
-                Predicate("distance_below", lang.STRIKE_REACH_BLOCKS),
+                lang.Report("in_reach"),
                 params=(AMBUSH_HOLD_SECONDS,),
             ),
         ),

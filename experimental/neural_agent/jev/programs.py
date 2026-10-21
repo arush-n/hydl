@@ -143,10 +143,11 @@ renewed there while ``no_reissue_seconds`` is 0. A companion's deferral also rai
 
 Combat program (2026-10-19, ``P_COMBAT``). One pursuit step (exit "done") with four rules and the evader as
 interrupts. The evader on damage (``EVADE_ON_DAMAGE``: the belief's ``ticks_since_damage``, as above) has the top
-priority. Then: ``guard`` while the target winds up; ``punish`` in its recovery and ``sword`` within
-STRIKE_REACH_BLOCKS (the reach of a strike through an ability slot); ``keep_range`` in its sweep within
-MELEE_REACH_BLOCKS (the target's sweep reach, a proxy). Pursuit runs when no rule holds,
-which is the target out of reach, or idle or cooling down. The reads, with the belief's field names: the distance is
+priority. Then: ``guard`` while the target winds up; ``punish`` in its recovery and ``sword`` while the body reports
+``in_reach`` (task #113, 2026-10-20: the held weapon's reach, from the skill layer's bodies, commit eb48407). With no
+``in_reach`` report the lane falls back to the belief's distance below STRIKE_REACH_BLOCKS, the reach of a strike
+through an ability slot. ``keep_range`` in its sweep within MELEE_REACH_BLOCKS (the target's sweep reach, a proxy).
+Pursuit runs when no rule holds, which is the target out of reach, or idle or cooling down. The reads, with the belief's field names: the distance is
 ``target_distance_blocks`` (known only while ``target_visible`` is known and above 0.5). The attack phase is the
 legal observation's ``target_i32`` column ``attack_phase`` (``ActorPolicyInput.legal_observation.base``), read as the
 code of ``ATTACK_PHASE_CODES`` and only while the target is visible. The belief itself carries no attack field: its
@@ -256,6 +257,8 @@ MELEE_REACH_BLOCKS: float = 3.0
 #: (iron sword, first ability pressed every tick at an inert target straight ahead, 8 lanes at stepped distances):
 #: hits from 3.4 to 3.7 blocks centre to centre, none from 3.8; 3.5 keeps 0.2 under the measured maximum. The
 #: opponent's own hits landed at 2.54 to 3.00 blocks (MELEE_REACH_BLOCKS 3.0 confirmed as the sweep reach).
+#: Since task #113 (2026-10-20) the combat programs strike on the body's ``in_reach`` report (the held weapon's reach);
+#: this distance is what ``Report("in_reach")`` reads when the lane has no report (the belief fallback, class ``Report``).
 STRIKE_REACH_BLOCKS: float = 3.5
 #: keep_range's band (band_min, band_max): outside the opponent's 3.0 sweep and inside the 3.7 strike reach, so the
 #: agent can hit without being hit (the skill layer's measurement above).
@@ -272,6 +275,8 @@ _PROGRAM, _INTERRUPT = 0, 1
 _SEEN: int = feature_index("ticks_since_target_seen")
 _DISTANCE_COLUMN: int = feature_index("target_distance_blocks")
 _VISIBLE_PREDICATE: Predicate = Predicate("target_visible")
+#: ``Report("in_reach")``'s belief fallback: the fixed strike reach, evaluated as the Predicate it was before task #113.
+_IN_REACH_FALLBACK: Predicate = Predicate("distance_below", STRIKE_REACH_BLOCKS)
 _ATTACK_PHASE_COLUMN: int = fields.field_index("target_i32", "attack_phase")
 #: The widest finite world box: the executor's own check of a request cannot know the world (item 9).
 _ANY_WORLD: tuple[tuple[float, ...], tuple[float, ...]] = ((-float(INT32_MAX),) * 3, (float(INT32_MAX),) * 3)
@@ -369,7 +374,10 @@ class Report:
 
     - ``seen``: ``ticks_since_target_seen`` is known and below half a tick (the belief resets it when the target is visible);
     - ``distance_above`` and ``distance_below``: ``target_distance_blocks``, known only while the target is visible;
-    - ``facing_me``, ``in_reach`` and ``acting``: the belief has no reading, so the condition does not hold.
+    - ``in_reach``: ``target_distance_blocks`` below STRIKE_REACH_BLOCKS (3.5), the default weapon's reach, with no facing
+      check (task #113). The body's own report also needs the target seen and within 60 degrees of its front, and it
+      uses the held weapon's reach;
+    - ``facing_me`` and ``acting``: the belief has no reading, so the condition does not hold.
 
     Raises:
         ValueError: If the kind is unknown, a distance kind has no finite argument, or another kind has one.
@@ -414,6 +422,10 @@ class Report:
             else:
                 return False
             return distance > self.argument if self.kind == "distance_above" else distance < self.argument
+        if self.kind == "in_reach":
+            if reports is not None and "in_reach" in reports:
+                return reports["in_reach"] > 0.5
+            return _IN_REACH_FALLBACK.evaluate(features, known)
         return reports is not None and reports.get(self.kind, 0.0) > 0.5
 
 
@@ -588,9 +600,9 @@ P_COMBAT = Program(
     interrupts=(
         EVADE_WHEN_HURT,
         Interrupt("guard", COMBAT_PHASE_PRIORITY, TargetPhase("windup")),
-        Interrupt("punish", COMBAT_PHASE_PRIORITY, TargetPhase("recovery", STRIKE_REACH_BLOCKS)),
+        Interrupt("punish", COMBAT_PHASE_PRIORITY, AllOf((TargetPhase("recovery"), Report("in_reach")))),
         Interrupt("keep_range", COMBAT_PHASE_PRIORITY, TargetPhase("sweep", MELEE_REACH_BLOCKS), params=KEEP_RANGE_BAND),
-        Interrupt("sword", SWORD_PRIORITY, Predicate("distance_below", STRIKE_REACH_BLOCKS), params=(0.0,)),
+        Interrupt("sword", SWORD_PRIORITY, Report("in_reach"), params=(0.0,)),
     ),
 )
 PROGRAMS: dict[str, Program] = {"J0": P_J0, "SEQ": P_SEQ, "COMBAT": P_COMBAT}
