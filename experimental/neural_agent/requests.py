@@ -73,8 +73,11 @@ shortbow (``jax/combat/arsenal/profiles/hytale_0_5_7.py``, ``_iron_shortbow``) a
 and 1.2 s for k = 0 to 4; in the engine each tier is one tap of ability slot k, and the arrow spawns 6 ticks after the
 release at 30 ticks a second (release_tick = ceil(threshold x 30) + 6: ticks 9, 15, 24, 33 and 42). The release delay is
 not part of the hold. (Pinned 2026-10-20 after three readings of the tiers were in play; the skill layer confirms or
-objects when it builds the body.) ``avoid`` takes the entity and drives
-locomotion, with the scalars ``band_min`` and ``band_max``: it retreats beyond the band, away from the target. The skill
+objects when it builds the body.) ``avoid`` takes the entity or the position and drives
+locomotion, with the scalars ``band_min`` and ``band_max``: it retreats beyond the band, away from the target. (Since
+2026-10-20, task #116: the position is the remembered threat while it is unseen, as for pursuit, the evader and keep_range,
+task #96; the skill layer's catalogue already declared avoid that way. Requests that named an unseen entity were rejected
+``entity_unknown``.) ``hide`` keeps the entity: its position is the cover point, not the threat. The skill
 layer writes their bodies (``skill_agent/runtime/scripted_bodies.py``, ``BODIES``); its shortbow body landed on 2026-10-20
 (ebf4092): ``hold_seconds`` picks the tier by the mapping above, the head aims through the gaze heads (yaw from the
 head-frame bearing, pitch from the engine's arrow model), and the tier is tapped once both errors are within a degree;
@@ -254,7 +257,7 @@ ARGUMENT_SCHEMAS: Mapping[str, ArgumentSchema] = MappingProxyType(
         "keep_range": ArgumentSchema(any_of=(("entity", "position"),), scopes=("locomotion",)),
         "hide": ArgumentSchema(entity=True, scopes=("locomotion",)),
         "shortbow": ArgumentSchema(any_of=(("entity", "position"),), scopes=("hands", "abilities_magic", "gaze")),
-        "avoid": ArgumentSchema(entity=True, scopes=("locomotion",)),
+        "avoid": ArgumentSchema(any_of=(("entity", "position"),), scopes=("locomotion",)),
     }
 )
 """The schemas of the proof-of-concept skills (``skill_library/``) and of the four combat verbs (2026-10-19) and the three guerrilla verbs (2026-10-20), keyed
@@ -267,7 +270,7 @@ uncommitted at 2026-10-19.
 Pursuit closes on a target and the evader keeps its distance from one
 (``skill_library/descriptions.py``). Today both read the belief's single target, so the entity names
 which one is meant. Idle needs nothing and drives nothing.
-(Task #96, in effect 2026-10-20: pursuit, evader and keep_range take ``any_of`` entity or position, so the belief's
+(Task #96, in effect 2026-10-20: pursuit, evader and keep_range take ``any_of`` entity or position, and avoid since task #116, so the belief's
 remembered target position stands in while the target is unseen; the skill layer's library copies the ``any_of``
 groups, d4c6cc1, so its entity-unknown check still fires when the entity is the argument.) The module docstring says where the scopes
 come from. Replace this mapping with the catalogue parser's by passing ``schemas=`` to :func:`validate`.
