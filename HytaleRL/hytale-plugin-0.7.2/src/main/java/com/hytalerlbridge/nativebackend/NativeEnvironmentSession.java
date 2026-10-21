@@ -2275,7 +2275,15 @@ final class NativeEnvironmentSession
             // Two levers, matching the simulator the policy was trained in.
             actorState.applyBodyYawDelta(action.bodyDeltaYaw());
             Inventory inventory = npc.getInventory();
-            if (inventory != null && action.hotbarSlot() >= 0 && action.hotbarSlot() < 9) {
+            ItemContainer hotbar = inventory == null ? null : inventory.getHotbar();
+            // A slot past the role's own hotbar (Trork_Unarmed has 5) crashed the
+            // server's interaction tick and removed the NPC (PORT-0.7.2.md), so
+            // such a request is ignored here.
+            if (
+                hotbar != null
+                    && action.hotbarSlot() >= 0
+                    && action.hotbarSlot() < Short.toUnsignedInt(hotbar.getCapacity())
+            ) {
                 inventory.setActiveHotbarSlot(ref, (byte) action.hotbarSlot(), store);
             }
             if (actorId == 0) {
@@ -2384,16 +2392,22 @@ final class NativeEnvironmentSession
                     double bodyAngle = (worldMoveDirection - 1)
                         * (Math.PI / 4.0);
                     double bodyYaw = actorState.desiredBodyYaw();
-                    double longitudinal = Math.cos(bodyAngle);
-                    double lateral = Math.sin(bodyAngle);
+                    double[] move = action.gaitScaledLocalMove(
+                        Math.cos(bodyAngle), Math.sin(bodyAngle)
+                    );
+                    double longitudinal = move[0];
+                    double lateral = move[1];
                     dx = longitudinal * -Math.sin(bodyYaw)
                         + lateral * Math.cos(bodyYaw);
                     dy = 0.0;
                     dz = longitudinal * -Math.cos(bodyYaw)
                         - lateral * Math.sin(bodyYaw);
                 } else {
-                    forward /= length;
-                    strafe /= length;
+                    double[] move = action.gaitScaledLocalMove(
+                        forward / length, strafe / length
+                    );
+                    forward = move[0];
+                    strafe = move[1];
                     double pitchScale = diveFixture
                         ? Math.cos(actorState.desiredPitch())
                         : 1.0;
@@ -2407,16 +2421,11 @@ final class NativeEnvironmentSession
                     dz = forward * pitchScale * -Math.cos(travelYaw)
                         - strafe * Math.sin(travelYaw);
                 }
-                double vectorLength = Math.sqrt(
-                    dx * dx + dy * dy + dz * dz
-                );
-                if (vectorLength > 1.0) {
-                    dx /= vectorLength;
-                    dy /= vectorLength;
-                    dz /= vectorLength;
-                }
+                // The vector's length is the gait's relative speed: the walk
+                // controller reads Steering.getTranslation().length() against the
+                // role's top speed. setTranslationRelativeSpeed would renormalise
+                // it (0.7.2 bytecode: Vector3d.normalize(speed)).
                 body.setTranslation(dx, dy, dz);
-                body.setTranslationRelativeSpeed(1.0);
             }
             // The body carries its OWN commanded heading. This used to be
             // desiredYaw -- the camera -- so the chest was dragged round by every
@@ -6795,7 +6804,8 @@ final class NativeEnvironmentSession
                 "camera_delta_pitch",
                 "hotbar_slot",
                 "world_move_direction",
-                "use"
+                "use",
+                "gait"
             )
         );
         List<String> unsupportedActions = new ArrayList<>();

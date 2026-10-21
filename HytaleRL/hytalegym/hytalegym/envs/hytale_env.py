@@ -39,6 +39,19 @@ HOST_ISSUED_LEARNER_V3_ACTION_SCHEMA_ID = (
 )
 
 
+def _native_step_action(translation, gait: int) -> dict[str, Any]:
+    """Attach the policy's gait to a legal translated action.
+
+    A refused decision is the translator's no-op, which carries no gait, so the
+    bridge keeps its idle default for it. A bridge that predates gait (the 0.5.7
+    line) ignores the key and moves every gait at run speed.
+    """
+    action = dict(translation.action)
+    if translation.legal:
+        action["gait"] = int(gait)
+    return action
+
+
 def host_issued_learner_v3_action_contract_sha256() -> str:
     """Identify the host-owned exact issued-row evidence law."""
 
@@ -612,7 +625,11 @@ class HytaleEnv(gym.Env):
             else self._learner_v3_noop_action_factors
         )
         self._host_issued_learner_v3_action_factors_available = True
-        return {"type": "step", "action": translation.action}
+        gait = int(np.asarray(action.gait)[0])
+        return {
+            "type": "step",
+            "action": _native_step_action(translation, gait),
+        }
 
     def _clear_host_issued_learner_v3_action(self) -> None:
         """Publish a canonical placeholder when no learner row was issued."""

@@ -39,7 +39,10 @@ public record AgentAction(
     // into the model's authored window around the body afterwards; this session
     // used to hand one yaw to both, so an actor could not walk one way and look
     // another. Zero means "no body steer this tick".
-    double bodyDeltaYaw
+    double bodyDeltaYaw,
+    // Learner gait: 0 idle, 1 walk, 2 run, 3 sprint, 4 sneak (LearnerArsenalAction.gait).
+    // It sets body speed only (gaitScaledLocalMove); posture and stamina are not modelled.
+    int gait
 ) {
     /** Backward-compatible constructor for callers predating typed World verbs. */
     public AgentAction(
@@ -94,7 +97,8 @@ public record AgentAction(
             abilitySlot,
             worldMoveDirection,
             NativeWorldVerbRequest.none(),
-            0.0
+            0.0,
+            0
         );
     }
 
@@ -219,6 +223,9 @@ public record AgentAction(
                 "worldMoveDirection must be in [0, 8]"
             );
         }
+        if (gait < 0 || gait >= GAIT_FORWARD.length) {
+            throw new IllegalArgumentException("gait must be in [0, 4]");
+        }
         if (nativeWorldVerbRequest == null) {
             nativeWorldVerbRequest = NativeWorldVerbRequest.none();
         }
@@ -243,6 +250,36 @@ public record AgentAction(
                 "At most one standard-input interaction root may start per action"
             );
         }
+    }
+
+    // The simulator's player gait tables (jax/combat/types.py
+    // PLAYER_GAIT_{FORWARD,BACKWARD,STRAFE}_SPEED_MULTIPLIERS), indexed by gait.
+    // Idle is 1.0 in every table, so a sender without a gait moves as before.
+    private static final double[] GAIT_FORWARD = {1.0, 0.3, 1.0, 1.273, 0.55};
+    private static final double[] GAIT_BACKWARD = {1.0, 0.3, 0.65, 1.273, 0.4};
+    private static final double[] GAIT_STRAFE = {1.0, 0.3, 0.8, 1.273, 0.45};
+    private static final int GAIT_RUN = 2;
+    private static final int GAIT_SPRINT = 3;
+    // An exact diagonal is not forward-dominant. Double trigonometry would sprint
+    // there where the simulator's float32 runs (the policy agent's
+    // PlayerLocomotionProjection uses the same epsilon).
+    private static final double SPRINT_FORWARD_DOMINANCE_EPSILON = 1.0e-7;
+
+    /**
+     * Scales a unit body-local move (longitudinal forward, lateral right) by this
+     * action's gait, as the simulator does (runtime/step.py): each axis by its own
+     * table, and sprint falls back to run unless the move is forward-dominant. The
+     * result's length is the body's speed relative to the role's top speed. Sprint
+     * stamina (the simulator's other fallback) is not modelled.
+     */
+    public double[] gaitScaledLocalMove(double longitudinal, double lateral) {
+        int applied = gait;
+        if (applied == GAIT_SPRINT
+            && !(longitudinal > Math.abs(lateral) + SPRINT_FORWARD_DOMINANCE_EPSILON)) {
+            applied = GAIT_RUN;
+        }
+        double along = longitudinal >= 0.0 ? GAIT_FORWARD[applied] : GAIT_BACKWARD[applied];
+        return new double[] {longitudinal * along, lateral * GAIT_STRAFE[applied]};
     }
 
     public static AgentAction noop() {
@@ -273,7 +310,8 @@ public record AgentAction(
             guardHeld, 0, -1,
             worldMoveDirection,
             NativeWorldVerbRequest.none(),
-            0.0
+            0.0,
+            gait
         );
     }
 
@@ -309,7 +347,8 @@ public record AgentAction(
             NativeWorldVerbRequest.fromActionMap(map),
             // getDouble returns 0.0 for a missing key, so a sender predating the
             // body/head split still means "no body steer" and behaves as before.
-            getDouble(map, "body_delta_yaw")
+            getDouble(map, "body_delta_yaw"),
+            getInt(map, "gait")
         );
     }
 

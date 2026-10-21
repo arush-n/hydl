@@ -22,7 +22,7 @@ consumes the protocol and evidence contracts through `HytaleRL/hytalegym`.
 - The `environment`, `combat`, `geometry`, `imitation`, and `worldgen` source
   packages implement the major bridge surfaces.
 - The native action frame, including the body-relative movement ring and the
-  currently unsupported gait field, is documented in
+  gait field (per-axis speed tables, 2026-10-21), is documented in
   [`../hytalegym/hytalegym/jax/combat/observation/v3/NATIVE-PORT.md`](../hytalegym/hytalegym/jax/combat/observation/v3/NATIVE-PORT.md).
 - [`gradlew`](gradlew) and [`gradlew.bat`](gradlew.bat) provide the build
   wrapper.

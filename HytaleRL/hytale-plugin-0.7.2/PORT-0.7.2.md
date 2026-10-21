@@ -40,8 +40,10 @@ changes that matter for training) is in [`TRAINING-0.7.2.md`](TRAINING-0.7.2.md)
 
 Pre-existing, not a port change: with random actions, choosing hotbar slot ≥ 5
 crashes the server's interaction tick on the default `Trork_Unarmed` (hotbar 5)
-and removes the NPC, on 0.5.10 and 0.7.2 alike. The bridge accepts slots 0–8
-(the Python action space is `Discrete(9)`).
+and removes the NPC, on 0.5.10 and 0.7.2 alike. The Python action space offers
+slots 0–8 (`Discrete(9)`, the player's hotbar). Since 2026-10-21 (#122) the 0.7.2
+bridge ignores a slot at or past the role's own hotbar capacity, so the active
+slot stays where it was; the 0.5.10 bridge still accepts 0–8.
 
 ## What 0.7.2 changed, and how the port maps it
 
