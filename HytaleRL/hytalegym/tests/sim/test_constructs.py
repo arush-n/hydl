@@ -33,7 +33,7 @@ IMPLEMENTED_SWITCHES = {"line_of_sight", "npc_walk_jump_velocity", "dagger_swing
                        "bench_crafting", "crafting_materials", "weapon_durability", "landing_walk_resume",
                        "crafting_bench_tier", "crafting_memories", "crafting_time", "processing_benches", "diagram_crafting",
                        "guard_reentry_cooldown", "ability_start_split", "shortbow_reset_ammo", "crossbow_scalar_variant",
-                       "shield_bash_root", "reset_head_heading", "crafting_augment_tags"}
+                       "shield_bash_root", "reset_head_heading", "crafting_augment_tags", "hit_interrupt"}
 
 
 #: Switches a gen-7 decision leaves at the gen-5 default: the module stays a stub and is never reached

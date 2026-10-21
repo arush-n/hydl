@@ -32,8 +32,8 @@ class Constructs:
     dodge_action_head: tuple[str, ...] = ("left", "right", "forward", "back")
     # Melee hits that inherit DamageEntityParent_Hit_Interrupt cancel the
     # target's attack, stun it and apply a flinch. Owner: hit_interrupt.py (P3).
-    # Pure logic in place (mechanics/hit_interrupt.py); the engine hooks are not wired yet (IMPLEMENTED False), so
-    # the switch changes no render until they are.
+    # Wired 2026-10-20 (part B, IMPLEMENTED True): on the gen-7 render an eligible target (the measured roles) gains
+    # Eligible from tick 42 and a flagged hit adds Stunned, Flinch and Reaction A; non-eligible roles are untouched.
     hit_interrupt: bool = False
     # A regenerating mana pool spent by casts (Stats/Mana.json Max > 0).
     # Owner: sim/gen7/mechanics/mana.py (P3).

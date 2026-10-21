@@ -709,6 +709,37 @@ PATCHES = (
           "                craft_accepted\n"
           "            )\n",
           "11p", _PROCESSING, "a processing request is accepted when its bench starts (in reach, idle, fuel loaded); a refused request keeps its inventory"),
+    # Row 5a, hit interrupt (construct hit_interrupt, part B): the eligible-role flags ride the arsenal config (built from
+    # entity_role_ids) and the mechanics state (copied at reset). The config field defaults to None, so the config pytree is
+    # unchanged until the builder hook sets it; the state field is all False until a reset with eligible roles.
+    Patch("hit_interrupt_config_field", "combat/arsenal/schema/types.py",
+          "    legal_observation: bool = False\n",
+          "    legal_observation: bool = False\n"
+          "    # Gen 7 (row 5a, hit interrupt): per-entity eligible-role flags from entity_role_ids; None without the builder hook.\n"
+          "    hit_interrupt_eligible: object = None\n",
+          "5a", "tests/sim/test_hit_interrupt.py",
+          "the config field the reset hook reads; None keeps the config pytree (gen 5, and gen 7 with the switch off)"),
+    Patch("hit_interrupt_state_field", "combat/mechanics/schema/types.py",
+          "    failure_bits: Array\n",
+          "    failure_bits: Array\n"
+          "    # Gen 7 (row 5a, hit interrupt): per-entity eligible-role flags, copied from the config at reset (bool [batch, entity]).\n"
+          "    hit_interrupt_eligible: Array\n",
+          "5a", "tests/sim/test_hit_interrupt.py",
+          "the state field the clock hook reads; gen 5 does not apply this patch; gen 7 with the switch off holds all False"),
+    Patch("hit_interrupt_state_init", "combat/mechanics/factory.py",
+          "        guard_active=jnp.zeros(entity_shape, dtype=jnp.bool_),\n",
+          "        guard_active=jnp.zeros(entity_shape, dtype=jnp.bool_),\n"
+          "        hit_interrupt_eligible=jnp.zeros(entity_shape, dtype=jnp.bool_),\n",
+          "5a", "tests/sim/test_hit_interrupt.py",
+          "the eligible flags start False at construction; the reset hook sets them from the config"),
+    Patch("hit_interrupt_loadout_argument", "combat/arsenal/runtime.py",
+          "            engagement_target_id=decision_targeting.engagement_target_id,\n        )\n",
+          "            engagement_target_id=decision_targeting.engagement_target_id,\n"
+          "            # Gen 7 (row 5a, hit interrupt): the agent's loadout maps each fired event to its attack row.\n"
+          "            loadout=config.loadout,\n        )\n",
+          "5a", "tests/sim/test_hit_interrupt.py",
+          "the loadout keyword of process_direct_events; the hit wrapper strips it when the switch is off"),
+
 )
 
 _MECHANICS = "hytalegym.sim.gen7.mechanics"
@@ -719,12 +750,22 @@ HOOKS = (
     Hook("crafting_augment_gate", "crafting/runtime.py", "_recipe_precondition",
          f"{_MECHANICS}.crafting_augment_tags:gate_hook", "crafting_augment_tags", "active", "11x", _AUGMENT,
          "a requirement slot whose tags the context's bench does not grant is cleared before the engine's precondition"),
-    Hook("hit_interrupt_flinch", "combat/mechanics/runtime/kernel.py", "resolve_damage_events",
-         f"{_MECHANICS}.hit_interrupt:construct", "hit_interrupt", "stub", "5a",
-         "interrupt/flinch differential against an eligible NPC (Skeleton_Fighter or Goblin_Scrapper): "
-         "flinch 0.5 s, stun 0.7 s, attack cancelled",
-         "31 attacks parent DamageEntityParent_Hit_Interrupt in 0.7.2; Trork_Brawler, Trork_Unarmed and "
-         "Kweebec_Razorleaf carry no eligibility (static reading)"),
+    Hook("hit_interrupt_roles", "combat/arsenal/runtime.py", "arsenal_runtime_config",
+         f"{_MECHANICS}.hit_interrupt:construct_roles", "hit_interrupt", "active", "5a",
+         differential="tests/sim/test_hit_interrupt.py: the eligible flags follow entity_role_ids (the measured role on the target: [False, True]; another role: all False)",
+         note="sets ArsenalRuntimeConfig.hit_interrupt_eligible; the measured roles are the default, the 22-role static set is a comment"),
+    Hook("hit_interrupt_reset", "combat/arsenal/runtime.py", "reset_arsenal_batch",
+         f"{_MECHANICS}.hit_interrupt:construct_reset", "hit_interrupt", "active", "5a",
+         differential="tests/sim/test_hit_interrupt.py: the state flags equal the config flags after reset",
+         note="copies the config flags into CombatMechanicsState.hit_interrupt_eligible"),
+    Hook("hit_interrupt_clock", "combat/arsenal/runtime.py", "step_arsenal_batch",
+         f"{_MECHANICS}.hit_interrupt:construct_clock", "hit_interrupt", "active", "5a",
+         differential="tests/sim/test_hit_interrupt.py: Eligible from tick 42 and refreshed on the 0.25 s grid (45, 53, 60) on the render",
+         note="before each step: Eligible for the eligible rows from tick 42, refreshed every 0.25 s; Enraged when a flinch ends with Recovery_Pending"),
+    Hook("hit_interrupt_flinch", "combat/arsenal/effects/events.py", "process_direct_events",
+         f"{_MECHANICS}.hit_interrupt:construct_hits", "hit_interrupt", "active", "5a",
+         differential="tests/sim/test_hit_interrupt.py: a hit before tick 42 adds nothing; the first hit at or after 42 adds Stunned, Flinch and Reaction A in one tick; removal after 15, 21 and 120 ticks; a non-eligible role is never affected",
+         note="a requested direct hit on the target from a flagged attack of the agent's loadout applies the gate chain and effects (landed approximated)"),
     Hook("mana_pool", "combat/mechanics/factory.py", "default_mechanics_rules",
          f"{_MECHANICS}.mana_pool:construct", "mana_pool", "active", "7a",
          "native_duel refill from 0 (live 0.7.2 bridge, native_agent_mana): +1 per 8.95 world ticks = 0.2982 s, "
