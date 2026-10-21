@@ -1,5 +1,10 @@
 """The guerrilla program (2026-10-20, task #99): avoid when threatened, shoot from range, hide when seen.
 
+An example, not a deliverable (owner, 2026-10-20): a workflow like this is what the LLM teaches the decision model, and
+nobody needs to hand-code it. What must hold is that the features it uses work on their own and compose: the verbs
+(``shortbow``, ``avoid``, ``hide``, ``keep_range``), companion requests (``Interrupt.beside``), the bodies' reports and the
+remembered target position. The program stays as a worked example and a test fixture; it is not tuned further.
+
 One step, pursuit until "done", and three interrupts. The priorities decide (``programs.py`` item 5): the highest priority
 whose condition holds on the lane wins, and ties go to the lower index.
 
