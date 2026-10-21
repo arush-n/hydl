@@ -1516,8 +1516,23 @@ def _step_arsenal_program_batch(
                 policy_desired_velocity * current_speed[:, AGENT_ENTITY, None],
             )
         )
+        # Opt-in F2 (#108, ``ArsenalWorldCapabilities.knockback_gated_control_lock``): where it is set, the agent's
+        # control lock reads a hit only if the agent carries an applied knockback push now. The read is here, after
+        # the direct damage packet above has applied its push to ``mechanics_candidate``, so a hit's own push counts.
+        # Off, ``jnp.where`` returns the input unchanged, so the default path is bit-identical.
+        agent_pushed = jnp.any(
+            mechanics_candidate.applied_velocity[:, AGENT_ENTITY] != jnp.float32(0.0),
+            axis=-1,
+        )
+        lock_input = motion_combat._replace(
+            target_damage_applied_this_tick=jnp.where(
+                commands.world.knockback_gated_control_lock,
+                motion_combat.target_damage_applied_this_tick & agent_pushed,
+                motion_combat.target_damage_applied_this_tick,
+            )
+        )
         base_candidate, base_components = _microtick(
-            motion_combat,
+            lock_input,
             pause_draw,
             strafe_frequency_draw,
             strafe_duration_draw,

@@ -158,3 +158,34 @@ Caveat (read from the code; arrows not measured): the same leaf sets entity 1's 
 `muzzle_yaw`), and its pitch reads the level `target_head_pitch`. Entity 1's arrows therefore leave along its body yaw,
 level, where entity 0's leave along its look (before this change they left along its spawn heading). Shortbow numbers
 from entity 1 are not valid; shoot from entity 0. Entity 0's view of entity 1's yaw (the legacy path in `multi_actor/views.py`) now shows the body yaw too.
+
+### Two engine opt-ins: the control lock and entity 1's regeneration (task #108, 2026-10-20)
+
+`make_duel_arena(..., knockback_gated_control_lock=True, target_regeneration=True)` turns both on, as the duel's default. With both `False` the duel is the stock engine bit for bit: `test_opt_ins_off_leave_the_stock_duel_bit_for_bit` compares every output leaf of three probes (knockback 1 tap, knockback 0 freeze, a 480-tick regeneration probe) with digests recorded on the stock engine before the change. Single-agent arenas do not pass the keywords and keep the stock path.
+
+- **F2, the lock follows a push.** The engine locks the agent's control on any damage: `target_damage_applied_this_tick` is set by `_resolve_damage` (`arsenal/runtime.py`) and read by the agent locomotion as `force_pushed` (`runtime/agent.py`). With the opt-in, `ArsenalWorldCapabilities.knockback_gated_control_lock` (set per batch on the duel's commands) ANDs that flag with `agent_pushed`: the agent's applied knockback velocity read after the direct damage packet has applied its push (`arsenal/runtime.py`, `lock_input`, just before `_microtick`). A hit locks only where it pushes. At knockback 0 no hit pushes, so nothing locks: the stock freeze after the first hit is gone.
+- **F3, entity 1 regenerates.** The engine heals the agent slot only (`runtime/step.py`, `_tick_regeneration`). `tick_target_regeneration` (`runtime/step.py`) applies the same rule to entity 1: `regen_fraction` of `target_max_health` every `regen_interval_ticks` after `regen_delay_ticks` without damage, while alive and below maximum. The duel calls it after each tick with the multi-actor locomotion's `ticks_since_damage[:, 1]`, which already counts that tick. The two bodies share a role, so the same rule is the consistent choice; the regeneration fields have no target-prefixed counterparts. Native NPC regeneration is not verified.
+- **Why a world-capability field and not a config field.** A new `ArsenalRuntimeConfig` field would enter the checkpoint provenance digest (`training/multi_actor/checkpoint/provenance.py`, `arsenal_runtime_config_content_sha256` over every leaf, line 50), and a new `CombatParams` field would enter the Region reset filter digest (`training/region_resets.py`, `_combat_params_sha256`, recorded in `artifacts/region-combat-reset-pool-*`). Either would move those digests for the default config. Threading a flag through `step_multi_actor_arena` would need an edit to `training/multi_actor/runtime.py`, which this lane did not touch.
+- **Not changed.** The target's own lock: its `force_pushed` comes from the multi-actor locomotion (`training/multi_actor/locomotion.py:537`). The pending-hit path (`_defend_pending_target_damage`) is not reached in the duel, because the legacy target attack is gated on `target_active`, which the duel sets False. The effects engine (`effects/runtime/engine.py`) is not on the duel path either.
+
+Measured (gen 5, 64 lanes, seed 0, 600 ticks, roles (Trork_Brawler, Trork_Brawler), seats exchanged, scratch harness `lane_108/seatrun.py`). Dealt difference (entity 0 minus entity 1 in each run, ± SE). Knockback 1 is the spec; knockback 0 is the extra table, because F2 is inert when every hit pushes.
+
+| mirror, knockback 1 | stock, run A / run B | both opt-ins, run A / run B | F2 only, per lane |
+|---|---|---|---|
+| sword PRESSURE | −0.42 ± 2.40 / +4.05 ± 2.18 | −4.33 ± 2.17 / −0.48 ± 2.03 | 0 of 64 lanes change |
+| sword HIT_AND_RUN | −9.41 ± 2.36 / −5.92 ± 2.39 | unchanged | 0 of 64 |
+| mace PRESSURE | −7.09 ± 2.25 / −8.45 ± 2.14 | unchanged | 0 of 64 |
+| mace HIT_AND_RUN | −6.83 ± 2.20 / −8.14 ± 1.99 | unchanged | 0 of 64 |
+
+Only F3 moves a knockback-1 bout: the 600-tick sword PRESSURE mirror (29 of 64 lanes change), where long undecided bouts reach the 450-tick delay.
+
+| mirror, knockback 0 | stock, run A / run B | both opt-ins, run A / run B | F2 only, run A / run B |
+|---|---|---|---|
+| sword PRESSURE | +11.00 ± 2.50 / +12.98 ± 2.30 | −1.25 ± 2.19 / +1.25 ± 2.19 | +11.00 ± 2.50 / +13.34 ± 2.30 |
+| sword HIT_AND_RUN | −2.23 ± 1.99 / −0.52 ± 2.06 | +0.03 ± 2.20 / −0.03 ± 2.20 | +0.03 ± 2.20 / −0.03 ± 2.20 |
+| mace PRESSURE | +1.00 ± 1.00 / −1.19 ± 1.00 | +1.14 ± 1.01 / −1.14 ± 1.01 | +1.14 ± 1.01 / −1.14 ± 1.01 |
+| mace HIT_AND_RUN | −0.41 ± 0.51 / −1.64 ± 0.86 | +1.14 ± 1.01 / −1.14 ± 1.01 | +1.09 ± 1.01 / −1.14 ± 1.01 |
+
+At knockback 0 the stock duel gives the same sign in both seat orders on sword PRESSURE and on both HIT_AND_RUN mirrors; with both opt-ins each pair has opposite signs. F2 alone gives the both-on values to within 0.05 on sword HIT_AND_RUN and both mace mirrors. F3 (the gap between the F2-only and both-on columns) is what changes sword PRESSURE, where the 600-tick bouts reach the 450-tick delay.
+
+On an engine built from HEAD (no `knockback_gated_control_lock` field and no `tick_target_regeneration`), both opt-ins are no-ops: `_opt_in_engine` in `duel_arena.py` resolves the pieces when a duel is built, so the module imports, and `test_duel_builds_and_steps_on_an_engine_without_the_108_pieces` pins that path.

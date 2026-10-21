@@ -622,6 +622,36 @@ def _tick_regeneration(
     )
 
 
+def tick_target_regeneration(
+    combat: CombatState,
+    ticks_since_damage: jax.Array,
+    params: CombatParams,
+) -> CombatState:
+    """Opt-in F3 (#108): regenerate entity 1 by the rule ``_tick_regeneration`` applies to entity 0.
+
+    Nothing in the engine calls this on the default path, which heals the agent slot only. The duel calls it
+    after each tick with ``ticks_since_damage[:, TARGET_ENTITY]`` from the multi-actor locomotion, which already
+    counts this tick. The rule is the agent's: ``regen_fraction`` of ``target_max_health`` every
+    ``regen_interval_ticks`` once ``regen_delay_ticks`` have passed without damage, while alive and below maximum.
+    The delay, interval and fraction are the shared regeneration fields (``CombatParams`` has no target-prefixed ones).
+    """
+
+    health = combat.health[:, TARGET_ENTITY]
+    maximum = params.target_max_health
+    eligible = (health > 0.0) & (health < maximum)
+    regen_tick = (
+        eligible
+        & (ticks_since_damage >= params.regen_delay_ticks)
+        & ((ticks_since_damage - params.regen_delay_ticks) % params.regen_interval_ticks == 0)
+    )
+    next_health = jnp.where(
+        regen_tick,
+        jnp.minimum(maximum, health + maximum * params.regen_fraction),
+        health,
+    )
+    return combat._replace(health=combat.health.at[:, TARGET_ENTITY].set(next_health))
+
+
 def _combat_info(
     state: CombatState,
     attack_requested: jax.Array,

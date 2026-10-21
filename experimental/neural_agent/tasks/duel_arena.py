@@ -338,6 +338,23 @@ def _target_head_on_body(arsenal):
     return arsenal._replace(combat=combat._replace(target_head_yaw=combat.yaw[:, TARGET_ENTITY]))
 
 
+def _opt_in_engine():
+    """The #108 engine pieces as ``(lock gate available, tick_target_regeneration or None)``.
+
+    Resolved when a duel is built, not at import, so an engine or render built from HEAD (which has neither piece)
+    still imports and runs; there both opt-ins are no-ops and the duel is the stock path.
+    """
+
+    from hytalegym.jax.combat.arsenal.schema.types import ArsenalWorldCapabilities
+
+    lock_gate_available = "knockback_gated_control_lock" in ArsenalWorldCapabilities._fields
+    try:
+        from hytalegym.jax.combat.runtime.step import tick_target_regeneration
+    except ImportError:
+        tick_target_regeneration = None
+    return lock_gate_available, tick_target_regeneration
+
+
 def make_duel_arena(
     batch: int,
     loadouts: Sequence[str | Sequence[str]],
@@ -348,6 +365,8 @@ def make_duel_arena(
     max_health: tuple[float, float] | None = None,
     roles: tuple[str, str] | None = None,
     arrows: tuple[int, int] | None = None,
+    knockback_gated_control_lock: bool = True,
+    target_regeneration: bool = True,
 ) -> DuelArena:
     """Build the two-entity duel on the open-flat fixture.
 
@@ -389,6 +408,14 @@ def make_duel_arena(
             ``initial_inventory``. A shot removes one arrow. ``None`` keeps the reset bit-identical. An entity with
             a positive count whose loadout holds no arrow stack raises ``ValueError``.
 
+        knockback_gated_control_lock: The #108 F2 opt-in (``ArsenalWorldCapabilities.knockback_gated_control_lock``).
+            A hit locks the agent's control only where the agent is also pushed that tick, not on any damage. The
+            engine default locks on any damage, which at knockback 0 froze entity 0 after its first hit.
+        target_regeneration: The #108 F3 opt-in. Entity 1 regenerates by the agent's rule
+            (``tick_target_regeneration``). ``False`` leaves entity 1 unhealed, as the engine does.
+
+    The two opt-ins need the #108 engine pieces; on an engine built from HEAD (which predates them) both are no-ops.
+
     Returns:
         A :class:`DuelArena`. ``reset(keys, *, entity_position=None, entity_health=None,
         entity_yaw=None)`` returns ``(state, observation_entity0, observation_entity1,
@@ -417,6 +444,15 @@ def make_duel_arena(
             f"arrows must be (entity 0 arrows, entity 1 arrows), two non-negative ints, got {arrows!r}"
         )
 
+    for name, value in (
+        ("knockback_gated_control_lock", knockback_gated_control_lock),
+        ("target_regeneration", target_regeneration),
+    ):
+        if not isinstance(value, bool):
+            raise TypeError(f"{name} must be a bool")
+    lock_gate_available, tick_target_regeneration = _opt_in_engine()
+    lock_on = knockback_gated_control_lock and lock_gate_available
+    regeneration_on = target_regeneration and tick_target_regeneration is not None
     params = default_combat_params(microticks=1) if combat_params is None else combat_params
     if int(params.microticks) != 1:
         raise ValueError("combat_params.microticks must be 1: the duel takes one decision per tick")
@@ -540,12 +576,27 @@ def make_duel_arena(
             assignment,
             maximum_turn_degrees=MAXIMUM_TURN_DEGREES,
         )
-        commands = empty_arsenal_commands(batch, entity_count=ENTITY_COUNT)._replace(
-            world=capabilities
-        )
+        world = capabilities
+        if lock_on:
+            world = capabilities._replace(
+                knockback_gated_control_lock=jnp.full((batch,), True, dtype=jnp.bool_),
+            )
+        commands = empty_arsenal_commands(batch, entity_count=ENTITY_COUNT)._replace(world=world)
         transition = step_multi_actor_arena(
             arena, controls, assignment, keys, params, commands, config
         )
+        if regeneration_on:
+            # Opt-in F3 (#108): entity 1 regenerates by the agent's rule. The multi-actor locomotion keeps its ticks.
+            regenerated = tick_target_regeneration(
+                transition.state.arsenal.combat,
+                transition.state.locomotion.ticks_since_damage[:, TARGET_ENTITY],
+                params,
+            )
+            transition = transition._replace(
+                state=transition.state._replace(
+                    arsenal=transition.state.arsenal._replace(combat=regenerated)
+                )
+            )
         next_state = transition.state._replace(
             arsenal=_target_head_on_body(transition.state.arsenal)
         )

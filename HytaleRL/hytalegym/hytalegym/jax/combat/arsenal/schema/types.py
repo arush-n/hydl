@@ -397,6 +397,9 @@ class ArsenalWorldCapabilities(NamedTuple):
     entity_only_area: Array
     static_area_placement: Array
     area_center: Array
+    # Opt-in (#108 F2; False by default, and the factory leaves it off): a hit locks the agent's control only
+    # where the agent is also pushed this tick (``arsenal/runtime.py``, the input of ``_microtick``). The duel sets it.
+    knockback_gated_control_lock: Array
 
 
 class ArsenalCommands(NamedTuple):
