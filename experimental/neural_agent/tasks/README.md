@@ -25,14 +25,33 @@ It is the `combat_open_flat` legal scene (default reset, default melee opponent,
 geometry added through `geometry_arsenal_world_capabilities` and `geometry_provider`:
 
 - Floor: solid and opaque over the whole 9 by 9 window about the spawn block (origin `(0, 65, 0)`).
-- Pillars: six 1 by 1 columns, 3 high, at block offsets `(3,0) (1,3) (-1,3) (-3,0) (-1,-3) (1,-3)`, radii 3.0 and sqrt(10) from the spawn.
-  The record (`describe()["pillars"]`) gives the offsets, radii and angles; the contract digest covers the layout and the flags.
+- Pillars: six 1 by 1 columns, 3 high, at block offsets `(3,0) (1,3) (-1,3) (-3,0) (-2,-3) (2,-3)`, radii 3.0 and sqrt(13) from the spawn.
+  Task #116 (2026-10-20) moved the two front columns one block outward, from `(-1,-3)` and `(1,-3)`. They boxed in the NPC's
+  spawn: its box is 0.95 wide at centre `(0.5, -2.0)`, so its diagonal chase step collided, its navigation was rejected, and the
+  sticky `target_navigation_unsupported` froze it there. Measured with `resolve_aabb_motion` on the cover geometry: 42 of 110
+  straight steps (0.02 and 0.1 block) from the spawn toward the window's agent cells collided before the move and 0 after.
+  The record (`describe()["pillars"]`) gives the offsets, radii and angles. The contract digest covers the layout, so the move
+  changed it: the pinned digests in `test_na_arenas.py` were re-captured, and the pre-move layout reproduces the old values.
 - Radius, measured on 2026-10-20 with `geometry_perception_line_of_sight_result` (`hytalegym/jax/world/perception/los.py`):
   the requested 5 to 15 blocks is beyond the local window (`hytalegym/geometry/contract.py`, `CELL_RADIUS = 4`). A clear
   line is visible at block offsets 1 to 4 and not at 5, where `geometry_exhausted` is set. The usable radius is 3 blocks
   on an axis (a pillar at 3 blocks hides a target at 4) and 4.24 (sqrt 18) on the diagonal (pillar (3,3) hides (4,4)).
-- Consequence (read in `hytalegym/jax/combat/arsenal/runtime.py` 2240 and 2364-2368, not run): `geometry_exhausted` is sticky
-  and truncates the episode, so an actor that leaves the window ends the episode. Measured only for a target placed at offset 5.
+- Window limit (measured 2026-10-20 with `resolve_aabb_motion` and `environment_damage_contact`): `geometry_exhausted` is sticky
+  and ends the episode (`arsenal/runtime.py` 2240 and 2364-2368; `environment.py` publishes `done = terminated | truncated`). So an
+  agent centre beyond about -3.7 or +4.7 blocks on x or z from the origin is a world error: `terminated` is set with both bodies
+  at full health (the composition's `terminated_alive` column). On x the switch lies between -3.695 and -3.700 and between 4.695
+  and 4.700; on z between -3.690 and -3.705 and between 4.695 and 4.705. So combat_cover is not an arena for kiting at range.
+  Measured by the diagnosis lane, not re-run here: on combat_open_flat a same-speed chaser follows a retreating agent at 3.4 to
+  3.9 blocks.
+- The NPC moves only when it sees the agent and its straight step is unobstructed (`hytalegym/jax/combat/opponents/legacy/motion.py`,
+  `_target_navigation_rejected`). `combat_cover` passes no `target_navigation_provider`, so any rejected step sets the sticky
+  `target_navigation_unsupported`. Probe (gen 5, the diagnosis lane's `scripted_avoid.py`, 200 ticks, the agent backing away):
+  before the move, 4 of 4 lanes had the flag set before the window exit, the NPC frozen within 0.05 block of its spawn. After the
+  move, 6 of 16 lanes still set the flag (ticks 109 to 153) while the agent was inside the window: the NPC was about (-0.49, -2.66),
+  its box a few hundredths of a block from the east face of the `(-2,-3)` column, with line of sight clear. Of the 16 lanes, 8
+  left the window at tick 43, and 2 stayed inside without the flag (the NPC moved up to 3.5 blocks). Gen 7 (the `gen7.py`
+  launcher, 16 lanes, the same driver): no flag, but every lane left the window by tick 43, so that run does not reach the chase.
+  The pillar move does not make combat_cover a chase arena; a navigation provider for it is the open fix, not made here.
 - Loadout: `iron_sword` (default) or `iron_shortbow`, through `build_arena(..., loadout=...)`, and `--loadout` on the CLI.
   The opponent's loadout is unchanged.
 - Arrows (task #111, 2026-10-20): `build_arena(..., arrows=N)` seeds the agent's `Weapon_Arrow_Crude` stack with N at every reset,
@@ -41,7 +60,8 @@ geometry added through `geometry_arsenal_world_capabilities` and `geometry_provi
   spawns nothing. A positive N on `iron_sword` raises. An arrows build is named `neural_agent/cover_<loadout>_arrows<N>` (scene
   `..._legal_...`), because agent names are process-wide. CLI: `--arrows N`. Measured on gen 5 (2026-10-20): reset holds N,
   one tier-4 tap spawns at tick 42 and takes one arrow.
-- Gate: `tests/experimental/neural_agent/test_na_arenas.py` (cover layout and digest, loadout, and the behavioural case).
+- Gate: `tests/experimental/neural_agent/test_na_arenas.py` (cover layout and digest, loadout, the behavioural case, and the NPC's
+  free spawn step, task #116).
 
 ## duel_arena.py (2026-10-20, task #101, the skill layer's league ask L1)
 

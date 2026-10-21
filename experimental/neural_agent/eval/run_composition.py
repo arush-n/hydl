@@ -156,6 +156,7 @@ COLUMNS: tuple[str, ...] = (
     "hp_taken",
     "kills",
     "deaths",
+    "terminated_alive",
     "goal_switches_per_lane_run",
     "core_switches_per_lane_run",
     "interrupt_onsets",
@@ -202,7 +203,7 @@ re-engagements               = completed episodes with a reengaged_tick; the cat
 damage_events                = sum over completed episodes of the rising edges of DAMAGE_RECEIVED in the episode  [src: metrics.completed_episodes]
 evader_share                 = evader_ticks / lane_ticks;  evader_ticks = lane-ticks whose goal in force is the evader;  evader_entries = its rising edges  [src: run_composition._score_run]
 hp_dealt, hp_taken           = sums over the timed run of the agent's damage dealt and received, absolute HP (arsenal entity counters, row AGENT_ENTITY)  [src: run_composition._score_run]
-kills, deaths                = completed episodes whose last tick is terminated: a kill when the target's health there is <= 0, else a death  [src: run_composition._score_run]
+kills, deaths, terminated_alive = completed episodes whose last tick is terminated: a kill when the target's health there is <= 0; else a death when the agent's health there is <= 0; else terminated_alive, a terminated end with both alive (a world error, such as geometry exhaustion on combat_cover)  [src: run_composition._score_run]
 damage_ticks                 = episode ticks t with DAMAGE_RECEIVED active and known at t  [src: run_composition._score_run]
 pursuit_entry_ticks          = episode ticks t with skill[t] = pursuit and skill[t-1] != pursuit (the first tick counts)  [src: run_composition._score_run]
 goal_switches_per_lane_run   = sum over lane-runs of sum_{t=1}^{T-1} [skill[t] != skill[t-1]] * [goal_valid[t]] / lane_runs  [src: metrics.goal_switches]
@@ -287,12 +288,14 @@ class _Totals:
     evader_ticks: int = 0
     evader_entries: int = 0
     #: Whether the arena publishes its damage counters (combat arenas). Then the agent's absolute HP dealt and taken,
-    #: and the episodes that ended with a kill (target health at or below 0) or a death.
+    #: and the episodes that ended with a kill (target health at or below 0), a death (agent health at or below 0)
+    #: or neither (terminated_alive: both alive on the terminated last tick, a world error such as geometry exhaustion).
     combat_known: bool = False
     hp_dealt: float = 0.0
     hp_taken: float = 0.0
     kills: int = 0
     deaths: int = 0
+    terminated_alive: int = 0
     #: Lane-ticks with the re-engagement distance known, and lane-ticks read (combat_baseline).
     distance_known: int = 0
     distance_ticks: int = 0
@@ -470,6 +473,19 @@ def _terminated_flag(info: Any) -> jax.Array:
     return jnp.asarray(flag, dtype=jnp.bool_)
 
 
+def _post_step_agent_health(environment: Any) -> jax.Array:
+    """Return the agent's absolute health [B] from the post-step environment state.
+
+    The single-actor arsenal carry keeps its arsenal state at ``.runtime``; the multi-actor arena (flat_pursuit,
+    ``MultiActorArenaState`` in hytalegym jax/training/multi_actor/runtime.py) keeps it at ``.arsenal``.
+    """
+
+    from hytalegym.jax.combat.types import AGENT_ENTITY
+
+    arsenal = environment.runtime if hasattr(environment, "runtime") else environment.arsenal
+    return arsenal.combat.health[:, AGENT_ENTITY]
+
+
 def composition_record_fn() -> Callable[[HierarchicalLoopTransition], dict[str, jax.Array]]:
     """Return the collector's record function for the composition metrics.
 
@@ -528,6 +544,9 @@ def composition_record_fn() -> Callable[[HierarchicalLoopTransition], dict[str, 
             records["damage_dealt"] = arsenal.entity_damage_dealt[:, AGENT_ENTITY]
             records["damage_received"] = arsenal.entity_damage_received[:, AGENT_ENTITY]
             records["target_health"] = combat.target_health
+            # The agent's absolute health after the step: next_state is the post-step state, taken before any autoreset
+            # (adk/runtime/hierarchical.py), the state that combat.target_health is read from.
+            records["agent_health"] = _post_step_agent_health(transition.next_state.environment)
         return records
 
     return record
@@ -660,11 +679,15 @@ def _score_run(
         totals.catches += int(metrics["caught"] or metrics.get("reengaged_tick") is not None)
         totals.damage_events += episode["damage_events"]
         if totals.combat_known and host["terminated"][episode["end"], lane]:
-            # The episode's last tick is a natural ending: the target is down (a kill) or the agent is (a death).
+            # The episode's last tick is terminated: the target is down (a kill), else the agent is (a death). With
+            # reengage, terminated is a death or a world error, so both alive is terminated_alive (a world error such
+            # as geometry exhaustion, not a death). On flat_pursuit terminated is a catch, and no outcome is counted.
             if host["target_health"][episode["end"], lane] <= 0.0:
                 totals.kills += 1
-            else:
+            elif host["agent_health"][episode["end"], lane] <= 0.0:
                 totals.deaths += 1
+            elif reengage:
+                totals.terminated_alive += 1
         totals.episodes.append(
             {"lane": lane, "start": episode["start"], "end": episode["end"], **metrics, "verdict": verdict}
         )
@@ -807,6 +830,7 @@ def _arm_row(
         "hp_taken": totals.hp_taken if totals.combat_known else None,
         "kills": totals.kills if totals.combat_known else None,
         "deaths": totals.deaths if totals.combat_known else None,
+        "terminated_alive": totals.terminated_alive if totals.combat_known else None,
         "jev_lane_failures": lane_failures,
     }
 
@@ -1086,7 +1110,8 @@ def _caveats(runs: Sequence[ArmRun], *, arena: str, runner: str, agent: str | No
     if arena == "flat_pursuit":
         lines += [
             "- Terminated is read as a catch. This is an inference, not a test: the flat arena closes combat, "
-            "so no actor can die there (`tasks/flat_arena.py` step_detailed).",
+            "so no actor can die there (`tasks/flat_arena.py` step_detailed). Kills, deaths and terminated_alive are "
+            "therefore 0 here by construction, and no outcome is claimed for a catch.",
             "- The flat arena produces no DAMAGE_RECEIVED event. This run injects none, "
             "because the injection is an ablation (ADR-001 D5). So the interrupt columns are empty here, and "
             "an episode cannot be composed without an injected damage event.",
@@ -1124,9 +1149,13 @@ def _caveats(runs: Sequence[ArmRun], *, arena: str, runner: str, agent: str | No
             "without sight breaks a re-engagement run.",
             "- HP dealt and taken are the agent's per-tick damage counters (`arsenal_info.entity_damage_dealt` and "
             "`entity_damage_received`, row AGENT_ENTITY), summed over the timed run in absolute HP. Kills and deaths "
-            "read the episode's last tick: `terminated` there with the target at or below 0 health is a kill, any other "
-            "natural ending a death, so a world error would count as a death (none is expected here: inferred from "
-            "`arsenal/runtime.py` `_arsenal_terminated`).",
+            "read the episode's last tick, where `terminated` is set: a kill when the target is at or below 0 health; "
+            "else a death when the agent is at or below 0 health (its absolute health after the step); else "
+            "`terminated_alive`, a terminated end with both bodies alive. A world error is not a death: where the arena "
+            "has a geometry (combat_cover), its exhaustion ends an episode through `done = terminated | truncated` "
+            "(`arsenal/environment.py`), and `_arsenal_terminated` ends only on the agent's death or with no live "
+            "opponent (`arsenal/runtime.py`). The combat_cover probe of 2026-10-20 ended episodes this way with both "
+            "bodies at full health, on the tick the geometry was exhausted.",
         ]
     if runner == "compiled":
         lines.append(

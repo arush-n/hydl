@@ -29,7 +29,8 @@ Arenas (:data:`ARENA_NAMES`):
 * ``combat_cover`` is the open-flat legal scene (same reset, opponent and sector) with
   solid pillars in the local geometry window (:func:`_combat_cover`). Line of sight is
   occluded by the pillars. The window is 9 by 9 blocks about the spawn block, so the
-  pillars sit within 4 blocks of the spawn on each axis, not at the 5 to 15 blocks asked for.
+  pillars sit within 4 blocks of the spawn on each axis, not at the 5 to 15 blocks asked for. Task #116 (2026-10-20)
+  moved the two front pillars one block outward; the layout is part of ``contract_sha256``, so that digest changed.
 """
 
 from __future__ import annotations
@@ -75,7 +76,11 @@ COMBAT_COVER_SCHEMA: str = "experimental-neural-agent-combat-cover-v1"
 #: one block square and COMBAT_COVER_PILLAR_HEIGHT blocks high. Every cell lies inside the local window
 #: (hytalegym.geometry.contract CELL_RADIUS 4). No column overlaps the default target's spawn footprint
 #: (block (0, -2)), so the default reset starts clear. The radii are in the description record.
-COMBAT_COVER_PILLARS: tuple[tuple[int, int], ...] = ((3, 0), (1, 3), (-1, 3), (-3, 0), (-1, -3), (1, -3))
+#: Task #116 (2026-10-20): the two columns at z = -3 moved one block outward, from (-1, -3) and (1, -3) to
+#: (-2, -3) and (2, -3). The NPC's spawn box (half-width 0.475) sat in the one-block slot between them, so
+#: its diagonal chase steps collided and its navigation was rejected and frozen at spawn. The slot is now
+#: three blocks wide. The layout is in the contract digest (contract_sha256), so the digest changed with it.
+COMBAT_COVER_PILLARS: tuple[tuple[int, int], ...] = ((3, 0), (1, 3), (-1, 3), (-3, 0), (-2, -3), (2, -3))
 COMBAT_COVER_PILLAR_HEIGHT: int = 3
 
 
