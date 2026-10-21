@@ -3,14 +3,17 @@
 One step, pursuit until "done", and three interrupts. The priorities decide (``programs.py`` item 5): the highest priority
 whose condition holds on the lane wins, and ties go to the lower index.
 
-1. ``avoid`` (AVOID_PRIORITY, the evader's 0.5) while the target faces the agent (report ``facing_me``) or the agent's
-   health is below HURT_HEALTH_FRACTION (``Predicate("self_health_below", 0.5)``, strict). The OR is built from ``Not`` and
-   ``AllOf``: ``Not(AllOf((Not(facing_me), Not(self_health_below))))``. Scalars: AVOID_BAND_BLOCKS, the skill layer's default
-   band of (6, 10) blocks.
-2. ``shortbow`` (SHOT_PRIORITY, 0.4) when the shot is clean: the target is seen, its distance is inside BOW_WINDOW_BLOCKS
+1. ``shortbow`` (SHOT_PRIORITY, 0.6) when the shot is clean: the target is seen, its distance is inside BOW_WINDOW_BLOCKS
    (the band ``avoid`` keeps, 6 to 10 blocks), and it is not in melee reach (report ``in_reach`` is off). Scalar:
    ``hold_seconds`` = SHOT_HOLD_SECONDS = 1.2 s, the full draw (ability slot 4) under the contract's mapping; the
    measurement behind both values is in the constants' docstrings (#105, 2026-10-20).
+   Beside it, while the shot is in force, a ``keep_range`` companion holds AVOID_BAND_BLOCKS facing the target
+   (``programs.py``, item 9, "Companions"). The body faces the target while it shoots, which the skill layer
+   measured to matter (commit 1112c77).
+2. ``avoid`` (AVOID_PRIORITY, the evader's 0.5) while the target faces the agent (report ``facing_me``) or the agent's
+   health is below HURT_HEALTH_FRACTION (``Predicate("self_health_below", 0.5)``, strict). The OR is built from ``Not`` and
+   ``AllOf``: ``Not(AllOf((Not(facing_me), Not(self_health_below))))``. Scalars: AVOID_BAND_BLOCKS, the skill layer's default
+   band of (6, 10) blocks.
 3. ``hide`` (HIDE_PRIORITY, 0.3) while the target is seen. It names no cover point, so the hide body retreats as ``avoid``
    does (``skill_agent/runtime/scripted_bodies.py``, ``hide``) until a cover position is supplied.
 4. Search is the step: while the target is unseen no interrupt holds, and the step's pursuit runs. The executor's request
@@ -20,16 +23,20 @@ whose condition holds on the lane wins, and ties go to the lower index.
 
 The reports and their belief fallback are the ``Report`` class in ``programs.py`` (its docstring has the mapping).
 
-Candidates (2026-10-20, task #111). ``P_GUERRILLA`` has two gaps. (1) ``avoid`` (0.5) holds while the target faces the
-agent, and the shot (0.4) sits below it; a chasing target always faces the agent, so it is never shot at. (2) The shot
-runs alone: nothing turns the body to the target, and the bow aims with the head only, within 45 degrees. The skill
-layer measured (commit 1112c77) that a body facing the target lets the bow hit a strafing target at 4.5 to 10 blocks
-on 85% of its arrows on gen 5 (114 of 134) and 79% on gen 7 (99 of 125), with the lead the body adds; the bow alone
-loses a strafer that runs past the head's 45 degrees. ``P_GUERRILLA_SHOT_FIRST`` fixes the first gap: the shot at 0.6,
-above ``avoid``. ``P_GUERRILLA_FACING`` fixes both: the same, and while the shot is in force a companion request of
-``keep_range`` (the 6 to 10 band, facing the target; ``programs.py``, item 9, "Companions"). The guerrilla referee run
-chooses among GUERRILLA, GUERRILLA_SHOT_FIRST and GUERRILLA_FACING, and the two losers are removed afterwards.
-``P_GUERRILLA`` itself is unchanged.
+Judged (2026-10-20, task #111). The referee run (the skill layer's harness, gen 5, combat_cover, 8 lanes x 1023
+ticks, seed 0; candidates in 5bd3fc1, referee in 52632ec) judged three programs: the shot below ``avoid`` (the old
+GUERRILLA), shot first (the shot at 0.6), and facing (shot first plus the ``keep_range`` companion). Two gaps
+showed. (1) GUERRILLA made 0 shot requests: ``avoid`` (0.5) holds while the target faces the agent, and a chaser
+always does. (2) The shot ran alone, and the bow aims with the head only, within 45 degrees. Shot first and facing
+each loosed 4 arrows and landed 4, with 1 kill, from one lane (HP taken 529 and 644, inside the per-lane spread).
+Under facing, keep_range held locomotion on all 204 lane-ticks the shortbow held the hands. The tie goes to the
+archery range (commit 1112c77): a body that faces the target lets the bow hit a strafer on 85% (gen 5) and 79%
+(gen 7) of its arrows, and the bow alone loses a strafer past the head's 45 degrees. So facing is
+``P_GUERRILLA``. Shot first and the old GUERRILLA structure are removed.
+Known limit of companions (task #114): a goal with a companion ends by its maximum duration, not by COMPLETED.
+Open (task #116): on combat_cover the agent cannot back off past about 4 blocks without leaving the arena's 9x9
+geometry window. On open ground a same-speed melee chaser follows a retreating agent at 3.4 to 3.9 blocks, so the
+6 to 10 window rarely opens. Kiting at range needs cover at range. The window stays 6 to 10 for now.
 
 Not built: "not yet in cover". No report or belief feature measures cover: ``REPORTS`` has none, and the cover asks of
 ``skill_agent/docs/PERCEPTION_ASKS.md`` are not in the belief. Rule 3 therefore tests "seen" alone. That reads as "not yet
@@ -44,7 +51,6 @@ from __future__ import annotations
 
 from experimental.neural_agent.executive.goal_language import Predicate
 from experimental.neural_agent.jev.programs import (
-    COMBAT_PHASE_PRIORITY,
     EXIT_DONE,
     AllOf,
     Interrupt,
@@ -76,7 +82,10 @@ the only strong tier there (damage a second 2.4, 3.6, 4.9, 9.5 for tiers 1 to 4 
 tier 0 cannot reach the window at all; on gen 5 every tier deals about 11 a second (6, 9, 12, 16, 19 damage), so the
 hold costs nothing there. The earlier 0.2 s tap (tier 0) was a 1-damage arrow on gen 7."""
 AVOID_PRIORITY: float = EVADER_PRIORITY
-SHOT_PRIORITY: float = COMBAT_PHASE_PRIORITY
+SHOT_PRIORITY: float = 0.6
+"""The shortbow's priority: above ``avoid`` (AVOID_PRIORITY, 0.5), so a clean shot wins over ``avoid``'s facing rule,
+which holds on every chase. At 0.4 (the old combat phase priority) the shot made no request in the referee run
+(task #111)."""
 HIDE_PRIORITY: float = 0.3
 
 _AVOID = Not(AllOf((Not(Report("facing_me")), Not(Predicate("self_health_below", HURT_HEALTH_FRACTION)))))
@@ -92,34 +101,9 @@ _SHOT = AllOf(
 P_GUERRILLA = Program(
     steps=(ProgramStep(PURSUIT_SKILL, exit=EXIT_DONE),),
     interrupts=(
-        Interrupt("avoid", AVOID_PRIORITY, _AVOID, params=AVOID_BAND_BLOCKS),
-        Interrupt("shortbow", SHOT_PRIORITY, _SHOT, params=(SHOT_HOLD_SECONDS,)),
-        Interrupt("hide", HIDE_PRIORITY, Report("seen")),
-    ),
-)
-"""The guerrilla program (module docstring): ``PROGRAMS["GUERRILLA"]`` in ``programs.py``."""
-
-SHOT_FIRST_PRIORITY: float = 0.6
-"""The shot's priority in the two candidates below: above ``avoid`` (0.5), so a clean shot wins over ``avoid``'s
-facing rule (gap 1 of the module docstring)."""
-
-P_GUERRILLA_SHOT_FIRST = Program(
-    steps=(ProgramStep(PURSUIT_SKILL, exit=EXIT_DONE),),
-    interrupts=(
-        Interrupt("shortbow", SHOT_FIRST_PRIORITY, _SHOT, params=(SHOT_HOLD_SECONDS,)),
-        Interrupt("avoid", AVOID_PRIORITY, _AVOID, params=AVOID_BAND_BLOCKS),
-        Interrupt("hide", HIDE_PRIORITY, Report("seen")),
-    ),
-)
-"""Candidate 1 (task #111): ``P_GUERRILLA`` with the shot first. Only the shot's priority changes; the shot runs
-alone."""
-
-P_GUERRILLA_FACING = Program(
-    steps=(ProgramStep(PURSUIT_SKILL, exit=EXIT_DONE),),
-    interrupts=(
         Interrupt(
             "shortbow",
-            SHOT_FIRST_PRIORITY,
+            SHOT_PRIORITY,
             _SHOT,
             params=(SHOT_HOLD_SECONDS,),
             beside=(("keep_range", AVOID_BAND_BLOCKS),),
@@ -128,6 +112,4 @@ P_GUERRILLA_FACING = Program(
         Interrupt("hide", HIDE_PRIORITY, Report("seen")),
     ),
 )
-"""Candidate 2 (task #111): ``P_GUERRILLA_SHOT_FIRST`` plus a companion. While the shot is in force, ``keep_range``
-holds the 6 to 10 band and faces the target beside it (disjoint scopes: shortbow drives hands, abilities_magic and
-gaze; keep_range drives locomotion), so the body turns to the target as the skill layer measured for its shot."""
+"""The guerrilla program (module docstring): ``PROGRAMS["GUERRILLA"]`` in ``programs.py``."""

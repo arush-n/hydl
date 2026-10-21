@@ -36,8 +36,7 @@ The arms follow the composition brief and
   (``jev/programs.py``, SYSTEM_ONE.md section 9.9) runs one hand-written behaviour
   program on every lane: ``NA_PROGRAM=J0`` (the default) or any other key of
   ``jev/programs.py`` ``PROGRAMS`` (SEQ, COMBAT, the combat styles COUNTER,
-  PRESSURE and HIT_AND_RUN, the guerrilla program GUERRILLA and its candidates
-  GUERRILLA_SHOT_FIRST and GUERRILLA_FACING), with the feedback rule's window ``NA_NO_REISSUE``
+  PRESSURE and HIT_AND_RUN, the guerrilla program GUERRILLA), with the feedback rule's window ``NA_NO_REISSUE``
   seconds (default 0, off). It uses the
   registry's control table. The report labels it ``jprog-<program>``, plus
   ``-noreissue<w>s`` when the rule is on. In the eager runner's timed session,

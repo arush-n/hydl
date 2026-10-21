@@ -607,14 +607,8 @@ P_COMBAT = Program(
 )
 PROGRAMS: dict[str, Program] = {"J0": P_J0, "SEQ": P_SEQ, "COMBAT": P_COMBAT}
 # The guerrilla program (2026-10-20) is in its own module, which imports the DSL above, so it is imported after PROGRAMS.
-from experimental.neural_agent.jev.programs_guerrilla import (  # noqa: E402
-    P_GUERRILLA,
-    P_GUERRILLA_FACING,
-    P_GUERRILLA_SHOT_FIRST,
-)
+from experimental.neural_agent.jev.programs_guerrilla import P_GUERRILLA  # noqa: E402
 PROGRAMS["GUERRILLA"] = P_GUERRILLA
-PROGRAMS["GUERRILLA_SHOT_FIRST"] = P_GUERRILLA_SHOT_FIRST
-PROGRAMS["GUERRILLA_FACING"] = P_GUERRILLA_FACING
 # The combat styles (jev/combat_styles.py, task #100): COUNTER, PRESSURE and HIT_AND_RUN join the names NA_PROGRAM accepts.
 from experimental.neural_agent.jev.combat_styles import built_styles  # noqa: E402
 PROGRAMS.update(built_styles())
