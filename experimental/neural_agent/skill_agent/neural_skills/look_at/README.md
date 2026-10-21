@@ -18,6 +18,8 @@ holds everything specific to look_at (`../README.md`).
 
 ## Status (2026-10-19): its own module is not trained yet; in the joint reference network every look_at bar passes
 
+**Gen 7 (2026-10-20).** Training reopened on gen 7 (owner): look_at v2 passes T1 and T3 on the gen-7 render too (1,024 / 1,024, median 13 ticks, 0 illegal; certificate `look_at_v2_gen7`), and the joint reference retrained on gen 7 (run `c7p_gen7_6x128x2000_a193a0d`) passes every look_at bar: look only 1.000 held seen, 0.988 held out. Its own module waits for the expanded encoder, which replaces the trunk it would train on.
+
 look_at's strategy (`train.py`) is built and unit-tested, and its module waits for training to reopen (paused by the
 owner, 2026-10-19). What is measured so far comes from the joint reference network of runs A2 to C' (one head for
 walk_to and look_at together, README 2.16), which the module will be compared against. Held success (on target 5

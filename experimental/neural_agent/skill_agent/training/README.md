@@ -12,7 +12,8 @@ checkpoints) stays under `agent_skills/training_runs/` and is never staged.
 | `bars.py` | 189 | A report scored on its bars on held success, the first hit beside: a skill module's report (per lane kind: T5, held out, the skills beside it, E4) or an A2 reference report (per mode, with a skill filter). |
 | `blocks.py` | 312 | The building blocks every trainer shares (moved from `distill.py`, 2026-10-19): frames, request features, resampling, the hold rule, legality, dataset chunks, saving and loading, run provenance. |
 | `skill_dagger.py` | 519 | DAgger for one skill's module on the frozen trunk (2.17): lanes, requests, the teachers of the skill and of the skills beside it, rollout, loss, training, evaluation per lane kind, and the command line every skill's `train.py` shares (`run_main`). |
-| `run_distill.sh` | 22 | The A2 reference trainer's launcher: one run at nice 10 on the CPU, `run_distill.sh NAME ITERATIONS LANES STEPS EVAL_LANES [options]`, into the private runs folder, refusing a name that exists. Skills train through their own `train.sh`. |
+| `run_distill.sh` | 25 | The A2 reference trainer's launcher: one run at nice 10 on the CPU, `run_distill.sh NAME ITERATIONS LANES STEPS EVAL_LANES [options]`, into the private runs folder, refusing a name that exists, on the gen-7 render by default (`engine.sh`, rendered into the run's `engine/`). Skills train through their own `train.sh`. |
+| `engine.sh` | 23 | The engine a launcher runs on (2026-10-20, owner: train on gen 7): sourced with `ENGINE_DIR` set, it sets `PYTHON_M`; GEN=7, the default, renders gen 7 from the committed source into `ENGINE_DIR` and mounts it (`../runtime/gen7.py`), GEN=5 keeps the stock engine. The reference, the skills' `train.sh` and `certify.sh` use it. |
 
 Run:
 

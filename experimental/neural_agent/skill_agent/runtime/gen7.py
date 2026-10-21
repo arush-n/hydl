@@ -78,9 +78,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("target", help="a module (a.b.c) or a script (path.py) to run as __main__")
     parser.add_argument("args", nargs=argparse.REMAINDER)
     options = parser.parse_args(argv)
+    engine = options.engine.resolve()  # absolute: render() runs in hytalegym's folder
     if options.render:
-        render(options.engine)
-    mount(options.engine)
+        render(engine)
+    mount(engine)
     switch_on(options.construct)
     sys.argv = [options.target, *[arg for arg in options.args if arg != "--"]]
     if options.target.endswith(".py"):

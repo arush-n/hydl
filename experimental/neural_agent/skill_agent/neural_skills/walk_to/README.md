@@ -18,6 +18,8 @@ holds everything specific to walk_to (`../README.md`).
 
 ## Status (2026-10-19): its own module is not trained yet; in the joint reference network every walk_to bar passes
 
+**Gen 7 (2026-10-20).** Training reopened on gen 7 (owner): walk_to v3 passes T1 to T3 on the gen-7 render too (1,024 / 1,024, T2 median 1.037, 0 illegal; certificate `walk_to_v3_gen7`), and the joint reference retrained on gen 7 (run `c7p_gen7_6x128x2000_a193a0d`) passes every walk_to bar: walk only 1.000 held, seen and held out. Its own module waits for the expanded encoder, which replaces the trunk it would train on.
+
 walk_to's strategy (`train.py`) is built and unit-tested, and its module waits for training to reopen (paused by the
 owner, 2026-10-19). What is measured so far comes from the joint reference network of runs A2 to C' (one head for
 walk_to and look_at together, README 2.16), which the module will be compared against. Run C'
