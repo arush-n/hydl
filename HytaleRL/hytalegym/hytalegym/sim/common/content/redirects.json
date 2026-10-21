@@ -1,5 +1,5 @@
 {
- "head": "2591899944fa287c3584f791e9d5a83cf95ac80d",
+ "head": "0eee27de941d5f20e505391ca23171035a60fa42",
  "redirect_count": 90,
  "redirects": [
   {
@@ -1993,7 +1993,7 @@
     "token": "nominal_dt"
    },
    {
-    "head_line": 1563,
+    "head_line": 1578,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/runtime.py",
     "scope": "engine",
@@ -2002,7 +2002,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 2172,
+    "head_line": 2187,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/runtime.py",
     "scope": "engine",
@@ -2011,7 +2011,7 @@
     "token": "motion_delta_seconds"
    },
    {
-    "head_line": 2183,
+    "head_line": 2198,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/runtime.py",
     "scope": "engine",
@@ -2020,7 +2020,7 @@
     "token": "motion_delta_seconds"
    },
    {
-    "head_line": 2183,
+    "head_line": 2198,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/arsenal/runtime.py",
     "scope": "engine",
@@ -3748,7 +3748,7 @@
     "token": "motion_delta"
    },
    {
-    "head_line": 652,
+    "head_line": 682,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/step.py",
     "scope": "engine",
@@ -3757,7 +3757,7 @@
     "token": "motion_delta_seconds"
    },
    {
-    "head_line": 652,
+    "head_line": 682,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/jax/combat/runtime/step.py",
     "scope": "engine",
