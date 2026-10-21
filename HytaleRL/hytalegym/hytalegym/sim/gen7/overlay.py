@@ -950,6 +950,14 @@ HOOKS = (
          "and the returned observation equals observe_batch of the state; entity_yaw None and gen 5 are unchanged",
          "an Arsenal reset given entity_yaw (entity-position path) seeds agent_head_yaw and target_head_yaw from the stored "
          "body yaw (pitch unchanged) and rebuilds the returned observation from that state; gen 5 returns the original"),
+    Hook("ability_ground_continuation", "combat/arsenal/programs/ability.py", "tick_ability_programs",
+         f"{_MECHANICS}.ability_ground_continuation:construct", "ability_ground_continuation", "active", "5h",
+         differential="tests/sim/test_ability_ground_continuation.py: the charged battleaxe Landing (slot 5) starts on the tick the "
+         "Downstrike finishes (cont 5 with active -1) and lands 29 at a measured tick; a premature resume starts nothing; the "
+         "sword thrust and mace charged hit are unchanged; the switch-off render equals the committed render",
+         note="wraps tick_ability_programs: a child starts when the parent finished this tick and the continuation resolved to a "
+         "child; the child start resets the scheduler fields start_abilities resets and keeps the requesting root; charges, "
+         "cooldowns and the regen delay are untouched; gen 5 returns the original"),
     Hook("perception_v2", "combat/observation/v3/encoding/encoder.py", "encode_learner_observation_v3",
          f"{_MECHANICS}.perception_v2:construct", "perception_v2", "active",
          differential="tests/sim/test_perception_v2.py: channel layout, row gate (view sector, occluder), ids, inventory "

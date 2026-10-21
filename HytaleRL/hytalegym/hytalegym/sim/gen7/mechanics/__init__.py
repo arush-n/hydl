@@ -45,6 +45,7 @@ CONSTRUCT_MODULES = {
     "crafting_augment_tags": "crafting_augment_tags",
     "guard_reentry_cooldown": "guard_cooldown",
     "ability_start_split": "ability_start_split",
+    "ability_ground_continuation": "ability_ground_continuation",
     "shortbow_reset_ammo": "shortbow_reset_ammo",
     "shield_bash_root": "shield_bash_fork",
     "reset_head_heading": "reset_head_heading",

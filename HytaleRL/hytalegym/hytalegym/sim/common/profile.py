@@ -156,6 +156,10 @@ class Constructs:
     # fields (role seam, held item, player kind, inventory tokens, body yaw); every entity field is gated by the entity row.
     # Opt-in: False in gen 5 and gen 7. Owner: sim/gen7/mechanics/perception_v2.py.
     perception_v2: bool = False
+    # Ability ground continuation: "off" (HEAD: a parked ability's ground child never starts; the resume is written to
+    # ability_continuation_slot and nothing reads it) or on (gen 7: the child starts on the tick the parent finishes, when
+    # its continuation resolved to a child). Owner: sim/gen7/mechanics/ability_ground_continuation.py (row 5h).
+    ability_ground_continuation: bool = False
 
 
 @dataclass(frozen=True)

@@ -63,6 +63,8 @@ PROFILE = SimProfile(
         # the shortbow's empty reset.
         guard_reentry_cooldown="claim_0_35s",
         ability_start_split="next_drain",
+        # Charged battleaxe Landing (row 5h): the Downstrike's ground resume starts its child on the tick the parent finishes.
+        ability_ground_continuation=True,
         shortbow_reset_ammo="native_zero",
         # Shield bash offer (section (x), row 5d): the 0.7.2 fork of the held guard is legal only while the guard is active.
         shield_bash_root="held_guard_fork",
