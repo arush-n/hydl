@@ -1,11 +1,16 @@
 """Exact joint distribution for the factored Arsenal action surface.
 
-The public policy keeps twelve fixed categorical heads, but six of those
-heads can request a Hytale standard-input root.  Sampling those six heads
-independently can request mutually exclusive roots in one control tick.  This
-module conditions the product of their categorical logits on the decoder's
-joint legality rule while leaving motion, look, jump, Dodge, and the retained
-block-trigger factor independent.
+The public policy keeps twelve fixed categorical heads, but five of those
+heads (base, ability, guard, use, block) can request a Hytale standard-input
+root.  Sampling those five heads independently can request mutually exclusive
+roots in one control tick.  This module conditions the product of their
+categorical logits on the decoder's joint legality rule while leaving motion,
+look (head and body), jump, Dodge, the hotbar, and the retained block-trigger
+factor independent.  Each independent head contributes its own log-normalizer
+and entropy (``_NON_ROOT_HEADS``); until 2026-10-20 the body-look and hotbar
+heads were missing from that list, so their log-probabilities were unnormalized
+and their entropy was left out.  Log-probabilities recorded before that fix are
+not comparable with ones scored after it.
 """
 
 from __future__ import annotations
@@ -38,7 +43,9 @@ _GUARD = ARSENAL_POLICY_ACTION_HEAD_NAMES.index("guard_off_on")
 _JUMP = ARSENAL_POLICY_ACTION_HEAD_NAMES.index("jump_off_on")
 _LOCOMOTION = ARSENAL_POLICY_ACTION_HEAD_NAMES.index("locomotion_gait_compass")
 _YAW = ARSENAL_POLICY_ACTION_HEAD_NAMES.index("yaw_delta_bins")
+_BODY_YAW = ARSENAL_POLICY_ACTION_HEAD_NAMES.index("body_yaw_delta_bins")
 _PITCH = ARSENAL_POLICY_ACTION_HEAD_NAMES.index("pitch_delta_bins")
+_HOTBAR = ARSENAL_POLICY_ACTION_HEAD_NAMES.index("hotbar_none_plus_slots")
 _USE = ARSENAL_POLICY_ACTION_HEAD_NAMES.index("use_off_on")
 _BLOCK_TRIGGER = ARSENAL_POLICY_ACTION_HEAD_NAMES.index(
     "block_primary_secondary_trigger"
@@ -52,7 +59,16 @@ _CATEGORY_GUARD = 3
 _CATEGORY_BLOCK_OR_USE = 4
 _CATEGORY_COUNT = 5
 
-_NON_ROOT_HEADS = (_LOCOMOTION, _JUMP, _YAW, _PITCH, _BLOCK_TRIGGER)
+# Non-root heads: all choices allowed, so each adds its own normalizer and entropy.
+_NON_ROOT_HEADS = (
+    _LOCOMOTION,
+    _JUMP,
+    _YAW,
+    _BODY_YAW,
+    _PITCH,
+    _HOTBAR,
+    _BLOCK_TRIGGER,
+)
 _ATTACK_CHOICES = (SKILL_ATTACK, SKILL_APPROACH_ATTACK, SKILL_RETREAT_ATTACK)
 
 
