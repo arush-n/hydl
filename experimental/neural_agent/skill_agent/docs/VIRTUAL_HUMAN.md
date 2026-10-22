@@ -630,6 +630,7 @@ the status token's identity (step 7).
   the encoder and the state layer").
 - **Future:** the levels' learning constants and aptitude (16.6), and who builds the institutions layer, and when
   (15.4).
+- **Waiting on the owner:** step 1b (section 13: the body's path onto v3) and the memory design (section 18.3).
 
 ## 14. Composability and updates (AGREED 2026-10-21; part of step 1)
 
@@ -1129,6 +1130,91 @@ zero with `known` 0.
 - Judged distance follows the compression.
 - Nothing privileged reaches the token: the source's id only when the source is seen.
 
+## 18. Memory: fast writes, and important things kept apart from the background (PROPOSED 2026-10-21; not built)
+
+The owner, 2026-10-21: "the goal is that the latent memory is quick retrieval and efficient not slow, the issue is that
+during fast throughput areas it is slower. one thing to note is that we need to store entities and important things
+differently than normal latent blocks as important things are more important than normal blocks in the background".
+
+### 18.1 Where the time goes (measured)
+
+Synthetic rows, jitted, load 7 to 8; milliseconds per tick for all lanes together, median (scratch `memory_cost.py`,
+`trunk_tokens_cost.py`, `parallel_upsert_proto.py`):
+
+| Batch | Stores: terrain slots, rows a tick | Write the stores | Read them | Trunk |
+|---|---|---|---|---|
+| 8 | 84, 44 | 2.0 | 0.1 | 4.1 (8 latent slots); 4.5 (32) |
+| 8 | 84, 88 (a busier place) | 3.7 | 0.1 | |
+| 8 | 336, 88 | 6.4 | 0.4 | |
+| 64 | 84, 44 | 6.2 | 0.5 | 22.5 (8); 23.6 (32) |
+| 64 | 84, 88 | 11.2 | 0.8 | |
+| 64 | 336, 88 | 31.0 | 2.3 | |
+
+- **The owner's observation holds, and its cause is the write.** Writing the stores costs in proportion to how much is
+  seen a tick, so a busy place costs more: twice the rows, twice the time. It grows with the store's size too, and at
+  batch 64 it outgrows the trunk.
+- **The latent memory itself is cheap:** 8 to 32 slots add 0.3 to 1.1 ms. Reading the stores is cheap.
+- **Why the write is slow:** `state/memory.py` writes this tick's rows one at a time (a serial `lax.scan`), and every
+  step copies the whole store. Every store goes through it, and terrain dominates: 44 cells a tick into 84 slots of
+  185 numbers each.
+- **A parallel write is 5 to 10 times faster** (a prototype, scratch only). It matches every row to the slots in one
+  comparison, ranks the free or least important slots once, and writes in one pass: batch 8, 84 slots, 44 rows, 1.63
+  to 0.26 ms; batch 64, 336 slots, 88 rows, 32.3 to 4.5 ms. It matches the serial write when no two rows compete; when
+  they do (more new things than free slots, or one cell twice in a tick), the order of preference must be part of the
+  design.
+- **Fewer tokens make the trunk faster too.** Remembered terrain as 84 tokens costs the trunk about a fifth of its
+  time. With 16 background summary slots in their place (348 tokens to 280): batch 8, 3.9 to 3.1 ms; batch 64, 19.4 to
+  15.9 ms.
+
+### 18.2 The design: object files and a gist
+
+People keep the two apart. **Object files:** one file per object, bound to it, which persists after attention moves
+away and is reopened when the object is seen again (Kahneman, Treisman and Gibbs 1992). **The gist of a scene:** the
+background is held as a low-dimensional summary of its layout, not object by object (Oliva and Torralba 2006). Robots
+build memory in the same layers: Hydra keeps objects apart from places and geometry, with fast low-level and slower
+high-level processes (Hughes, Chang and Carlone, RSS 2022).
+
+- **The important tier (object files).** Entities, tagged things, and salient blocks (ores, doors, containers,
+  stations, harvestables):
+  - stored with identity: entities by id, blocks by cell;
+  - exact, with a long horizon;
+  - never displaced by background: their own capacity, with tagged things pinned as now;
+  - each with its own slot in the latent memory, bound to that thing and written only when it is perceived or
+    involved, so retrieving one is a lookup by identity, not a search;
+  - small (16 to 32 entities and 16 to 32 blocks), so it is cheap to keep exact.
+- **The background tier (the gist).** Ordinary terrain:
+  - no longer stored cell by cell in the hot path;
+  - a few latent summary slots (16 proposed) take this tick's terrain tokens through one cross-attention, as the
+    Perceiver condenses many inputs into a small latent bottleneck (Jaegle et al., ICML 2021), and blend them into
+    what they held by a gate, as the latent memory does now;
+  - a fixed cost however busy the place is;
+  - no voxel map, as ruled (2026-10-21: "idk if we need the explicit voxel map we will see later"). A spatially laid
+    out memory written around the agent's position (Neural Map, Parisotto and Salakhutdinov, ICLR 2018) is the
+    alternative that ruling sets aside.
+- **The write is parallel, with a fixed budget a tick.** The rows a tick are matched and written in one pass. When
+  more new things arrive than there is room for, the most important win (tagged, then salience, then nearness),
+  never a pinned slot.
+- **Retrieval is fixed-size.** The trunk reads the important rows and their slots, the background slots and this
+  tick's rows: about 280 tokens instead of 348. A busy place no longer changes the cost.
+
+**Expected** (inferred from the measured parts, not yet measured whole): at batch 8 in a busy place, the stores' write
+plus the trunk from about 7.6 ms to about 3.5 ms; at batch 64, from about 31 ms to about 18 ms.
+
+**What it costs.** The background slots and the object slots are learned. Until the trunk is trained (with N1's
+auxiliary loss: decode hidden things' places from the latent memory), the background slots carry nothing useful. The
+explicit important tier works from the first tick.
+
+### 18.3 Decisions for the owner
+
+1. **The background.** Recommended: latent slots plus a small recency cache of the nearest remembered cells (about
+   32), so the body keeps a spatial sense before training. The alternative is latent slots alone.
+2. **What counts as important.** Recommended: every entity, every tagged thing, and the salient blocks. Projectiles
+   and hazards are not stored: they are brief.
+3. **The object slots.** Recommended: one latent slot keyed to each tracked important thing. The alternative is a
+   shared pool written by priority, where things can interfere.
+4. **The background's rate.** Recommended: every tick (the cross-attention is cheap). The alternative is every few
+   ticks, or only when the agent has moved.
+
 ## Sources
 
 - Steel, P. (2007). The nature of procrastination. Psychological Bulletin 133(1), 65-94.
@@ -1196,6 +1282,7 @@ zero with `known` 0.
   `BlockSounds/Bone/SFX_Bone_Hit.json`).
 - The startle findings (prepulse inhibition, habituation, fear potentiation, affective modulation): from a 2020 review
   of prepulse inhibition (PMC7563436), a habituation protocol, and Koch and Fendt (2003); read at abstract level.
+- Section 18, checked by search 2026-10-21 (abstracts and summaries): Kahneman, Treisman and Gibbs (1992), "The reviewing of object files", Cognitive Psychology 24(2); Oliva and Torralba (2006), "Building the gist of a scene", Progress in Brain Research; Hughes, Chang and Carlone (2022), Hydra, RSS (arXiv:2201.13360); Jaegle et al. (2021), Perceiver, ICML (arXiv:2103.03206); Parisotto and Salakhutdinov, Neural Map, ICLR 2018 (arXiv:1702.08360).
 - Recalled, not re-checked this session: Lowe et al. (2017) MADDPG; Schwartz (1992) basic human values; Harris and
   Wolpert (1998); Flash and Hogan (1985); Mackworth (1948); boredom proneness's scale.
 - The emotion and personality literature in section 6, as relayed by the 2026-10-21 research surveys: the papers'
