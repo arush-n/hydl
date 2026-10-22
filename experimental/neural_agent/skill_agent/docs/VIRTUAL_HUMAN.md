@@ -166,15 +166,17 @@ correlations. Human trait-to-play-style links are weak in games (r below 0.1 in 
 players), so the traits are defined as behaviour, and the Big Five are a view derived from them. The scope of the
 list is OPEN.
 
-## 7. What exists today, and how it maps (BUILT, uncommitted)
+## 7. What exists today, and how it maps (BUILT: step 0 committed as ea4bc63; step 1 uncommitted)
 
 | Code | What it is | Its place in this architecture |
 |---|---|---|
 | `state/senses.py`, `state/memory.py`, `state/action_history.py`, `state/layer.py` | the legal observation as tokens; the spatial map and the salient store; the action history; one stateful tick | the world and body part of the state, filled from the senses (its certification: `PERCEPTION.md` sections 10 and 11) |
-| `state/persona.py` | 29 continuous traits; correlated population sampling; a Big Five view | the identity variables (a proposal: the scope is OPEN) |
+| `contract/variables.py`, `state/registry.py` (step 1) | the variable registry: every variable the agent tracks on its own side, read and written by name, migrated by name | the state layer's variables (10.1, 10.2; section 14's rulings) |
+| `state/persona.py` | the registry's self section: 15.6's 23 traits and the motor signature's bias; correlated population sampling, re-fitted; a Big Five view | the identity variables (APPROVED, 15.6) |
 | `state/affect.py` | hand-coded emotion rules (below) | a proposal for the emotion variables' update rules, to reshape: under section 3, feelings toward others are written by the top two layers, not computed in the body |
 | `model/encoder.py` `condition_types` (FiLM) | the persona and affect tokens modulate every token's embedding | one way the body reads the state; plain attention over state tokens may be simpler (OPEN) |
-| `contract/tokens_v3.py` `persona`, `affect` types, `feel_*` entity columns | the state's variables as tokens | the body's view of the state |
+| `contract/tokens_v3.py` `persona`, `affect` types, `feel_*` entity columns | the state's variables as tokens; the `persona` token carries the 10 traits the body reads (15.1), generated from the registry | the body's view of the state |
+| `model/migrate.py`, `model/skill_module.py` `save_trunk`/`load_trunk` (step 1) | a trained trunk carried to another layout by feature name; the layout and its fingerprint saved with every trunk | section 14, rules 1, 2 and 5 |
 
 **The emotion proposal in `state/affect.py`** (constants marked [E] are our estimates):
 - **state:**
@@ -185,13 +187,17 @@ list is OPEN.
 - **appraisal:** a threat is likelihood times cost; damage is taken as the drop in my own health (who hit me is S11);
 - **time constants [E]:** fear rises in 0.3 s and fades over 6 s; anger 12 s; startle 1.2 s; valence 8 s; coping
   2 s; mood 180 s; hostility 600 s; fear memory 900 s; trust 1,800 s;
-- **trait gains:** `exp(trait)`.
+- **trait gains:** `exp(trait)`: negative emotionality for fear, startle and valence; negative emotionality and
+  negative reciprocity for anger; positive emotionality for valence; risk taking moves coping. Step 1 moved them to
+  15.6's names. The old list's aggression and memory retention are not in 15.6: anger takes negative emotionality in
+  aggression's place (angry hostility is a facet of neuroticism in the NEO-PI-R; recalled), and the feelings decay at
+  their own constants, no longer stretched by a retention trait.
 
-Its tests, `tests/experimental/neural_agent/test_sa_state_affect.py` (A1 to A7) and `test_sa_state_memory.py`, pass (37 v3
-and affect tests):
+Its tests, `tests/experimental/neural_agent/test_sa_state_affect.py` (A1 to A7) and `test_sa_state_memory.py`, pass (45 v3,
+affect and registry tests with step 1's `test_sa_state_registry.py`):
 - A1 step response: fear follows its target at its rise constant and fades by 1/e in one decay constant.
 - A2: fear falls with distance and rises with the attack and with lower health.
-- A3: negative reactivity sets the fear gain.
+- A3: negative emotionality sets the fear gain.
 - A4: anger and hostility go to the attacker, not a bystander, and ride on its token.
 - A5: unseen damage frightens and startles more.
 - A6: the mood rests at the persona's baseline and moves with emotion.
@@ -405,7 +411,7 @@ says otherwise.
 
 | # | Piece | What it is | Why | Depends on |
 |---|---|---|---|---|
-| 10.1 | Variable registry | One declared list of every variable: name, section (body, inner, world, self, social), range and units, source (the game, the senses, a fixed rule, or a write by the decision layer or the LLM), update rate, decay, and whether the body reads it. Append-only and versioned, like the token schema. | "we also need to be able to identify and update them" | none |
+| 10.1 | Variable registry | One declared list of every variable the agent tracks on its own side (RULED in section 14: not a value the game gives): name, section (body, inner, world, self, social), group, range, default, source (set at birth, a fixed rule, or a write by the decision layer or the LLM), and whether the body reads it. Update rates and decay are declared with the rules that use them (step 3). It grows and shrinks by name (section 14). | "we also need to be able to identify and update them" | none |
 | 10.2 | Queries | Get a variable or a whole section by name, for any layer. | every layer reads the same values | 10.1 |
 | 10.3 | Formatted views | Typed facts for the decision layer, words for the LLM (the body's tokens exist). Built on demand, off the 30 Hz tick. | "it can be queried and formatted" | 10.1, 10.2 |
 | 10.4 | Structured writes | Writes from the top two layers, checked against the registry (allowed writer, range), applied between ticks, stamped with who and when, decaying where they act as memory. The middle layer's tags (`memory.Tags`) move onto this path. | feelings toward X, "X is my ally", mood nudges, tagged places | 10.1 |
@@ -544,14 +550,14 @@ approach. Missing:
 
 | Step | Work | Sections |
 |---|---|---|
-| 0 | Commit what is gated: the v3 encoder and `../state/` (416 skill_agent tests pass), with the package's two-pass gate (the usual command, then the stand-in pursuit tests on 0.5.7) | 7 |
-| 1 | The variable registry and queries, with the composability rules: append-only columns, migration, fingerprints, state migration | 10.1, 10.2, 14 |
+| 0 | DONE 2026-10-21, ea4bc63: the v3 encoder, `../state/` and this plan, under the package's two-pass gate (no new failure by name; the 37 v3 tests pass; the stand-in pass 30 of 30 in the shared tree) | 7 |
+| 1 | DONE 2026-10-21: the variable registry (`contract/variables.py`: 24 self and 8 inner variables, agent-side only), queries and state migration by name (`state/registry.py`), trunk migration by feature name (`model/migrate.py`), the layout and its fingerprint saved with every trunk and state; the trait list (15.6) and the persona token's shape (15.1, 10 body-read traits), moved here from step 7. Gate: no new failure by name; 8 new tests | 10.1, 10.2, 14, 15.1, 15.6 |
 | 2 | Structured writes from the top two layers; the tags move onto them | 10.4 |
 | 3 | Fixed rules on game time: alarm and startle, sleep pressure and fatigue, hunger and the other drives; then lifecycle under normal death, and provenance | 10.5, 10.7, 10.8, 16.1, 16.2, 16.5 |
 | 4 | The event log and its tokens; the activity counters and levels | 10.6, 11.1, 16.6 |
 | 5 | The long-term spatial memory: places, routes, coordinates | 10.11, 16.4 |
 | 6 | Hearing: the sound registry, the hearing rule, heard entries in the stores, the orienting reflex (the token reads zero until S12) | 17 |
-| 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the persona token's shape, the effects registry, places, the proficiencies | 11.1 to 11.4, 11.6, 15.1, 16.6, 17.8 |
+| 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry, places, the proficiencies | 11.1 to 11.4, 11.6, 16.6, 17.8 |
 | 8 | The formatted views (typed facts, words) and the recording | 10.3, 10.9 |
 | 9 | The social section (approved, 15.3) | 12, 15.3 |
 
@@ -615,6 +621,24 @@ Five rules make the rest updatable. All must hold before anything trains on v3.
    means retraining every skill. The trunk stays frozen between deliberate updates; an update grows it by rule 1
    rather than training it from scratch; and each update re-fits the skills against a recorded before-and-after
    comparison.
+
+**Rulings for step 1** (owner, 2026-10-21, answering the two questions on step 1's plan):
+- **What a variable is.** "Variables are states that are not given in game but we track locally to modify some
+  output or just to keep track of." The registry holds only the agent's own state: its traits and emotions now; its
+  drives, sleep pressure, levels, places and relationships as their steps come (3 to 9). A value the game gives
+  (health, stamina, position, what is in view) is not a variable. It stays a token column of the senses, which the
+  fingerprints protect (rule 2).
+- **The trait list.** 15.6's list is declared now ("sure"), with the condition: "ensure that we can expand it or
+  compress it later". So the list changes by name, in both directions:
+  - **Expanding:** a new trait takes its default in a saved state, and its input column starts with zero weights, so a
+    trained trunk computes exactly what it did (rule 1).
+  - **Compressing:** a trait is merged into a new one by an explicit map (`new = sum_i w_i old_i`) or dropped by
+    name. A trait that disappears without either fails loudly. A saved state takes the map's value. In the trunk, the
+    merged column's weights are the sum of its sources' weights over the sum of the map's weights. The trunk is then
+    unchanged for an agent whose merged traits were equal, and changed for the others, by an amount measured before
+    and after (rule 5). A dropped trait's weights are removed: the trunk computes what it did with that trait at 0,
+    the population's mean.
+- Because migration goes by name, a column's position no longer matters. `marked` stays last.
 
 ## 15. Designs for the open decisions (DESIGNED 2026-10-21 from research; not built)
 

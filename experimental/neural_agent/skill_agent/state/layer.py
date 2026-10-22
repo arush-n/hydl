@@ -4,32 +4,37 @@ section 10): the agent's state brought up to date from its senses, and read by t
 The stateless parts are ``state/senses.py`` (the legal observation to this tick's rows) and
 ``state/frames.py`` (space). The state is :class:`AgentState`: the agent's action history
 (``state/action_history.py``), its stored memory (``state/memory.py``: the spatial map and the salient store), its
-persona and emotional state (``state/persona.py``, ``state/affect.py``; ``docs/VIRTUAL_HUMAN.md``) and the
-trunk's latent memory (``model/encoder.py``, ``memory_slots``; the trunk call fills it, this module only carries and
+variables (``state/registry.py``: the persona, ``state/persona.py``, and the emotional state the affect rules publish,
+``state/affect.py``; ``docs/VIRTUAL_HUMAN.md``), the affect rules' own working state, and the trunk's latent memory (``model/encoder.py``, ``memory_slots``; the trunk call fills it, this module only carries and
 stores it). One tick, :func:`step`:
 
 1. the action history takes the action the agent sent last tick;
 2. the senses read this tick's perceived rows;
-3. the emotional state appraises them, with the persona's gains;
+3. the emotional state appraises them, with the persona's gains, and is published to the variables;
 4. the stores take them, and the middle layer's live tags;
 5. the stores give back what is remembered but not perceived;
 6. every entity token, perceived or remembered, gets the agent's feelings toward it (``feel_*``);
-7. everything is packed into the ``skill_tokens_v3`` token sets the trunk reads, the persona and affect tokens
-   with them.
+7. everything is packed into the ``skill_tokens_v3`` token sets the trunk reads, with the persona and affect
+   tokens, whose columns are the body-read variables (``tokens_v3.PERSONA_FEATURES``, ``AFFECT_FEATURES``).
 
-:func:`save` and :func:`load` write and read a state as one ``.npz`` (memory "stored as well", owner 2026-10-20 night).
+:func:`save` and :func:`load` write and read a state as one ``.npz`` (memory "stored as well", owner 2026-10-20 night),
+with the variables' names and the token layout, so a save migrates by name to a later registry or schema
+(``docs/VIRTUAL_HUMAN.md`` section 14, rules 2 and 4).
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
-from typing import Any, Mapping, NamedTuple
+from typing import Any, Mapping, NamedTuple, Sequence
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
 from experimental.neural_agent.skill_agent.contract import tokens_v3 as v3
+from experimental.neural_agent.skill_agent.contract import variables
+from experimental.neural_agent.skill_agent.state import registry
 from experimental.neural_agent.skill_agent.state import affect as feeling
 from experimental.neural_agent.skill_agent.state import memory as stores
 from experimental.neural_agent.skill_agent.state.action_history import (
@@ -39,7 +44,7 @@ from experimental.neural_agent.skill_agent.state.action_history import (
     update_history,
 )
 from experimental.neural_agent.skill_agent.state.senses import append_rows, pack, perceive_rows
-from experimental.neural_agent.skill_agent.state.persona import neutral_persona
+from experimental.neural_agent.skill_agent.state.persona import TRAITS, neutral_persona
 
 
 class AgentState(NamedTuple):
@@ -48,17 +53,19 @@ class AgentState(NamedTuple):
     history: ActionHistory
     memory: stores.SpatialMemory
     latent: jax.Array | None = None  # float32[B, S, W]: the trunk's last ``EncoderOutput.memory``
-    persona: jax.Array | None = None  # float32[B, P]: the agent's traits (``tokens_v3.PERSONA_TRAITS``), fixed
-    affect: feeling.AffectState | None = None
+    variables: jax.Array | None = None  # float32[B, V]: ``contract/variables.NAMES``, read through ``registry``
+    affect: feeling.AffectState | None = None  # the affect rules' working state
 
 
 def initial_state(batch: int, latent: jax.Array | None = None, persona: jax.Array | None = None) -> AgentState:
     """The state at an episode's start (``latent``: the trunk's initial slots, ``encoder.initial_memory``;
-    ``persona``: float32[B, P], the population's mean when None)."""
+    ``persona``: float32[B, len(persona.TRAITS)], the population's mean when None)."""
 
     persona = neutral_persona(batch) if persona is None else jnp.asarray(persona, jnp.float32)
-    return AgentState(initial_history(batch), stores.initial_memory(batch), latent, persona,
-                           feeling.initial_affect(persona))
+    affect = feeling.initial_affect(persona)
+    values = registry.put(registry.defaults(batch), TRAITS, persona)
+    values = registry.put(values, v3.AFFECT_FEATURES, feeling.affect_features(affect))
+    return AgentState(initial_history(batch), stores.initial_memory(batch), latent, values, affect)
 
 
 def step(observation: Any, state: AgentState, *, last_action: jax.Array,
@@ -81,7 +88,8 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
 
     history = update_history(state.history, last_action, reset)
     perceived = perceive_rows(observation, inventory_capacity=capacities["inventory_slot"], **adapter)
-    affect = feeling.update(state.affect, perceived, state.persona, reset)
+    affect = feeling.update(state.affect, perceived, registry.take(state.variables, TRAITS), reset)
+    values = registry.put(state.variables, v3.AFFECT_FEATURES, feeling.affect_features(affect))
     memory = stores.update(state.memory, perceived, tags, reset)
     remembered = stores.read(memory, perceived.pose)
     rows = dict(perceived.rows)
@@ -97,29 +105,63 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
     rows["entity"] = (features.at[..., feel:feel + len(v3.FEELINGS)].set(feelings), valid)
     batch = observation.base.self_f32.shape[0]
     one = jnp.ones((batch, 1), jnp.bool_)
-    rows["persona"] = (jnp.pad(state.persona, ((0, 0), (0, 1)))[:, None, :], one)
-    rows["affect"] = (jnp.pad(feeling.affect_features(affect), ((0, 0), (0, 1)))[:, None, :], one)
+    for name in ("persona", "affect"):  # the body-read variables, the token's ``marked`` 0
+        columns = registry.take(values, v3.TOKEN_TYPES_V3[name].FEATURES[:-1])
+        rows[name] = (jnp.pad(columns, ((0, 0), (0, 1)))[:, None, :], one)
     tokens = pack(rows, batch, capacities)
-    return tokens, AgentState(history, memory, state.latent, state.persona, affect)
+    return tokens, AgentState(history, memory, state.latent, values, affect)
+
+
+_STORE_TYPES: Mapping[str, str] = {"geometry": "geometry", "entity": "entity", "block": "block_candidate"}
+"""Each store of ``SpatialMemory`` and the token type of its rows."""
+
+
+def _layout() -> dict[str, list[str]]:
+    return {name: list(cls.FEATURES) for name, cls in v3.TOKEN_TYPES_V3.items()}
 
 
 def save(path: str | Path, state: AgentState) -> None:
-    """Write ``state`` to ``path`` (``.npz``), each array under its place in the state."""
+    """Write ``state`` to ``path`` (``.npz``), each array under its place in the state, with the variables' names
+    (``__variables__``) and the token layout (``__layout__``) and their fingerprints (``__fingerprint__``)."""
 
     leaves = jax.tree_util.tree_flatten_with_path(state)[0]
-    np.savez(path, **{jax.tree_util.keystr(key): np.asarray(value) for key, value in leaves})
+    layout = _layout()
+    np.savez(path, **{jax.tree_util.keystr(key): np.asarray(value) for key, value in leaves},
+             __variables__=np.asarray(variables.NAMES), __layout__=np.asarray(json.dumps(layout)),
+             __fingerprint__=np.asarray([variables.fingerprint(list(variables.NAMES)), variables.fingerprint(layout)]))
 
 
-def load(path: str | Path, like: AgentState) -> AgentState:
-    """Read a state written by :func:`save`, shaped as ``like`` (a state of the same batch and capacities)."""
+def load(path: str | Path, like: AgentState, *, maps: Mapping[str, Mapping[str, Mapping[str, float]]] | None = None,
+         dropped: Mapping[str, Sequence[str]] | None = None) -> AgentState:
+    """Read a state written by :func:`save`, shaped as ``like`` (a state of the same batch and capacities).
 
+    A save made under another variable list or token layout is migrated by name (``docs/VIRTUAL_HUMAN.md`` section 14):
+    a variable it lacks takes its default, and a stored row's new column reads 0. A variable or column that is gone
+    must be merged into a new one by ``maps`` or listed in ``dropped``, both keyed by ``"variables"`` or a stored token
+    type (``variables.transfer``).
+    """
+
+    maps, dropped = maps or {}, dropped or {}
     with np.load(path) as stored:
+        if "__variables__" not in stored:
+            raise ValueError(f"{path} was saved without the variables' names (before the registry), so it cannot be "
+                             "migrated by name")
+        names = tuple(str(name) for name in stored["__variables__"])
+        layout = json.loads(str(stored["__layout__"]))
         paths, treedef = jax.tree_util.tree_flatten_with_path(like)
         values = []
         for key, template in paths:
-            value = stored[jax.tree_util.keystr(key)]
+            name = jax.tree_util.keystr(key)
+            value = stored[name]
+            if name == ".variables":
+                value = registry.migrate(value, names, maps.get("variables"), dropped.get("variables", ()))
+            parts = name.split(".")
+            if len(parts) == 4 and parts[1] == "memory" and parts[3] == "rows":
+                kind = _STORE_TYPES[parts[2]]
+                value = variables.remap(value, layout[kind], v3.TOKEN_TYPES_V3[kind].FEATURES, maps.get(kind),
+                                        dropped.get(kind, ()))
             if value.shape != np.shape(template):
-                raise ValueError(f"{jax.tree_util.keystr(key)} is {value.shape}, expected {np.shape(template)}")
+                raise ValueError(f"{name} is {value.shape}, expected {np.shape(template)}")
             values.append(jnp.asarray(value))
     return jax.tree_util.tree_unflatten(treedef, values)
 

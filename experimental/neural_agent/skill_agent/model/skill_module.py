@@ -17,15 +17,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, NamedTuple, Sequence
+from typing import Any, Mapping, NamedTuple, Sequence
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
 from experimental.neural_agent.skill_agent.contract.surface import scope_of
+from experimental.neural_agent.skill_agent.contract.variables import fingerprint
 from experimental.neural_agent.skill_agent.model.encoder import EncoderConfig, EncoderOutput, init_encoder
 from experimental.neural_agent.skill_agent.model.freezing import params_sha256
+from experimental.neural_agent.skill_agent.model.migrate import migrate_trunk
 from experimental.neural_agent.skill_agent.model.generalist import (
     GeneralistConfig,
     GeneralistParams,
@@ -124,22 +126,49 @@ def _config_dict(config: Any) -> dict:
     return {name: getattr(config, name) for name in config.__dataclass_fields__}
 
 
-def save_trunk(path: Path, trunk: Trunk) -> None:
-    """``path`` (.npz) and its .json sidecar: the encoder's sizes and the SHA-256."""
+def save_trunk(path: Path, trunk: Trunk, layout: Mapping[str, Sequence[str]] | None = None) -> None:
+    """``path`` (.npz) and its .json sidecar: the encoder's sizes and the SHA-256, and ``layout`` ({type: feature
+    names}, ``encoder.token_layout``) with its fingerprint when given, so a later schema can migrate the trunk by name
+    (``docs/VIRTUAL_HUMAN.md`` section 14, rule 2)."""
 
-    save_params(path, trunk.params)
     meta = {"config": _config_dict(trunk.config), "sha256": trunk.sha256}
+    if layout is not None:
+        if tuple((name, len(features)) for name, features in layout.items()) != trunk.config.token_types:
+            raise ValueError(f"the layout's widths are not the trunk's {trunk.config.token_types}")
+        meta["layout"] = {name: list(features) for name, features in layout.items()}
+        meta["layout_fingerprint"] = fingerprint(meta["layout"])
+    save_params(path, trunk.params)
     Path(path).with_suffix(".json").write_text(json.dumps(meta, indent=1) + "\n")
 
 
-def load_trunk(path: Path) -> Trunk:
+def load_trunk(path: Path, layout: Mapping[str, Sequence[str]] | None = None, *,
+               maps: Mapping[str, Mapping[str, Mapping[str, float]]] | None = None,
+               dropped: Mapping[str, Sequence[str]] | None = None) -> Trunk:
+    """A saved trunk, checked against its SHA-256. With ``layout`` (the schema it will read), a trunk saved under
+    another layout is migrated to it by name (``model/migrate.py``; ``maps`` and ``dropped`` as there), and one saved
+    without a layout must have its widths."""
+
     meta = json.loads(Path(path).with_suffix(".json").read_text())
     raw = meta["config"]
-    config = EncoderConfig(**{**raw, "token_types": tuple(tuple(entry) for entry in raw["token_types"])})
+    config = EncoderConfig(**{**raw, "token_types": tuple(tuple(entry) for entry in raw["token_types"]),
+                              "condition_types": tuple(raw.get("condition_types", ()))})
     trunk = make_trunk(load_params(path, init_encoder(jax.random.key(0), config)), config)
     if trunk.sha256 != meta["sha256"]:
         raise ValueError(f"{path}: the parameters' SHA-256 differs from the sidecar's")
-    return trunk
+    if layout is None:
+        return trunk
+    current = {name: list(features) for name, features in layout.items()}
+    saved = meta.get("layout")
+    if saved is None:
+        if tuple((name, len(features)) for name, features in current.items()) != config.token_types:
+            raise ValueError(f"{path} was saved without its layout and its widths differ, so it cannot be migrated")
+        return trunk
+    if fingerprint(saved) != meta["layout_fingerprint"]:
+        raise ValueError(f"{path}: the layout differs from its fingerprint")
+    if saved == current:
+        return trunk
+    params, config = migrate_trunk(trunk.params, config, saved, current, maps=maps, dropped=dropped)
+    return make_trunk(params, config)
 
 
 def save_module(path: Path, module: SkillModule) -> None:

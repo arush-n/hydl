@@ -26,7 +26,7 @@ view at all, as unseen, which doubles fear and startles).
 
 **Dynamics** (leaky integrators, fixed shapes, no branches; ``lam(tau) = exp(-dt / tau)``)::
 
-    c <- c + (c* - c)(1 - lam(TAU_COPING)),   c* = sigmoid(1 + 2 (h - 1/2) + risk_tolerance - 1.5 n_attacking + p)
+    c <- c + (c* - c)(1 - lam(TAU_COPING)),   c* = sigmoid(1 + 2 (h - 1/2) + risk_taking - 1.5 n_attacking + p)
     F <- F + (F* - F)(1 - lam(tau_F)) + g_F I_F (1 - F),   F* = T (1 - c)(1 + MU max(0, -mood_P))
     a0 <- a0 + (A* - a0)(1 - lam(TAU_ANGER)) + g_A I_0 (1 - a0),   A* = T c / 2
     a_j <- lam(TAU_ANGER) a_j + g_A K harm_j (1 - a_j),            anger = 1 - (1 - a0) prod_j (1 - a_j)
@@ -34,11 +34,12 @@ view at all, as unseen, which doubles fear and startles).
     V <- clip(lam(TAU_VALENCE) V + VALENCE_GAIN (g+ dealt - g- taken), -1, 1)
     M <- M + (1 - lam(TAU_MOOD))(M0 - M) + MOOD_PULL dt sum_e w_e (P_e - M)
 
-with ``tau_F`` = ``TAU_FEAR_RISE`` while fear rises, else ``TAU_FEAR_DECAY exp(negative_reactivity / 2)``; the gains
-``g = exp(trait)`` (negative reactivity for fear and startle; aggression and negative reciprocity for anger; positive
-and negative reactivity for valence); ``P_e`` the PAD points of fear (-0.64, 0.60, -0.43), anger (-0.51, 0.59, 0.25),
+with ``tau_F`` = ``TAU_FEAR_RISE`` while fear rises, else ``TAU_FEAR_DECAY exp(negative_emotionality / 2)``; the
+gains ``g = exp(trait)`` (negative emotionality for fear and startle; negative emotionality and negative reciprocity for
+anger, angry hostility being a facet of neuroticism (NEO-PI-R; recalled); positive and negative emotionality for
+valence); ``P_e`` the PAD points of fear (-0.64, 0.60, -0.43), anger (-0.51, 0.59, 0.25),
 joy (0.4, 0.2, 0.1) and sadness (-0.6, -0.4, -0.5) (Gebhard 2005); and ``M0`` Mehrabian's mapping from the persona's
-Big Five view. Feelings toward entity j decay with their own constants, stretched by ``memory_retention``::
+Big Five view. Feelings toward entity j decay with their own constants::
 
     hostility_j <- lam(TAU_HOSTILITY) hostility_j + g_A K harm_j (1 - hostility_j)
     fear_j      <- max(lam(TAU_FEAR_MEMORY) fear_j, F [j is the top threat])
@@ -224,8 +225,8 @@ def update(affect: AffectState, perceived: Perceived, persona: jax.Array, reset:
     their_health = jnp.take_along_axis(entities[..., _E["health_fraction"]], top[:, None], axis=1)[:, 0]
     power = jnp.where(has_top, health - their_health, 0.0)
 
-    risk = trait(persona, "risk_tolerance")
-    negative, positive = trait(persona, "negative_reactivity"), trait(persona, "positive_reactivity")
+    risk = trait(persona, "risk_taking")
+    negative, positive = trait(persona, "negative_emotionality"), trait(persona, "positive_emotionality")
     coping_target = jax.nn.sigmoid(1.0 + 2.0 * (health - 0.5) + risk - 1.5 * attackers_near + power)
     coping = affect.coping + (coping_target - affect.coping) * (1.0 - _lam(TAU_COPING, dt))
 
@@ -236,7 +237,7 @@ def update(affect: AffectState, perceived: Perceived, persona: jax.Array, reset:
     fear = affect.fear + (fear_target - affect.fear) * (1.0 - _lam(tau_fear, dt))
     fear = jnp.clip(fear + jnp.exp(negative) * fear_impulse * (1.0 - fear), 0.0, 1.0)
 
-    anger_gain = jnp.exp(0.5 * trait(persona, "aggression") + 0.5 * trait(persona, "negative_reciprocity"))
+    anger_gain = jnp.exp(0.5 * negative + 0.5 * trait(persona, "negative_reciprocity"))
     anger_target = threat * coping / 2.0
     unattributed = DAMAGE_GAIN * taken * (~attributed) * 0.3
     anger0 = affect.anger_unattributed + (anger_target - affect.anger_unattributed) * (1.0 - _lam(TAU_ANGER, dt))
@@ -255,16 +256,15 @@ def update(affect: AffectState, perceived: Perceived, persona: jax.Array, reset:
     valence = jnp.clip(_lam(TAU_VALENCE, dt) * affect.valence
                        + VALENCE_GAIN * (jnp.exp(positive) * dealt - jnp.exp(negative) * taken), -1.0, 1.0)
 
-    retention = jnp.exp(0.7 * trait(persona, "memory_retention"))[:, None]
     feelings = jnp.where((table != affect.entity_id)[..., None], 0.0, affect.feelings)  # a slot given a new entity
     harm_slot = jnp.zeros((batch, ENTITY_SLOTS)).at[rows_index, slot].add(jnp.where(entity_valid, harm, 0.0))
     impulse = anger_gain[:, None] * DAMAGE_GAIN * harm_slot
-    hostility = _lam(TAU_HOSTILITY * retention, dt) * feelings[..., 0]
+    hostility = _lam(TAU_HOSTILITY, dt) * feelings[..., 0]
     hostility = hostility + impulse * (1.0 - hostility)
     top_slot = jnp.where(has_top, jnp.take_along_axis(slot, top[:, None], axis=1)[:, 0], -1)
-    fear_memory = jnp.maximum(_lam(TAU_FEAR_MEMORY * retention, dt) * feelings[..., 1],
+    fear_memory = jnp.maximum(_lam(TAU_FEAR_MEMORY, dt) * feelings[..., 1],
                               jnp.where(jnp.arange(ENTITY_SLOTS)[None, :] == top_slot[:, None], fear[:, None], 0.0))
-    trust = jnp.clip(_lam(TAU_TRUST * retention, dt) * feelings[..., 2] - 2.0 * DAMAGE_GAIN * harm_slot, -1.0, 1.0)
+    trust = jnp.clip(_lam(TAU_TRUST, dt) * feelings[..., 2] - 2.0 * DAMAGE_GAIN * harm_slot, -1.0, 1.0)
     anger_j = _lam(TAU_ANGER, dt) * feelings[..., 3]
     anger_j = anger_j + impulse * (1.0 - anger_j)
     feelings = jnp.clip(jnp.stack([hostility, fear_memory, trust, anger_j], axis=-1), -1.0, 1.0)

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import Mapping
 
+from experimental.neural_agent.skill_agent.contract import variables
 from experimental.neural_agent.skill_agent.contract.surface import (
     ATTACK_PHASES,
     ATTITUDES,
@@ -86,28 +87,14 @@ MEMORY_FEATURES: tuple[str, ...] = ("remembered", "age", "tagged")
 ticks since it was last perceived, over log1p of the memory's horizon) and ``tagged`` (the priority the middle layer
 gave it with a ``remember`` request, 0 when untagged; PERCEPTION.md section 10.3)."""
 
-PERSONA_TRAITS: tuple[str, ...] = (
-    # risk and time
-    "risk_tolerance", "loss_aversion", "patience", "persistence",
-    # combat style
-    "aggression", "preferred_range", "stealth", "precision", "tactical_variability",
-    # social
-    "social_value_orientation", "inequity_aversion", "honesty_humility", "trust", "positive_reciprocity",
-    "negative_reciprocity", "sociability", "conformity",
-    # cognitive
-    "curiosity", "deliberation", "memory_retention", "vigilance",
-    # motor signature
-    "reaction_mean", "reaction_tail", "motor_noise", "smoothness", "lateral_bias",
-    # emotional reactivity
-    "negative_reactivity", "positive_reactivity", "urgency",
-)
-"""The agent's stable traits (``docs/VIRTUAL_HUMAN.md``; owner 2026-10-21: unique continuous scalars, every agent a
-combination, shared through the whole architecture). Each is a scalar in [-1, 1], 0 the population's mean; the list is
-append-only (a module trained before a name existed reads it as 0)."""
-AFFECT_FEATURES: tuple[str, ...] = ("fear", "anger", "startle", "valence", "coping", "mood_pleasure", "mood_arousal",
-                                    "mood_dominance")
-"""The agent's emotional state (``state/affect.py``): fear, anger, startle in [0, 1]; valence (joy or distress)
-and the mood's pleasure, arousal and dominance in [-1, 1]; coping, its sense of control over the threat, in [0, 1]."""
+PERSONA_FEATURES: tuple[str, ...] = variables.names("self", body_reads=True)
+"""The ``persona`` token's columns: the traits the body has a mechanism for (``docs/VIRTUAL_HUMAN.md`` section 15.1),
+generated from the variable registry (``contract/variables.py``). The other traits stay in the state layer for the
+decision layer and the LLM."""
+AFFECT_FEATURES: tuple[str, ...] = variables.names("inner", body_reads=True)
+"""The agent's emotional state (``state/affect.py``), generated from the variable registry: fear, anger, startle in
+[0, 1]; valence (joy or distress) and the mood's pleasure, arousal and dominance in [-1, 1]; coping, its sense of
+control over the threat, in [0, 1]."""
 FEELINGS: tuple[str, ...] = ("hostility", "fear", "trust", "anger")
 """The agent's feelings toward one known entity (``state/affect.py``), on that entity's token as ``feel_*``."""
 
@@ -223,10 +210,10 @@ class InventorySlotTokenV3:
 
 
 class PersonaTokenV3:
-    """Who the agent is: its traits (``PERSONA_TRAITS``), the same for its whole life. One token; it also conditions
-    every other token's embedding (``EncoderConfig.condition_types``)."""
+    """Who the agent is, as far as the body reads it (``PERSONA_FEATURES``), the same for its whole life. One token; it
+    also conditions every other token's embedding (``EncoderConfig.condition_types``)."""
 
-    FEATURES = (*(f"trait_{name}" for name in PERSONA_TRAITS), "marked")
+    FEATURES = (*PERSONA_FEATURES, "marked")
 
 
 class AffectTokenV3:
@@ -276,7 +263,7 @@ assert all(len(set(cls.FEATURES)) == len(cls.FEATURES) for cls in TOKEN_TYPES_V3
 
 __all__ = ["ABILITY_SLOTS", "AFFECT_FEATURES", "AFFORDANCES", "CAPACITIES_V3", "DESCRIPTION_WIDTH", "FEELINGS",
            "GATHER_BITS", "GEOMETRY_BOXES", "GEOMETRY_BOX_FIELDS", "GEOMETRY_EDGES", "GEOMETRY_EDGE_FIELDS",
-           "GEOMETRY_FLAGS", "HOLD_THRESHOLDS", "ITEM_PROPERTIES_V3", "MEMORY_FEATURES", "PERSONA_TRAITS",
+           "GEOMETRY_FLAGS", "HOLD_THRESHOLDS", "ITEM_PROPERTIES_V3", "MEMORY_FEATURES", "PERSONA_FEATURES",
            "RECIPE_WIDTH", "RESERVE_WIDTH", "RESOURCES", "STATUS_FIELDS", "STATUS_FLAGS", "TOKEN_SCHEMA_V3",
            "TOKEN_TYPES_V3", "TRUNK_TYPE_NAMES_V3", "WHERE_FEATURES", "ActTokenV3", "AffectTokenV3",
            "BlockCandidateTokenV3", "EntityTokenV3", "GeometryTokenV3", "HazardTokenV3", "InventorySlotTokenV3",

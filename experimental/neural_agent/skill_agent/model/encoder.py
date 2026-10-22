@@ -73,6 +73,13 @@ def token_widths(schema: str = TOKEN_SCHEMA_V1) -> tuple[tuple[str, int], ...]:
     return tuple((name, len(cls.FEATURES)) for name, cls in trunk_types(schema))
 
 
+def token_layout(schema: str = TOKEN_SCHEMA_V1) -> dict[str, tuple[str, ...]]:
+    """{type: feature names} for ``schema``, in sequence order: what a saved trunk records so a later schema can
+    migrate it by name (``model/migrate.py``)."""
+
+    return {name: tuple(cls.FEATURES) for name, cls in trunk_types(schema)}
+
+
 TRUNK_TYPES: tuple[tuple[str, type], ...] = trunk_types(TOKEN_SCHEMA_V1)
 """The token types the trunk reads under ``skill_tokens_v1``, in its sequence order: (name, record class)."""
 
@@ -552,6 +559,7 @@ __all__ = [
     "pack_tokens",
     "parameter_count",
     "stack_batch",
+    "token_layout",
     "token_widths",
     "trunk_types",
 ]
