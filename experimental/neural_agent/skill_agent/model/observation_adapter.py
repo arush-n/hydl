@@ -55,7 +55,9 @@ Gaps: features the legal observation does not provide
 -----------------------------------------------------
 * Body yaw: not published; supplied by the caller (see Frame).
 * Held-item durability: not published; 0.
-* Mana: the flat world has no mana resource (the observation's mask is False), so 0.
+* Mana, gen 5 only: the stock engine's flat world has no mana resource (the observation's mask is False), so 0. On gen
+  7 every reset carries Mana 100 / 100 since 65a74bb (as the live 0.7.2 body spawns), so the meter reads 1.0 at spawn;
+  anything trained on gen 7 before that commit saw 0 here.
 * Role: the nearby-entity row publishes only ``hostile``, which the writer sets to 1 for every row
   (``observation/v1/runtime/encoder.py:132``). Every opponent is therefore ``enemy``. ``ally``, ``animal``,
   ``merchant`` and ``player`` are never produced.
