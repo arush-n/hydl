@@ -43,7 +43,7 @@ from experimental.neural_agent.skill_agent.state.action_history import (
     initial_history,
     update_history,
 )
-from experimental.neural_agent.skill_agent.state.senses import append_rows, pack, perceive_rows
+from experimental.neural_agent.skill_agent.state.senses import append_rows, fit_ids, pack, perceive_rows
 from experimental.neural_agent.skill_agent.state.persona import TRAITS, neutral_persona
 
 
@@ -55,17 +55,21 @@ class AgentState(NamedTuple):
     latent: jax.Array | None = None  # float32[B, S, W]: the trunk's last ``EncoderOutput.memory``
     variables: jax.Array | None = None  # float32[B, V]: ``contract/variables.NAMES``, read through ``registry``
     affect: feeling.AffectState | None = None  # the affect rules' working state
+    entity_ids: jax.Array | None = None  # int32[B, E]: the id of each entity token row last tick, -1 for padding
 
 
-def initial_state(batch: int, latent: jax.Array | None = None, persona: jax.Array | None = None) -> AgentState:
+def initial_state(batch: int, latent: jax.Array | None = None, persona: jax.Array | None = None,
+                  entity_capacity: int = v3.CAPACITIES_V3["entity"]) -> AgentState:
     """The state at an episode's start (``latent``: the trunk's initial slots, ``encoder.initial_memory``;
-    ``persona``: float32[B, len(persona.TRAITS)], the population's mean when None)."""
+    ``persona``: float32[B, len(persona.TRAITS)], the population's mean when None; ``entity_capacity``: the entity
+    capacity :func:`step` packs to)."""
 
     persona = neutral_persona(batch) if persona is None else jnp.asarray(persona, jnp.float32)
     affect = feeling.initial_affect(persona)
     values = registry.put(registry.defaults(batch), TRAITS, persona)
     values = registry.put(values, v3.AFFECT_FEATURES, feeling.affect_features(affect))
-    return AgentState(initial_history(batch), stores.initial_memory(batch), latent, values, affect)
+    return AgentState(initial_history(batch), stores.initial_memory(batch), latent, values, affect,
+                      jnp.full((batch, entity_capacity), -1, jnp.int32))
 
 
 def step(observation: Any, state: AgentState, *, last_action: jax.Array,
@@ -109,7 +113,8 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
         columns = registry.take(values, v3.TOKEN_TYPES_V3[name].FEATURES[:-1])
         rows[name] = (jnp.pad(columns, ((0, 0), (0, 1)))[:, None, :], one)
     tokens = pack(rows, batch, capacities)
-    return tokens, AgentState(history, memory, state.latent, values, affect)
+    ids = fit_ids(entity_ids, valid, capacities["entity"])  # aligned with tokens["entity"], perceived and remembered
+    return tokens, AgentState(history, memory, state.latent, values, affect, ids)
 
 
 _STORE_TYPES: Mapping[str, str] = {"geometry": "geometry", "entity": "entity", "block": "block_candidate"}

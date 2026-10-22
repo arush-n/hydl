@@ -14,7 +14,7 @@ when it is -1, out of range, or names a padded slot. The request tokens and six 
 ``X = [q_1 .. q_R; s_1 .. s_6]``, and ``layers`` pre-LayerNorm blocks follow::
 
     X <- X + SelfAttn(LN(X); V)         V: the valid request slots and every scope query
-    X <- X + CrossAttn(LN(X); T, M)     T: every trunk token, in TRUNK_TYPES order; M: their validity
+    X <- X + CrossAttn(LN(X); T, M)     T: every token the trunk outputs, in its order; M: their validity
     X <- X + MLP(LN(X))                 MLP: Dense(W -> 2 W), GELU, Dense(2 W -> W)
 
 After a final LayerNorm, the readouts are::
@@ -332,8 +332,11 @@ def _check_shapes(encoder_output: EncoderOutput, requests: GeneralistRequests, c
 
 
 def _trunk_masks(encoder_output: EncoderOutput, token_masks: Mapping[str, Any]) -> dict[str, jax.Array]:
+    """Each token type the trunk output carries, in its order (the six v1 types for a v1 trunk, every v3 type for a v3
+    one; 2026-10-22, step 1b of ``docs/VIRTUAL_HUMAN.md`` section 13), with its validity mask."""
+
     masks: dict[str, jax.Array] = {}
-    for name, _ in TRUNK_TYPES:
+    for name in encoder_output.tokens:
         shape = jnp.shape(encoder_output.tokens[name])[:2]
         if name in token_masks:
             mask = jnp.asarray(token_masks[name], dtype=jnp.bool_)
@@ -373,8 +376,8 @@ def apply_generalist(
     _check_shapes(encoder_output, requests, config)
     batch, slots = jnp.shape(requests.verb)
     masks = _trunk_masks(encoder_output, token_masks)
-    memory = jnp.concatenate([encoder_output.tokens[name] for name, _ in TRUNK_TYPES], axis=1)
-    memory_valid = jnp.concatenate([masks[name] for name, _ in TRUNK_TYPES], axis=1)
+    memory = jnp.concatenate([encoder_output.tokens[name] for name in masks], axis=1)
+    memory_valid = jnp.concatenate(list(masks.values()), axis=1)
 
     arguments = jnp.where(requests.arg_present[..., _GROUP_OF_FEATURE], requests.args, 0.0)
     token = params.verbs[requests.verb] + _linear(params.arguments, arguments) + params.scopes[requests.scope]

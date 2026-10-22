@@ -556,6 +556,8 @@ approach. Missing:
 |---|---|---|
 | 0 | DONE 2026-10-21, ea4bc63: the v3 encoder, `../state/` and this plan, under the package's two-pass gate (no new failure by name; the 37 v3 tests pass; the stand-in pass 30 of 30 in the shared tree) | 7 |
 | 1 | DONE 2026-10-21, 61fc40e: the variable registry (`contract/variables.py`: 24 self and 8 inner variables, agent-side only), queries and state migration by name (`state/registry.py`), trunk migration by feature name (`model/migrate.py`), the layout and its fingerprint saved with every trunk and state; the trait list (15.6) and the persona token's shape (15.1, 10 body-read traits), moved here from step 7. Gate: no new failure by name; 8 new tests | 10.1, 10.2, 14, 15.1, 15.6 |
+| 1b | DONE 2026-10-22: the body's path on v3: the generalist reads every token type; every entity row carries its id; the runtime ticks the state layer (`runtime/state_tick.py`); a request points at a perceived or remembered entity; request to action tested. The trainers stay on v1 until training resumes | 13 (this section) |
+| 1c | APPROVED 2026-10-22, after 1b: the memory design: a parallel, budgeted write; object files for important things (one latent slot each); a gist of 16 latent slots plus a cache of about 32 nearby cells for the background | 18 |
 | 2 | Structured writes from the top two layers; the tags move onto them | 10.4 |
 | 3 | Fixed rules on game time: alarm and startle, sleep pressure and fatigue, hunger and the other drives; then lifecycle under normal death, and provenance | 10.5, 10.7, 10.8, 16.1, 16.2, 16.5 |
 | 4 | The event log and its tokens; the activity counters and levels | 10.6, 11.1, 16.6 |
@@ -580,16 +582,26 @@ memory's job once trained (`PERCEPTION.md` N1, N2); the trunk is untrained, so t
 stores. What the world does not show yet (sound, events, more than one entity, time) is the simulator's asks (S11 to
 S15, ask 3).
 
-**Not yet connected (PROPOSED as step 1b, waiting on the owner):** nothing that acts reads v3. The generalist head's
-cross-attention reads only the six v1 token types (`model/generalist.py`: not the action history, status,
-projectiles, hazards, recipes, persona or affect, which reach it only through the trunk's own attention); the skill
-modules and the runtime still build v1 tokens (`model/observation_adapter.py`); and a request cannot point at a v3
-entity row: the resolver matches a request's entity handle against v1 token records (`contract/references.py`,
-`entity_index`), while the v3 rows carry no handle and `layer.step` does not return the row ids it knows (perceived
-and remembered). Step 1b would move the body's path onto the state layer and v3: the head reads every type, the
-runtime ticks the state layer, and `layer.step` returns each entity row's id so a request can point at a perceived or
-a remembered entity; the tandem test then covers request to action. Without it, steps 2 to 9 add inputs that no skill
-reads.
+**The body's path on v3** (step 1b, APPROVED 2026-10-22: "yes go ahead ensure to keep it organized"; DONE
+2026-10-22). Found on 2026-10-21: nothing that acts read v3. Now:
+- **The generalist head reads every type its trunk outputs** (`model/generalist.py`), in the trunk's order: all
+  thirteen for a v3 trunk, the same six for a v1 trunk, whose outputs are bit-identical to before.
+- **Every entity token row carries its entity's id** (`AgentState.entity_ids`, aligned with the packed rows by
+  `state/senses.py` `fit_ids`), perceived or remembered.
+- **The runtime ticks the state layer** (`runtime/state_tick.py`): `tick` runs the state layer, then the trunk once
+  for every agent with its latent memory (reset per lane); `point` resolves a request's entity handle to its row (the
+  v3 resolver, kept out of `contract/references.py`, which stays free of JAX by its own test); `module_factors` is a
+  skill module's masked action for every agent; `encode_contexts` gives the combiner each agent's row and every entity
+  it knows, perceived or remembered; `ModuleBody` runs a skill module as a combiner body.
+- **Request to action is tested** (`test_sa_state_tick.py`, on the duel with the opponent chasing the evading agent):
+  the head reads a type v1 never had directly; the request's pointer finds the opponent in view and after it has
+  left view; the module's request token takes the remembered row; its factors are legal and only on its scope; the
+  combiner accepts a request naming the remembered opponent and the module body fills the gaze heads.
+
+**Still on v1, by design:** the trained v1 bodies (`runtime/neural_pursuit.py`, the A2 C' network) and the skill
+trainers' token kernel (`training/blocks.py`, `training/skill_dagger.py`): no skill is trained on v3 yet. Moving the
+trainers onto `runtime/state_tick.py` is the first task when training resumes (owner, 2026-10-19: no training right
+now).
 
 **The encoding tested** (2026-10-21, owner: "test the encoding in the sim and the real server"): the state layer's
 tick on simulator duels, a Region world and the live 0.7.2 server (`PERCEPTION.md` section 10.5; the tools are
@@ -630,7 +642,8 @@ the status token's identity (step 7).
   the encoder and the state layer").
 - **Future:** the levels' learning constants and aptitude (16.6), and who builds the institutions layer, and when
   (15.4).
-- **Waiting on the owner:** step 1b (section 13: the body's path onto v3) and the memory design (section 18.3).
+- **Approved 2026-10-22** ("yes go ahead ensure to keep it organized"): step 1b (the body's path onto v3), then the
+  memory design (section 18, with 18.3's recommendations).
 
 ## 14. Composability and updates (AGREED 2026-10-21; part of step 1)
 
@@ -1130,7 +1143,7 @@ zero with `known` 0.
 - Judged distance follows the compression.
 - Nothing privileged reaches the token: the source's id only when the source is seen.
 
-## 18. Memory: fast writes, and important things kept apart from the background (PROPOSED 2026-10-21; not built)
+## 18. Memory: fast writes, and important things kept apart from the background (APPROVED 2026-10-22 with 18.3's recommendations; built after step 1b)
 
 The owner, 2026-10-21: "the goal is that the latent memory is quick retrieval and efficient not slow, the issue is that
 during fast throughput areas it is slower. one thing to note is that we need to store entities and important things
@@ -1204,7 +1217,7 @@ plus the trunk from about 7.6 ms to about 3.5 ms; at batch 64, from about 31 ms 
 auxiliary loss: decode hidden things' places from the latent memory), the background slots carry nothing useful. The
 explicit important tier works from the first tick.
 
-### 18.3 Decisions for the owner
+### 18.3 Decisions for the owner (APPROVED 2026-10-22: "yes go ahead", the recommendations below)
 
 1. **The background.** Recommended: latent slots plus a small recency cache of the nearest remembered cells (about
    32), so the body keeps a spatial sense before training. The alternative is latent slots alone.

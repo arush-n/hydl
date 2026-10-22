@@ -550,6 +550,18 @@ def append_rows(perceived, remembered):
             jnp.concatenate((perceived[1], remembered[1]), axis=1))
 
 
+def fit_ids(ids: jax.Array, mask: jax.Array, capacity: int) -> jax.Array:
+    """int32[B, capacity]: the ids of rows packed as :func:`pack` packs them (valid rows first, in their order, the
+    first ``capacity`` kept), -1 for a padded slot."""
+
+    order = jnp.argsort(~mask, axis=1, stable=True)
+    ids, mask = jnp.take_along_axis(ids, order, axis=1), jnp.take_along_axis(mask, order, axis=1)
+    if ids.shape[1] < capacity:
+        ids = jnp.pad(ids, ((0, 0), (0, capacity - ids.shape[1])), constant_values=-1)
+        mask = jnp.pad(mask, ((0, 0), (0, capacity - mask.shape[1])))
+    return jnp.where(mask[:, :capacity], ids[:, :capacity], -1)
+
+
 def _fit(built, batch: int, capacity: int, width: int) -> tuple[jax.Array, jax.Array]:
     """Rows packed into ``capacity`` slots, valid rows first in their order; the rest padded invalid. More valid rows
     than slots keeps the first ``capacity`` (perceived before remembered)."""
@@ -569,4 +581,4 @@ def _fit(built, batch: int, capacity: int, width: int) -> tuple[jax.Array, jax.A
 
 __all__ = ["APPROACH_DISTANCE_BLOCKS", "APPROACH_HORIZON_SECONDS", "ASSUMED_PROJECTILE_TERMINAL",
            "ENTITY_CENTRE_HEIGHT", "VIEW_HALF_ANGLE_DEGREES", "Light", "Perceived", "Pose", "Remembered",
-           "append_rows", "legal_tokens_v3", "pack", "perceive_rows", "where_of"]
+           "append_rows", "fit_ids", "legal_tokens_v3", "pack", "perceive_rows", "where_of"]
