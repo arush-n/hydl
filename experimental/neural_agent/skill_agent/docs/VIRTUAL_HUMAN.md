@@ -1292,10 +1292,19 @@ The write alone, old and new loaded in one process on the same rows (scratch `wr
   identity, so it gives no block candidates (0 rows in these runs). Making them needs a live capture of the 20 seeds;
   that is the owner's call (coordinator, `HytaleRL/hytalegym/tools/worldgen/README.md`, "Block-semantic sidecar").
 - The terrain the gist reads is short: the world-geometry row is fail-closed at 44 tokens, which traversal and
-  exception tokens share, and on the Region world 98 of 200 in-core positions clear the whole row (a capacity of 128
-  recovers 94). Changing it changes the token contract: the owner's call (same README, "World geometry tokens").
-- What the owner saw as slower "during fast throughput areas" is not yet pinned down: in this pipeline every shape is
-  fixed, so a busy place does not change the cost (18.1, corrected).
+  exception tokens share, so a position that needs more sees no terrain at all (same README, "World geometry
+  tokens"). **Decided: 96 on the 0.7.2 line** (the owner ruled 96 with the coordinator, then, 2026-10-22: "increase
+  to however many pos you think is best, you can increase past 96 if needed"). A census of the tokens a row needs
+  (the coordinator's `capacity_census.py`, in-core traversal nodes, random facing; logs in
+  `HytaleRL/artifacts/fidelity_evidence/region_token_capacity/skill_layer_*`): all 20 seeds of the 0.7.2 library
+  (3,983 positions) median 50, p99 72, max 84; 32 of `region-library-v3-288`'s seeds (3,178) median 49, p99 72, max
+  81. 44 keeps 38% of positions, 64 keeps 96.5%, 96 keeps all 7,161. The trunk a tick per agent: 1.02 ms at 44, 1.21
+  at 96, 1.42 at 128 (batch 1). 128 would guard only terrain not yet sampled: re-run the census before a new kind of
+  world. The sim side is the coordinator's (not landed); then `contract/tokens_v3.py` and `state/memory.py` read the
+  capacity from the server profile. The overflow flag does not reach the skill layer: an overflowed row looks like
+  terrain outside the captured core.
+- "During fast throughput areas it is slower" was a design concern, not an observation (owner, 2026-10-22: "just a
+  design concern"). It is met: every shape is fixed, so a busy place does not change the cost (18.1, corrected).
 
 ## Sources
 
