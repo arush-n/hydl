@@ -493,6 +493,10 @@ Lane region-072 (task #130 item 5). Diagnosis and plan only. Nothing was produce
 
 Not done by this lane: no server, no bridge, no capture, no artifact, no promotion. The live step is the coordinator's to schedule.
 
+### Capture tool and stage (2026-10-22)
+
+`capture_block_semantics.py` (this folder) is the live step for one seed: reset the native env on the seed, `capture_projected_native_region_block_semantics` against the stored Region NPZ, save, reload and check the semantic digest, and write a receipt beside the sidecar. It refuses a jar other than the pin and never overwrites. The owner's ruling (2026-10-22) is capture to a stage only: `HytaleRL/artifacts/worldgen/stage/block-semantics-072-20261022/` (`run.sh SEED ...` launches one fresh bridge per seed on 5556/25574 after the load is below 6; `sidecars/`, `logs/`). Smoke, seed 1044320000 on bridge 6DFD8682: 250 of 250 sections, the reloaded digest equals the captured one (1c9d5d23...), the live physical pass agreed with the stored Region. Promotion into the library and the binding in `worlds/region.py` wait for the owner.
+
 ## World geometry tokens: why the collision box fields (`box_*`) read 0, 2026-10-22
 
 Diagnosis of the box fields that read 0 in the Region world and live. Lane region-072, 2026-10-22 (task #130 item 6). Diagnosis only: no simulator change was made. Every claim is marked confirmed (file:line, or a command or probe run here) or inferred.
