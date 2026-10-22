@@ -455,3 +455,79 @@ Checks before promotion:
 10. The stage is outside the fixed paths, and `git status` shows no new tracked change from the run.
 
 Then the owner decides the promotion (the three 0.7.2 locations above) and the swap (README steps 3 to 5). Promotion writes shared state, so it needs an explicit owner yes.
+
+## Block-semantic sidecar (Region block identity), 2026-10-22
+
+Lane region-072 (task #130 item 5). Diagnosis and plan only. Nothing was produced, promoted or published. The 0.7.2 library has no sidecar, so the perception channel's block candidates are closed there.
+
+### What it is (confirmed)
+
+- Per Region: a palette-compressed block identity for every cell. Each palette entry carries `semantic_key` and `asset_key` (8 big-endian uint32 words each, from SHA-256), `valid`, `affordance_tags`, `gather_type_index`, `required_tool_quality` and `rotation_index`. Cell codes are `uint16[25][10][32768]`. Entry zero is air.
+- 0.5.7 folder: `HytaleRL/artifacts/worldgen/region-library-pilot-v2/block-semantics-v1/`. `manifest.json` has schema `hytalerl_region_block_semantic_library_v1`, with one row per Region: `path`, `file_sha256`, `source_region_semantic_sha256`, `semantic_sha256`, `evidence_bridge_sha256`. Sidecars live in `sidecars/<source sha>.block-semantics.npz`. Their keys are `_SNAPSHOT_KEYS` (`hytalegym/worldgen/region/block_semantics.py`): `metadata` (schema `hytalerl_native_region_block_semantic_snapshot_v1`), `core_min_chunk_xz`, `section_known`, `cell_code`, and seven `palette_*` arrays. The 20 sidecars carry 350 to 614 palette entries each (measured).
+- Writer: `capture_native_region_block_semantics` (`block_semantics.py:499`) and `capture_projected_native_region_block_semantics` (`:530`). Both take a live bridge transport and call `capture_region_block_semantic_section` once per section, 25 chunks times 10 sections (`_capture_block_semantic_sections`, `:583`). `NativeRegionBlockSemanticSnapshot.save` (`:246`) writes the file. `create_region_block_semantic_library` (`hytalegym/worldgen/region/block_semantic_library.py:181`) writes the manifest.
+- Reader: `RegionBlockSemanticLibrary.load` (`block_semantic_library.py:71`) checks the source library, the contracts, the one-to-one pairing and both hash levels. `NativeRegionBlockSemanticSnapshot.load` (`block_semantics.py:316`) reads one file.
+- Runtime: `hytalegym/jax/world/region/library.py:143-156`. With no manifest, the runtime builds `region_block_semantic_atlas_without_evidence` (every block mask false, block heads closed; `jax/world/region/block_semantics.py:90-120`). With a manifest, it builds the atlas from the snapshots.
+- Bound by: `worlds/region.py:96` (`BLOCK_SEMANTIC_MANIFEST`, under `region-library-v3-288`), `:120-127` (`block_semantics_available()`), `:545`. No 0.7.2 folder is bound.
+
+### How the 0.5.7 sidecar was produced (live, confirmed for the mechanism)
+
+- `block-semantics-v1/STATUS.md` records evidence bridge `CF0A5CD5...BD2F1` and "twelve live physical bases were artifact-exact". The writer takes a transport, so it cannot run from files alone.
+- The live caller of the same writer is `experimental/worldgen-v2/tools/native_v2_region_capture.py:531` (`capture_native_region_block_semantics`, then save, reload and identity check at `:542-556`). Not confirmed: which script wrote the 0.5.7 manifest. No file in the repo names the `block-semantics-v1` writer.
+
+### Offline production for the 0.7.2 library: not possible (confirmed)
+
+- The stored 0.7.2 NPZs carry no block identity. Their keys are `__metadata_json__`, `__core_min_chunk_xz__`, `__section_known__`, `__cell_code__`, `cell_flags`, `cell_shape_index`, `cell_fluid_*`, `cell_support`, `cell_block_damage`, `cell_fluid_damage`, `cell_movement`, `cell_fluid_movement`, `shape_boxes`, `shape_box_mask` and `__filler_root_offset_packed__`. The metadata has no block names (checked on `region_0.7.2_seed_1044320000.npz`).
+- `__cell_code__` indexes a physical palette, not a block-id table. The 0.5.7 NPZs of the 20 seeds use 85 to 134 physical entries per Region; the 0.5.7 sidecars for the same Regions hold 350 to 614 identities. The 0.7.2 NPZs checked use 126 (seed 70970103) and 161 (seed 1044320000). Identity is lost when the Region is stored (scratch `inspect_057_sidecar.py`; the 0.7.2 counts from the NPZ `cell_flags` length).
+- The identity keys come from the live server's `BlockType` asset ids (`hytale-plugin-0.7.2/src/main/java/com/hytalerlbridge/nativebackend/session/region/RegionGeometryCapture.java:642-683`). Assets.zip has no per-cell block id, so it cannot map a stored cell to a block.
+- Conclusion: producing `block-semantics-v1` for the 0.7.2 library needs a live 0.7.2 bridge. The lane wrote no artifact.
+
+### Plan for a 0.7.2 sidecar (live; not run)
+
+1. Preconditions. The bridge jar pinned in `hytalegym/server_versions/v0_7.py` (`bridge_jar_sha256`; `6DFD8682...` on 2026-10-22). The 0.7.2 Region NPZs are the physical base: `artifacts/worldgen/region_0.7.2_seed_<seed>.npz`. Ports per "Before you run it" above. The bridge must expose `region_block_semantics` (`hytale-plugin-0.7.2/.../network/ClientHandler.java:197`, present).
+2. Per seed. Start the 0.7.2 bridge the same way the recapture does. Load the NPZ with `NativeRegionSnapshot.load`. Call `capture_projected_native_region_block_semantics(transport, snapshot, evidence_bridge_sha256=<the pinned jar>)`. Use the projected form. The exact form (`capture_native_region_block_semantics`) requires the live physical digest to equal the NPZ digest, which fails on fluid drift (see "Why the exact scope is unreliable" above). The projected form accepts a live pass whose seed projection matches, or whose differences are at most four dry-physical cells (`_block_semantic_physical_alignment`, `block_semantics.py:649`). The 0.7.2 compare table records matching seed projections for all 20 seeds (inferred that the check passes on each).
+3. Save each sidecar with `save`, reload it with `load`, and verify `semantic_sha256()` against the saved value before any publish.
+4. Publish once, into a new folder under a run root (never the shared artifacts without the owner's yes): `create_region_block_semantic_library(root, [sidecar paths], region_library_0_7_2)`. It pairs one sidecar per Region by `source_region_semantic_sha256`. For the 0.7.2 library the pairing key is the NPZ's complete digest (library `9DCA3C71...`, `artifact.semantic_sha256`).
+5. Validate. `RegionBlockSemanticLibrary.load(manifest, region_library_0_7_2)`, then a `region_action_runtime_from_artifact_libraries` build with `block_semantic_manifest_path` pointing at the new manifest. Check that a block cell from a known sidecar has `block_present` true.
+6. Cost (inferred from the 0.7.2 recapture timings). 251 wire calls per seed (one physical pass plus 250 sections). About 1.3 to 2.3 minutes per seed, so roughly 30 to 50 minutes for 20 seeds with three bridges in parallel.
+7. Decisions for the owner. Which digest identifies the 0.7.2 library (the same question as the open item in "Open question before step 2"). Where the manifest is bound: `worlds/region.py` binds only `region-library-v3-288`. Promotion, which writes shared state.
+
+Not done by this lane: no server, no bridge, no capture, no artifact, no promotion. The live step is the coordinator's to schedule.
+
+## World geometry tokens: why the collision box fields (`box_*`) read 0, 2026-10-22
+
+Diagnosis of the box fields that read 0 in the Region world and live. Lane region-072, 2026-10-22 (task #130 item 6). Diagnosis only: no simulator change was made. Every claim is marked confirmed (file:line, or a command or probe run here) or inferred.
+
+### Where the fields are filled (confirmed)
+
+- Source data: `NativeRegionSnapshot.load` reads `shape_boxes` and `shape_box_mask` (`hytalegym/worldgen/region/snapshot.py:442-443`). Region atlas: `hytalegym/jax/world/region/atlas.py:311-312` gathers `collision_boxes` and `collision_box_mask` by each cell's shape, and `:347-348` returns them.
+- Exception candidates for a Region: `hytalegym/jax/world/tokens/_candidates.py:248` (`_region_collision_exception_candidates`), dispatched from `:105-111`. `box_mask` is gated by `available & filler_available` (`:275-278`). Full cubes are split out (`:280-286`) and become surface tokens.
+- Surface and zero-box candidate builders write zeros or broadcast masks (`_candidates.py:441`, `:501`, `:604`). A full-cube token therefore has zero box fields by design. Pinned by `tests/jax/world/tokens/test_tokens.py:171-190` (`test_ordinary_full_cube_ground_is_visible_without_a_traversal_atlas`, shared tree, git-ignored).
+- Token output: `hytalegym/jax/world/tokens/__init__.py:480-481`. Policy floats: `hytalegym/jax/combat/observation/v3/tokens/world.py:427-443`. Each of the 9 boxes is a mask followed by `x0 y0 z0 x1 y1 z1`, divided by the maximum distance and clipped to plus or minus 1. The skill contract names these `box_{i}_{field}` (`experimental/neural_agent/skill_agent/contract/tokens_v3.py:191`), so the layout matches.
+
+### Why they read 0 in the Region world
+
+Probe (confirmed, run in this lane; scripts in the lane's scratch folder, `census_traversal.py` and `overflow_split.py`). Region seed 1044320000 from `region-library-pilot-v2-072`. Actors stood on traversal nodes inside the traversal core. Producer: `produce_actor_region_world_geometry_tokens` (`hytalegym/jax/world/region/traversal.py:438`, the Region world's producer), with `token_capacity=44` and `maximum_distance=4.0`. Sample: 120 random in-core nodes.
+
+- 65 of 120 rows (54%) are cleared by overflow: `capacity_exceeded` is true, `available` is false, and every field is zero, boxes included. The same 65 positions are available with zero overflow under the plain producer (no traversal) at capacity 44. So traversal tokens cause the overflow. At capacity 128 all 65 recover, and 10 of them carry boxes.
+- 55 of 120 rows are available. 16 of those (29%) have at least one boxed token.
+- Re-run by the coordinator (2026-10-22, the same script on a fresh 200-node sample, the lane's worktree at the HEAD engine): 98 of 200 rows (49%) cleared by overflow; 102 available, 24 of them boxed; at capacity 128, 94 of the 98 recover. So about half of the in-core positions see no geometry tokens at all, not only zero box fields.
+- Mechanism. Traversal and exception candidates share one budget: `visible_count` sums the eligible candidates of both (`hytalegym/jax/world/tokens/__init__.py:362-376`). Overflow clears the complete row (`__init__.py:183`, "clears the complete actor row"). The budget is `WORLD_GEOMETRY_TOKEN_CAPACITY = 44` (`hytalegym/jax/combat/observation/v3/tokens/world.py:25`), which the arsenal environment normalises into the Region producer (`hytalegym/jax/combat/arsenal/environment.py:1445`, `:3171`; no Region override found in `worlds/region.py`).
+- The staged capacity report says the same. `artifacts/worldgen/region-library-pilot-v2-072/world-token-capacity.json`: `interpretation.capacity_rule` = "overflow clears the complete actor row; no nearest-token truncation". Its `limitation` says the traversal tokens "require a separate capacity measurement", and no such measurement is staged (confirmed by reading the report).
+- Non-full shapes are rare, so most rows have no boxed token. Confirmed: 7,858 of 8,192,000 cells (0.096%) in seed 1044320000 belong to a non-full boxed shape. Full cubes are about a third of cells. The 0.5.7 and 0.7.2 values agree to within 0.00001 for all 20 seeds.
+- Not a library gap. The 0.7.2 NPZ holds the boxes (115 active, 514 non-zero floats; confirmed). The 0.5.7 pilot Region with the same probe gives 64 available, 19 with boxes and 56 cleared out of 120 (confirmed; `census_057.py`). So the pattern is not specific to 0.7.2.
+- Other zero rows. An actor outside the traversal core, or at the capture edge, is unavailable (the probe shows this at the 0.7.2 capture edge).
+
+### Live (inferred from code; not run on a live server)
+
+- Flat world. `GeometryFrame.fromSimulatorBlocks` (`hytale-plugin-0.7.2/src/main/java/com/hytalerlbridge/geometry/GeometryFrame.java:100-135`) makes solid blocks unit cubes and gives non-solid blocks no boxes. It sets `exact_collision_shapes` false. Unit cubes are surface tokens with zero box fields, so zeros are expected for the flat world. The flat frame would also be refused by `geometry_state_from_numpy` (`hytalegym/jax/world/types.py:162`, `:208`, `require_exact=True` by default). No caller in `hytalegym` passes `require_exact=False`, so the flat frame probably never reaches the JAX token producer. Not confirmed.
+- Multi-actor composer. `hytalegym/jax/combat/observation/v3/native/channels/actor_major/projection.py:237` sets `world_geometry_available = False` on every row, and `native/codec/decode.py:847` then returns no geometry. Any live multi-actor observation therefore has no world geometry tokens, and its box fields read 0. This is a Python-side choice, not a bridge gap (confirmed by reading; not run live).
+
+### Decision for the owner (no change made)
+
+The zeros come from a fail-closed capacity contract, not a missing field or a bug in the fill path. The candidate fixes all change a pinned contract and need recertification:
+
+1. Raise `WORLD_GEOMETRY_TOKEN_CAPACITY` above 44. Changes the contract hash (`world_geometry_token_contract_sha256`). The traversal-side count still needs measuring over the training distribution (the report already says so).
+2. Reserve a separate budget for exception tokens, so traversal cannot evict boxes. Also a contract change.
+3. Keep the rule and document it. Nearest-token truncation is ruled out by the capacity report's rule.
+
+The cheapest first step is to measure traversal visible-token counts over the training distribution, then choose 1 or 2. The skill-layer entry at `experimental/neural_agent/skill_agent/docs/PERCEPTION.md:405` lists this gap (task #130 item 6).
