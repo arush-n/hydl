@@ -335,6 +335,12 @@ training: the combat program's evade gate (#94), the bridge augment-tag readout 
 content identity in the contract stamp (#79). The hit-interrupt probes (#69) wait for a quiet machine. #80 (the default flip)
 still needs a gen-7 checkpoint that passes live. Nothing is pushed.
 
+Status at 19:15 on 2026-10-21. The default server line is 0.7.2 (a49d001). The 0.7.2 line is certified modulo training under the
+bridge `6DFD8682` (the gait batch 3024fde: the learner's gait reaches the live body; sprint stays at run speed, #126):
+recertification run 11 passed and was promoted with supersede (receipt `world-evidence-history/6DFD8682/publication-v12.json`);
+the v7 suite line is `CFB529B8`; the Combat contract stamp is `combat-contract-stamp-2ab102f5`. Live 0.7.2 holds the learner's
+body yaw while a knockback push is active, as the simulator does (#108). The paragraph below is the 2026-10-20 status.
+
 Status at 02:10 on 2026-10-20. The 0.7.2 line is certified modulo training under the bridge `1CB4F651` (the host-contract pins,
 the fixture aim, the augment readout and the request-tick fix): recertification run 10 passed on a quiet machine with the seed
 projection exactly equal (the cross-reset fluid drift is load-driven: 3, 5, 6, 7 cells under load, 0 quiet) and was promoted with
