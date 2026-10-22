@@ -59,6 +59,14 @@ class ServerProfile:
     # digest of the recertification target seed. None means unchecked.
     region_library_sha256: str | None = None
     seed_projection_sha256: str | None = None
+    # Rows of the World geometry token row (traversal and exception candidates
+    # share them; overflow clears the actor's row). Read at import by
+    # ``hytalegym.jax.combat.observation.v3.tokens.world``; None leaves the
+    # policy config unbuildable, so every line must set it.
+    world_geometry_token_capacity: int | None = None
+    # Artifact that evidences ``world_geometry_token_capacity`` (named in the
+    # policy config manifest, so it is checkpoint-visible).
+    world_geometry_capacity_evidence: str | None = None
 
 
 def release_line(version: object) -> tuple[int, int] | None:

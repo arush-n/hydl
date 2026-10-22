@@ -18,11 +18,16 @@ from hytalegym.jax.world import (
     world_geometry_token_contract,
     world_geometry_token_contract_sha256,
 )
+from hytalegym.server_versions import server_profile
 
 
 Array = jax.Array
 
-WORLD_GEOMETRY_TOKEN_CAPACITY = 44
+# Rows of the World geometry token row for the active server line (44 on 0.5.7,
+# 96 on 0.7.2; see server_versions). Read at import, like the other per-line
+# policy sizes: set HYTALERL_SERVER_VERSION before importing this module.
+WORLD_GEOMETRY_TOKEN_CAPACITY = server_profile().world_geometry_token_capacity
+WORLD_GEOMETRY_CAPACITY_EVIDENCE = server_profile().world_geometry_capacity_evidence
 WORLD_TOKEN_DEFAULT_EDGE_CAPACITY = 12
 WORLD_TOKEN_DEFAULT_MAXIMUM_DISTANCE = 4.0
 WORLD_TOKEN_BASE_FLOAT_SIZE = 8
@@ -148,9 +153,7 @@ def world_geometry_policy_config_manifest(
         "detail_box_capacity": MAX_DETAIL_BOXES,
         "feature_size": value.feature_size,
         "maximum_distance": float(value.maximum_distance),
-        "capacity_evidence": (
-            "artifacts/worldgen/world-token-capacity-v3.json:first_zero_overflow"
-        ),
+        "capacity_evidence": WORLD_GEOMETRY_CAPACITY_EVIDENCE,
         "traversal_provenance": "surrogate",
         "source_contract_sha256": world_geometry_token_contract_sha256(),
     }

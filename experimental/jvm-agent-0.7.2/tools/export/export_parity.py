@@ -4,8 +4,8 @@ The three existing tests each certify one link and none of them certify the
 chain:
 
   * `ProjectionTest` -- raw simulation state -> the derived fields
-  * `AssembleTest`   -- 37 structured fields -> the 8,272-column vector
-  * `Main`           -- an 8,272-column vector -> logits and value
+  * `AssembleTest`   -- 37 structured fields -> the 15,656-column vector
+  * `Main`           -- a 15,656-column vector -> logits and value
 
 A stage can be correct in isolation and still be wired up wrong: a derived group
 written to the wrong slot, the agent row taken from the wrong entity, a field

@@ -375,7 +375,7 @@ public final class PolicyAgentPlugin extends JavaPlugin {
      * many actions were legal.
      *
      * <p>This is the "does it actually comprehend the world" number. The
-     * contract width (8272) says how much the policy *can* read; this says how
+     * contract width (15656) says how much the policy *can* read; this says how
      * much carried signal when it last looked. A wide contract with a handful
      * of non-zero columns is an agent reading mostly padding -- which looks
      * identical to a working agent from every other diagnostic.

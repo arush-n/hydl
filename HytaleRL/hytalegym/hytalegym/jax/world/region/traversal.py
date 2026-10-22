@@ -29,6 +29,7 @@ from hytalegym.jax.world.traversal import (
     TRAVERSAL_PROVENANCE_NATIVE_EXACT_GEOMETRY,
     TraversalTokenObservation,
 )
+from hytalegym.server_versions import server_profile
 from hytalegym.worldgen.region import (
     CAPTURE_BLOCKS_PER_AXIS,
     CHUNK_SIZE,
@@ -451,7 +452,7 @@ def produce_actor_region_world_geometry_tokens(
     traversal_staging_capacity: int = (
         REGION_TRAVERSAL_POLICY_STAGING_CAPACITY
     ),
-    token_capacity: int = 44,
+    token_capacity: int = server_profile().world_geometry_token_capacity,
     maximum_distance: float = 4.0,
     view_sector_full_angle_radians: float = math.tau,
     max_los_cells: int | None = None,

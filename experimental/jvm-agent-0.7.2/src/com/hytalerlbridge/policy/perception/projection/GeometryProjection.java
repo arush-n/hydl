@@ -3,7 +3,7 @@ package com.hytalerlbridge.policy.perception.projection;
 /** Pure learner projection for World-owned, actor-legal geometry tokens. */
 public final class GeometryProjection {
 
-    public static final int TOKEN_CAPACITY = 44;
+    public static final int TOKEN_CAPACITY = 96;
     public static final int EDGE_CAPACITY = 12;
     public static final int DETAIL_BOX_CAPACITY = 9;
     public static final int BASE_FEATURE_SIZE = 8;

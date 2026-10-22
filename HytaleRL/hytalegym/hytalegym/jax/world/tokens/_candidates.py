@@ -48,8 +48,9 @@ _UNIT_CUBE = jnp.asarray((0.0, 0.0, 0.0, 1.0, 1.0, 1.0), dtype=jnp.float32)
 
 # A dense 5x5 neighbourhood plus four-block cardinal sight lines.  Ordinary
 # terrain used to disappear from policy tokens because only unusual collision
-# shapes were candidates.  This bounded stencil leaves eleven of the default
-# 44 token slots for slabs, stairs, doors, and authored traversal nodes.
+# shapes were candidates.  This bounded stencil leaves eleven of the 0.5.7
+# line's 44 token slots (63 of the 0.7.2 line's 96) for slabs, stairs, doors,
+# and authored traversal nodes.
 _SURFACE_XZ_OFFSETS = jnp.asarray(
     [
         (x, z)

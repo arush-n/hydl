@@ -258,7 +258,7 @@ class FlatPursuitEnvironment:
             ``(state, policy_input)``. ``state.environment`` is a
             MultiActorArenaState. ``state.learner_observation`` is the learner's
             LearnerCombatObservationV3 with leading axis B. ``policy_input`` is a
-            PolicyInput whose ``observation`` is float32[B, 8272] and whose
+            PolicyInput whose ``observation`` is float32[B, ARSENAL_POLICY_OBSERVATION_SIZE] (15656 on 0.7.2, 8272 on 0.5.7) and whose
             ``action_mask`` is bool[B, 124].
         """
 
@@ -534,7 +534,7 @@ def build_flat_arena(
 
     Returns:
         A :class:`FlatArena`. ``built`` has ``batch`` lanes, its ``reset`` takes
-        keys of shape [batch], and its observations are float32[batch, 8272] with
+        keys of shape [batch], and its observations are float32[batch, ARSENAL_POLICY_OBSERVATION_SIZE] (15656 on 0.7.2) with
         an action mask of bool[batch, 124].
 
     Raises:

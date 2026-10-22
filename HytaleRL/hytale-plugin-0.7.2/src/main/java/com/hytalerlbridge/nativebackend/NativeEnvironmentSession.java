@@ -2478,8 +2478,18 @@ final class NativeEnvironmentSession
             // setVelocity is intentional: addVelocity is the knockback path and
             // scales by the role's knockback multiplier, which turns a jump into
             // only ~0.17 blocks for Trork_Unarmed in 0.5.7.
+            // The body's horizontal velocity is kept, so a running jump carries its
+            // speed. Before 2026-10-22 the jump set (0, v, 0) and every live jump went
+            // straight up (FIDELITY-0.7.2.md section (ao); owner ruling 2026-10-22).
+            Velocity bodyVelocity = store.getComponent(ref, Velocity.getComponentType());
+            double carriedX = bodyVelocity == null ? 0.0 : bodyVelocity.getX();
+            double carriedZ = bodyVelocity == null ? 0.0 : bodyVelocity.getZ();
+            if (!Double.isFinite(carriedX) || !Double.isFinite(carriedZ)) {
+                carriedX = 0.0;
+                carriedZ = 0.0;
+            }
             controller.setVelocity(
-                new Vector3d(0.0, jumpVelocity, 0.0),
+                new Vector3d(carriedX, jumpVelocity, carriedZ),
                 AGENT_VELOCITY_CONFIG,
                 true
             );

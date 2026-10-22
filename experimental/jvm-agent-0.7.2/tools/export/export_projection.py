@@ -1,7 +1,7 @@
 """Export raw state inputs and the derived fields JAX computes from them.
 
 `AssembleTest` certifies the step *after* this one: 37 pre-computed structured
-fields -> 8,272 columns. This exports the step before it -- the raw simulation
+fields -> 15,656 columns. This exports the step before it -- the raw simulation
 quantities plus what the shared projector derives from them -- so the derivation
 itself can be certified rather than assumed.
 
@@ -1161,8 +1161,10 @@ def _light_fixture() -> list[str]:
         encode_actor_light_policy_tokens,
     )
     from hytalegym.jax.world import ActorBlockLightTokens
+    from hytalegym.jax.combat.observation.v3.tokens.world import (
+        WORLD_GEOMETRY_TOKEN_CAPACITY as capacity,
+    )
 
-    capacity = 44
     rows = []
 
     def evaluate(
@@ -1358,11 +1360,13 @@ def _light_fixture() -> list[str]:
             raise SystemExit(f"light row-level gate stayed open for {label}")
 
     lines = [
-        "# case\tsource_available\tsource_mask[44]\tlight_valid[132]"
-        "\tsky_light[44]\tblock_light_rgb[132]\ttint_rgb[132]"
-        "\tgeometry_mask[44]\tgeometry_available\tactor_valid"
-        "\texpected_available\texpected_token_f32[440]"
-        "\texpected_token_mask[44]"
+        f"# case\tsource_available\tsource_mask[{capacity}]"
+        f"\tlight_valid[{capacity * 3}]"
+        f"\tsky_light[{capacity}]\tblock_light_rgb[{capacity * 3}]"
+        f"\ttint_rgb[{capacity * 3}]"
+        f"\tgeometry_mask[{capacity}]\tgeometry_available\tactor_valid"
+        f"\texpected_available\texpected_token_f32[{capacity * 10}]"
+        f"\texpected_token_mask[{capacity}]"
     ]
     for row in rows:
         fields = [str(row[0])]
@@ -1380,12 +1384,12 @@ def _geometry_fixture() -> list[str]:
     """Exercise all geometry columns, padding, and malformed-row gates."""
 
     from hytalegym.jax.combat.observation.v3.tokens.world import (
+        WORLD_GEOMETRY_TOKEN_CAPACITY as token_capacity,
         encode_world_geometry_policy_tokens,
         mask_world_geometry_policy_tokens,
     )
     from hytalegym.jax.world import WorldGeometryTokenObservation
 
-    token_capacity = 44
     rows = []
 
     def blank(edge_capacity: int = 12, box_capacity: int = 9) -> dict:
@@ -1435,7 +1439,8 @@ def _geometry_fixture() -> list[str]:
             dtype=np.float32,
         )
         data["clearance"][token] = np.float32(0.5 + token % 8)
-        data["semantic_flags"][token] = np.uint16((token + 1) * 1000)
+        # Wrapped to 16 bits: 96 rows overflow uint16 at token 65. Below 65 rows the values are unchanged.
+        data["semantic_flags"][token] = np.uint16(((token + 1) * 1000) % 65536)
         data["dynamic_blocked"][token] = True
         edge_capacity = data["edge_mask"].shape[1]
         data["edge_mask"][token] = True
@@ -1606,13 +1611,18 @@ def _geometry_fixture() -> list[str]:
             raise SystemExit(f"geometry row-level gate stayed open for {label}")
 
     lines = [
-        "# case\tsource_available\ttoken_mask[44]\ttoken_kind[44]"
-        "\ttoken_provenance[44]\trelative_position[132]\tclearance[44]"
-        "\tsemantic_flags[44]\tdynamic_blocked[44]\tedge_capacity"
+        f"# case\tsource_available\ttoken_mask[{token_capacity}]"
+        f"\ttoken_kind[{token_capacity}]"
+        f"\ttoken_provenance[{token_capacity}]"
+        f"\trelative_position[{token_capacity * 3}]"
+        f"\tclearance[{token_capacity}]"
+        f"\tsemantic_flags[{token_capacity}]"
+        f"\tdynamic_blocked[{token_capacity}]\tedge_capacity"
         "\tedge_mask\tedge_destination\tedge_cost\tedge_kind\tedge_flags"
         "\tbox_capacity\tcollision_box_mask\tcollision_boxes_relative"
-        "\tactor_valid\texpected_available\texpected_token_f32[5764]"
-        "\texpected_token_mask[44]"
+        "\tactor_valid\texpected_available"
+        f"\texpected_token_f32[{token_capacity * 131}]"
+        f"\texpected_token_mask[{token_capacity}]"
     ]
 
     def encoded(value) -> str:

@@ -5,7 +5,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 /**
- * Acceptance test for the Java observation assembler: 8272/8272 or fail.
+ * Acceptance test for the Java observation assembler: 15656/15656 or fail.
  *
  * <p>Exact equality is the bar, not a tolerance. The assembler does selection,
  * masking, reshaping and concatenation -- all order-preserving operations on

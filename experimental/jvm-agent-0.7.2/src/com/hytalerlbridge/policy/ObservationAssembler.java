@@ -6,7 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Builds the 8,272-value policy observation from structured evidence, in Java.
+ * Builds the 15,656-value (0.7.2) policy observation from structured evidence, in Java.
  *
  * <p>Port of {@code observation/v3/policy/layout.py:arsenal_policy_observation}.
  * Thirty-seven groups concatenated in a fixed order. Two semantics carry the
@@ -30,7 +30,9 @@ import java.util.Map;
 public final class ObservationAssembler {
 
     public static final int AGENT_ENTITY = 0;
-    public static final int OBSERVATION_SIZE = 8272;
+    // 0.7.2 policy width: 1028 base + 12673 geometry (1 + 96 + 96*131) + 961 light
+    // (96*10 + 1) + 994 action surface = 15656. The 0.5.7 width was 8272 (44 rows).
+    public static final int OBSERVATION_SIZE = 15656;
     public static final int TARGET_PLANAR_DISTANCE_OFFSET =
         Projection.SELF_SIZE + Projection.TARGET_PLANAR_DISTANCE_INDEX;
     public static final int TARGET_VISIBLE_OFFSET =
@@ -57,7 +59,7 @@ public final class ObservationAssembler {
     private static final int ABILITIES = 16, ABILITY_FEATURES = 11;
     private static final int ACTOR_WORLD = 5, ACTOR_WORLD_MASKS = 3;
     private static final int MOVEMENT = 23;
-    private static final int GEOMETRY_TOKENS = 44, GEOMETRY_FEATURES = 131;
+    private static final int GEOMETRY_TOKENS = 96, GEOMETRY_FEATURES = 131;
     private static final int LIGHT_FEATURES = 10;
     private static final int CONTAINERS = 6;
     private static final int INVENTORY_TOKENS = 76, INVENTORY_FEATURES = 7;

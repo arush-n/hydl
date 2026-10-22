@@ -445,7 +445,7 @@ public final class ParityTest {
     /**
      * The 37 groups and how many columns each contributes, in layout order.
      * Sizes are the per-actor widths after agent-row selection, which is what
-     * lands in the 8,272-column vector.
+     * lands in the 15,656-column vector.
      */
     private static final String[][] GROUPS = {
         {"base_self_f32", "16"}, {"base_target_f32", "16"},
@@ -455,9 +455,9 @@ public final class ParityTest {
         {"ability_f32", "176"}, {"ability_mask", "16"}, {"ability_legal", "16"},
         {"actor_world_f32", "5"}, {"actor_world_mask", "3"},
         {"movement_state_f32", "23"}, {"movement_state_mask", "23"},
-        {"geometry_token_f32", "5764"}, {"geometry_token_mask", "44"},
+        {"geometry_token_f32", "12576"}, {"geometry_token_mask", "96"},
         {"geometry_available", "1"},
-        {"light_token_f32", "440"}, {"light_available", "1"},
+        {"light_token_f32", "960"}, {"light_available", "1"},
         {"inventory_container_f32", "6"}, {"inventory_container_mask", "6"},
         {"inventory_token_f32", "532"}, {"inventory_token_mask", "76"},
         {"inventory_available", "1"},

@@ -10,7 +10,7 @@ import com.hytalerlbridge.policy.world.model.WorldActionEvidence;
  * Supplies one NPC's observation and action mask from live server state.
  *
  * <p>{@code perception.LivePolicyPerception} implements the composition step:
- * one coherent evidence frame becomes the 8,272-column learner row and its
+ * one coherent evidence frame becomes the 15,656-column learner row and its
  * 124-bit legality mask. Public Server 0.5.7 component readers acquire actor,
  * movement, status, resource, and inventory state. Exact combat-lifecycle and
  * terrain evidence remain explicit provider boundaries; a missing provider

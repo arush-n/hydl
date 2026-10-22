@@ -12,7 +12,7 @@ PROFILE = ServerProfile(
     certified_version="0.7.2",
     bridge_jar="hytale-plugin-0.7.2/build/libs/HytaleRLBridge072-0.1.0.jar",
     bridge_jar_sha256=(
-        "6DFD868241FE33B4DC699C3E0937037F0AD5638BB8ADD3CC7DBC1AE574F06E76"
+        "1F874DFCD19A830A5A8FEDE500B6F838668B24FEDB614DD00F463B60C0DD4567"
     ),
     crafting_recipe_count=2_047,
     checkpoint_rulesets=("0.5.7",),
@@ -21,4 +21,9 @@ PROFILE = ServerProfile(
     world_capacity_report="region-library-pilot-v2-072/world-token-capacity.json",
     region_library_sha256="9DCA3C71D43A2C3BF4BE6AFF6E2BD24D2F6608C8BE01D1687A0B259F06DAAB95",
     seed_projection_sha256="408D5FB2DAA797E767AEE23248C6591FC226E1FE764C6258353D60FE49D1104D",
+    # 96 keeps every sampled in-core row (max 82 tokens; 44 keeps 34-42 %).
+    world_geometry_token_capacity=96,
+    world_geometry_capacity_evidence=(
+        "artifacts/fidelity_evidence/region_token_capacity/census_3seeds_200.log"
+    ),
 )

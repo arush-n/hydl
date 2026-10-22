@@ -73,6 +73,8 @@ ARSENAL_REGION_V6_SUITE_SHA256 = (
 
 ARSENAL_REGION_V7 = "hytalerl_arsenal_region_v7"
 
+ARSENAL_REGION_V8 = "hytalerl_arsenal_region_v8"
+
 
 REGION_LIBRARY_SEMANTIC_SHA256 = (
     "F0EA0526AC1EE6184FC575C085607EE7B3F9843D78B0D4F806FFF15B51C8616C"
@@ -357,6 +359,9 @@ ARSENAL_REGION_V7_LINES = {
             "460054A8E7508FE5E205AD527AFB08474B61626EE5C2212FC2A484ECFCCAD88D"
         ),
         worlds=FROZEN_REGION_WORLDS_0_7_2,
+        # Frozen record (recert run 11). The live suite contents moved with the 0.7.2
+        # world-token capacity (44 -> 96), so this digest no longer reproduces on the
+        # default line; the active 0.7.2 suite is v8 (ARSENAL_REGION_V8_LINES).
         suite_sha256=(
             "CFB529B84C4A465619D2917FEB23D72F19466A53A1596E1BC2D4D647AE2D341F"
         ),
@@ -373,6 +378,48 @@ def frozen_region_v7_line(line: str | None = None) -> RegionV7Line:
         raise RuntimeError(
             f"{ARSENAL_REGION_V7} has no frozen v7 suite on this line ({line}); "
             f"frozen lines: {', '.join(sorted(ARSENAL_REGION_V7_LINES))}"
+        )
+    return spec
+
+
+@dataclass(frozen=True)
+class RegionV8Line:
+    """Frozen Region v8 inputs and identity of one server line."""
+
+    region_library_sha256: str
+    capture_evidence_bridge_sha256: str
+    worlds: tuple[FrozenRegionWorld, ...]
+    suite_sha256: str
+
+
+#: Region v8 is frozen per server line, keyed by ``server_profile().certified_version``.
+#: v8 is v7 re-issued for the 0.7.2 world-token capacity 96 (the policy and learner
+#: observation digests and the default policy config changed); v7 stays a record.
+ARSENAL_REGION_V8_LINES = {
+    "0.7.2": RegionV8Line(
+        region_library_sha256=(
+            "9DCA3C71D43A2C3BF4BE6AFF6E2BD24D2F6608C8BE01D1687A0B259F06DAAB95"
+        ),
+        capture_evidence_bridge_sha256=(
+            "460054A8E7508FE5E205AD527AFB08474B61626EE5C2212FC2A484ECFCCAD88D"
+        ),
+        worlds=FROZEN_REGION_WORLDS_0_7_2,
+        suite_sha256=(
+            "54B3057C8B7F6DB8BDEDE396251F7069E09D045BA4C5DD156A47AEA3E192CEB9"
+        ),
+    ),
+}
+
+
+def frozen_region_v8_line(line: str | None = None) -> RegionV8Line:
+    """Return the frozen Region v8 inputs of ``line`` (default: the configured line)."""
+
+    line = server_profile().certified_version if line is None else line
+    spec = ARSENAL_REGION_V8_LINES.get(line)
+    if spec is None:
+        raise RuntimeError(
+            f"{ARSENAL_REGION_V8} has no frozen v8 suite on this line ({line}); "
+            f"frozen lines: {', '.join(sorted(ARSENAL_REGION_V8_LINES))}"
         )
     return spec
 
@@ -821,6 +868,22 @@ def _region_v7_suite_contract(
     )
 
 
+def _region_v8_suite_contract(
+    *,
+    traversal_manifest: Mapping[str, Any],
+) -> dict[str, Any]:
+    spec = frozen_region_v8_line()
+    return _region_suite_contract(
+        traversal_manifest=traversal_manifest,
+        suite_id=ARSENAL_REGION_V8,
+        version=8,
+        server_line=server_profile().certified_version,
+        region_library_sha256=spec.region_library_sha256,
+        capture_evidence_bridge_sha256=spec.capture_evidence_bridge_sha256,
+        worlds=spec.worlds,
+    )
+
+
 def region_v1_suite_contract(
     *,
     traversal_manifest_path: str | Path,
@@ -906,6 +969,21 @@ def region_v7_suite_contract(
     )
     traversal_manifest = json.loads(path.read_text(encoding="utf-8"))
     return _checked_region_v7_suite_contract(traversal_manifest)
+
+
+def region_v8_suite_contract(
+    traversal_manifest_path: str | Path | None = None,
+) -> dict[str, Any]:
+    """Return Region v8 for the configured line; fails closed off its line or on drift."""
+
+    frozen_region_v8_line()
+    path = (
+        _traversal_library_manifest()
+        if traversal_manifest_path is None
+        else Path(traversal_manifest_path)
+    )
+    traversal_manifest = json.loads(path.read_text(encoding="utf-8"))
+    return _checked_region_v8_suite_contract(traversal_manifest)
 
 
 def _checked_region_v1_suite_contract(
@@ -1013,6 +1091,21 @@ def _checked_region_v7_suite_contract(
     if actual != spec.suite_sha256:
         raise RuntimeError(
             f"{ARSENAL_REGION_V7} drifted on {suite['server_line']}: expected "
+            f"{spec.suite_sha256}, current {actual}; "
+            "publish a new suite version"
+        )
+    return suite
+
+
+def _checked_region_v8_suite_contract(
+    traversal_manifest: Mapping[str, Any],
+) -> dict[str, Any]:
+    spec = frozen_region_v8_line()
+    suite = _region_v8_suite_contract(traversal_manifest=traversal_manifest)
+    actual = canonical_sha256(suite)
+    if actual != spec.suite_sha256:
+        raise RuntimeError(
+            f"{ARSENAL_REGION_V8} drifted on {suite['server_line']}: expected "
             f"{spec.suite_sha256}, current {actual}; "
             "publish a new suite version"
         )

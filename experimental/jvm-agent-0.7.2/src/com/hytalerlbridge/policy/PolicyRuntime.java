@@ -101,7 +101,7 @@ public final class PolicyRuntime {
      * Run one tick of the policy and decode the result into an applicable
      * action. {@code carry} is advanced in place.
      *
-     * @param observation the 8,272-column vector, assembled in the server's own
+     * @param observation the 15,656-column vector, assembled in the server's own
      *                    layout by {@link ObservationAssembler}
      * @param legal       the 124 per-logit legality bits derived from the same
      *                    evidence; masked-off logits are driven to -1e9 before

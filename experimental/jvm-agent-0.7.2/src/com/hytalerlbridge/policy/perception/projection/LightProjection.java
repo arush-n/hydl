@@ -5,7 +5,7 @@ import java.util.Arrays;
 /** Pure projection for geometry-aligned native light evidence. */
 public final class LightProjection {
 
-    public static final int TOKEN_CAPACITY = 44;
+    public static final int TOKEN_CAPACITY = 96;
     public static final int CHANNEL_COUNT = 3;
     public static final int FEATURE_SIZE = 10;
     public static final int VALUE_COUNT = TOKEN_CAPACITY * FEATURE_SIZE;

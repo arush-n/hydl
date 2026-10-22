@@ -21,7 +21,7 @@ import java.util.Map;
  * at {@code t}, and the next observation/mask when the next sample for that
  * slot is the immediately following world tick. A gap is recorded explicitly
  * rather than silently pairing unrelated samples. Arrays use base64 encoded
- * little-endian float32/uint8 so the 8,272-column learner row remains exact
+ * little-endian float32/uint8 so the 15,656-column learner row remains exact
  * without making JSON parsing the numerical contract.</p>
  *
  * <p>The recorder is opt-in, bounded, and failure-isolated. The configured

@@ -80,6 +80,10 @@ from ._contracts import (  # noqa: F401  (re-exported: callers unchanged)
     _checked_region_v7_suite_contract,
     frozen_region_v7_line,
     region_v7_suite_contract,
+    ARSENAL_REGION_V8,
+    _checked_region_v8_suite_contract,
+    frozen_region_v8_line,
+    region_v8_suite_contract,
     EDGE_SELECTION_METHOD,
     EDGE_SELECTION_NAMESPACE,
     EDGE_SELECTION_PAYLOAD_V1,
@@ -304,6 +308,32 @@ def load_region_v7_context(
         traversal_path.read_text(encoding="utf-8")
     )
     suite = _checked_region_v7_suite_contract(traversal_manifest)
+    return _load_region_context(
+        region_path,
+        traversal_path,
+        region_manifest,
+        traversal_manifest,
+        suite,
+        region_library_sha256=spec.region_library_sha256,
+        capture_evidence_bridge_sha256=spec.capture_evidence_bridge_sha256,
+        worlds=spec.worlds,
+    )
+
+
+def load_region_v8_context(
+    region_manifest_path: str | Path,
+    traversal_manifest_path: str | Path,
+) -> RegionBenchmarkContext:
+    """Load the configured line's frozen Region v8 corpus; fails closed."""
+
+    spec = frozen_region_v8_line()
+    region_path = Path(region_manifest_path)
+    traversal_path = Path(traversal_manifest_path)
+    region_manifest = json.loads(region_path.read_text(encoding="utf-8"))
+    traversal_manifest = json.loads(
+        traversal_path.read_text(encoding="utf-8")
+    )
+    suite = _checked_region_v8_suite_contract(traversal_manifest)
     return _load_region_context(
         region_path,
         traversal_path,
@@ -557,6 +587,27 @@ def run_arsenal_region_v7_trained(
     return _run_region_trained(
         load_region_v7_context(region_manifest_path, traversal_manifest_path),
         worlds=frozen_region_v7_line().worlds,
+        action_source=action_source,
+        subject=subject,
+        action_carry_initializer=action_carry_initializer,
+        compile=compile,
+    )
+
+
+def run_arsenal_region_v8_trained(
+    action_source: ActionSource,
+    subject: Mapping[str, Any],
+    *,
+    region_manifest_path: str | Path,
+    traversal_manifest_path: str | Path,
+    action_carry_initializer: ActionCarryInitializer,
+    compile: bool = True,
+) -> dict[str, Any]:
+    """Run the configured line's frozen Region v8 with exact geometry and target navigation bound."""
+
+    return _run_region_trained(
+        load_region_v8_context(region_manifest_path, traversal_manifest_path),
+        worlds=frozen_region_v8_line().worlds,
         action_source=action_source,
         subject=subject,
         action_carry_initializer=action_carry_initializer,
@@ -847,6 +898,7 @@ __all__ = [
     "load_region_v5_context",
     "load_region_v6_context",
     "load_region_v7_context",
+    "load_region_v8_context",
     "region_benchmark_artifact_errors",
     "region_v1_runtime_blockers",
     "region_v1_suite_contract",
@@ -857,6 +909,10 @@ __all__ = [
     "region_v6_suite_contract",
     "region_v7_suite_contract",
     "frozen_region_v7_line",
+    "region_v8_suite_contract",
+    "frozen_region_v8_line",
+    "ARSENAL_REGION_V8",
+    "run_arsenal_region_v8_trained",
     "run_arsenal_region_v1_trained",
     "run_arsenal_region_v2_trained",
     "run_arsenal_region_v3_trained",

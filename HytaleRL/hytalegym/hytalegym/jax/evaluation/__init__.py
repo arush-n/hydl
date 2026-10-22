@@ -83,6 +83,11 @@ from hytalegym.jax.evaluation.arsenal_region_benchmark import (
     load_region_v7_context,
     region_v7_suite_contract,
     run_arsenal_region_v7_trained,
+    ARSENAL_REGION_V8,
+    frozen_region_v8_line,
+    load_region_v8_context,
+    region_v8_suite_contract,
+    run_arsenal_region_v8_trained,
 )
 from hytalegym.jax.evaluation.arsenal_native_transfer import (
     ARSENAL_NATIVE_TRANSFER_SCHEMA,
@@ -209,6 +214,11 @@ __all__ = [
     "load_region_v7_context",
     "region_v7_suite_contract",
     "run_arsenal_region_v7_trained",
+    "ARSENAL_REGION_V8",
+    "frozen_region_v8_line",
+    "load_region_v8_context",
+    "region_v8_suite_contract",
+    "run_arsenal_region_v8_trained",
     "run_frozen_outcome_controls",
     "suite_contract",
     "summarize_frozen_outcome_rollout",
