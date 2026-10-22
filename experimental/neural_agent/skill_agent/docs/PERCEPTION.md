@@ -372,13 +372,13 @@ values. The runs:
 
 | Type | duel (gen 7) | channel (gen 7) | region (gen 7) | live 0.7.2 |
 |---|---|---|---|---|
-| self | 101+16 of 173 (7,200) | 90+18 (4,800) | 35+81 (1,200) | 30+83 (204) |
+| self | 99+19 of 173 (7,200) | 90+18 (4,800) | 35+81 (1,200) | 30+83 (204) |
 | act | 25 of 26 | 25 | 25 | 25 |
 | kit | 24+1 of 39 | 16+1 | 14+1 | 14+1 |
 | status | 0+2 of 22 | 0+2 | 0+2 | 0+2 |
-| entity | 27+4 of 158 (2,466) | 22+4 (4,451) | 32+3 (1,200) | 27+5 (204) |
-| projectile | 19+1 of 23 (538) | no rows | no rows | no rows |
-| geometry | no rows | no rows | 71+4 of 185 (55,698) | 13+10 (2,147) |
+| entity | 27+4 of 158 (2,480) | 22+4 (4,451) | 31+4 (1,200) | 27+5 (204) |
+| projectile | 19+1 of 23 (382) | no rows | no rows | no rows |
+| geometry | no rows | no rows | 71+4 of 185 (55,534) | 13+10 (2,147) |
 | inventory slot | no rows | 67+8 of 106 | 1+74 | no rows |
 | hazard, block candidate, recipe | no rows | no rows | no rows | no rows |
 | persona, affect | 10 of 11, 8 of 9 | 10, 7 | 10, 8 | 10 (one agent: constant), 8 |
@@ -394,12 +394,12 @@ scales (the self speed column peaks at 0.928 in both).
 
 | Gap | Where | Owner |
 |---|---|---|
-| The live decoder refuses a frame: `ValueError: native defense evidence is incomplete` (`native/codec/decode.py:309`), at tick 74 (twice, the same seed and actions) and tick 204 (another program). Both follow hotbar selections; a dodge alone and a sneak alone run clean | live | coordinator |
-| Guard on gen 7: the mask marks `guard_off_on` legal, the step rejects it (`action_valid` False) and guard never engages; gen 5 and the live server engage it | gen-7 render | coordinator |
+| The live decoder refuses a frame: `ValueError: native defense evidence is incomplete` (`native/codec/decode.py:309`), at tick 74 (twice, the same seed and actions) and tick 204 (another program). Both follow hotbar selections; a dodge alone and a sneak alone run clean | live | coordinator: cause found 2026-10-22, a knockback queued while the agent is airborne after a jump (the decoder's ambiguous motion-force branch); a decoder fix next, no bridge rebuild |
+| FIXED (coordinator, 3f8aded): guard on gen 7. The mask marked `guard_off_on` legal and the step rejected it, so guard never engaged: a re-entry patch closed the guard choice while a guard was held, dropping it on its second tick. Now a held guard engages on tick 3, as live; `defense_guard_active` varies in the duel and the Region world (audits re-run on a render of 3f8aded) | gen-7 render | coordinator |
 | `perception_v2` exists only on the state-taking encoder; the duel's multi-actor path and the live native assembly carry none. There, no position (so no memory), no inventory, no entity kind or held item. The observation has no other legal position (`actor_world` is medium, submersion and drop) | duel, live | coordinator (asks 1, 2, 5 and the live channel) |
 | The entity's role id is 0 in the channel (its seam), so every `kind_*`, `attitude_*` and `known` column reads 0 | all | coordinator (ask 1) |
 | One entity row only, in every run | all | coordinator (ask 3) |
-| The Region fixture gates no entity row by the view sector or the sensor range (`project_world_runtime` omits both), so there the agent perceives what is behind it: only line of sight and the 24-block radius hide an entity (`HytaleRL/examples/jax_arsenal_world_benchmark.py`, `geometry_arsenal_world_capabilities` called without them) | region | coordinator |
+| The Region fixture gates no entity row by the view sector or the sensor range (`project_world_runtime` omits both), so there the agent perceives what is behind it: only line of sight and the 24-block radius hide an entity (`HytaleRL/examples/jax_arsenal_world_benchmark.py`, `geometry_arsenal_world_capabilities` called without them) | region | coordinator: filed; that file has another session's uncommitted edits, so the fix waits for them or the owner |
 | No block candidates: the 0.7.2 Region library has no block semantics (only the 0.5.7-captured `region-library-pilot-v2` does); live needs the world-action adapter, which has not run live | all | coordinator (asks 4, S5) |
 | No hazards: only ability-spawned areas make them (the flame staff's fire trap) | all | coordinator (S10) |
 | Collision boxes (`box_*`) read 0 in the Region world and live; the live flat world also sends no traversal edges | region, live | coordinator |
@@ -412,10 +412,12 @@ The coordinator filed every gap in its lane on 2026-10-21 and is working on two:
 replay these action sequences live once fixed) and gen-7 guard; the channel's reach extends #92 and waits on the
 owner's scope.
 
-The duel and Region numbers above are the repo tool's, re-run after the attribution fix; the live runs predate it
+The duel and Region numbers above are the repo tool's, re-run on a gen-7 render of 3f8aded, after the attribution fix
+and the guard fix. With guard engaging, a few columns moved: the Region target's health and the agent's signature
+energy no longer change in this run (inferred: more hits are blocked). The live runs predate the attribution fix
 (inferred unchanged: their attacker hits during its sweep, and the new reach moves values, not which columns carry
-information). The live captures (raw leaves and actions) are
-kept in this session's scratch for the coordinator's replay of the decoder failure.
+information); the guard fix is the simulator's only. The live captures (raw leaves and actions) are kept in this
+session's scratch for the coordinator's replay of the decoder failure.
 
 ## 11. Is the encoding enough? The literature and a field-by-field audit (2026-10-21)
 
