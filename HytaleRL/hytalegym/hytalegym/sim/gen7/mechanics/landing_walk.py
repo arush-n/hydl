@@ -12,6 +12,18 @@ and lands with forward velocity: native walks on the first tick after touchdown,
 Arming on the jump is FIDELITY (o)'s inference (a force-pushed state after a jump blocks steering); the two captures
 above are its only evidence, not a measured mechanism.
 
+Knockback (2026-10-22; render and live receipts ``knockback_landing_hit_Kweebec_Razorleaf_20261022b.json`` and
+``knockback_landing_jump_Kweebec_Razorleaf_20261022.json``): a hit's knockback landing is not armed here and needs no hold.
+With forward held the render walks on L+2, as live does (first walking tick: 0.011 blocks on the render, 0.016 live; the
+render then rises 0.011 per tick; the live steps are 0.009 to 0.014 over four ticks, two seeds). The one-tick hold is the engine's knockback
+control lock (``CombatState.knockback_control_lock``): the hit sets it (``jax/combat/runtime/agent.py``, ``control_lock_at_start``),
+it stays set on the touchdown tick, and the step after touchdown clears it (``next_lock``, same file). The construct arms only
+where ``_apply_action`` ends the contact itself, an accepted jump (``jax/combat/runtime/step.py``, ``grounded_jump`` sets
+``agent_grounded`` False); a hit and a walk-off end the contact later, in the motion stage. With this switch at ``at_once`` the
+knockback landing still walks on L+2 (in-process ablation, 2026-10-22). Not matched: a running jump keeps horizontal motion
+in the air on the render (0.10 to 0.17 blocks per tick), while the live jump receipt shows the body at rest from takeoff to
+L+2; the landing timing is the same. Tests: ``tests/sim/test_landing_walk_knockback.py``.
+
 State: ``CombatState.agent_landing_hold_ticks``, an int32 countdown (patches ``landing_walk_state_field`` and
 ``landing_walk_state_init`` in ``sim/gen7/overlay.py``). A tick that begins grounded holds the planar walk (forward, back,
 left, right set to zero) while the countdown is positive, and spends one; an accepted jump sets it to ``HOLD_TICKS``; an

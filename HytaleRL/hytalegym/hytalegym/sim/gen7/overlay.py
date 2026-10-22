@@ -909,7 +909,9 @@ HOOKS = (
          f"{_MECHANICS}.landing_walk:construct", "landing_walk_resume", "active", "1c", _LANDING_WALK,
          "after an accepted jump, holds forward, back, left and right for the two grounded ticks after touchdown "
          "(npc_walk only); a landing without a jump is not held; the jump request is not held; the native pause before "
-         "a re-jump (F1c) is the existing patch npc_rejump_after_landing"),
+         "a re-jump (F1c) is the existing patch npc_rejump_after_landing; a knockback landing is not held here (the "
+         "engine's knockback control lock holds one tick natively: the render walks on L+2, as live; "
+         "tests/sim/test_landing_walk_knockback.py)"),
     Hook("bench_tier_assets", "combat/arsenal/world_actions/crafting.py", "compile_region_fieldcraft_assets",
          f"{_MECHANICS}.bench_tiers:construct", "crafting_bench_tier", "active", "11b", _BENCH_TIERS,
          "the bench rows' tier from the scenario (bench_tiers=: an int for every bench, or a {bench id: tier} mapping; a fresh "
