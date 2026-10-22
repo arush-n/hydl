@@ -167,6 +167,10 @@ class Constructs:
     # NPC sprint is run (row 1a, owner ruling 2026-10-21): on npc_walk a sprint request runs at the run gait, with no
     # stamina drain or regen block (the live NPC body cannot exceed its MaxSpeed). Owner: sim/gen7/mechanics/npc_sprint.py.
     npc_walk_sprint_as_run: bool = False
+    # Replace default hop (row 5f): False (the selector runs at its authored time) or True (the selector of each
+    # Simple -> Replace -> Selector melee attack starts one tick later, the live 0.7.2 sword hit on tick 9). False in gen 5;
+    # True in the gen-7 profile (sim/gen7/profile.py). Owner: sim/gen7/mechanics/replace_default_hop.py.
+    replace_default_hop: bool = False
 
 
 @dataclass(frozen=True)

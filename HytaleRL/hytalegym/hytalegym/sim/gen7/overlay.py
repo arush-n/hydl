@@ -953,6 +953,15 @@ HOOKS = (
          "sword finish 14; the recharge is unchanged at the nominal 1.0 s from the claim",
          "each accepted ability chain starts one drain after its claim (scheduler offset -1 on the admitted rows); charges "
          "are spent and recharged on the claim; gen 5 returns the original"),
+    Hook("replace_default_hop", PROFILE_JAX, "_write_profile",
+         f"{_MECHANICS}.replace_default_hop:construct", "replace_default_hop", "active", "5f",
+         differential="tests/sim/test_replace_default_hop.py: with the switch on the iron sword Swing_Left, Swing_Right and "
+         "Swing_Down, the dagger swings and stabs, the mace swings and the battleaxe swings hit one step later than the switch-off "
+         "render (sword Left 9 against 8; the table in the test), their chain finishes are unchanged, and the other attacks are "
+         "identical; the switch-off render equals the committed render leaf by leaf",
+         note="wraps _write_profile: the server-selector event time of the 13 Simple -> Replace -> Selector attacks moves one tick "
+         "(1/30 s) later, so the selector window and sweep move with it; the ability duration is unchanged; _ability is left to "
+         "the guard hook; gen 5 returns the original"),
     Hook("shortbow_reset_ammo", "combat/arsenal/profiles/hytale_0_5_7.py", "hytale_0_5_7_loadouts",
          f"{_MECHANICS}.shortbow_reset_ammo:construct", "shortbow_reset_ammo", "active", "5f",
          "section (af) shortbow receipts (seeds 570057, 913771): native ammo 0 on ticks 0 and 1, 1 from tick 2; differential "

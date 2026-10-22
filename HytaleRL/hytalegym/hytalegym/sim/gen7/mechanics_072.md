@@ -33,6 +33,7 @@ by `tests/sim/test_constructs.py`).
 | Guard cancel window (`guard_window.py`) | `guard_cancel_window`: guard_root -> attack_root | The guard roots of Sword, Mace, Battleaxe and Daggers lose `Interrupting: [Primary]`; each of their Primary attack roots is a `Simple` interaction with `InterruptedBy: [Secondary]` and a wind-up `RunTime` (sword swings 0.111 s, sword down 0.361 s, mace 0.536 s, battleaxe 0.348 / 0.4 s, daggers 0.066 s), so Guard cancels an attack only while its root runs | `weapons/interaction:<attack>` Type, RunTime, Rules | `tests/fidelity/combat/defense/test_native_guard_attack_cancel.py` (live): onset 4 cancels, onset 8 does not, on native and on the engine; per-attack windows measured 2026-10-18 (sword left 2-5, down 2-12, mace 2-18, battleaxe down-left 2-12) | 5d (2026-10-18) |
 | Guard re-entry cooldown (`guard_cooldown.py`) | `guard_reentry_cooldown`: none -> claim_0_35s | A new guard claim waits 0.35 s after the previous claim (the interaction default cooldown). Native reopen on the loaded server: claim + 10 ticks in 17 of 24 runs, claim + 11 in 7 (FIDELITY (af)); the simulator counts 0.35 s at 1/30 s, so the reopen is claim + 11 and the one-tick difference is recorded as load jitter | none (the claim is tick 1 and the activation tick 3 in every native run) | 24 reopen ticks (release 1 to 12, seeds 570057 and 913771) on the 1/30 s clock: 7 exact, 17 one tick late (recorded); the policy mask reopens with the countdown (`encoder.py` patch); FIDELITY (am), idle re-measurement 2026-10-19: claim+11 in all 15 short-tick runs (mean engine tick below 0.0365 s), claim+10 in most long-tick runs; 0.35 s stands, the tick-period dependence is a known deviation | 5d (timing lane, 2026-10-18) |
 | Ability chain start (`ability_start_split.py`) | `ability_start_split`: claim_tick -> next_drain | An accepted ability claims on its request tick and starts one drain later: kunai claim 1, start 2, finish 11; iron sword claim 1, start 2, finish 14; shortbow start 2. Charges are spent and recharged on the claim (nominal 1.0 s from the claim) | authored durations of the slot's chain (unchanged) | kunai, iron sword and shortbow receipts (FIDELITY (af)): start and finish ticks; charge recovery legal-on offsets +3, +3, +1, +2 against the loaded server (recorded, not a rule); FIDELITY (am), idle re-measurement 2026-10-19: the kunai bank recharges at claim4+30 on both seeds (1.0 s stands; the loaded runs gave +27 and +29) | 5f (timing lane, 2026-10-18) |
+| Replace default hop (`replace_default_hop.py`) | `replace_default_hop`: False -> True | The Simple -> Replace -> Selector melee attacks enter their selector one tick later (the Replace node's default chain): live iron sword left swing hits on tick 9 against the render's 8, chain finish 14 unchanged (the other twelve attacks follow by mechanism, not measured live). Thirteen attacks: sword Swing_Left, Swing_Right, Swing_Down; dagger Swing_Left, Swing_Right, Stab_Left, Stab_Right; mace Swing_Left, Swing_Right, Swing_Up_Left; battleaxe Swing_Down, Swing_Down_Left, Swing_Down_Right (not the charged, thrust, vortex, whirlwind or razorstrike rows) | `weapons/interaction:<attack>` (Simple, `Next` Replace `Var` / `DefaultValue` `<attack>_Selector`), `weapons/interaction:<attack>_Selector` | sword Swing_Left hit 8 -> 9 with finish 14 on the render (live 9, 14); all 13 attacks +1 step with finishes unchanged; the other attacks identical; switch off equals the committed render (`tests/sim/test_replace_default_hop.py`) | 5f (2026-10-22) |
 | Ability ground continuation (`ability_ground_continuation.py`) | `ability_ground_continuation`: False -> True | The charged battleaxe Downstrike (slot 4) is an ApplyForce leap with WaitForGround that lands its Landing (slot 5): a forward 120 degree selector, 29 Charged physical damage, knockback Force 7. HEAD resolves the ground exit from the previous tick's grounded flag with no finished term and writes `ability_continuation_slot`, but nothing starts the child, so the Landing never runs. Gen 7 starts the child on the tick the parent finishes with its continuation resolved (section 5h below) | `weapons/interaction:Weapon_Battleaxe_Primary_Downstrike#document` (`wait_for` ground, `ground_next` 5), `weapons/interaction:Weapon_Battleaxe_Primary_Downstrike_Landing` (RunTime, damage 29 Physical, force 7 Set), `weapons/interaction:Weapon_Battleaxe_Primary_Downstrike_Selector` | the Landing hits 29 three steps after the resume on the gen-7 render (step 40, resume step 37); the leap's nine airborne steps unchanged; a target one block ahead behind the landing point is missed; the sword thrust and mace charged hit traces unchanged (tests/sim/test_ability_ground_continuation.py). Live receipt not run (coordinator) | 5h (2026-10-21)
 | Status clock (`status_clock.py`) | `status_clock`: False -> True | A timed status lasts round(D / tick) ticks, as the live 0.7.2 server counts them. Measured on whole ticks: the hit-interrupt Flinch (0.5 s) is removed after 15 frames and Stunned (0.7 s) after 21. The gen-5 float32 decrement removes a 0.5 s status on tick 16 (the sequential sum leaves 2.2e-8) | `tick_statuses` (`combat/mechanics/runtime/statuses.py`); the authored durations are unchanged | `tests/sim/test_status_clock.py`: a 0.5 s status ends on tick 15 (gen 5: 16); the hit-interrupt rows keep 15, 21 and 120; switch off equals the committed render | #106 |
 | Shortbow reset ammo (`shortbow_reset_ammo.py`) | `shortbow_reset_ammo`: loadout_one -> native_zero | The shortbow starts with no ammo loaded: native ammo 0 on the reset row and on tick 1, 1 from tick 2 (the accepted tick); the gen-5 charging phase already gives 0 on tick 1 and 1 from tick 2 | the shortbow's initial ammo in the loadout (receipts, FIDELITY (af)) | the stock differential on 570057 and 1553616197: the ammo feature mismatches on the reset row only; ticks 1 to 8 agree | 5f (timing lane, 2026-10-18) |
@@ -162,6 +163,44 @@ from the run receipts `HytaleRL/artifacts/fidelity_evidence/sim_values/run2/` (J
 **Unmeasured live.** The native landing delay (the 0.072 s selector, the 0.199 s pad and any server tick jitter), the native reach window (the measured miss at 1.5 is a render result), and whether 1 to 2 blocks are missed on the live server. The Landing's delay after the ground is reached is the engine's one-tick lag (the resume reads the previous tick's grounded flag, a documented choice in `continuation.py`). A live receipt is the coordinator's.
 
 **Other abilities.** The construct acts on any ability with a ground continuation, and today only the battleaxe Downstrike authors one: `ground_next` is set once in `jax/combat/arsenal/profiles/hytale_0_5_7.py` (2479), and the mace Groundslam and the dagger Pounce, which the same mechanism gates (`programs/continuation.py` docstring), are deferred world-conditional assets (`WORLD_CONDITIONAL_ABILITY_ASSETS`, 156-158) that no loadout builds. When they are built, their children start by this rule; measure them then.
+
+## Replace default hop (row 5f, 2026-10-22; lane `lane_replace_hop`)
+
+**Native (asset shape).** The iron sword left swing is `Weapon_Sword_Primary_Swing_Left`: a Simple of RunTime 0.111 whose `Next` is
+a Replace (`Var` Swing_Left_Selector) with `DefaultValue` `[Weapon_Sword_Primary_Swing_Left_Selector]`. The same Simple -> Replace ->
+Selector shape holds for 13 primary attacks (`sim/gen7/data/weapons.json`; list in `replace_default_hop.py`; checked by the test).
+
+**Live (receipt `hit_interrupt_Skeleton_Fighter_seed570057_swings6_s570057_p20.json.gz`, one request on tick 1; FIDELITY section (ao)).**
+Claim tick 1, chain start 2; the Simple finishes on tick 6 (carried 0.02233 s = 4/30 - 0.111); the Replace's default Selector is entered
+on tick 7; selection hit count 1 on tick 8 and 2 on tick 9; the target's health drops on tick 9; chain finish 14.
+
+**Construct (gen 7, switch on).** The sword's melee event (time 0.117 s, `profiles/hytale_0_5_7.py` `_melee`) opens its progressive
+selector when the scheduler clock passes that time; the HEAD render hits on tick 8 with chain start 2 and finish 14. The construct wraps
+`_write_profile` (`overlay.py` hook `replace_default_hop`, gen-7 profile `replace_default_hop=True`, registered in
+`mechanics/__init__.py`): the selector event of the 13 attacks moves one tick (1/30 s) later, so the selector window and sweep move
+with it and the ability duration (the finish) is unchanged. Gen 5 (switch False) returns the original writer.
+
+**Measured on the gen-7 render** (`tests/sim/test_replace_default_hop.py`; one still iron-sword target, request on step 1, 1-based steps;
+hit = first step the health reads lower; finish = first step the slot reads -1):
+
+| attack | distance | HEAD hit | switch on | finish (both) | evidence |
+|---|---|---|---|---|---|
+| iron sword Swing_Left | 1.5 | 8 | 9 | 14 | measured; live 9 and 14 |
+| iron sword Swing_Right | 1.5 | 8 | 9 | 14 | measured |
+| iron sword Swing_Down | 1.0 | 18 | 19 | 26 | measured |
+| iron daggers Swing_Left, Swing_Right, Stab_Left, Stab_Right | 1.5 | 8 | 9 | 10 | measured; the shift by mechanism (not live) |
+| iron mace Swing_Left, Swing_Right, Swing_Up_Left | 1.5 | 23 | 24 | 37 | measured; the shift by mechanism (not live) |
+| iron battleaxe Swing_Down, Swing_Down_Left, Swing_Down_Right | 1.5 | 18 | 19 | 34 | measured; the shift by mechanism (not live) |
+
+**Routing (measured).** A thrust request (slot 3) runs the listed Swing_Left (slot 0) on both renders: the Primary root releases into
+slot 0 on a short press; a 30-step hold on slot 0 runs Swing_Left repeatedly (hits on steps 8, 22, 36) and never the thrust (committed render, probe6). The charged mace request (slot 3) runs
+the listed mace Swing_Left the same way. The vortex, the battleaxe whirlwind and the dagger razorstrike do not start in this scenario
+(cause not checked). The test classifies each lane by the attack it runs; the thrust difference first seen (a
+`ability_selector_hit_bits` mismatch on the thrust lane) was this routing, not a leak of the construct to a non-listed event.
+
+**Not matched or not measured.** The ledger's bronze-dagger 17 -> 18 (row 5f) is a 0.5.7-pinned run; this scenario does not reproduce it
+(stock iron daggers 7, render 8). The live selection-count tick (8) and health tick (9) differ by one; the render shows both on one step.
+The mace, battleaxe and dagger shifts are by mechanism only.
 
 ## Candidate rows from the offline design pass (2026-10-18; lane stubs_69; `mechanics/DESIGNS-072.md`)
 

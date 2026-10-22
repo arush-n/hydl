@@ -5,6 +5,11 @@ Two kinds of test. The pure-logic tests run the construct's functions on ``Statu
 hit-interrupt rows) and drive the engine's own step: the switch-off render must equal the committed render leaf by leaf, and the
 switch-on render must show the measured timeline. Removal follows the stock decrement of ``mechanics/runtime/statuses.py``
 tick_statuses (``remaining = max(0, remaining - dt)``, active while > 0) at dt = 1/30 s in float32.
+
+Live check (hit_interrupt_part1 receipt, Skeleton_Fighter, seed 570057): an iron sword swing requested on tick r lands on tick
+r + 8 (the swing requested on tick 1 lands on tick 9, the one on tick 21 on tick 29). The render's sword timing (the Replace
+default hop, ``sim/gen7/mechanics/replace_default_hop.py``) now lands the swings of this file on steps r + 8 as well: requests
+on ticks 2 and 40 hit on steps 10 and 48. The step numbers below are the render's, measured with the shipped gen-7 overlay.
 """
 
 from __future__ import annotations
@@ -275,7 +280,7 @@ SEED = 570057
 AGENT, TARGET = 0, 1
 SWING = 0  # the iron sword's first attack root (Swing_Left; hytale_0_5_7 _iron_sword ability index 0)
 DISTANCE = 1.5  # the target, in front of the agent (the agent faces -z at yaw 0)
-EARLY, LATE = 2, 40  # swing requests: the hit at step 9 (before tick 42) and the hit at step 47 (the first at or after 42)
+EARLY, LATE = 2, 40  # swing requests: the hit at step 10 (before tick 42) and the hit at step 48 (the first at or after 42)
 
 
 class _Scenario:
@@ -385,7 +390,9 @@ def test_switch_off_leaves_the_gen7_render_identical_to_the_committed_render(ren
         off_final, off = _Scenario(package).run(requests, 64)
     with _mounted(render_dirs["committed"]) as package:
         committed_final, committed = _Scenario(package).run(requests, 64)
-    assert _hit_steps(committed) == [9, 47] and _hit_steps(off) == [9, 47]
+    # The two renders share every other construct (the shipped profile, replace_default_hop included) and differ only in the
+    # hit-interrupt hooks and switch, so the hit steps must agree; their values are pinned by the timing tests below.
+    assert len(_hit_steps(committed)) == 2 and _hit_steps(off) == _hit_steps(committed)
     for name in committed:
         assert np.array_equal(off[name], committed[name]), name
     off_leaves, committed_leaves = _leaves(off_final), _leaves(committed_final)
@@ -410,7 +417,7 @@ def test_the_eligible_target_gets_eligibility_from_tick_42_and_refreshes_on_the_
 
 def test_a_hit_before_tick_42_adds_nothing(eligible_run) -> None:
     _, trace = eligible_run
-    assert _hit_steps(trace)[0] == 9  # the swing requested on tick 2 lands on tick 9
+    assert _hit_steps(trace)[0] == 10  # the swing requested on tick 2 lands on tick 10 (live rule: request + 8)
     for name in ("Hit_Interrupt_Stunned", "Hit_Interrupt_Flinch", "Hit_Interrupt_Recent_Reaction_A"):
         assert all(step >= 42 for step in _steps(trace, name)), name
 
@@ -418,7 +425,7 @@ def test_a_hit_before_tick_42_adds_nothing(eligible_run) -> None:
 def test_the_first_hit_at_or_after_tick_42_adds_the_three_statuses_in_one_tick(eligible_run) -> None:
     _, trace = eligible_run
     late = _hit_steps(trace)[1]
-    assert late == 47
+    assert late == 48
     for name in ("Hit_Interrupt_Stunned", "Hit_Interrupt_Flinch", "Hit_Interrupt_Recent_Reaction_A"):
         assert late in _steps(trace, name) and late - 1 not in _steps(trace, name), name
     for name in ("Hit_Interrupt_Recent_Reaction_B", "Hit_Interrupt_Recovery_Pending", "Hit_Interrupt_Enraged"):
@@ -427,28 +434,28 @@ def test_the_first_hit_at_or_after_tick_42_adds_the_three_statuses_in_one_tick(e
 
 def test_the_statuses_are_removed_after_15_21_and_120_ticks(eligible_run) -> None:
     _, trace = eligible_run
-    assert _steps(trace, "Hit_Interrupt_Flinch") == list(range(47, 62))  # removed on step 62: 15 ticks after the hit
-    assert _steps(trace, "Hit_Interrupt_Stunned") == list(range(47, 68))  # removed on step 68: 21 ticks
-    assert _steps(trace, "Hit_Interrupt_Recent_Reaction_A") == list(range(47, 167))  # removed on step 167: 120 ticks
+    assert _steps(trace, "Hit_Interrupt_Flinch") == list(range(48, 63))  # removed on step 63: 15 ticks after the hit
+    assert _steps(trace, "Hit_Interrupt_Stunned") == list(range(48, 69))  # removed on step 69: 21 ticks
+    assert _steps(trace, "Hit_Interrupt_Recent_Reaction_A") == list(range(48, 168))  # removed on step 168: 120 ticks
 
 
 def test_the_flinch_window_freezes_the_target_motion_on_the_render(eligible_run) -> None:
     """Recorded, not corrected: on the render the flinch's speed multiplier 0 scales the target's whole position change and
-    velocity (arsenal/runtime.py _apply_target_controls). The hit's knockback is still moving the target on steps 48 to 52;
-    from step 53 to the removal on 62 it is still, and it moves again on 62, when the flinch is gone. The asset comment keeps
-    gravity and knockback active, so this freeze is a deviation (sim/gen7/mechanics/hit_interrupt.py, module docstring).
-    DISABLE_MOVEMENT alone does not freeze the target (a flag-only run moved on step 1)."""
+    velocity (arsenal/runtime.py _apply_target_controls). The hit's knockback is still moving the target on steps 49 to 53;
+    from step 54 to the last flinch step 62 it is still, and it moves again on step 63, when the flinch is gone. The asset
+    comment keeps gravity and knockback active, so this freeze is a deviation (sim/gen7/mechanics/hit_interrupt.py, module
+    docstring). DISABLE_MOVEMENT alone does not freeze the target (a flag-only run moved on step 1)."""
 
     _, trace = eligible_run
     pos = trace["pos"]
-    assert np.all(pos[52:61] == pos[52])  # the states after steps 53 to 61
-    assert not np.array_equal(pos[61], pos[60])  # moving again after the flinch is removed on step 62
+    assert np.all(pos[53:62] == pos[53])  # the states after steps 54 to 62
+    assert not np.array_equal(pos[62], pos[61])  # moving again after the flinch is removed on step 63
 
 
 def test_a_non_eligible_role_is_never_affected(render_dirs) -> None:
     with _mounted(render_dirs["on"]) as package:
         final, trace = _Scenario(package, roles=("Trork_Brawler", "Trork_Brawler")).run({EARLY: SWING, LATE: SWING}, 60)
     assert np.asarray(final.mechanics.hit_interrupt_eligible)[0].tolist() == [False, False]
-    assert _hit_steps(trace)[:2] == [9, 47]  # the swings still land
+    assert _hit_steps(trace)[:2] == [10, 48]  # the swings still land
     for name in ("Hit_Interrupt_Eligible", "Hit_Interrupt_Stunned", "Hit_Interrupt_Flinch", "Hit_Interrupt_Recent_Reaction_A"):
         assert _steps(trace, name) == [], name

@@ -51,6 +51,7 @@ CONSTRUCT_MODULES = {
     "shield_bash_root": "shield_bash_fork",
     "reset_head_heading": "reset_head_heading",
     "npc_walk_sprint_as_run": "npc_sprint",
+    "replace_default_hop": "replace_default_hop",
 }
 
 

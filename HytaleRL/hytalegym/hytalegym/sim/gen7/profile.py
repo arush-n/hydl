@@ -63,6 +63,9 @@ PROFILE = SimProfile(
         # the shortbow's empty reset.
         guard_reentry_cooldown="claim_0_35s",
         ability_start_split="next_drain",
+        # Replace default hop (row 5f, sim/gen7/mechanics/replace_default_hop.py): the selector of each Simple -> Replace ->
+        # Selector melee attack starts one tick later (the live sword hit on tick 9). Owner: mechanics/replace_default_hop.py.
+        replace_default_hop=True,
         # Charged battleaxe Landing (row 5h): the Downstrike's ground resume starts its child on the tick the parent finishes.
         ability_ground_continuation=True,
         # Timed statuses (task #106): a status lasts round(duration / tick) ticks, as the live 0.7.2 server counts them.
