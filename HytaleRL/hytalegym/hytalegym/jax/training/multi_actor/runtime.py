@@ -151,6 +151,36 @@ def _hold_speed_multiplier(
     return jnp.where(active, authored, jnp.float32(1.0))
 
 
+def _force_pushed_rows(transition, world, policy_controlled: jax.Array) -> jax.Array:
+    """Opt-in (#108, ``ArsenalWorldCapabilities.target_force_pushed_knockback``): the [B, N] non-agent rows that the
+    policy owns and that were damaged and pushed this tick. Each takes the force-pushed branch of its locomotion step
+    (``tick_entity_policy_locomotion``), as the agent takes it in the arsenal step. Off, every row is False.
+    """
+
+    entity_count = policy_controlled.shape[1]
+    received = transition.arsenal_info.entity_damage_received > jnp.float32(0.0)
+    pushed = jnp.any(
+        transition.state.mechanics.applied_velocity != jnp.float32(0.0),
+        axis=-1,
+    )
+    nonagent = jnp.arange(entity_count, dtype=jnp.int32)[None, :] != AGENT_ENTITY
+    return received & pushed & nonagent & policy_controlled & world.target_force_pushed_knockback[:, None]
+
+
+def _applied_motion_rows(state, world, policy_controlled: jax.Array) -> jax.Array:
+    """Opt-in (#108, ``ArsenalWorldCapabilities.target_force_pushed_knockback``): the [B, N] non-agent policy rows that
+    are under applied motion at the start of the tick. The test is the arsenal step's ``applied_motion_active``, which
+    holds the agent's body yaw; the locomotion step holds these rows' yaw the same way. Off, every row is False.
+    """
+
+    mechanics = state.mechanics
+    active = jnp.any(mechanics.applied_velocity != jnp.float32(0.0), axis=-1) | (
+        mechanics.external_velocity_y != jnp.float32(0.0)
+    )
+    nonagent = jnp.arange(policy_controlled.shape[1], dtype=jnp.int32)[None, :] != AGENT_ENTITY
+    return active & nonagent & policy_controlled & world.target_force_pushed_knockback[:, None]
+
+
 def initialize_multi_actor_arena_state(
     state: ArsenalEnvironmentState,
     params: CombatParams,
@@ -225,6 +255,7 @@ def step_multi_actor_arena(
         entity_controls.low_level_action[:, AGENT_ENTITY],
         scripted_actions,
     )
+    applied_motion_rows = _applied_motion_rows(state.arsenal, merged_commands.world, policy_controlled)
     compile_plan = plan_arsenal_compilation(params, config)
     transition = step_arsenal_batch(
         state.arsenal,
@@ -261,6 +292,8 @@ def step_multi_actor_arena(
             config.loadout.ability_hold_speed_multiplier,
             config.loadout.ability_hold_speed_multiplier_after_seconds,
         ),
+        force_pushed_rows=_force_pushed_rows(transition, merged_commands.world, policy_controlled),
+        hold_yaw_rows=applied_motion_rows,
     )
     nonzero = jnp.arange(entity_count, dtype=jnp.int32)[None, :] != AGENT_ENTITY
     ticks_since_damage = jnp.where(

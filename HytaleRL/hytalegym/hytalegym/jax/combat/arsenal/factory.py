@@ -566,6 +566,7 @@ def empty_arsenal_commands(
             static_area_placement=jnp.zeros(entity, dtype=jnp.bool_),
             area_center=jnp.zeros(entity + (3,), dtype=jnp.float32),
             knockback_gated_control_lock=jnp.zeros((batch,), dtype=jnp.bool_),
+            target_force_pushed_knockback=jnp.zeros((batch,), dtype=jnp.bool_),
         ),
     )
 

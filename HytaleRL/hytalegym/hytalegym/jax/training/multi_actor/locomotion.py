@@ -170,6 +170,8 @@ def tick_entity_policy_locomotion(
     params: CombatParams,
     geometry: GeometryProvider | None = None,
     hold_speed_multiplier: jax.Array | None = None,
+    force_pushed_rows: jax.Array | None = None,
+    hold_yaw_rows: jax.Array | None = None,
 ) -> tuple[CombatState, EntityLocomotionState]:
     """Advance uniquely owned entity rows through the existing Walk kernel.
 
@@ -217,7 +219,28 @@ def tick_entity_policy_locomotion(
             prepared_locomotion,
             entity_index,
         )
+        if force_pushed_rows is not None:
+            # Opt-in (#108): a row hit and pushed this tick takes the force-pushed branch of `_tick_agent_motion`.
+            virtual = virtual._replace(
+                target_damage_applied_this_tick=(
+                    virtual.target_damage_applied_this_tick | force_pushed_rows[:, entity_index]
+                ),
+            )
         stepped = _tick_agent_motion(virtual, motion_delta, params, geometry)
+        if force_pushed_rows is not None:
+            # The flag is consumed on the tick it is raised, as `_microtick` clears the agent's after its motion.
+            stepped = stepped._replace(
+                target_damage_applied_this_tick=jnp.zeros_like(stepped.target_damage_applied_this_tick),
+            )
+        if hold_yaw_rows is not None:
+            # Opt-in (#108): a row under applied motion keeps its body yaw for the tick, as the arsenal step holds
+            # the agent's (`arsenal/runtime.py`, the yaw select after `_microtick`). Off, the kernel's yaw stands.
+            held_yaw = jnp.where(
+                hold_yaw_rows[:, entity_index],
+                virtual.yaw[:, AGENT_ENTITY],
+                stepped.yaw[:, AGENT_ENTITY],
+            )
+            stepped = stepped._replace(yaw=stepped.yaw.at[:, AGENT_ENTITY].set(held_yaw))
         next_combat, next_locomotion = _scatter_stepped_entity(
             next_combat,
             prepared_locomotion,

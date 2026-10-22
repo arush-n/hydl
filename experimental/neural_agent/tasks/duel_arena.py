@@ -367,6 +367,7 @@ def make_duel_arena(
     arrows: tuple[int, int] | None = None,
     knockback_gated_control_lock: bool = True,
     target_regeneration: bool = True,
+    target_force_pushed_knockback: bool = True,
 ) -> DuelArena:
     """Build the two-entity duel on the open-flat fixture.
 
@@ -413,6 +414,10 @@ def make_duel_arena(
             engine default locks on any damage, which at knockback 0 froze entity 0 after its first hit.
         target_regeneration: The #108 F3 opt-in. Entity 1 regenerates by the agent's rule
             (``tick_target_regeneration``). ``False`` leaves entity 1 unhealed, as the engine does.
+        target_force_pushed_knockback: The #108 slot 1 opt-in (``ArsenalWorldCapabilities.target_force_pushed_knockback``).
+            A hit that pushes entity 1 takes its locomotion row's force-pushed branch, as entity 0's does, and entity 1
+            holds its body yaw under applied motion, as entity 0's does. ``False``
+            is the stock path bit for bit.
 
     The two opt-ins need the #108 engine pieces; on an engine built from HEAD (which predates them) both are no-ops.
 
@@ -447,12 +452,16 @@ def make_duel_arena(
     for name, value in (
         ("knockback_gated_control_lock", knockback_gated_control_lock),
         ("target_regeneration", target_regeneration),
+        ("target_force_pushed_knockback", target_force_pushed_knockback),
     ):
         if not isinstance(value, bool):
             raise TypeError(f"{name} must be a bool")
     lock_gate_available, tick_target_regeneration = _opt_in_engine()
     lock_on = knockback_gated_control_lock and lock_gate_available
     regeneration_on = target_regeneration and tick_target_regeneration is not None
+    from hytalegym.jax.combat.arsenal.schema.types import ArsenalWorldCapabilities
+
+    push_on = target_force_pushed_knockback and "target_force_pushed_knockback" in ArsenalWorldCapabilities._fields
     params = default_combat_params(microticks=1) if combat_params is None else combat_params
     if int(params.microticks) != 1:
         raise ValueError("combat_params.microticks must be 1: the duel takes one decision per tick")
@@ -581,6 +590,8 @@ def make_duel_arena(
             world = capabilities._replace(
                 knockback_gated_control_lock=jnp.full((batch,), True, dtype=jnp.bool_),
             )
+        if push_on:
+            world = world._replace(target_force_pushed_knockback=jnp.full((batch,), True, dtype=jnp.bool_))
         commands = empty_arsenal_commands(batch, entity_count=ENTITY_COUNT)._replace(world=world)
         transition = step_multi_actor_arena(
             arena, controls, assignment, keys, params, commands, config

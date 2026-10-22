@@ -400,6 +400,10 @@ class ArsenalWorldCapabilities(NamedTuple):
     # Opt-in (#108 F2; False by default, and the factory leaves it off): a hit locks the agent's control only
     # where the agent is also pushed this tick (``arsenal/runtime.py``, the input of ``_microtick``). The duel sets it.
     knockback_gated_control_lock: Array
+    # Opt-in (#108 slot 1; False by default, and the factory leaves it off): a hit that damages and pushes entity 1
+    # takes the force-pushed branch of its multi-actor locomotion row, as entity 0 does (``multi_actor/runtime.py``
+    # selects the rows, ``multi_actor/locomotion.py`` takes the branch). The duel sets it.
+    target_force_pushed_knockback: Array
 
 
 class ArsenalCommands(NamedTuple):
