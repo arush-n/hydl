@@ -444,7 +444,10 @@ The encoder is the body's reading of the state: the state's variables as tokens,
 - 11.4 **An effects registry.** The gym publishes each status effect's id (`status_i32`), but the token cannot say
   which effect it is. A registry of the game's effects, built from Assets.zip like the item and creature registries
   (`../perception/registry.py`), would give each effect a description vector, and the status token would read it.
-  This lane's to build.
+  This lane's to build. **The registry is BUILT** (2026-10-22, `../perception/effects.py`; owner: "ok start working
+  on those"): 260 effects of 0.7.2 with fixed properties and a description vector, keyed by the id the observation
+  publishes. The status token reads it after the geometry capacity change and its re-audit, so the token layout
+  changes once.
 
 **Planned:**
 - 11.5 **The recipe encoder's parameters.** The environment's recipe embedding is a fixed-seed random encoder
