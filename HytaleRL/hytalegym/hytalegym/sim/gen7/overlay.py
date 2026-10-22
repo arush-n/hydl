@@ -881,6 +881,15 @@ HOOKS = (
          "policy attack",
          "the catalog's weapon_items: max_durability and durability_loss_on_hit of all 143 rows from the 0.7.2 table "
          "(57 maxima and 82 losses change); the rest of the catalog, semantic_sha256 included, unchanged"),
+    # Row 1a, NPC sprint is run (construct npc_walk_sprint_as_run): a sprint request under npc_walk is a run request for the
+    # learner. Listed before the landing hook: hooks on one function apply in tuple order and the first applied is the
+    # outermost, so landing_walk (which reads original.__globals__) stays innermost (sim/PORTING.md, hook-chaining note).
+    Hook("npc_walk_sprint_learner", "combat/runtime/step.py", "_apply_action",
+         f"{_MECHANICS}.npc_sprint:construct", "npc_walk_sprint_as_run", "active", "1a",
+         "live receipt pending (bridge 6DFD8682, 2026-10-21: NPC sprint measures 5.0 against 6.37); sim side: "
+         "tests/sim/test_npc_sprint.py (sprint and run trajectories bit-identical on npc_walk)",
+         "a requested sprint under npc_walk is a run for actor zero: same multipliers on every axis, no stamina drain and "
+         "no regen block (stamina regenerates as for run); the player model keeps its sprint (1.273)"),
     Hook("landing_walk_resume", "combat/runtime/step.py", "_apply_action",
          f"{_MECHANICS}.landing_walk:construct", "landing_walk_resume", "active", "1c", _LANDING_WALK,
          "after an accepted jump, holds forward, back, left and right for the two grounded ticks after touchdown "

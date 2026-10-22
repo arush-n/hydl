@@ -67,6 +67,8 @@ PROFILE = SimProfile(
         ability_ground_continuation=True,
         # Timed statuses (task #106): a status lasts round(duration / tick) ticks, as the live 0.7.2 server counts them.
         status_clock=True,
+        # NPC sprint is run (row 1a): under npc_walk a sprint request runs as a run (the live NPC body measures 5.0, not 6.37).
+        npc_walk_sprint_as_run=True,
         shortbow_reset_ammo="native_zero",
         # Shield bash offer (section (x), row 5d): the 0.7.2 fork of the held guard is legal only while the guard is active.
         shield_bash_root="held_guard_fork",

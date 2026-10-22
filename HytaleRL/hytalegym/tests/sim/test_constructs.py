@@ -34,7 +34,7 @@ IMPLEMENTED_SWITCHES = {"line_of_sight", "npc_walk_jump_velocity", "dagger_swing
                        "crafting_bench_tier", "crafting_memories", "crafting_time", "processing_benches", "diagram_crafting",
                        "guard_reentry_cooldown", "ability_start_split", "shortbow_reset_ammo", "crossbow_scalar_variant",
                        "shield_bash_root", "reset_head_heading", "crafting_augment_tags", "hit_interrupt",
-                       "ability_ground_continuation", "status_clock"}
+                       "ability_ground_continuation", "status_clock", "npc_walk_sprint_as_run"}
 
 
 #: Switches a gen-7 decision leaves at the gen-5 default: the module stays a stub and is never reached
@@ -66,7 +66,7 @@ def test_every_changed_switch_has_an_owning_module_and_refuses_until_implemented
                                                          "processing_benches", "diagram_crafting",
                                                          "guard_cooldown", "ability_start_split", "shortbow_reset_ammo", "crossbow_variant",
                                                          "shield_bash_fork", "reset_head_heading", "crafting_augment_tags", "hit_interrupt",
-                                                         "ability_ground_continuation", "status_clock"}),
+                                                         "ability_ground_continuation", "status_clock", "npc_sprint"}),
 )
 def test_stub_entry_points_raise(module_name: str) -> None:
     module = importlib.import_module(f"hytalegym.sim.gen7.mechanics.{module_name}")

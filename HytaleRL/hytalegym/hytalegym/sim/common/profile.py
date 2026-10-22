@@ -164,6 +164,9 @@ class Constructs:
     # step, reaches <= 0, so a 0.5 s status ends on the 16th tick at 1/30 s) or on (gen 7: a status lasts round(D / tick) ticks,
     # the live 0.7.2 count). Owner: sim/gen7/mechanics/status_clock.py.
     status_clock: bool = False
+    # NPC sprint is run (row 1a, owner ruling 2026-10-21): on npc_walk a sprint request runs at the run gait, with no
+    # stamina drain or regen block (the live NPC body cannot exceed its MaxSpeed). Owner: sim/gen7/mechanics/npc_sprint.py.
+    npc_walk_sprint_as_run: bool = False
 
 
 @dataclass(frozen=True)

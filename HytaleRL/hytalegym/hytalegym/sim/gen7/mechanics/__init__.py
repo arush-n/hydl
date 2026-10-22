@@ -50,6 +50,7 @@ CONSTRUCT_MODULES = {
     "shortbow_reset_ammo": "shortbow_reset_ammo",
     "shield_bash_root": "shield_bash_fork",
     "reset_head_heading": "reset_head_heading",
+    "npc_walk_sprint_as_run": "npc_sprint",
 }
 
 
