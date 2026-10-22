@@ -366,7 +366,7 @@ values. The runs:
   gen-7 render with the channel on: real terrain, its geometry and light tokens, the built-in Trork target active.
 - **live:** the live 0.7.2 server (pinned bridge 6DFD8682, `HytaleEnv` native backend, `kill_trork` on the flat
   world, the Kweebec_Razorleaf body, the target active), the tick run in-process on each live observation; 74 and
-  204 ticks (both runs ended on a native decode error, below).
+  204 ticks (both runs ended on a native decode error, below; after the coordinator's fix, 745a0cf, the same program ran 300 ticks, all valid, with the same columns carrying information and the dodge's invulnerability too).
 
 **Columns carrying information** (varying + constant non-zero, of all; valid rows):
 
@@ -394,7 +394,7 @@ scales (the self speed column peaks at 0.928 in both).
 
 | Gap | Where | Owner |
 |---|---|---|
-| The live decoder refuses a frame: `ValueError: native defense evidence is incomplete` (`native/codec/decode.py:309`), at tick 74 (twice, the same seed and actions) and tick 204 (another program). Both follow hotbar selections; a dodge alone and a sneak alone run clean | live | coordinator: cause found 2026-10-22, a knockback queued while the agent is airborne after a jump (the decoder's ambiguous motion-force branch); a decoder fix next, no bridge rebuild |
+| FIXED (coordinator, 745a0cf): the live decoder refused a frame (`ValueError: native defense evidence is incomplete`) when a hit's knockback was queued while the agent was airborne after a jump; the decoder now sums the projection on the host. The same random program then ran 300 live ticks, all valid (2026-10-22) | live | coordinator |
 | FIXED (coordinator, 3f8aded): guard on gen 7. The mask marked `guard_off_on` legal and the step rejected it, so guard never engaged: a re-entry patch closed the guard choice while a guard was held, dropping it on its second tick. Now a held guard engages on tick 3, as live; `defense_guard_active` varies in the duel and the Region world (audits re-run on a render of 3f8aded) | gen-7 render | coordinator |
 | `perception_v2` exists only on the state-taking encoder; the duel's multi-actor path and the live native assembly carry none. There, no position (so no memory), no inventory, no entity kind or held item. The observation has no other legal position (`actor_world` is medium, submersion and drop) | duel, live | coordinator (asks 1, 2, 5 and the live channel) |
 | The entity's role id is 0 in the channel (its seam), so every `kind_*`, `attitude_*` and `known` column reads 0 | all | coordinator (ask 1) |
