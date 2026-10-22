@@ -1,9 +1,10 @@
 # sim_port
 
 `regen_swap_plan.py` regenerates the gen-7 render's swap plan (`../hytalegym/sim/common/content/redirects.json`): the
-redirect records and the step-clock sites, with their line numbers in the committed engine. After any commit that
-touches a module under `hytalegym/jax/` (even a comment) those line numbers can go stale, so run it from
-`HytaleRL/hytalegym/tools`:
+redirect records and the step-clock sites, with their line numbers in the committed tree. Most sites are under
+`hytalegym/jax/`; others are in `hytalegym/worldgen/`, `hytalegym/combat/assets/`, `hytalegym/framework/`, the rulesets,
+`arena/curriculum/` and `arena/imitation/`. After any commit that touches one of those files (even a comment) the line
+numbers can go stale, so run it from `HytaleRL/hytalegym/tools`:
 
     PYTHONPATH=<repo>:<repo>/HytaleRL/hytalegym python -m sim_port.regen_swap_plan --dry-run   # report only
     PYTHONPATH=<repo>:<repo>/HytaleRL/hytalegym python -m sim_port.regen_swap_plan             # write
