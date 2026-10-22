@@ -160,6 +160,10 @@ class Constructs:
     # ability_continuation_slot and nothing reads it) or on (gen 7: the child starts on the tick the parent finishes, when
     # its continuation resolved to a child). Owner: sim/gen7/mechanics/ability_ground_continuation.py (row 5h).
     ability_ground_continuation: bool = False
+    # Status clock (task #106): "stock" (HEAD: a status is removed when its float32 remaining time, decremented by one tick per
+    # step, reaches <= 0, so a 0.5 s status ends on the 16th tick at 1/30 s) or on (gen 7: a status lasts round(D / tick) ticks,
+    # the live 0.7.2 count). Owner: sim/gen7/mechanics/status_clock.py.
+    status_clock: bool = False
 
 
 @dataclass(frozen=True)

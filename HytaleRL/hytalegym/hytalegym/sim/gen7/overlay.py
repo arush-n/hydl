@@ -958,6 +958,13 @@ HOOKS = (
          note="wraps tick_ability_programs: a child starts when the parent finished this tick and the continuation resolved to a "
          "child; the child start resets the scheduler fields start_abilities resets and keeps the requesting root; charges, "
          "cooldowns and the regen delay are untouched; gen 5 returns the original"),
+    Hook("status_clock", "combat/mechanics/runtime/statuses.py", "tick_statuses",
+         f"{_MECHANICS}.status_clock:construct", "status_clock", "active",
+         differential="tests/sim/test_status_clock.py: a 0.5 s status is active for 15 ticks on the gen-7 render and 16 with the switch "
+         "off; the rendered clock matches the construct on every row; the switch-off render equals the committed render leaf by leaf; "
+         "tests/sim/test_hit_interrupt.py keeps 15, 21 and 120 steps",
+         note="wraps tick_statuses: after the stock decrement a status stays active while more than half a tick remains (round(D / "
+         "tick)); only the active flags change; gen 5 returns the original"),
     Hook("perception_v2", "combat/observation/v3/encoding/encoder.py", "encode_learner_observation_v3",
          f"{_MECHANICS}.perception_v2:construct", "perception_v2", "active",
          differential="tests/sim/test_perception_v2.py: channel layout, row gate (view sector, occluder), ids, inventory "

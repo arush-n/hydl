@@ -23,10 +23,11 @@ overlap rules and horizontal speed multipliers, and the 31 attack interactions w
 blocks attack starts (``STATUS_FLAG_DISABLE_ABILITIES``, asset comment); Flinch stops walking with gravity and knockback active
 (speed multiplier 0 with ``STATUS_FLAG_DISABLE_MOVEMENT``, asset comment).
 
-Removal timing: the stock status clock subtracts the step dt from ``remaining_seconds`` in float32 and removes a status at
-<= 0 (``mechanics/runtime/statuses.py``). A 0.5 s status written at its full duration is removed on the 16th tick at 1/30 s, a
-0.7 s one on the 21st. The construct writes Flinch, Stunned and Reaction A at their duration minus half a tick, so the same stock
-clock removes them after 15, 21 and 120 ticks, the native frame counts. The engine-wide clock is not corrected here (task #106).
+Removal timing: with ``Constructs.status_clock`` on (gen 7, ``mechanics/status_clock.py``, task #106) a status lasts round(D / tick)
+ticks, so the construct writes Flinch, Stunned and Reaction A at their full durations and they are removed after 15, 21 and 120
+ticks, the native frame counts. With it off (the stock clock, ``mechanics/runtime/statuses.py``: removed at <= 0 in float32) the
+construct writes them at duration minus half a tick, which gives the same counts; the stock clock alone removes a 0.5 s status on
+the 16th tick at 1/30 s.
 
 Motion on the render (tests/sim/test_hit_interrupt.py): DISABLE_MOVEMENT alone does not move the target (a flag-only run moved on
 step 1). The flinch's speed multiplier 0 does: arsenal/runtime.py _apply_target_controls scales the target's whole position change
@@ -82,7 +83,7 @@ EFFECT_FLAGS = {
     "Hit_Interrupt_Stunned": STATUS_FLAG_DISABLE_ABILITIES,
     "Hit_Interrupt_Flinch": STATUS_FLAG_DISABLE_MOVEMENT,
 }
-#: Written at duration minus half a tick (see the module docstring).
+#: Written at duration minus half a tick when the stock clock runs (``status_clock`` off; see the module docstring).
 PRECOMPENSATED = ("Hit_Interrupt_Flinch", "Hit_Interrupt_Stunned", "Hit_Interrupt_Recent_Reaction_A")
 ATTACK_SUFFIX = "_Damage"
 EFFECT_NAMES = (
@@ -282,25 +283,31 @@ def hit_gate(status: Any, entity: int) -> Any:
     return eligible & ~blocked
 
 
-def _effect(table: HitInterruptTable, name: str) -> Effect:
+def _status_clock_on(profile: Any) -> bool:
+    """The half-tick pre-compensation is for the stock clock; the status_clock construct rounds on its own, so it must not get it."""
+
+    return profile.constructs.status_clock is True
+
+
+def _effect(table: HitInterruptTable, name: str, precompensate: bool = True) -> Effect:
     effect = table.effects[name]
-    if name in PRECOMPENSATED:
+    if precompensate and name in PRECOMPENSATED:
         return replace(effect, duration_seconds=effect.duration_seconds - HALF_TICK_SECONDS)
     return effect
 
 
-def apply_hit(status: Any, entity: int, landed: Any, table: HitInterruptTable) -> Any:
+def apply_hit(status: Any, entity: int, landed: Any, table: HitInterruptTable, precompensate: bool = True) -> Any:
     """A landed hit on ``entity`` (``landed`` [B]). Where the gate holds: Stunned, Flinch and a reaction. The reaction is
     Recent_Reaction_A on the first hit, B on the second, and the third queues Recovery_Pending (asset values; unmeasured)."""
 
     gate = landed & hit_gate(status, entity)
     a_present = _has(status, entity, semantic_id("Hit_Interrupt_Recent_Reaction_A"))
     b_present = _has(status, entity, semantic_id("Hit_Interrupt_Recent_Reaction_B"))
-    status = write_status(status, entity, _effect(table, "Hit_Interrupt_Stunned"), gate)
-    status = write_status(status, entity, _effect(table, "Hit_Interrupt_Flinch"), gate)
-    status = write_status(status, entity, _effect(table, "Hit_Interrupt_Recent_Reaction_A"), gate & ~a_present)
-    status = write_status(status, entity, _effect(table, "Hit_Interrupt_Recent_Reaction_B"), gate & a_present & ~b_present)
-    return write_status(status, entity, _effect(table, "Hit_Interrupt_Recovery_Pending"), gate & a_present & b_present)
+    status = write_status(status, entity, _effect(table, "Hit_Interrupt_Stunned", precompensate), gate)
+    status = write_status(status, entity, _effect(table, "Hit_Interrupt_Flinch", precompensate), gate)
+    status = write_status(status, entity, _effect(table, "Hit_Interrupt_Recent_Reaction_A", precompensate), gate & ~a_present)
+    status = write_status(status, entity, _effect(table, "Hit_Interrupt_Recent_Reaction_B", precompensate), gate & a_present & ~b_present)
+    return write_status(status, entity, _effect(table, "Hit_Interrupt_Recovery_Pending", precompensate), gate & a_present & b_present)
 
 
 def enrage_after_flinch(status: Any, entity: int, table: HitInterruptTable) -> Any:
@@ -414,7 +421,8 @@ def construct_hits(original: Any, profile: Any) -> Any:
             return out
         mechanics_out, arsenal_out, health, damage, event_count = out
         landed = landed_flagged(loadout, events, damage, flagged)
-        statuses = apply_hit(mechanics_out.statuses, TARGET_ENTITY, landed, table)
+        statuses = apply_hit(mechanics_out.statuses, TARGET_ENTITY, landed, table,
+                             precompensate=not _status_clock_on(profile))
         return mechanics_out._replace(statuses=statuses), arsenal_out, health, damage, event_count
 
     return process_direct_events
