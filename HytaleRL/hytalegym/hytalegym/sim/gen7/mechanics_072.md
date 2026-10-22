@@ -73,7 +73,7 @@ fidelity patch in the gen-7 overlay. Every value below is in the gen-7 tables an
 | Guard roots no longer interrupt Primary (`Rules.Interrupting: [Primary]` removed from the Sword, Battleaxe, Daggers and Mace guard roots) | `weapons/root:Root_Weapon_*_Secondary_Guard#document.Rules` | `_guard(interrupting_type_mask=1 << PRIMARY)` default (patch: read the root's Rules) |
 | Crafting 1,947 -> 2,047 recipes, 22 bench ids, 19 without a bench | `crafting/recipe:*` | `jax/crafting/contract.py` `RECIPE_TABLE_CAPACITY` (redirect `crafting_capacities`) |
 | Spider web speed 0.65 -> 0.45 (jump 0.5 -> 0.45, drag 0.45 -> 0.82) and a new NPC web-collision slow (x0.2, 1 s) | `blocks/block:Deco_SpiderWeb#movement_settings,collision_interactions` | Region recapture on 0.7.2 (the engine reads captured cells) |
-| Mana 0 -> 100 | `stats/stat:Mana` | `mechanics/factory.py` defaults (redirect `mechanics_factory_resources`) |
+| Mana 0 -> 100 | `stats/stat:Mana` | `mechanics/factory.py` defaults (redirect `mechanics_factory_resources`) and the loadout (hook `mana_pool_loadout`, 2026-10-22) |
 
 ## Engine fixes that are not version constructs
 
@@ -211,3 +211,20 @@ Live differential (2026-10-20, bridge `9AABD344`, the crafting oracle's augment 
 ## NPC sprint is run (row 1a, 2026-10-21; owner ruling "Sim: sprint = run")
 
 Switch `npc_walk_sprint_as_run`: `False` -> `True` (gen 7). Construct `sim/gen7/mechanics/npc_sprint.py`, one hook on `_apply_action` (`combat/runtime/step.py`, actor zero). Under `npc_walk` a requested sprint is rewritten to a run before the engine reads the gait, so the engine takes its run branch: the run multipliers on every axis, no stamina drain, no regen block. Measured on the live 0.7.2 bridge (6DFD8682, 2026-10-21): the agent body is an NPC with MaxSpeed 5.0, so its sprint measures 5.0 against the simulator's 5.0 x 1.273 = 6.37; the NPC controller never publishes a sprinting state (`jax/world/entities/movement_states.py`, `npc_walk_sprinting` source-pinned false). The player model keeps its sprint; gen 5 returns the original function. Not covered: the entity path (`training/multi_actor/locomotion.py`, the duel's slot 1) has its own sprint block and is outside the gen-7 render scope (`overlay.modules` is `combat/`); the multi-actor runtime imports the HEAD `hytalegym.jax.combat`. Measured on the sim side: `tests/sim/test_npc_sprint.py`. Live receipt pending.
+
+## Mana reset: the loadout carried no mana (task #107 item 2, 2026-10-22)
+
+**What was wrong (confirmed).** The mana construct (`mana_pool`, row 7a) set only the factory default: maximum 100 and +1 per 0.3 s. The reset never reached it. `arsenal_runtime_config` builds the rules from the input loadout's `resource_maximum` (`jax/combat/arsenal/factory.py`, `mechanics_rules_for_loadout`, lines 247-265), and the reset takes its initial resources from `config.loadout.resource_initial` (`jax/combat/arsenal/runtime.py`, `reset_arsenal_batch`). A weapon profile lists only its own resources: the iron sword carries signature energy 20 and no mana (`jax/combat/arsenal/profiles/hytale_0_5_7.py`, `_iron_sword`); the staff and wand profiles carry none at all. So both values were 0 for the melee duel and the single-agent env. The observation's mana feature is masked when the span is 0 (`observation/v3/encoding/encoder.py:222-228`).
+
+**Evidence (gen-7 render, probe run 2026-10-22, scratch `probe_mana.py`).** Before: the factory default maximum read 100 with the construct on, while the single-agent env (iron sword) read resources [0, 0], maximum [0, 0], initial [0, 0] and observation mana 0.0 with mask False. The duel-equivalent reset (the calls of `duel_arena.make_duel_arena`) read the same. After the fix: resources [100, 100], maximum [100, 100], initial [100, 100], observation 1.0 with mask True. Gen 5 reads 0 / 0 on both paths, which is the gen-5 model (0.5.10 `Mana` is 0/0). Live reference: the native duel reset reports `native_agent_mana` 100.0 and maximum 100.0 with no override (`FIDELITY-0.7.2.md` row 7a). The receipt files that row names were not present at the scratch path searched on 2026-10-22, so that reference is cited from the row, not re-read.
+
+**The duel was not the only path.** The single-agent env shows the same 0, so the brief's branch (single-agent 100, duel 0) did not hold. The duel's code is unchanged; the fault is the shared config path above.
+
+**Fix.** `mechanics/mana_pool.py`, `construct_loadout`, registered as hook `mana_pool_loadout` on `arsenal_runtime_config` (`overlay.py`). It fills the input loadout's Mana maximum and initial from `stats/stat:Mana` (100 and 100) where the loadout has none (maximum 0). A loadout that names its own maximum keeps its maximum and initial. The rules follow the loadout, so the reset and the observation both read 100. Gen 5 returns the original function.
+
+**What it changes (named consumers).**
+- Every gen-7 actor now reads Mana 100 at reset: the observation's mana feature is 1.0 with mask True. The skill layer's self-token meter (`experimental/neural_agent/skill_agent/model/observation_adapter.py`, `meter(RESOURCE_MANA)`) reads it, and that file's docstring still says the flat world has no mana (0). Policies trained on gen 7 saw 0 there; they are not retrained by this change.
+- Mana-costed casts become payable in gen 7 where the loadout had no mana (staff and wand casts). That matches native 0.7.2 but is not measured in the simulator.
+- Entity 1 (the target) also reads 100, because the hook fills every entity row. The live 0.7.2 target's mana is not measured: the native readout covers the agent only.
+
+Tests: `tests/sim/test_mana_pool.py` (4 new render tests). Against the pre-change construct, the two reset tests read 0 and the gen-5 test fails on the missing attribute; the explicit-maximum test passes on both, as a guard should.

@@ -24,7 +24,7 @@ B = batch; C = entity capacity (default 16); S = inventory token capacity, 76 (`
 | Array | dtype | shape | Meaning | Today | Gate |
 |---|---|---|---|---|---|
 | `entity_kind` | int32 | [B, C] | 0 none, `ENTITY_KIND_NPC` = 1 (as v1), `ENTITY_KIND_PLAYER` = 2 (new, channel-local) | filled, row 0 | row gate |
-| `entity_role_id` | int32 | [B, C] | semantic id of the NPC role asset | 0 (seam, section 6) | row gate |
+| `entity_role_id` | int32 | [B, C] | semantic id of the target's NPC role asset | filled, row 0 (0 for a player-backed target or an empty role; section 6) | row gate |
 | `entity_held_item_id` | int32 | [B, C] | semantic id of the target's held weapon | filled, row 0 | row gate |
 | `inventory_i32` | int32 | [B, S, 3] | (container_id, container_slot, item_id) per token; 0 where absent | filled | actor validity |
 | `inventory_f32` | float32 | [B, S, 7] | the v3 inventory token features, unchanged | filled | actor validity |
@@ -72,6 +72,12 @@ gated by actor validity (`observation.valid`), as the v3 carry already does (`ar
 
 - Every id is `semantic_id(asset_id)` (`jax/combat/contracts/semantic.py:6`): the positive 31-bit FNV-1a of the asset string.
 - 0 means none, not held, absent, or unknown. The channel never writes a non-semantic id.
+- `entity_role_id` is `semantic_id(role name)` for the target's role, read from `ArsenalRuntimeConfig.entity_role_semantic_ids`
+  (`int32 [B, E]`, written by the construct `perception_v2:construct_roles` on `arsenal_runtime_config`, 2026-10-22). The names
+  are the caller's `entity_role_ids` (the duel's `roles=`), or the matchup pair when none is passed
+  (`default_combat_role_ids`: agent `Kweebec_Razorleaf`, target `Trork_Brawler`, `rulesets/hytale_0_5_7/*_v9.json`). An empty
+  name is 0; a player-backed target is 0, since a player has no NPC role asset. The agent's own role is on the config (entity 0);
+  the layout has no self role field, so the channel does not publish it.
 - `entity_held_item_id` is `ArsenalRuntimeConfig.loadout.weapon_id[:, TARGET]` (`arsenal/schema/types.py:61-64`), which
   holds `semantic_id` of the weapon asset by construction (section 2).
 - `inventory_i32[..., 2]` is the `InventoryState.item_id` of the agent's slot. INFERRED that this is `semantic_id` of the
@@ -89,10 +95,11 @@ gated by actor validity (`observation.valid`), as the v3 carry already does (`ar
 
 ## 6. Seams (named, not built)
 
-- **`entity_role_id`.** `arsenal/runtime.py:194` takes `entity_role_ids`; it feeds `initial_role_status_applications`
-  (`:416`) and is not kept. `ArsenalRuntimeConfig` (`arsenal/schema/types.py:477-513`) has no role field. Seam: an
-  `entity_role_ids` int32 [B, E] field of semantic ids on the runtime config, filled by the scene builder. Until then
-  the channel's role field is 0 and `known` stays 0 on the peer's side.
+- **`entity_role_id` (closed, task #130 item 4, 2026-10-22).** `arsenal/runtime.py:194` takes `entity_role_ids` and feeds
+  `initial_role_status_applications` (`:416`), which did not keep them, so the channel wrote 0 for every entity. The config now
+  carries `entity_role_semantic_ids` (patch `perception_role_config_field`, `arsenal/schema/types.py`, None unless the switch is
+  on) filled by the hook `perception_roles` (`construct_roles`), applied after the hit-interrupt role hook so it reads the raw
+  names. The peer's `known` flag can turn on for a registry-resolved role; the registry lookup is on the peer's side.
 - **Block candidates (ask 4).** The rows come from the world candidate producer behind
   `ArsenalActorBlockCandidateSource` (`arsenal/environment.py:309`; provider `:960`) into `ArsenalActionSurfaceEvidence`
   (`:322`). They are not encoder inputs, and the world tokens carry no cell or block id (`observation/v3/tokens/world.py:94-99`).
@@ -120,6 +127,9 @@ Ours (`tests/sim/test_perception_v2.py`):
 - the switch: off returns the v3 type with unchanged fields; on returns the augmented type with the v3 fields unchanged;
 - the row gate: a target outside the view sector, and a target behind an occluder (through the rendered line-of-sight
   construct), both blank `entity_kind`, `entity_held_item_id` and `entity_role_id`; a visible target fills them;
+- task #130 item 4 (2026-10-22, on a render with the switch on, `on_engine`): the switch-off config carries no role ids; the
+  matchup default gives the target row `semantic_id("Trork_Brawler")`; the duel's `roles=` reaches the config and the row; swapped
+  roles put `Kweebec_Razorleaf` on the target row; an empty role name reads 0; a player-backed target has kind PLAYER and role 0;
 - ids: `entity_held_item_id` equals `semantic_id(weapon asset)` for the target's loadout;
 - body yaw equals sin and cos of the body yaw in radians;
 - inventory tokens equal `inventory_policy_tokens_from_state`'s floats;
@@ -152,10 +162,7 @@ does not enter this gate. So the peer's legality requirement holds in arenas tha
 both: `view_sector_full_angle_radians` and `legal_observation_sensor_range=True`.
 
 Seams, with the engine input each needs (not built):
-- Role id (`entity_role_id`): an `entity_role_ids` int32 [B, E] field of semantic ids on `ArsenalRuntimeConfig`
-  (`arsenal/schema/types.py:477-513`). Today `arsenal_runtime_config(entity_role_ids=...)` (`arsenal/runtime.py:194`) uses
-  the names for `initial_role_status_applications` (`:416`) and does not keep them. Input: the scene builder's role names,
-  stored on the config.
+- Role id (`entity_role_id`): closed 2026-10-22 (section 6, the first bullet; section 9).
 - Block candidates (ask 4): the candidate rows (cell x, y, z, face, block_id, reachable) from the action surface at the step,
   `ArsenalActionSurfaceEvidence` (`arsenal/environment.py:322`), built by `ArsenalActorBlockCandidateSource` (`:309`) and
   `make_world_actor_block_candidate_provider` (`:960`). Input: those rows passed to the channel builder beside the
@@ -192,3 +199,11 @@ noted):
 - Identity gate, `tests/sim/test_render_identity.py`, run on its own: before 4 passed (exit 0); after 4 passed (exit 0).
 - Rollout fingerprints (`tools/sim_bench/rollout.py`, batches 8 and 64, 64 steps): before `d8477b63…bd4b` and
   `b02ee274…d8e7`; after the same two values. Unchanged.
+
+Task #130 item 4 (2026-10-22): the role id. Cause (confirmed, `perception_v2.py` before this change): the channel wrote a zero
+array for `entity_role_id`, and `arsenal_runtime_config` did not keep the role names it was given. Fix: the config field and
+the hook above; the channel publishes `where(present & ~player, config.entity_role_semantic_ids[:, TARGET], 0)`. Evidence:
+`tests/sim/test_perception_v2.py` on a gen-7 render with the switch on (the matchup default reads `semantic_id("Trork_Brawler")`,
+the duel's roles and swapped roles read as named). Red check: with the channel's role read zeroed, the three value tests fail and
+the empty-role and player-backed tests pass, as they should. Not done: a self role field (the layout is peer-facing; the agent's
+role is on the config only); the peer's `known` flag and attitude are the peer's to derive.

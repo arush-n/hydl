@@ -742,6 +742,14 @@ PATCHES = (
           "            loadout=config.loadout,\n        )\n",
           "5a", "tests/sim/test_hit_interrupt.py",
           "the loadout keyword of process_direct_events; the hit wrapper strips it when the switch is off"),
+    Patch("perception_role_config_field", "combat/arsenal/schema/types.py",
+          "    legal_observation: bool = False\n",
+          "    legal_observation: bool = False\n"
+          "    # Gen 7 (task #130, perception_v2): per-entity semantic role ids [batch, entity] from the role names; None without\n"
+          "    # the perception role hook (perception_v2 off).\n"
+          "    entity_role_semantic_ids: object = None\n",
+          "PV2", "tests/sim/test_perception_v2.py",
+          "the config field the perception channel reads (PERCEPTION_V2.md section 6 seam, not a FIDELITY-0.7.2.md row); None keeps the config pytree (gen 5, and gen 7 with the switch off)"),
 
 )
 
@@ -773,8 +781,15 @@ HOOKS = (
          f"{_MECHANICS}.mana_pool:construct", "mana_pool", "active", "7a",
          "native_duel refill from 0 (live 0.7.2 bridge, native_agent_mana): +1 per 8.95 world ticks = 0.2982 s, "
          "against the 0.3 s bar within 5 %; JAX: tick_resources from 0 at 1/30 s (rendered engine)",
-         "maximum 100 and initial 100 from stats/stat:Mana; the regeneration interval 0.3 s replaces the gen-5 "
-         "0.2 s literal (factory.py line 134); rune casts spend this pool only once rune_casting is built"),
+         "maximum 100 from stats/stat:Mana (the factory default); the regeneration interval 0.3 s replaces the gen-5 "
+         "0.2 s literal (factory.py line 134); the loadout's maximum and initial come from mana_pool_loadout; rune casts "
+         "spend this pool only once rune_casting is built"),
+    Hook("mana_pool_loadout", "combat/arsenal/runtime.py", "arsenal_runtime_config",
+         f"{_MECHANICS}.mana_pool:construct_loadout", "mana_pool", "active", "7a",
+         "tests/sim/test_mana_pool.py: the agent reads Mana 100 / 100 at reset on the single-agent env and the duel's reset "
+         "path (both were 0 / 0 before); gen 5 reads 0 / 0; a loadout's own mana maximum is kept",
+         "fills the input loadout's Mana maximum and initial (stats/stat:Mana) where it has none; the rules follow the "
+         "loadout (arsenal/factory.py mechanics_rules_for_loadout), so the reset and the observation read 100 / 100"),
     Hook("rune_casting", PROFILE_JAX, "hytale_0_5_7_loadouts",
          f"{_MECHANICS}.mana:construct", "rune_casting", "stub", "7b",
          "one differential per rune: cost, cooldown, cast time, flight, effect",
@@ -981,7 +996,13 @@ HOOKS = (
          f"{_MECHANICS}.perception_v2:construct", "perception_v2", "active",
          differential="tests/sim/test_perception_v2.py: channel layout, row gate (view sector, occluder), ids, inventory "
          "floats, body yaw; the switch-off identity gate and the rollout fingerprints are unchanged",
-         note="sim/gen7/PERCEPTION_V2.md: opt-in beside the v3 fields; the role id is a seam (no role ids on the runtime config)"),
+         note="sim/gen7/PERCEPTION_V2.md: opt-in beside the v3 fields; the role id is the target's NPC role (perception_roles)"),
+    Hook("perception_roles", "combat/arsenal/runtime.py", "arsenal_runtime_config",
+         f"{_MECHANICS}.perception_v2:construct_roles", "perception_v2", "active",
+         differential="tests/sim/test_perception_v2.py: the config's role ids for the matchup default, the duel's roles= (swapped), "
+         "an empty role, and a player-backed target (the channel's role id reads 0)",
+         note="sets ArsenalRuntimeConfig.entity_role_semantic_ids (semantic_id of each role name) from entity_role_ids or the "
+         "matchup default; applied after hit_interrupt_roles, which replaces its measured roles with '' before the original"),
 )
 
 OVERLAY = Overlay(

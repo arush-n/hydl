@@ -1,22 +1,24 @@
 """Gen-7 perception channel ``perception_v2`` (``sim/gen7/PERCEPTION_V2.md``). Switch ``Constructs.perception_v2``, default False.
 
 When the switch is on, the render's hook on ``encode_learner_observation_v3`` returns the v3 observation with one more
-field, ``perception_v2``: the target's kind (NPC or player), its held weapon (a semantic id), the agent's inventory
-tokens, its body yaw and its own world-frame position. The role id is a placeholder (0) until the runtime keeps role ids (a named seam). Every entity
-field is blanked where the observation's entity row is blanked: the row is the same gate the learner already applies
-(target perception, line of sight with the detail-hitbox rule, and the opt-in view sector and sensor range, which reach
-``line_of_sight``), so the channel adds no perception of its own. The v3 fields are passed through unchanged.
+field, ``perception_v2``: the target's kind (NPC or player), its role id (the NPC role asset's semantic id, from the config's
+``entity_role_semantic_ids``), its held weapon (a semantic id), the agent's inventory tokens, its body yaw and its own
+world-frame position. Every entity field is blanked where the observation's entity row is blanked: the row is the same gate
+the learner already applies (target perception, line of sight with the detail-hitbox rule, and the opt-in view sector and
+sensor range, which reach ``line_of_sight``), so the channel adds no perception of its own. The v3 fields are passed through
+unchanged. The role id is 0 for a player-backed target (a player has no NPC role asset) and for an empty role name.
 """
 
 from __future__ import annotations
 
 import importlib
 import inspect
-from functools import lru_cache
+from functools import lru_cache, wraps
 from typing import Any, NamedTuple
 
 import jax.numpy as jnp
 
+from hytalegym.jax.combat.contracts.semantic import semantic_id
 from hytalegym.jax.combat.observation.v1.schema.contract import ENTITY_KIND_NPC
 from hytalegym.jax.combat.types import AGENT_ENTITY, TARGET_ENTITY
 
@@ -34,7 +36,7 @@ class PerceptionV2(NamedTuple):
     """The channel's arrays (``PERCEPTION_V2.md`` section 2). Entity arrays are [B, C]; row 0 is the target."""
 
     entity_kind: Any  # int32 [B, C]
-    entity_role_id: Any  # int32 [B, C]: placeholder 0 (seam: the runtime keeps no role ids)
+    entity_role_id: Any  # int32 [B, C]: the target's NPC role asset (semantic id); 0 for a player or no role
     entity_held_item_id: Any  # int32 [B, C]
     inventory_i32: Any  # int32 [B, S, 3]: container_id, container_slot, item_id; 0 where the token is absent
     inventory_f32: Any  # float32 [B, S, 7]: the v3 inventory token features, unchanged
@@ -130,10 +132,19 @@ def channel(root: str, state, config, observation, *, entity_capacity: int = ENT
     def rows(values):
         return jnp.zeros((batch, entity_capacity), jnp.int32).at[:, 0].set(values.astype(jnp.int32))
 
+    # The config's role ids (construct_roles) give each entity's role asset; the channel publishes the target's, and an NPC
+    # role only: a player-backed target has no NPC role asset, so the field is 0 for it (as it is for a hidden row).
+    role_ids = config.entity_role_semantic_ids
+    target_role = (
+        jnp.zeros((batch,), jnp.int32)
+        if role_ids is None
+        else jnp.asarray(role_ids, dtype=jnp.int32)[:, TARGET_ENTITY]
+    )
+    role = jnp.where(present & ~player, target_role, 0)
     yaw = jnp.deg2rad(state.combat.yaw[:, AGENT_ENTITY].astype(jnp.float32))
     return PerceptionV2(
         entity_kind=rows(kind),
-        entity_role_id=rows(jnp.zeros((batch,), jnp.int32)),
+        entity_role_id=rows(role),
         entity_held_item_id=rows(held),
         inventory_i32=inventory_i32.astype(jnp.int32),
         inventory_f32=tokens.token_f32,
@@ -151,6 +162,35 @@ def observation_type(base: type) -> type:
 
     fields = [(name, Any) for name in base._fields] + [("perception_v2", Any)]
     return NamedTuple(f"{base.__name__}WithPerceptionV2", fields)
+
+
+def construct_roles(original, profile):
+    """Hook for ``arsenal_runtime_config``: the config's semantic role ids (``entity_role_semantic_ids``, int32 [B, E]).
+
+    The names are the caller's ``entity_role_ids`` (the duel's ``roles=``), or the matchup's pair when none is passed
+    (``default_combat_role_ids``, the names the status builder already reads). A name is ``semantic_id(name)``; an empty
+    name (no role, or an entity past the roles) is 0. The hook is applied after the other config hooks, so it reads the names
+    before the hit-interrupt hook replaces its measured roles with "". Switch off: ``original`` is returned.
+    """
+
+    value = profile.constructs.perception_v2
+    if value is False:
+        return original
+    if value is not True:
+        raise ValueError(f"perception_v2 must be a bool, got {value!r}")
+
+    @wraps(original)
+    def arsenal_runtime_config(loadout: Any, *args: Any, **kwargs: Any) -> Any:
+        config = original(loadout, *args, **kwargs)
+        batch, entities = config.loadout.weapon_id.shape
+        names = kwargs.get("entity_role_ids")
+        if names is None:
+            roles = importlib.import_module(_rendered_root(original) + ".combat.mechanics.sources.role_statuses")
+            names = roles.default_combat_role_ids(entities)
+        ids = jnp.asarray([semantic_id(name) if name else 0 for name in names], dtype=jnp.int32)
+        return config._replace(entity_role_semantic_ids=jnp.broadcast_to(ids[None, :], (batch, entities)))
+
+    return arsenal_runtime_config
 
 
 def construct(original, profile):

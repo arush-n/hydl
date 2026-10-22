@@ -191,3 +191,9 @@ At knockback 0 the stock duel gives the same sign in both seat orders on sword P
 On an engine built from HEAD (no `knockback_gated_control_lock` field and no `tick_target_regeneration`), both opt-ins are no-ops: `_opt_in_engine` in `duel_arena.py` resolves the pieces when a duel is built, so the module imports, and `test_duel_builds_and_steps_on_an_engine_without_the_108_pieces` pins that path.
 
 Slot 1 knockback (task #108, 2026-10-21): `target_force_pushed_knockback` (`True` by default in the duel) lets a hit that damages and pushes entity 1 take its multi-actor locomotion row's force-pushed branch, as entity 0 takes it, and holds its body yaw under applied motion (`multi_actor/runtime.py` `_force_pushed_rows` and `_applied_motion_rows`, `multi_actor/locomotion.py` `tick_entity_policy_locomotion`); `False` is the stock path bit for bit.
+
+### Gen-7 render: the reset's mana and the role ids (task #107 item 2, task #130 item 4, 2026-10-22)
+
+`duel_arena.py` is unchanged. On the gen-7 render (`render.redirect_imports`), the duel's reset reads Mana 100 / 100 for both
+entities (it read 0 / 0 before; gen 5 still reads 0), and the config carries the semantic role ids of `roles=` (or the matchup
+pair). Details and evidence: `sim/gen7/mechanics_072.md` (Mana reset) and `sim/gen7/PERCEPTION_V2.md` (section 9).

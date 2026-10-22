@@ -11,6 +11,9 @@ cases, and the channel must blank its kind, held item and role with it.
 from __future__ import annotations
 
 import math
+import sys
+import types
+from dataclasses import replace
 from importlib import import_module
 from types import SimpleNamespace
 
@@ -92,6 +95,25 @@ def engine(tmp_path_factory):
     built.on = perception_v2.construct(built.encoder.encode_learner_observation_v3, ON)
     yield built
     unmount(built.package)
+
+
+@pytest.fixture(scope="module")
+def on_engine(tmp_path_factory):
+    """The gen-7 render with ``perception_v2`` on (its profile names the switch, as ``test_status_clock.py`` does for its
+    off render): the encoder carries the channel and the config carries the role ids (``construct_roles``)."""
+
+    name = "perception_v2_on_profile"
+    module = types.ModuleType(name)
+    module.PROFILE = replace(GEN7, constructs=replace(GEN7.constructs, perception_v2=True))
+    sys.modules[name] = module  # the rendered package imports its profile when it mounts, so it stays until teardown
+    try:
+        target = tmp_path_factory.mktemp("render_on") / "gen7"
+        R.render(replace(GEN7_OVERLAY, profile=f"{name}:PROFILE"), target, source=HeadSource())
+        built = _Engine(mount_fresh(target).__name__)
+        yield built
+        unmount(built.package)
+    finally:
+        sys.modules.pop(name, None)
 
 
 def _channel(engine, state, observation, config=None, capacity=perception_v2.ENTITY_CAPACITY):
@@ -230,7 +252,6 @@ def test_a_visible_target_fills_kind_and_held_item_and_pads_the_rest(engine) -> 
     channel = _channel(engine, state, observation)
     assert int(channel.entity_kind[0, 0]) == 1  # ENTITY_KIND_NPC
     assert int(channel.entity_held_item_id[0, 0]) == semantic_id(WEAPON_ASSET)
-    assert int(channel.entity_role_id[0, 0]) == 0  # seam: no role ids on the runtime config
     assert not np.any(np.asarray(channel.entity_kind)[0, 1:])
     assert not np.any(np.asarray(channel.entity_held_item_id)[0, 1:])
 
@@ -345,3 +366,64 @@ def test_gen5_keeps_its_construct_absent() -> None:
 
     assert GEN5.constructs.perception_v2 is False
     assert perception_v2.construct(original, GEN5) is original
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Task #130 item 4 (2026-10-22): the role id. The channel published 0 for every entity: the runtime config did not keep the
+# role names (arsenal_runtime_config(entity_role_ids=...) fed the status builder only). construct_roles keeps them as
+# semantic ids on the config; the channel publishes the target's (row 0) for a visible NPC target.
+# ---------------------------------------------------------------------------------------------------------------------
+
+KWEEBEC = "Kweebec_Razorleaf"  # ruleset matchup agent role (rulesets/hytale_0_5_7/kweebec_razorleaf_vs_trork_brawler_v9.json)
+TRORK = "Trork_Brawler"  # ruleset matchup target role
+
+
+def _role_ids(config) -> list[int]:
+    return np.asarray(config.entity_role_semantic_ids)[0].tolist()
+
+
+def _observe_roles(engine, config, **kwargs):
+    state = engine.reset(config=config)
+    observation = engine.observe(state, encode=engine.encoder.encode_learner_observation_v3, config=config, **kwargs)
+    return observation.perception_v2
+
+
+def test_the_switch_off_config_carries_no_role_ids(engine) -> None:
+    assert engine.config.entity_role_semantic_ids is None
+
+
+def test_the_matchup_default_gives_the_agent_and_the_target_their_role_ids(on_engine) -> None:
+    config = on_engine.config
+    assert _role_ids(config) == [semantic_id(KWEEBEC), semantic_id(TRORK)]
+    channel = _observe_roles(on_engine, config, line_of_sight=True)
+    assert int(channel.entity_role_id[0, 0]) == semantic_id(TRORK)
+    assert not np.any(np.asarray(channel.entity_role_id)[0, 1:])
+
+
+def test_the_duel_roles_reach_the_config_and_the_target_channel(on_engine) -> None:
+    config = on_engine._config(entity_role_ids=(KWEEBEC, TRORK))
+    assert _role_ids(config) == [semantic_id(KWEEBEC), semantic_id(TRORK)]
+    assert int(_observe_roles(on_engine, config, line_of_sight=True).entity_role_id[0, 0]) == semantic_id(TRORK)
+
+
+def test_swapped_duel_roles_put_the_kweebec_on_the_target_row(on_engine) -> None:
+    config = on_engine._config(entity_role_ids=(TRORK, KWEEBEC))
+    assert _role_ids(config) == [semantic_id(TRORK), semantic_id(KWEEBEC)]
+    assert int(_observe_roles(on_engine, config, line_of_sight=True).entity_role_id[0, 0]) == semantic_id(KWEEBEC)
+
+
+def test_an_empty_role_name_is_no_role(on_engine) -> None:
+    # The source genuinely has no role for entity 1: the role name is "" (the padding of entity_role_ids).
+    config = on_engine._config(entity_role_ids=(KWEEBEC, ""))
+    assert _role_ids(config) == [semantic_id(KWEEBEC), 0]
+    channel = _observe_roles(on_engine, config, line_of_sight=True)
+    assert bool(np.asarray(channel.entity_kind)[0, 0] == 1)
+    assert int(channel.entity_role_id[0, 0]) == 0
+
+
+def test_a_player_backed_target_has_no_npc_role(on_engine) -> None:
+    # A player has no NPC role asset: the kind is PLAYER and the role field reads 0, whatever role name the config names.
+    config = on_engine._config(player_backed_actor_mask=jnp.asarray([[False, True]]))
+    channel = _observe_roles(on_engine, config, line_of_sight=True)
+    assert int(channel.entity_kind[0, 0]) == 2  # ENTITY_KIND_PLAYER
+    assert int(channel.entity_role_id[0, 0]) == 0
