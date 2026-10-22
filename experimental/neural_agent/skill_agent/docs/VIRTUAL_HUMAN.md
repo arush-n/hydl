@@ -561,11 +561,19 @@ approach. Missing:
 | 4 | The event log and its tokens; the activity counters and levels | 10.6, 11.1, 16.6 |
 | 5 | The long-term spatial memory: places, routes, coordinates | 10.11, 16.4 |
 | 6 | Hearing: the sound registry, the hearing rule, heard entries in the stores, the orienting reflex (the token reads zero until S12) | 17 |
-| 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry, places, the proficiencies | 11.1 to 11.4, 11.6, 16.6, 17.8 |
+| 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry (with it the status token's identity: which effect, its source entity, its damage cause, all in the observation and dropped today; `PERCEPTION.md` section 10.5), places, the proficiencies | 11.1 to 11.4, 11.6, 16.6, 17.8 |
 | 8 | The formatted views (typed facts, words) and the recording | 10.3, 10.9 |
 | 9 | The social section (approved, 15.3) | 12, 15.3 |
 
 Every step is measured first with 2 agents, then scaled up (16.3).
+
+**The encoding tested** (2026-10-21, owner: "test the encoding in the sim and the real server"): the state layer's
+tick on simulator duels, a Region world and the live 0.7.2 server (`PERCEPTION.md` section 10.5; the tools are
+`../bench/encoding_audit.py` and `../bench/live_encoding.py`). Everything published arrives, at the same scales
+live and simulated. The gaps outside this lane went to the coordinator, who filed them: the live decoder's failure,
+gen-7 guard, the perception channel's reach (memory, inventory, entity kinds), the role id, block candidates,
+collision boxes and edges, the jumping and sprinting states. This lane's two: the anger attribution (fixed, 5b4a7ca) and
+the status token's identity (step 7).
 
 **Future, parked by the owner:**
 - regulators (section 4);

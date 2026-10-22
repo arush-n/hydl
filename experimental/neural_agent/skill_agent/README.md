@@ -42,7 +42,7 @@ Import a module by its subfolder: `from experimental.neural_agent.skill_agent.ru
 | [`teaching/`](teaching/README.md) | What every scripted teacher shares (the registry, the observed-state rule), the teacher certificates, and the lookahead teacher (Stage L, step L3). |
 | [`tasks/`](tasks/README.md) | The flat task world skills are trained and measured on, and the episode runner; the duel world on the coordinator's two-actor arena (Stage L, step L1), the league of combat styles (L2) and the archery range for the shortbow. |
 | [`training/`](training/README.md) | Native traces, the behaviour-cloning dataset, the training building blocks every skill's strategy uses (per-skill DAgger, the bars), and the A2 reference trainer. |
-| [`bench/`](bench/README.md) | Per-tick latency benches (the 30 Hz gate). |
+| [`bench/`](bench/README.md) | Per-tick latency benches (the 30 Hz gate), and the encoding audit on the simulator and the live server (2026-10-21). |
 | [`docs/`](docs/README.md) | The design record: `BUILD.md` (the plan), `TRAINING_PLAN.md`, `PERCEPTION.md` (the perception contract), `VIRTUAL_HUMAN.md` (the agreed architecture), `ARCHITECTURE_RESEARCH.md`, `FIDELITY.md`, `AGENT_BRIEF.md`. |
 
 ## 1. Create, register, use (the guide)

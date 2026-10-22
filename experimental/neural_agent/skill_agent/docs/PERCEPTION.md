@@ -285,8 +285,8 @@ The first two are arrays in the neural layer's carry, saved and loaded with it.
 | E6 legality | a hidden entity (behind, or at another distance out of view) leaves every token identical; projectiles and hazards out of the view sector are dropped | **confirmed** for entities and projectiles (test_sa_state_senses.py: a target behind at 5 or 10 blocks gives identical tokens of every type; a projectile behind is dropped, one ahead kept while the head looks there); hazards use the same gate, untested |
 | E7 memory | the latent memory carries information across ticks and resets; the spatial store keeps, moves and evicts rows as specified | **confirmed**. Latent (test_sa_tokens_v3.py): two pasts read differently; the initial slots are a clean reset; padding-invariant; no parameter change without memory. Stores (test_sa_state_memory.py, with a synthetic perception channel): an entity seen 6 blocks ahead, hidden after the agent walks 2 blocks and turns 90 degrees, reads 4 blocks to the right, remembered, not visible, one tick old, and is not perceived twice; a tagged place never seen is a placeholder block row at the right place with its priority; a tagged entity survives an overflowing store while the oldest untagged ones are evicted; without the agent's position the stores do nothing; reset clears; a carry saves and loads exactly. **Reopened and re-confirmed 2026-10-21**: the first confirmation used motionless entities and checked positions only, and the store kept every column but `where` in the body frame of the tick it was seen, so after a turn a remembered entity's velocity and facing, and a remembered cell's edges, pointed the old way. Now stored in world axes and turned on reading: an entity seen moving along +x and facing -z, remembered after a 90-degree turn, reads that motion to the right and that facing straight ahead; a remembered cell's edge turns with it (22 v3 tests). Open: the stores on a real gen-7 perception channel (S1); an entity's own velocity across ticks (S16: the gym scales entity and self velocity by different speeds) |
 | E8 cost | the full v3 tick (adapter and trunk, memory on) within the 30 Hz gate (p95 at most 15 ms at batch 8) | **confirmed at the default size** (scratch bench on real archery-range observations, jitted adapter and trunk, load 12 to 14): width 64, 2 layers, 8 memory slots (213,184 parameters, 346 tokens an agent): p95 2.59 ms at batch 1, 5.20 ms at batch 8. A larger trunk (width 128, 4 layers, 16 slots, 995,456 parameters): 4.06 ms at batch 1, 25.56 ms at batch 8, over the gate (inside the 33 ms tick); a larger trunk needs the speed-ups first (caching the slow tokens, a slower trunk rate). Re-measured 2026-10-21 after the geometry (185) and status (22) widths changed, load 8 to 11: p95 1.38 ms at batch 1 and 4.86 ms at batch 8 at the default size; the larger trunk 2.82 and 9.63 ms (its earlier 25.56 ms was under a heavier load) |
-| E9 live consistency | the native assembly's tokens equal the simulator's for the same state | open (needs a live window) |
-| E10 bounded inputs | every feature within ±5 on rollouts (running normalisation clipped at ±5 in OpenAI Five) | **confirmed for the published types** (2026-10-21, scripted sword, battleaxe and shortbow duels, 8 lanes x 240 ticks each: 17,280 self, 720 entity, 38,400 kit, 5,760 status, 12 projectile rows): the largest is 1.42 (projectile speed); every other feature is within 1. Open for geometry, hazards, block candidates, inventory and recipes (published by no arena, S10). A block candidate's `required_quality` is the raw tier, not a fraction |
+| E9 live consistency | the native assembly's tokens equal the simulator's for the same state | **partly** (2026-10-21, section 10.5): the state layer's real tick ran on the live 0.7.2 server (bridge 6DFD8682) and filled every type the live path publishes (self, kit, status, entity, geometry with light, act, persona, affect), with the same scales as the simulator on the shared columns. Token equality for the same state is still open: it needs a live trajectory replayed in the simulator from the same start |
+| E10 bounded inputs | every feature within ±5 on rollouts (running normalisation clipped at ±5 in OpenAI Five) | **confirmed on active rollouts, reopened and re-measured 2026-10-21** (section 10.5). The first measurement's rollouts were nearly static: its scripted sword body only swings at a target already in reach and never moves or turns, so the agent's speed was always 0 and one lane in eight saw the target, at one place. Re-measured on six runs where the agent acts at random (legal, held) against an attacker: the gen-5 and gen-7 duels, the gen-7 channel run, a gen-7 Region world (55,698 geometry rows) and two live runs. The largest value is 1.94 (a projectile's place beyond the 24-block scale); every other column is within 1.48. Still open for hazards, block candidates and recipes (published by no run). A block candidate's `required_quality` is the raw tier, not a fraction |
 
 ### 10.3 Two stores: the spatial map and the salient store (owner, 2026-10-20 night)
 
@@ -346,6 +346,73 @@ by importance, never evicted by bulk.
 - 2026-10-21, owner: the architecture paused and settled in discussion (`VIRTUAL_HUMAN.md`): a state layer holds
   everything about the agent, in memory, read by every layer; this document's tokens are the body's view of its
   world and body part. The persona and affect code is a proposal to reshape under it; nothing of it is committed.
+
+### 10.5 The encoding on the simulator and the live server (2026-10-21)
+
+The owner: "start to test the encoding in the sim and the real server to see if we get the information we need".
+
+**How** (`../bench/encoding_audit.py` and `../bench/live_encoding.py`; the runbook is `../bench/README.md`). The
+state layer's real tick (`layer.step`, with the 0.7.2 content registry's tables) ran on rollouts in
+which the agent takes random legal actions, each held for about 8 ticks, against an opponent that attacks. For every
+column of every token type it counted the valid rows, how often the column is non-zero, its range, and its distinct
+values. The runs:
+- **duel:** the open-flat duel (`tasks/duel_arena.py`) on a private gen-7 render, sword, shortbow and battleaxe,
+  8 lanes x 300 ticks; a chaser (close to 1.5-2.5 blocks, swing in reach) plays the opponent. The same on gen 5.
+- **channel:** the single-actor environment on the gen-7 render with `perception_v2` on (position, body yaw,
+  inventory, entity kind and held item), open field and the gym's wall geometry.
+- **region:** a Region world (`worlds/region.py` `region_scene`, the pinned library `region-library-v3-288`) on the
+  gen-7 render with the channel on: real terrain, its geometry and light tokens, the built-in Trork target active.
+- **live:** the live 0.7.2 server (pinned bridge 6DFD8682, `HytaleEnv` native backend, `kill_trork` on the flat
+  world, the Kweebec_Razorleaf body, the target active), the tick run in-process on each live observation; 74 and
+  204 ticks (both runs ended on a native decode error, below).
+
+**Columns carrying information** (varying + constant non-zero, of all; valid rows):
+
+| Type | duel (gen 7) | channel (gen 7) | region (gen 7) | live 0.7.2 |
+|---|---|---|---|---|
+| self | 101+16 of 173 (7,200) | 90+18 (4,800) | 35+81 (1,200) | 30+83 (204) |
+| act | 25 of 26 | 25 | 25 | 25 |
+| kit | 24+1 of 39 | 16+1 | 14+1 | 14+1 |
+| status | 0+2 of 22 | 0+2 | 0+2 | 0+2 |
+| entity | 27+4 of 158 (2,466) | 22+4 (4,451) | 32+3 (1,200) | 27+5 (204) |
+| projectile | 19+1 of 23 (538) | no rows | no rows | no rows |
+| geometry | no rows | no rows | 71+4 of 185 (55,698) | 13+10 (2,147) |
+| inventory slot | no rows | 67+8 of 106 | 1+74 | no rows |
+| hazard, block candidate, recipe | no rows | no rows | no rows | no rows |
+| persona, affect | 10 of 11, 8 of 9 | 10, 7 | 10, 8 | 10 (one agent: constant), 8 |
+
+**What arrives, everywhere it is published.** The body's motion, movement states, head and heading, health,
+stamina and the other resources, defense, attack state; the held item with its registry properties and description;
+the kit; another entity's place, motion, facing, health and attack phases; projectiles; terrain cells with clearance,
+traversal edges and sky light; the remembered cells and entities (where the channel gives the position); the action
+history; the persona and the emotional state. The live server fills the same columns as the simulator, at the same
+scales (the self speed column peaks at 0.928 in both).
+
+**What does not arrive** (the gaps, by owner):
+
+| Gap | Where | Owner |
+|---|---|---|
+| The live decoder refuses a frame: `ValueError: native defense evidence is incomplete` (`native/codec/decode.py:309`), at tick 74 (twice, the same seed and actions) and tick 204 (another program). Both follow hotbar selections; a dodge alone and a sneak alone run clean | live | coordinator |
+| Guard on gen 7: the mask marks `guard_off_on` legal, the step rejects it (`action_valid` False) and guard never engages; gen 5 and the live server engage it | gen-7 render | coordinator |
+| `perception_v2` exists only on the state-taking encoder; the duel's multi-actor path and the live native assembly carry none. There, no position (so no memory), no inventory, no entity kind or held item. The observation has no other legal position (`actor_world` is medium, submersion and drop) | duel, live | coordinator (asks 1, 2, 5 and the live channel) |
+| The entity's role id is 0 in the channel (its seam), so every `kind_*`, `attitude_*` and `known` column reads 0 | all | coordinator (ask 1) |
+| One entity row only, in every run | all | coordinator (ask 3) |
+| No block candidates: the 0.7.2 Region library has no block semantics (only the 0.5.7-captured `region-library-pilot-v2` does); live needs the world-action adapter, which has not run live | all | coordinator (asks 4, S5) |
+| No hazards: only ability-spawned areas make them (the flame staff's fire trap) | all | coordinator (S10) |
+| Collision boxes (`box_*`) read 0 in the Region world and live; the live flat world also sends no traversal edges | region, live | coordinator |
+| `moving_jumping` and `moving_sprinting` never set, though the agent leaves the ground (falling is set) and picks the sprint gait; sprint matches #126 (sprint capped at run live) | all | coordinator (to confirm) |
+| My maximum health (S17) | all | coordinator |
+| FIXED (5b4a7ca): damage taken was credited to an attacker only in its sweep and within 3.0 blocks. The duel's sword lands as the attacker enters recovery, from up to 3.48 blocks, so the feelings toward it never rose (they did toward the Trork, which hits during its sweep, in the Region world and live). Now a sweep, else a recovery, within the measured melee reach of 3.75 blocks (`THREAT_REACH_BLOCKS`); the duel's hostility, trust and anger columns fill (test A4b) | duel | this lane (`state/affect.py`) |
+| The status token drops the effect's id, its source entity and its damage cause, which the observation carries (`status_i32`): the agent sees a status's effects but not what it is or who applied it. The duel's permanent status is the game's infinite `Immunity_Environmental` (speed 0.5 is the encoder's multiplier over 2, so x1). Planned with the effects registry in step 7 (`VIRTUAL_HUMAN.md` section 13) | all | this lane (the token) |
+
+The coordinator filed every gap in its lane on 2026-10-21 and is working on two: the live decoder failure (it will
+replay these action sequences live once fixed) and gen-7 guard; the channel's reach extends #92 and waits on the
+owner's scope.
+
+The duel and Region numbers above are the repo tool's, re-run after the attribution fix; the live runs predate it
+(inferred unchanged: their attacker hits during its sweep, and the new reach moves values, not which columns carry
+information). The live captures (raw leaves and actions) are
+kept in this session's scratch for the coordinator's replay of the decoder failure.
 
 ## 11. Is the encoding enough? The literature and a field-by-field audit (2026-10-21)
 
