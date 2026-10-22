@@ -56,20 +56,26 @@ class AgentState(NamedTuple):
     variables: jax.Array | None = None  # float32[B, V]: ``contract/variables.NAMES``, read through ``registry``
     affect: feeling.AffectState | None = None  # the affect rules' working state
     entity_ids: jax.Array | None = None  # int32[B, E]: the id of each entity token row last tick, -1 for padding
+    object_slots: dict | None = None  # per important type: int32[B, N], each token row's store slot (-1 for none)
+    background: jax.Array | None = None  # float32[B, K, W]: the trunk's last ``EncoderOutput.background``
 
 
 def initial_state(batch: int, latent: jax.Array | None = None, persona: jax.Array | None = None,
-                  entity_capacity: int = v3.CAPACITIES_V3["entity"]) -> AgentState:
-    """The state at an episode's start (``latent``: the trunk's initial slots, ``encoder.initial_memory``;
-    ``persona``: float32[B, len(persona.TRAITS)], the population's mean when None; ``entity_capacity``: the entity
-    capacity :func:`step` packs to)."""
+                  capacities: Mapping[str, int] = v3.CAPACITIES_V3, object_width: int = 0,
+                  background: jax.Array | None = None) -> AgentState:
+    """The state at an episode's start (``latent`` and ``background``: the trunk's initial slots,
+    ``encoder.initial_memory`` and ``initial_background``, which the trunk call fills and this layer carries;
+    ``persona``: float32[B, len(persona.TRAITS)], the population's mean when None; ``capacities``: those
+    :func:`step` packs to; ``object_width``: the trunk's width when it keeps object slots, ``EncoderConfig.object_types``,
+    else 0)."""
 
     persona = neutral_persona(batch) if persona is None else jnp.asarray(persona, jnp.float32)
     affect = feeling.initial_affect(persona)
     values = registry.put(registry.defaults(batch), TRAITS, persona)
     values = registry.put(values, v3.AFFECT_FEATURES, feeling.affect_features(affect))
-    return AgentState(initial_history(batch), stores.initial_memory(batch), latent, values, affect,
-                      jnp.full((batch, entity_capacity), -1, jnp.int32))
+    slots = {name: jnp.full((batch, capacities[name]), -1, jnp.int32) for name in ("entity", "block_candidate")}
+    return AgentState(initial_history(batch), stores.initial_memory(batch, latent_width=object_width), latent, values,
+                      affect, slots["entity"], slots, background)
 
 
 def step(observation: Any, state: AgentState, *, last_action: jax.Array,
@@ -114,7 +120,8 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
         rows[name] = (jnp.pad(columns, ((0, 0), (0, 1)))[:, None, :], one)
     tokens = pack(rows, batch, capacities)
     ids = fit_ids(entity_ids, valid, capacities["entity"])  # aligned with tokens["entity"], perceived and remembered
-    return tokens, AgentState(history, memory, state.latent, values, affect, ids)
+    slots = stores.object_slots(memory, tokens, ids, perceived.pose)
+    return tokens, AgentState(history, memory, state.latent, values, affect, ids, slots, state.background)
 
 
 _STORE_TYPES: Mapping[str, str] = {"geometry": "geometry", "entity": "entity", "block": "block_candidate"}
@@ -143,7 +150,8 @@ def load(path: str | Path, like: AgentState, *, maps: Mapping[str, Mapping[str, 
     A save made under another variable list or token layout is migrated by name (``docs/VIRTUAL_HUMAN.md`` section 14):
     a variable it lacks takes its default, and a stored row's new column reads 0. A variable or column that is gone
     must be merged into a new one by ``maps`` or listed in ``dropped``, both keyed by ``"variables"`` or a stored token
-    type (``variables.transfer``).
+    type (``variables.transfer``). A part of the state the save lacks (added since, as the object latents and the
+    background summary on 2026-10-22) takes ``like``'s value.
     """
 
     maps, dropped = maps or {}, dropped or {}
@@ -157,6 +165,9 @@ def load(path: str | Path, like: AgentState, *, maps: Mapping[str, Mapping[str, 
         values = []
         for key, template in paths:
             name = jax.tree_util.keystr(key)
+            if name not in stored:  # a part added to the state since this save
+                values.append(jnp.asarray(template))
+                continue
             value = stored[name]
             if name == ".variables":
                 value = registry.migrate(value, names, maps.get("variables"), dropped.get("variables", ()))

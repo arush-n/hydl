@@ -3,7 +3,9 @@ tick the state layer (``state/layer.py``) builds the agent's tokens, the trunk r
 memory, and each skill module reads the result; a request's entity handle points at the entity token row that holds it,
 perceived or remembered. The v1 path is unchanged (``model/freezing.py`` ``encode_contexts``, ``VerbBody``).
 
-- :func:`tick`: the state layer, then the trunk once (the latent memory carried, and reset where a lane starts over).
+- :func:`tick`: the state layer, then the trunk once: the latent memory and the background summary carried (reset where
+  a lane starts over), and each important thing's object latent read from its store slot and written back
+  (``docs/VIRTUAL_HUMAN.md`` section 18).
 - :func:`entity_rows` and :func:`point`: the v3 resolver, an entity handle to the token row that holds it, inside the
   jitted tick (``contract/references.py`` resolves v1 token records, and stays free of JAX).
 - :func:`module_factors`: a skill module's action for every agent: the masked argmax on its scope's heads, neutral
@@ -23,7 +25,12 @@ import jax.numpy as jnp
 import numpy as np
 
 from experimental.neural_agent.skill_agent.contract.surface import SCOPE_NAMES, head_layout, scope_of
-from experimental.neural_agent.skill_agent.model.encoder import EncoderOutput, apply_encoder, initial_memory
+from experimental.neural_agent.skill_agent.model.encoder import (
+    EncoderOutput,
+    apply_encoder,
+    initial_background,
+    initial_memory,
+)
 from experimental.neural_agent.skill_agent.model.generalist import ARG_GROUPS, GeneralistRequests
 from experimental.neural_agent.skill_agent.model.skill_module import SkillModule, Trunk, check_trunk, module_outputs
 from experimental.neural_agent.skill_agent.runtime.combiner import AgentContext, BodyStep
@@ -42,20 +49,50 @@ class StateView(NamedTuple):
 def tick(trunk: Trunk, state: layer.AgentState, observation: Any, *, last_action: jax.Array,
          reset: jax.Array | None = None, **step: Any) -> tuple[StateView, layer.AgentState]:
     """One tick for B agents: ``layer.step`` (``step`` takes its keyword arguments: ``tags``, ``capacities`` and the
-    senses' inputs), then the trunk on its tokens. A lane that ``reset`` starts its latent memory from the trunk's
-    initial slots."""
+    senses' inputs), then the trunk on its tokens. A lane that ``reset`` starts its latent memory and its background
+    summary from the trunk's initial slots (its stores, object latents included, start empty in ``layer.step``)."""
 
     tokens, state = layer.step(observation, state, last_action=last_action, reset=reset, **step)
-    latent = state.latent
-    if trunk.config.memory_slots:
-        initial = initial_memory(trunk.params, trunk.config, state.entity_ids.shape[0])
-        if latent is None:
-            latent = initial
-        elif reset is not None:
-            latent = jnp.where(reset[:, None, None], initial, latent)
-    encoded = apply_encoder(trunk.params, tokens, trunk.config, memory=latent)
+    batch = state.entity_ids.shape[0]
+    latent = _carried(state.latent, initial_memory(trunk.params, trunk.config, batch), reset)
+    background = _carried(state.background, initial_background(trunk.params, trunk.config, batch), reset)
+    stores = {"entity": state.memory.entity, "block_candidate": state.memory.block}
+    objects = {name: _gather(stores[name].latent, state.object_slots[name]) for name in trunk.config.object_types}
+    encoded = apply_encoder(trunk.params, tokens, trunk.config, memory=latent, background=background,
+                            objects=objects or None)
+    memory = state.memory
+    if trunk.config.object_types:  # each row's next latent goes back to its thing's slot
+        written = {name: stores[name]._replace(latent=_scatter(stores[name].latent, state.object_slots[name],
+                                                               encoded.objects[name]))
+                   for name in trunk.config.object_types}
+        memory = memory._replace(entity=written.get("entity", memory.entity),
+                                 block=written.get("block_candidate", memory.block))
     view = StateView(encoded, {name: valid for name, (_, valid) in tokens.items()}, state.entity_ids)
-    return view, state._replace(latent=encoded.memory)
+    return view, state._replace(latent=encoded.memory, background=encoded.background, memory=memory)
+
+
+def _carried(held: jax.Array | None, initial: jax.Array | None, reset: jax.Array | None) -> jax.Array | None:
+    if initial is None:
+        return None
+    if held is None:
+        return initial
+    return held if reset is None else jnp.where(reset[:, None, None], initial, held)
+
+
+def _gather(latents: jax.Array, slots: jax.Array) -> jax.Array:
+    """float32[B, N, W]: each row's object latent from its store slot int32[B, N] (zeros for -1)."""
+
+    rows = jnp.take_along_axis(latents, jnp.maximum(slots, 0)[..., None], axis=1)
+    return jnp.where((slots >= 0)[..., None], rows, 0.0)
+
+
+def _scatter(latents: jax.Array, slots: jax.Array, rows: jax.Array) -> jax.Array:
+    """``latents`` float32[B, C, W] with each row's value written to its slot (a slot holds at most one row)."""
+
+    to_slot = slots[..., None] == jnp.arange(latents.shape[1])[None, None, :]  # [B, N, C]
+    hit = to_slot.any(axis=1)
+    source = jnp.argmax(to_slot, axis=1)  # [B, C]
+    return jnp.where(hit[..., None], jnp.take_along_axis(rows, source[..., None], axis=1), latents)
 
 
 def entity_rows(handles: jax.Array, row_ids: jax.Array) -> jax.Array:

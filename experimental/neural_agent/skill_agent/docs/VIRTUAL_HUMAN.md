@@ -557,7 +557,7 @@ approach. Missing:
 | 0 | DONE 2026-10-21, ea4bc63: the v3 encoder, `../state/` and this plan, under the package's two-pass gate (no new failure by name; the 37 v3 tests pass; the stand-in pass 30 of 30 in the shared tree) | 7 |
 | 1 | DONE 2026-10-21, 61fc40e: the variable registry (`contract/variables.py`: 24 self and 8 inner variables, agent-side only), queries and state migration by name (`state/registry.py`), trunk migration by feature name (`model/migrate.py`), the layout and its fingerprint saved with every trunk and state; the trait list (15.6) and the persona token's shape (15.1, 10 body-read traits), moved here from step 7. Gate: no new failure by name; 8 new tests | 10.1, 10.2, 14, 15.1, 15.6 |
 | 1b | DONE 2026-10-22: the body's path on v3: the generalist reads every token type; every entity row carries its id; the runtime ticks the state layer (`runtime/state_tick.py`); a request points at a perceived or remembered entity; request to action tested. The trainers stay on v1 until training resumes | 13 (this section) |
-| 1c | APPROVED 2026-10-22, after 1b: the memory design: a parallel, budgeted write; object files for important things (one latent slot each); a gist of 16 latent slots plus a cache of about 32 nearby cells for the background | 18 |
+| 1c | DONE 2026-10-22: the memory design: a parallel write; object files for entities and block candidates (one latent each, keyed by identity); a gist of 16 latent slots plus a cache of 32 remembered cells for the background; the tick a quarter to a third faster on real rows (18.4) | 18 |
 | 2 | Structured writes from the top two layers; the tags move onto them | 10.4 |
 | 3 | Fixed rules on game time: alarm and startle, sleep pressure and fatigue, hunger and the other drives; then lifecycle under normal death, and provenance | 10.5, 10.7, 10.8, 16.1, 16.2, 16.5 |
 | 4 | The event log and its tokens; the activity counters and levels | 10.6, 11.1, 16.6 |
@@ -1143,7 +1143,7 @@ zero with `known` 0.
 - Judged distance follows the compression.
 - Nothing privileged reaches the token: the source's id only when the source is seen.
 
-## 18. Memory: fast writes, and important things kept apart from the background (APPROVED 2026-10-22 with 18.3's recommendations; built after step 1b)
+## 18. Memory: fast writes, and important things kept apart from the background (APPROVED 2026-10-22 with 18.3's recommendations; BUILT 2026-10-22, 18.4)
 
 The owner, 2026-10-21: "the goal is that the latent memory is quick retrieval and efficient not slow, the issue is that
 during fast throughput areas it is slower. one thing to note is that we need to store entities and important things
@@ -1163,9 +1163,12 @@ Synthetic rows, jitted, load 7 to 8; milliseconds per tick for all lanes togethe
 | 64 | 84, 88 | 11.2 | 0.8 | |
 | 64 | 336, 88 | 31.0 | 2.3 | |
 
-- **The owner's observation holds, and its cause is the write.** Writing the stores costs in proportion to how much is
-  seen a tick, so a busy place costs more: twice the rows, twice the time. It grows with the store's size too, and at
-  batch 64 it outgrows the trunk.
+- **The write was the slow part of the stores, but not because a place is busy** (corrected 2026-10-22 by the real
+  measurement in 18.4). The write's cost grows with the rows a tick *can* carry (the capacity) and the store's size, not
+  with how many are actually seen: every shape is fixed, so a full tick and an empty one cost the same. On real Region
+  rows (15.6 of 44 terrain rows valid) the old write cost about what synthetic rows with all 44 valid cost (batch 8:
+  1.16 and 1.48 ms, one process). The "88 rows" lines above are a larger capacity, not a busier place. At batch 64
+  with 336 slots it outgrows the trunk.
 - **The latent memory itself is cheap:** 8 to 32 slots add 0.3 to 1.1 ms. Reading the stores is cheap.
 - **Why the write is slow:** `state/memory.py` writes this tick's rows one at a time (a serial `lax.scan`), and every
   step copies the whole store. Every store goes through it, and terrain dominates: 44 cells a tick into 84 slots of
@@ -1208,9 +1211,11 @@ high-level processes (Hughes, Chang and Carlone, RSS 2022).
   more new things arrive than there is room for, the most important win (tagged, then salience, then nearness),
   never a pinned slot.
 - **Retrieval is fixed-size.** The trunk reads the important rows and their slots, the background slots and this
-  tick's rows: about 280 tokens instead of 348. A busy place no longer changes the cost.
+  tick's rows: about 280 tokens instead of 348 (as built, 312: 18.4). A busy place never changed the cost; the
+  capacity does (18.1, corrected).
 
-**Expected** (inferred from the measured parts, not yet measured whole): at batch 8 in a busy place, the stores' write
+**Expected** (inferred from the synthetic parts before building; 18.4 has the whole tick measured on real rows: batch
+8, 6.2 to 3.9-4.7 ms; batch 64, 21.6-22.2 to 15.2-15.8 ms): at batch 8 in a busy place, the stores' write
 plus the trunk from about 7.6 ms to about 3.5 ms; at batch 64, from about 31 ms to about 18 ms.
 
 **What it costs.** The background slots and the object slots are learned. Until the trunk is trained (with N1's
@@ -1227,6 +1232,70 @@ explicit important tier works from the first tick.
    shared pool written by priority, where things can interfere.
 4. **The background's rate.** Recommended: every tick (the cross-attention is cheap). The alternative is every few
    ticks, or only when the agent has moved.
+
+### 18.4 Built: step 1c (DONE 2026-10-22), measured on real rows
+
+What was built, with the recommendations of 18.3:
+
+- **The parallel write** (`state/memory.py` `_upsert`). One pass: every candidate is matched to the stored slots at
+  once, the free or least important unpinned slots are ranked once, and the rows are written together. When there is
+  room for every new candidate it equals the serial write slot for slot (tested against it). When candidates compete:
+  a later twin of the same key wins, as before; a slot refreshed this tick or pinned by a tag is never taken; with
+  more new candidates than room, the most salient are written. Nearness is not used (18.2 had proposed it third).
+- **The background** (decision 1). 16 latent summary slots (`model/encoder.py` `background_slots`) read only this
+  tick's terrain tokens through one cross-attention, blend into what they held by a gate, and are carried from tick
+  to tick (`AgentState.background`). The remembered terrain cache is cut from 84 cells to 32 (the geometry type is
+  now 44 perceived plus 32 remembered rows). The trunk reads 312 tokens an agent instead of 348.
+- **Object files** (decisions 2 and 3). Every stored entity and block candidate has its own latent (`Store.latent`),
+  keyed by its identity (entity id, block cell). The trunk adds a read of that latent to the thing's token and
+  returns its next latent, which `runtime/state_tick.py` writes back to the thing's slot. A new thing starts at zero;
+  a refreshed one keeps its own; a reset lane starts empty. The read starts at zero, so an untrained trunk is
+  unchanged by it. Projectiles and hazards are not stored.
+- **The rate** (decision 4): the background updates every tick.
+- **Saves**: a save from before step 1c loads, with the new parts at their starting values (section 14, rule 4).
+
+**Measured** (Region, gen 7 with the perception channel, 30 recorded ticks played 10 times, jitted; median ms for all
+lanes together; each side run from its own worktree, 88a2404 before and c3fc181 with step 1c after; two runs each,
+load 6 to 10; scratch `tick_breakdown.py`):
+
+| Batch | | Write the stores | State layer | Trunk | Whole tick |
+|---|---|---|---|---|---|
+| 8 | before (step 1b) | 1.47, 1.20 | 1.95, 1.57 | 4.03, 3.43 | 6.22, 6.15 |
+| 8 | after (step 1c) | 0.24, 0.15 | 0.70, 0.76 | 3.93, 3.32 | 4.68, 3.94 |
+| 64 | before | 4.38, 4.19 | 5.91, 5.25 | 15.97, 15.68 | 22.15, 21.61 |
+| 64 | after | 0.55, 0.52 | 1.99, 1.73 | 13.66, 13.11 | 15.75, 15.23 |
+
+The write alone, old and new loaded in one process on the same rows (scratch `write_compare.py`), median ms:
+
+| Batch | Write, terrain slots | Real rows | Synthetic rows of the same shape |
+|---|---|---|---|
+| 8 | serial, 84 (step 1b) | 1.16 | 1.48 |
+| 8 | parallel, 32 (step 1c) | 0.16 | 0.15 |
+| 64 | serial, 84 | 4.37 | 6.06 |
+| 64 | parallel, 32 | 0.54 | 0.54 |
+
+- **The tick is a quarter to a third faster:** batch 8, 6.2 to 3.9-4.7 ms; batch 64, 21.6-22.2 to 15.2-15.8 ms. The
+  write is 6 to 8 times faster and the state layer 2 to 3 times. The trunk is the same at batch 8 and 15% less at
+  batch 64: it reads 36 fewer tokens but adds the background's cross-attention.
+- **E8** (PERCEPTION.md): the whole tick at batch 8 is p50 3.65, p95 4.42 ms (gate: p95 at most 15 ms).
+- **The trunk is now the cost:** about 85% of the tick at batch 64. Making it cheaper is the next lever (caching the
+  slow tokens, a slower trunk rate: PERCEPTION.md E8).
+- **A first timing was wrong and is withdrawn.** It ran the "before" side from the main tree, whose code Python
+  imported ahead of the worktree's, so both sides were step 1c and showed no difference. Each result now names the
+  memory file it loaded.
+
+**Open**:
+
+- The background slots and the object reads are untrained. They carry nothing useful until the trunk is trained
+  (N1's auxiliary loss); the explicit stores work from the first tick.
+- Block candidates' object slots do not engage on the Region world yet: the 0.7.2 Region library keeps no block
+  identity, so it gives no block candidates (0 rows in these runs). Making them needs a live capture of the 20 seeds;
+  that is the owner's call (coordinator, `HytaleRL/hytalegym/tools/worldgen/README.md`, "Block-semantic sidecar").
+- The terrain the gist reads is short: the world-geometry row is fail-closed at 44 tokens, which traversal and
+  exception tokens share, and on the Region world 98 of 200 in-core positions clear the whole row (a capacity of 128
+  recovers 94). Changing it changes the token contract: the owner's call (same README, "World geometry tokens").
+- What the owner saw as slower "during fast throughput areas" is not yet pinned down: in this pipeline every shape is
+  fixed, so a busy place does not change the cost (18.1, corrected).
 
 ## Sources
 

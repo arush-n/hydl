@@ -73,7 +73,9 @@ _ANGLES = {"entity": (("yaw_sin", "yaw_cos"),)}
 
 class Store(NamedTuple):
     """One store, per agent and slot: the key (a world position; an entity id, or -1), the row as last perceived, the
-    tick it was last perceived, whether the slot holds anything, its middle-layer tag and its salience."""
+    tick it was last perceived, whether the slot holds anything, its middle-layer tag, its salience, and the thing's
+    own latent in the trunk (its object slot, ``docs/VIRTUAL_HUMAN.md`` section 18: kept while the slot holds the same
+    thing, zero for a new one; width 0 without object slots)."""
 
     world: jax.Array  # float32[B, C, 3]
     key_id: jax.Array  # int32[B, C]
@@ -82,6 +84,7 @@ class Store(NamedTuple):
     valid: jax.Array  # bool[B, C]
     tag: jax.Array  # float32[B, C]
     salience: jax.Array  # float32[B, C]
+    latent: jax.Array  # float32[B, C, L]
 
 
 class SpatialMemory(NamedTuple):
@@ -103,20 +106,23 @@ class Tags(NamedTuple):
     priority: jax.Array  # float32[B, K]
 
 
-def _empty_store(batch: int, slots: int, type_name: str) -> Store:
+def _empty_store(batch: int, slots: int, type_name: str, latent_width: int = 0) -> Store:
     width = len(v3.TOKEN_TYPES_V3[type_name].FEATURES)
     return Store(jnp.zeros((batch, slots, 3), jnp.float32), jnp.full((batch, slots), -1, jnp.int32),
                  jnp.zeros((batch, slots, width), jnp.float32), jnp.zeros((batch, slots), jnp.int32),
                  jnp.zeros((batch, slots), jnp.bool_), jnp.zeros((batch, slots), jnp.float32),
-                 jnp.zeros((batch, slots), jnp.float32))
+                 jnp.zeros((batch, slots), jnp.float32), jnp.zeros((batch, slots, latent_width), jnp.float32))
 
 
 def initial_memory(batch: int, *, geometry_slots: int = GEOMETRY_SLOTS, entity_slots: int = ENTITY_SLOTS,
-                   block_slots: int = BLOCK_SLOTS) -> SpatialMemory:
-    """Empty stores at an episode's start."""
+                   block_slots: int = BLOCK_SLOTS, latent_width: int = 0) -> SpatialMemory:
+    """Empty stores at an episode's start. ``latent_width``: the trunk's width when it keeps object slots
+    (``EncoderConfig.object_types``), else 0; the important stores (entities and blocks) hold one latent a slot, the
+    spatial map none."""
 
     return SpatialMemory(jnp.zeros((batch,), jnp.int32), _empty_store(batch, geometry_slots, "geometry"),
-                         _empty_store(batch, entity_slots, "entity"), _empty_store(batch, block_slots, "block_candidate"))
+                         _empty_store(batch, entity_slots, "entity", latent_width),
+                         _empty_store(batch, block_slots, "block_candidate", latent_width))
 
 
 def no_tags(batch: int, slots: int = 1) -> Tags:
@@ -127,26 +133,53 @@ def no_tags(batch: int, slots: int = 1) -> Tags:
 
 
 def _upsert(store: Store, rows, valid, world, key_id, salience, now, by_id: bool) -> Store:
-    """Write N candidate rows into one agent's store (vmapped over agents): a candidate whose key is stored refreshes
-    that slot; a new one takes a free slot, else the least important unpinned one (salience, then age)."""
+    """Write N candidate rows into one agent's store (vmapped over agents) in one parallel pass (2026-10-22,
+    ``docs/VIRTUAL_HUMAN.md`` section 18.4: the serial write's cost grew with the rows a tick can carry and the store's
+    size, not with how many are seen; on real Region rows this one is 6 to 8 times faster).
 
-    def write(slots: Store, candidate):
-        row, ok, position, ident, weight = candidate
-        if by_id:
-            same = slots.valid & (slots.key_id == ident)
-        else:
-            same = slots.valid & jnp.all(jnp.abs(slots.world - position) < SAME_CELL_BLOCKS, axis=-1)
-        known = same.any()
-        score = jnp.where(~slots.valid, _FREE,
-                          jnp.where(slots.tag > 0, _PINNED, slots.salience * HORIZON_TICKS - (now - slots.tick)))
-        slot = jnp.where(known, jnp.argmax(same), jnp.argmin(score))
-        keep_tag = jnp.where(known, slots.tag[slot], 0.0)
-        updated = Store(slots.world.at[slot].set(position), slots.key_id.at[slot].set(ident),
-                        slots.rows.at[slot].set(row), slots.tick.at[slot].set(now), slots.valid.at[slot].set(True),
-                        slots.tag.at[slot].set(keep_tag), slots.salience.at[slot].set(weight))
-        return jax.tree_util.tree_map(lambda new, old: jnp.where(ok, new, old), updated, slots), None
+    A candidate whose key is stored refreshes that slot. New candidates take the free slots first, then the least
+    important unpinned ones (salience, then age), the most salient candidate first. When candidates compete:
+    - two with the same key this tick: the later one is written (as the serial write left it);
+    - a slot refreshed this tick, or pinned by a tag, is never taken;
+    - more new candidates than slots: the least salient are not written.
+    With room for every new candidate, the result is the serial write's, slot for slot."""
 
-    return jax.lax.scan(write, store, (rows, valid, world, key_id, salience))[0]
+    capacity = store.valid.shape[0]
+    if by_id:
+        same = store.valid[None, :] & (store.key_id[None, :] == key_id[:, None])
+        twin = key_id[:, None] == key_id[None, :]
+    else:
+        same = store.valid[None, :] & jnp.all(jnp.abs(store.world[None, :, :] - world[:, None, :]) < SAME_CELL_BLOCKS,
+                                              axis=-1)
+        twin = jnp.all(jnp.abs(world[:, None, :] - world[None, :, :]) < SAME_CELL_BLOCKS, axis=-1)
+    superseded = jnp.any(jnp.triu(twin & valid[None, :], k=1), axis=1)  # a later candidate has the same key
+    live = valid & ~superseded
+    known = live & same.any(axis=1)
+    fresh = live & ~known
+    refreshed = jnp.any(same & known[:, None], axis=0)
+    score = jnp.where(~store.valid, _FREE, jnp.where(store.tag > 0, _PINNED,
+                                                     store.salience * HORIZON_TICKS - (now - store.tick)))
+    score = jnp.where(refreshed, _PINNED, score)
+    slots = jnp.argsort(score, stable=True)  # the slots new candidates take, in order
+    room = jnp.sum(score < _PINNED)
+    by_importance = jnp.argsort(jnp.where(fresh, -salience, jnp.inf), stable=True)
+    importance = jnp.zeros(valid.shape, jnp.int32).at[by_importance].set(jnp.arange(valid.shape[0], dtype=jnp.int32))
+    placed = fresh & (importance < room)  # without room for all, the most salient
+    rank = jnp.cumsum(placed) - 1  # placed candidates take the slots in their own order
+    take = slots[jnp.clip(rank, 0, capacity - 1)]
+    target = jnp.where(known, jnp.argmax(same, axis=1), jnp.where(placed, take, -1))
+    write = target[:, None] == jnp.arange(capacity)[None, :]  # [N, C]: candidate -> slot, one at most each
+    hit = write.any(axis=0)
+    source = jnp.argmax(write, axis=0)  # the candidate each written slot takes
+
+    def put(new, old):
+        return jnp.where(hit.reshape((-1,) + (1,) * (old.ndim - 1)), new[source], old)
+
+    keep_tag = jnp.where(refreshed, store.tag, 0.0)
+    new_thing = hit & ~refreshed  # its object latent starts at zero; a refreshed thing keeps its own
+    return Store(put(world, store.world), put(key_id, store.key_id), put(rows, store.rows),
+                 jnp.where(hit, now, store.tick), store.valid | hit, jnp.where(hit, keep_tag, store.tag),
+                 put(salience, store.salience), jnp.where(new_thing[:, None], 0.0, store.latent))
 
 
 def _world_of(rows: jax.Array, pose: Pose) -> jax.Array:
@@ -193,7 +226,8 @@ def update(memory: SpatialMemory, perceived: Perceived, tags: Tags | None = None
     batch = memory.now.shape[0]
     if reset is not None:
         fresh = initial_memory(batch, geometry_slots=memory.geometry.valid.shape[1],
-                               entity_slots=memory.entity.valid.shape[1], block_slots=memory.block.valid.shape[1])
+                               entity_slots=memory.entity.valid.shape[1], block_slots=memory.block.valid.shape[1],
+                               latent_width=memory.entity.latent.shape[-1])
         memory = jax.tree_util.tree_map(
             lambda new, old: jnp.where(reset.reshape((batch,) + (1,) * (old.ndim - 1)), new, old), fresh, memory)
     now = memory.now + 1
@@ -239,6 +273,26 @@ def _salience(store: str, rows: jax.Array) -> jax.Array:
     return jnp.zeros(rows.shape[:2], jnp.float32)
 
 
+def object_slots(memory: SpatialMemory, tokens: dict, entity_ids: jax.Array, pose: Pose) -> dict[str, jax.Array]:
+    """Each important token row's slot in its store, where its object latent lives (``docs/VIRTUAL_HUMAN.md`` section
+    18): entity rows by id (``entity_ids`` int32[B, E], aligned with them), block-candidate rows by cell, perceived or
+    remembered; -1 for a row the stores do not hold (and every row without the agent's position)."""
+
+    store = memory.entity
+    match = (store.valid[:, None, :] & (store.key_id[:, None, :] == entity_ids[:, :, None])
+             & (entity_ids[:, :, None] >= 0))
+    out = {"entity": jnp.where(match.any(axis=-1), jnp.argmax(match, axis=-1), -1).astype(jnp.int32)}
+    rows, valid = tokens["block_candidate"]
+    if pose.position is None:
+        out["block_candidate"] = jnp.full(valid.shape, -1, jnp.int32)
+        return out
+    world, block = _world_of(rows, pose), memory.block
+    match = valid[:, :, None] & block.valid[:, None, :] & jnp.all(
+        jnp.abs(block.world[:, None, :, :] - world[:, :, None, :]) < SAME_CELL_BLOCKS, axis=-1)
+    out["block_candidate"] = jnp.where(match.any(axis=-1), jnp.argmax(match, axis=-1), -1).astype(jnp.int32)
+    return out
+
+
 def read(memory: SpatialMemory, pose: Pose) -> Remembered | None:
     """Every stored row not perceived this tick, in the current body frame (module docstring); None without the
     agent's position."""
@@ -264,4 +318,5 @@ def read(memory: SpatialMemory, pose: Pose) -> Remembered | None:
 
 
 __all__ = ["BLOCK_SLOTS", "ENTITY_SLOTS", "GEOMETRY_SLOTS", "HORIZON_TICKS", "SAME_CELL_BLOCKS", "SpatialMemory",
+           "object_slots",
            "Store", "Tags", "initial_memory", "no_tags", "read", "update"]

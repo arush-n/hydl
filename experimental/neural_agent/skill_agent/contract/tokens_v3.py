@@ -250,12 +250,13 @@ TRUNK_TYPE_NAMES_V3: tuple[str, ...] = tuple(TOKEN_TYPES_V3)
 
 CAPACITIES_V3: Mapping[str, int] = {
     "self": 1, "act": len(ActTokenV3.HEADS), "kit": ABILITY_SLOTS, "status": 8, "entity": 16, "projectile": 16,
-    "hazard": 8, "geometry": 44 + 84, "block_candidate": 16 + 16, "inventory_slot": 76, "recipe": 16,
+    "hazard": 8, "geometry": 44 + 32, "block_candidate": 16 + 16, "inventory_slot": 76, "recipe": 16,
     "persona": 1, "affect": 1,
 }
 """Default capacities. Geometry and block candidates hold this tick's (44 and 16, the gym's) plus remembered ones
-(84 and 16); entities hold perceived and remembered together. A capacity is a configuration: the trunk's parameters
-never depend on it."""
+(32 and 16; the remembered terrain was 84 cells until 2026-10-22, when the background became a cache of nearby cells
+beside the trunk's summary slots, ``docs/VIRTUAL_HUMAN.md`` section 18); entities hold perceived and remembered
+together. A capacity is a configuration: the trunk's parameters never depend on it."""
 
 assert RESOURCE_COUNT == len(RESOURCES)
 assert all(cls.FEATURES[-1] == "marked" for cls in TOKEN_TYPES_V3.values())
