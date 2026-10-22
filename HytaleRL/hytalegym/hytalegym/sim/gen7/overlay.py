@@ -479,9 +479,12 @@ PATCHES = (
           "                & guard_rules.can_start[:, AGENT_ENTITY]\n"
           "            )\n",
           "                & guard_rules.can_start[:, AGENT_ENTITY]\n"
-          "                # Gen 7 (row 5d): a new guard claim is off the policy mask while the re-entry countdown runs; an\n"
-          "                # active or held guard is unaffected.\n"
-          "                & (state.mechanics.guard_reentry_seconds[:, AGENT_ENTITY] <= 0)\n"
+          "                # Gen 7 (row 5d): a new guard claim is off the policy mask while the re-entry countdown runs; a\n"
+          "                # guard already held (active or not yet active) stays on it.\n"
+          "                & (\n"
+          "                    state.mechanics.guard_held[:, AGENT_ENTITY]\n"
+          "                    | (state.mechanics.guard_reentry_seconds[:, AGENT_ENTITY] <= 0)\n"
+          "                )\n"
           "            )\n",
           "5d", "section (af) guard reopen receipts (24 runs) and tests/sim/test_timing_constructs.py",
           "the guard-on choice reopens on the tick the countdown reaches zero (gen 5 keeps the countdown at zero, so the term is always true)"),
