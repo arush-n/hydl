@@ -1,5 +1,5 @@
 {
- "head": "ebdae2c0932365a1eeefaf7e139921c2509ea2ec",
+ "head": "04c3b18e483f9fffae34a4bc66aaed79a2d792a4",
  "redirect_count": 90,
  "redirects": [
   {
@@ -4378,7 +4378,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 735,
+    "head_line": 736,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
@@ -4387,7 +4387,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 1129,
+    "head_line": 1130,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
@@ -4396,7 +4396,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 1349,
+    "head_line": 1350,
     "kind": "timing_key",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
@@ -4405,7 +4405,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 1349,
+    "head_line": 1350,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
@@ -4414,7 +4414,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 1416,
+    "head_line": 1417,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
@@ -4423,7 +4423,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 1416,
+    "head_line": 1417,
     "kind": "timing_key",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
