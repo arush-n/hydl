@@ -125,7 +125,7 @@ Scope as of 2026-10-18, from a read-only pass over the tracked code. It covers t
   pin is an owner decision; the lane's candidate patch is `suite_drift/proposed.patch`). Pins: `tests/jax/test_region_public_benchmark.py:131-142`,
   `evaluation/_artifact.py` (`FROZEN_REGION_SUITE_SHA256_BY_ID`), `docs/jax/arsenal-benchmark.md:221-222`.
 - Resolved 2026-10-19 (owner's call: per-line v7). The three 0.5.7 identities are now inputs of the line table `ARSENAL_REGION_V7_LINES`; v1 to v6 keep them as defaults, and their suite dicts are unchanged (JSON compared before and after the change).
-- Region v7 (0.7.2 line), frozen 2026-10-19, re-frozen the same night after the bridge batch dbd30f2 (pin 6F5B6021) and again after the host-contract batch b682e33 (pin 6EB44F30, run 8) and after the fixture-aim, augment-readout and request-tick batches (pin 1CB4F651, run 10 on 2026-10-20; the bridge pin enters the content twice, through the arsenal contract and through the promoted traversal manifest's `native_evidence_jar_sha256`, so every 0.7.2 bridge rebuild and every promotion re-freezes this value): `hytalerl_arsenal_region_v7` for `certified_version == "0.7.2"` is `703ED690804021C2977394BA6C346F3AC3CDA0A446ECE7FDD812CB34649827A5`.
+- Region v7 (0.7.2 line), frozen 2026-10-19, re-frozen the same night after the bridge batch dbd30f2 (pin 6F5B6021) and again after the host-contract batch b682e33 (pin 6EB44F30, run 8) and after the fixture-aim, augment-readout and request-tick batches (pin 1CB4F651, run 10 on 2026-10-20) and after the gait batch 3024fde (pin 6DFD8682, run 11 on 2026-10-21; the bridge pin enters the content twice, through the arsenal contract and through the promoted traversal manifest's `native_evidence_jar_sha256`, so every 0.7.2 bridge rebuild and every promotion re-freezes this value): `hytalerl_arsenal_region_v7` for `certified_version == "0.7.2"` is `CFB529B84C4A465619D2917FEB23D72F19466A53A1596E1BC2D4D647AE2D341F`.
   - Inputs: Region library `9DCA3C71D43A2C3BF4BE6AFF6E2BD24D2F6608C8BE01D1687A0B259F06DAAB95` (profile `region_library_sha256`; library manifest); traversal library `CC613B1202C44A2C351EAEA6027E057A4E844676B7DC361BCDD070CAE2A38C4C` (`region-library-pilot-v2-072/traversal-v2`, 20 graphs); capture bridge `460054A8E7508FE5E205AD527AFB08474B61626EE5C2212FC2A484ECFCCAD88D` (the library's capture contract, `capture_evidence_bridge_sha256` in the line table); the promoted traversal manifest's native evidence bridge (`native_evidence_jar_sha256`, today `6EB44F30`); the arsenal contract, which carries the current bridge pin (today `6EB44F30`).
   - Held-out worlds (`FROZEN_REGION_WORLDS_0_7_2`), by evaluation order: 0 slot 3 seed 1921897808; 1 slot 2 seed 1397671741; 2 slot 1 seed 1176664667; 3 slot 0 seed 1274646439. Each record carries the library's stored semantic digest, the traversal graph digest and the spawn edge, chosen by the same selection code as v6 (`_select_world_edge`, now taking the world table). The 0.5.7 order (slots 1, 3, 0, 2) does not apply to this library.
   - Fresh-capture drift is irrelevant to loading the frozen library. The identity is the library's stored NPZs and graphs; the held-out digests are one capture's complete digests (`artifacts/worldgen/region-library-pilot-v2-072/STATUS.md`), and a fresh capture need not reproduce them. Loading checks the stored artifacts, not a live capture.
@@ -184,7 +184,8 @@ Current state:
 - 0.5.7: compare mode, unchanged. All four references exist, so the run is the same as before. The cascade output is byte-identical before and after the change. The real 0.5 dry run stops at the bridge-identity check, because no 0.5 bridge build exists on this machine (see "Dry runs").
 - 0.7.2: compare mode since 2026-10-19 19:45; re-promoted at 21:43 for the rebuilt bridge `6F5B6021`, at 23:38 for `6EB44F30`
   (the host-contract batch b682e33) and at 02:02 on 2026-10-20 for `1CB4F651` (the fixture-aim, augment-readout and request-tick
-  batches; receipt `world-evidence-history/1CB4F651/publication-v12.json`; each earlier bridge's evidence is under
+  batches; receipt `world-evidence-history/1CB4F651/publication-v12.json`) and at 19:00 on 2026-10-21 for `6DFD8682` (the gait
+  batch 3024fde; receipt `world-evidence-history/6DFD8682/publication-v12.json`; each earlier bridge's evidence is under
   `world-evidence-history/<that bridge8>/superseded/`). The first
   capture (live run 4, 19:26 to 19:42) passed end to end and was promoted
   with `promote_world_evidence.py` (receipt `world-evidence-history/460054A8/publication-v12.json`, 62 files: 14 fixtures under
@@ -399,6 +400,12 @@ First capture adds the capacity benchmark (measured 2026-10-19 on the 0.7.2 libr
   transport certified). Promoted at 02:02 with `--apply --supersede`: 34 checks passed, the 14 destinations of the 6EB44F30
   promotion moved into `world-evidence-history/6EB44F30/superseded/`, 59 files written, receipt
   `world-evidence-history/1CB4F651/publication-v12.json`. v7 re-frozen after it (`703ED690`).
+- Run 11 (18:41 to 19:00 on 2026-10-21, the bridge `6DFD8682` of the gait batch 3024fde, 1-minute load 4.6 at launch): passed
+  end to end (`WORLD_EVIDENCE_RECERTIFICATION_PASS published=false`; capture differential, traversal replay, mutable block,
+  explosions, drop program, crafting catalog, item interaction, block use and world-action capabilities all PASS). Promoted with
+  `--apply --supersede`: 36 checks passed, the 14 destinations of the 1CB4F651 promotion moved into
+  `world-evidence-history/1CB4F651/superseded/`, 60 files written, receipt `world-evidence-history/6DFD8682/publication-v12.json`.
+  v7 re-frozen after it (`CFB529B8`).
 
 ### Blockers and what changed
 
