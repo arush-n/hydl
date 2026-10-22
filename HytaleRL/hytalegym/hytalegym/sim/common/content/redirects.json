@@ -1,5 +1,5 @@
 {
- "head": "0eee27de941d5f20e505391ca23171035a60fa42",
+ "head": "d7d290c711a3b95474c6f589058539d9d835b231",
  "redirect_count": 90,
  "redirects": [
   {
@@ -4378,7 +4378,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 654,
+    "head_line": 735,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
@@ -4387,7 +4387,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 1038,
+    "head_line": 1129,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
@@ -4396,7 +4396,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 1258,
+    "head_line": 1349,
     "kind": "timing_key",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
@@ -4405,7 +4405,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 1258,
+    "head_line": 1349,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
@@ -4414,7 +4414,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 1325,
+    "head_line": 1416,
     "kind": "delta_field",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
@@ -4423,7 +4423,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 1325,
+    "head_line": 1416,
     "kind": "timing_key",
     "module": "HytaleRL/hytalegym/hytalegym/worldgen/native_npc_traces.py",
     "scope": "engine",
@@ -4594,7 +4594,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 272,
+    "head_line": 274,
     "kind": "delta_field",
     "module": "arena/imitation/native.py",
     "scope": "consumer",
@@ -4603,7 +4603,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 899,
+    "head_line": 901,
     "kind": "delta_field",
     "module": "arena/imitation/native.py",
     "scope": "consumer",
@@ -4612,7 +4612,7 @@
     "token": "delta_seconds"
    },
    {
-    "head_line": 899,
+    "head_line": 901,
     "kind": "delta_field",
     "module": "arena/imitation/native.py",
     "scope": "consumer",
