@@ -184,7 +184,10 @@ list is OPEN.
   - coping: low control turns a threat into fear, high control into anger;
   - a three-axis mood (pleasure, arousal, dominance) with a baseline set by the persona;
   - feelings (hostility, fear, trust, anger) toward up to 16 entities;
-- **appraisal:** a threat is likelihood times cost; damage is taken as the drop in my own health (who hit me is S11);
+- **appraisal:** a threat is likelihood times cost; damage is taken as the drop in my own health, credited to a
+  visible hostile within 3.75 blocks in its sweep, else in its recovery (2026-10-21: the encoding audit found the
+  simulator's sword landing as the attacker enters recovery, from up to 3.48 blocks; `PERCEPTION.md` section 10.5),
+  else to no one (who hit me is S11);
 - **time constants [E]:** fear rises in 0.3 s and fades over 6 s; anger 12 s; startle 1.2 s; valence 8 s; coping
   2 s; mood 180 s; hostility 600 s; fear memory 900 s; trust 1,800 s;
 - **trait gains:** `exp(trait)`: negative emotionality for fear, startle and valence; negative emotionality and
@@ -193,12 +196,13 @@ list is OPEN.
   aggression's place (angry hostility is a facet of neuroticism in the NEO-PI-R; recalled), and the feelings decay at
   their own constants, no longer stretched by a retention trait.
 
-Its tests, `tests/experimental/neural_agent/test_sa_state_affect.py` (A1 to A7) and `test_sa_state_memory.py`, pass (45 v3,
-affect and registry tests with step 1's `test_sa_state_registry.py`):
+Its tests, `tests/experimental/neural_agent/test_sa_state_affect.py` (A1 to A7, A4b) and `test_sa_state_memory.py`, pass
+(46 v3, affect and registry tests with step 1's `test_sa_state_registry.py`):
 - A1 step response: fear follows its target at its rise constant and fades by 1/e in one decay constant.
 - A2: fear falls with distance and rises with the attack and with lower health.
 - A3: negative emotionality sets the fear gain.
-- A4: anger and hostility go to the attacker, not a bystander, and ride on its token.
+- A4: anger and hostility go to the attacker, not a bystander, and ride on its token. A4b: also when the hit lands
+  as the attacker enters recovery; one in its sweep outranks one in recovery.
 - A5: unseen damage frightens and startles more.
 - A6: the mood rests at the persona's baseline and moves with emotion.
 - A7: a population's traits correlate as specified.
@@ -551,7 +555,7 @@ approach. Missing:
 | Step | Work | Sections |
 |---|---|---|
 | 0 | DONE 2026-10-21, ea4bc63: the v3 encoder, `../state/` and this plan, under the package's two-pass gate (no new failure by name; the 37 v3 tests pass; the stand-in pass 30 of 30 in the shared tree) | 7 |
-| 1 | DONE 2026-10-21: the variable registry (`contract/variables.py`: 24 self and 8 inner variables, agent-side only), queries and state migration by name (`state/registry.py`), trunk migration by feature name (`model/migrate.py`), the layout and its fingerprint saved with every trunk and state; the trait list (15.6) and the persona token's shape (15.1, 10 body-read traits), moved here from step 7. Gate: no new failure by name; 8 new tests | 10.1, 10.2, 14, 15.1, 15.6 |
+| 1 | DONE 2026-10-21, 61fc40e: the variable registry (`contract/variables.py`: 24 self and 8 inner variables, agent-side only), queries and state migration by name (`state/registry.py`), trunk migration by feature name (`model/migrate.py`), the layout and its fingerprint saved with every trunk and state; the trait list (15.6) and the persona token's shape (15.1, 10 body-read traits), moved here from step 7. Gate: no new failure by name; 8 new tests | 10.1, 10.2, 14, 15.1, 15.6 |
 | 2 | Structured writes from the top two layers; the tags move onto them | 10.4 |
 | 3 | Fixed rules on game time: alarm and startle, sleep pressure and fatigue, hunger and the other drives; then lifecycle under normal death, and provenance | 10.5, 10.7, 10.8, 16.1, 16.2, 16.5 |
 | 4 | The event log and its tokens; the activity counters and levels | 10.6, 11.1, 16.6 |

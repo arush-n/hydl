@@ -21,8 +21,9 @@ threats combine as ``T = 1 - prod(1 - theta)``:
   cost; a hostile hazard: ``0.5 exp(-d / 2)``.
 
 Damage taken is my own health's drop (the simulator does not yet say who hit me or from where: S11). It is
-attributed to a visible hostile in its swing within reach, or else counts as unattributed (and, with no hostile in
-view at all, as unseen, which doubles fear and startles).
+attributed to a visible hostile within reach in its sweep, or else in its recovery (the simulator's sword lands as
+the attacker enters recovery, ``docs/PERCEPTION.md`` section 10.5), or else counts as unattributed (and, with no
+hostile in view at all, as unseen, which doubles fear and startles).
 
 **Dynamics** (leaky integrators, fixed shapes, no branches; ``lam(tau) = exp(-dt / tau)``)::
 
@@ -77,8 +78,11 @@ DAMAGE_GAIN: float = 4.0
 """Impulse per unit of my maximum health lost (a hit taking 10% gives an impulse of 0.4) [E]."""
 EXPECTED_HIT: float = 0.1
 """The cost of one expected hit, as a fraction of my maximum health [E]."""
-THREAT_REACH_BLOCKS: float = 3.0
-"""The reach an entity's attack is assumed to have (its own reach is not published) [E]."""
+THREAT_REACH_BLOCKS: float = 3.75
+"""The reach an entity's attack is assumed to have (its own reach is not published): the longest measured melee hit,
+the iron sword's and the mace's 3.75 blocks centre to centre (``runtime/scripted_bodies.py``, ``MELEE_REACH_BLOCKS``,
+measured 2026-10-20 on gen 5 and gen 7). It was an estimate of 3.0 until the encoding audit found sword hits landing
+from 3.48 blocks unattributed (``docs/PERCEPTION.md`` section 10.5)."""
 ON_COURSE_BLOCKS: float = 1.5
 """A projectile whose closest approach passes nearer than this is on course [E]."""
 MOOD_CONGRUENCE: float = 0.3
@@ -214,7 +218,9 @@ def update(affect: AffectState, perceived: Perceived, persona: jax.Array, reset:
     every = jnp.concatenate([entity_threat, projectile_threat, hazard_threat], axis=1)
     threat = 1.0 - jnp.prod(1.0 - jnp.clip(every, 0.0, 1.0), axis=1)
 
-    swinging = hostile * (entities[..., _E[f"phase_{ATTACK_PHASES[2]}"]] > 0.5) * (distance <= THREAT_REACH_BLOCKS)
+    sweep = (entities[..., _E[f"phase_{ATTACK_PHASES[2]}"]] > 0.5).astype(jnp.float32)
+    recovery = (entities[..., _E[f"phase_{ATTACK_PHASES[3]}"]] > 0.5).astype(jnp.float32)
+    swinging = hostile * (2.0 * sweep + recovery) * (distance <= THREAT_REACH_BLOCKS)  # a sweep outranks a recovery
     attributed = jnp.any(swinging > 0, axis=1) & (taken > 0)
     attacker = jnp.argmax(swinging, axis=1)
     harm = jnp.where(attributed[:, None], jax.nn.one_hot(attacker, count) * taken[:, None], 0.0)  # [B, E]

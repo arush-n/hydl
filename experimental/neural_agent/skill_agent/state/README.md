@@ -29,7 +29,7 @@ folder and rename it properly and add documentation"). The content registry and 
 | `action_history.py` | 72 | What the body last did: for each gen-7 action head, the last choice, whether it changed, and how many ticks it has been held (the `act` tokens). In neuroscience terms, an efference copy. |
 | `memory.py` | 267 | What the body remembers of where things are. The spatial map holds geometry cells, kept by recency. The salient store holds entities by id and blocks by cell, kept by tag, then salience, then recency. Both are anchored to the world by the agent's position. Entity velocity and facing, and cell edges, are stored in world axes and turned into the current body frame on reading. Tags come from the middle layer. |
 | `persona.py` | 120 | Identity: the registry's self section (`TRAITS`), 15.6's 23 traits and the motor signature's bias, each in [-1, 1] (APPROVED, `../docs/VIRTUAL_HUMAN.md` section 15.6). `sample_personas` draws correlated populations; `big_five` is a derived narrative view. The body reads 10 of them (15.1). |
-| `affect.py` | 306 | A proposal for the emotion variables: hand-coded rules for fear, anger, startle, valence, coping, a three-axis mood, and feelings toward up to 16 entities. Their constants are estimates. To reshape under the rulings: feelings toward others become written by the top two layers, and a fast reflex response stays a fixed rule (open question 1). |
+| `affect.py` | 312 | A proposal for the emotion variables: hand-coded rules for fear, anger, startle, valence, coping, a three-axis mood, and feelings toward up to 16 entities. Their constants are estimates. To reshape under the rulings: feelings toward others become written by the top two layers, and a fast reflex response stays a fixed rule (open question 1). |
 
 **One tick (`layer.step`):**
 1. the action history takes last tick's action;
@@ -47,7 +47,7 @@ folder and rename it properly and add documentation"). The content registry and 
 - `test_sa_tokens_v3.py`: frames, schema, the trunk, latent memory, conditioning.
 - `test_sa_state_senses.py`: decoding and legality, E5 and E6.
 - `test_sa_state_memory.py`: the stores, the tick, and the persona and feelings on the tokens.
-- `test_sa_state_affect.py`: the emotion rules, A1 to A7.
+- `test_sa_state_affect.py`: the emotion rules, A1 to A7 and A4b (a hit landing as the attacker enters recovery).
 - `test_sa_state_registry.py`: the registry and the composability rules (section 14): only agent-side variables, the
   trait list, queries, migration of a saved state by name, and a trunk that grows exactly or is compressed by a map.
 
