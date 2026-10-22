@@ -9,6 +9,10 @@ read the same way. Legal perception only: the adapter reads the legal observatio
 | `registry.py` | 783 | The offline content registry (build step 1). **Items**: every item of a server version's `Assets.zip` resolved through its `Parent` chain, with `ITEM_FEATURES`; the blocks with `BLOCK_FEATURES` and their breaking rule; the open gather-type table with each tool's power and quality per gather type. **Creatures**: every NPC role a world can spawn, resolved through its references and parameters, with `CREATURE_FEATURES` (health, motion, model size, attack distance, taming, trade). **Attitudes**: each creature's attitude toward a player and toward every creature, from the NPC groups and attitude tables by the engine's rules. A 64-number description vector per item and per creature (a pinned local sentence encoder, projected by a basis fitted once per registry and kept for content added later); saved with a manifest and SHA-256s. |
 | `adapter.py` | 372 | The v2 adapter (build step 3). `legal_tokens_v2`: the legal observation as `skill_tokens_v2` token sets, reading only the observation, the body yaw and the registry tables: the self token (v1's features; with the tables, the held weapon's registry row), every published entity row (state, facing in the body frame, attack phase and progress). With the gen-7 perception channel (`perception_v2`, 2026-10-19 night) it also reads each published row's kind, held item and role, the agent's inventory tokens and the body yaw (`../docs/PERCEPTION_ASKS.md`). `registry_tables`, `lookup` and `tool_relations`: the registry on the device keyed by the gym's semantic ids, the id-to-row gather, and the agent's tools against block candidates, ready for those ids. |
 
+**Token schema v3** moved to `../state/` on 2026-10-21: the senses, frames, the action history, the stores, the persona,
+the affect proposal and the tick are the state layer now (`../state/README.md`, `../docs/VIRTUAL_HUMAN.md`). They
+read this folder's registry tables and v2's inventory rows.
+
 Run (offline; it never downloads):
 
 ```sh

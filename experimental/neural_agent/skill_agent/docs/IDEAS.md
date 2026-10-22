@@ -115,6 +115,73 @@ privileged scripts and keeps the student on legal perception ("learning by cheat
 - **Uniqueness**: no two agents need the same z.
 - **Growth** (owner: "5 names for now but in the future there should be many"): the names are an append-only list, as the verb ids are (`neural_skills/spec.py`); a module trained before a name existed reads it as 0 (neutral).
 
+### Idea 2b: tracking individuality (design, 2026-10-21; not built)
+
+Superseded in its placement by `VIRTUAL_HUMAN.md` (owner, 2026-10-21): the persona and the emotions are variables of
+the state layer, read by every layer; the measurement and the gates below still stand as proposals.
+
+The owner: "how will we be keeping track of behaviors like we want the agents to be unique and embody some
+personality instead of being mere dupes". A literature survey (each paper checked by search; lessons from abstracts)
+gives the shape below. The thresholds are proposals, not taken from the literature.
+
+**What makes two agents differ, by layer.** One persona record per agent; each layer reads its slice.
+
+| Slice | Where | What |
+|---|---|---|
+| values and story | the LLM | goals, values, social stance. Hold the persona as structured fields re-injected into every prompt, not in dialogue history: LLM personas held in history drift within about 8 rounds (arXiv:2402.10962) |
+| choices | the decision layer | values become workflows (engage, flee, share, trade); it sends z with each request and can nudge it per request ("careful here": z + delta, clipped) |
+| style | the neural layer | z through the request token (above); FiLM on the module heads if the additive term proves too weak (FiLM, arXiv:1709.07871) |
+| motor signature | after the policy, outside the network | per agent, drawn once from its seed: reaction latency, aim noise, motor jitter. Bit-exact for a seed, and human-like (superhuman aim reads as a bot) |
+| experience | the stores and long-term memory | what this agent has seen, been told to remember, and done with whom: per-entity counters of hits taken and dealt (`PERCEPTION.md` 11.3, N8, waiting on S11) are what grudges and trust are made of |
+
+**Training so z changes behaviour.** A shared policy ignores a style input unless something makes it pay. One
+single-author 2026 report (arXiv:2605.23652, self-reported) found reward rose and identification fell to chance when
+its trajectory-to-persona loss was removed. In order:
+1. Teachers with knobs theta = g(z) (above): the student copies each style, so controllability holds by
+   construction.
+2. In reinforcement, a reward weighted by z: r = w(z) . phi, over damage dealt, exposure, distance from the preferred
+   range and, for the upper layers, the others' payoff by a social value orientation angle. Populations mixed in that
+   orientation behave more richly and generalise better (McKee et al., arXiv:2002.02325). One network conditioned on
+   reward weights generalises across them (arXiv:1908.08342).
+3. An identifiability term: a discriminator q(z | trajectory window), computed on task-tied descriptors (raw-state
+   mutual information rewards trivial, static differences, arXiv:2202.00914). It is paid only while the return stays
+   at least 90% of the z-agnostic baseline on the same seeds (diversity only while near-optimal: DOMiNO,
+   arXiv:2205.13521; SMERL, arXiv:2010.14484).
+4. The motion prior on native traces (AMP, above) keeps every style natural.
+
+**The behaviour fingerprint.** A fixed battery of scenarios and seeds, the same for every agent. Each episode gives
+one descriptor vector per agent:
+- engagement distance (quantiles), time to first engage, exposure fraction, health at retreat;
+- aim error, measured reaction latency, path tortuosity, idle fraction, damage ratio;
+- once the upper layers act socially: help, share and trade counts.
+
+The neural layer reports the vector onto the blackboard; the upper layers keep its history.
+
+**Gates** (P1 to P6 are this lane's; the thresholds are proposals):
+
+| Gate | Measure | Pass |
+|---|---|---|
+| P1 controllability | each z axis swept in 9 steps; Spearman rho between the axis and its descriptor; cross-talk onto the other descriptors | rho >= 0.9; cross-talk <= 0.3 |
+| P2 identifiability | a classifier names the agent from a 30 s window of held-out scenarios (chess players are told apart among thousands at 98% from 100 games, arXiv:2208.01366) | top-1 >= 0.9 among 100 agents |
+| P3 consistency | test-retest ICC per descriptor; the fingerprint's shift from the first to the last hour | ICC >= 0.6; shift <= 0.5 of the within-agent SD |
+| P4 diversity | the Vendi score of the population's fingerprints (the effective number of distinct agents, arXiv:2210.02410) | >= 0.8 N |
+| P5 competence | paired-seed success per z cell against the z-agnostic baseline | >= 90% inside, >= 80% at the corners |
+| P6 naturalness | the motion prior's discriminator, or a human-likeness classifier, on agents against native traces | near chance |
+
+The upper layers' gates are theirs: "say-do", a declared trait against the measured descriptor; and a society gate,
+the cooperation rate rising with the population's social orientation.
+
+**First experiment** (when the scripted teachers have knobs): distil the teachers with theta = g(z) into one student;
+sweep each axis (P1) with and without the identifiability term, additive against FiLM. This shows whether z is used,
+monotone and disentangled before any reinforcement is spent.
+
+**Open, for the owner:**
+- The trait list. Five now (aggression, caution, stealth, patience, precision); the survey adds preferred range and
+  risk tolerance for the body, and social orientation and sociability for the upper layers.
+- A learned identity vector per agent (8 to 16 dims), only if P2 fails with the scalars and the motor signature.
+  Five scalars at about 4 distinguishable levels give about 1,000 cells, borderline for a society of 1,000 agents.
+- The persona record's home: the blackboard, which is the coordinator's.
+
 ## Idea 3: vague requests
 
 Today the combiner rejects an under-specified request: sword without a target, or keep_range without its band, comes

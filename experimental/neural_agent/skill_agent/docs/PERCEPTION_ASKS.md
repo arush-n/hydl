@@ -52,6 +52,22 @@ window freezes the arsenal: `geometry_exhausted` is set, abilities never tick, a
 coordinator's bow recipe, 2026-10-20). A shot fires at 3.5 blocks and freezes at 4.5. A bow there works only at sword
 range; at range it needs the Region route.
 
+### Asks 11 to 16: what the encoder audit found missing (2026-10-21)
+
+From the field-by-field audit of the learner observation and the literature check (`PERCEPTION.md` section 11). Sent
+to the coordinator on 2026-10-21. S16 is filed under ask 3, which the owner assigned; S11 to S15 are new scope,
+waiting on the owner. S17 sent the same day.
+
+| # | Ask | Today | Proposed field | Legal basis |
+|---|---|---|---|---|
+| 11 | Damage and hits, per actor (high) | `NativeDamageEventBatch` (`v3/native/channels/events.py`) exists for native traces only; the learner sees its health fraction and the `damage_recovery` timer, with no direction or source | Recent events at a fixed capacity. Received: amount, cause and class, blocked, lethal, the source's direction in the actor's frame, and the source entity id only when it is perceivable. Dealt (hit confirm): target id, amount. The age of each | A player sees the damage indicator, even for an attacker behind it, and a hit confirmed on its target |
+| 12 | Sound (medium-high; part of S9) | `jax/world/audio` (`AudioObservation`: source position, category, block walk/land/hit/break/build and item-drop families, maximum distance, volume) has no consumer | The sounds an actor hears, attenuated by their maximum distance: source position (or bearing and distance), category, family and ordinal, volume, age | A player hears footsteps and block breaks of what it cannot see |
+| 13 | Item drops (medium) | No item-entity or pickup rows in the observation | Nearby dropped items: position, item id, count | A dropped item is visible |
+| 14 | Clock and weather (medium) | The light channel is a surrogate sky light computed from terrain height; no time of day | Time of day, time to the next day or night, weather | A player sees the sky |
+| 15 | An entity's team or group (medium; multi-agent) | Entity rows carry only hostile and attitude | Each perceived entity's group or faction id, relative to the actor | A player sees a teammate's marker or colours |
+| 16 | One velocity unit for entity and self rows (medium) | The self row's velocity is over `agent_maximum_gait_speed`, an entity row's relative velocity over one target's `target_chase_speed` (`v1/runtime/encoder.py`) | Both in one unit, or the scale per row | Unchanged; without it the stored memory cannot carry an entity's own velocity across ticks |
+| 17 | My own maximum health; a block's break progress (low) | The self row has the health fraction only; `ActorBlockActionParameters.block_health` exists but is not in the block candidate's policy view | `self_f32` gains the maximum health; the block candidate gains its health fraction | A player sees its own health numbers and a block's cracks |
+
 ## Status
 
 **2026-10-19: all seven accepted** by the 0.7.2 port's coordinator (the simulator session), scheduled as the next

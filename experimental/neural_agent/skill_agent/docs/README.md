@@ -6,6 +6,7 @@ Read `BUILD.md` first. Paths in these documents are relative to `skill_agent/` (
 
 | Document | Purpose | Edit rule |
 |---|---|---|
+| `VIRTUAL_HUMAN.md` | The architecture agreed with the owner on 2026-10-21: the agent as a virtual human; the layers (LLM, decision, the state layer, the body); the state layer (in memory, queried and formatted, read by every layer; game-tied variables from the game's state, others written by the top two layers); regulators (future); which kind of memory lives where; traits, motivation and control (future); what remains for the state layer and the encoder; social interaction and non-game mechanics (proposed); section 13 is the plan of work and the decisions waiting on the owner. | RULED and AGREED lines quote the owner; mark open questions as they are settled, with the date. |
 | `BUILD.md` | The build plan: the owner's rulings (section 0), the layout (1), reusable resources (2), the architecture (3), the gen-7 verification checklist (4), the requirement map (5), the proofs E1 to E14 (6), the order of work (7). | Update rows in place with the date; RULED lines quote the owner. |
 | `TRAINING_PLAN.md` | The training plan the owner approved: hypotheses, the bar, the method, the teacher certificate T1 to T7, stages S1 to S4, checks C1 to C9, risks. | Status lines say what is true now. |
 | `PERCEPTION.md` | The skill layer's input contract (2026-10-19): what agents perceive, as properties and relations from an offline registry of the game's assets, open to mods; the owner's decisions and the build plan. | As `BUILD.md`. |

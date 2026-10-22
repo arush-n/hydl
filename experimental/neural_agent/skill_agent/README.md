@@ -38,11 +38,12 @@ Import a module by its subfolder: `from experimental.neural_agent.skill_agent.ru
 | [`model/`](model/README.md) | The networks: the token-set trunk, per-verb adapters, the request-conditioned generalist, each skill's own module on the shared trunk, the legal-observation adapter. |
 | [`neural_skills/`](neural_skills/README.md) | One folder per neural skill: its plan, its teacher and task, its own training strategy (`train.py`, which trains its own module), and the scripts that certify, train and score it (2026-10-19); the index of every catalogue skill and what it waits on. |
 | [`perception/`](perception/README.md) | What the skill layer perceives (2026-10-19): the content registry built from the game's assets (items, blocks, gather types, creatures, attitudes, description vectors), and the v2 adapter from the legal observation to `skill_tokens_v2` tokens (`docs/PERCEPTION.md`). |
+| [`state/`](state/README.md) | The state layer (2026-10-21, `docs/VIRTUAL_HUMAN.md`): everything about the agent, in memory, read by every layer: the senses (the legal observation as v3 rows), frames, the action history, the stores (spatial map and salient store), the persona, the affect proposal, and one tick (`layer.step`), read by the body as tokens. |
 | [`teaching/`](teaching/README.md) | What every scripted teacher shares (the registry, the observed-state rule), the teacher certificates, and the lookahead teacher (Stage L, step L3). |
 | [`tasks/`](tasks/README.md) | The flat task world skills are trained and measured on, and the episode runner; the duel world on the coordinator's two-actor arena (Stage L, step L1), the league of combat styles (L2) and the archery range for the shortbow. |
 | [`training/`](training/README.md) | Native traces, the behaviour-cloning dataset, the training building blocks every skill's strategy uses (per-skill DAgger, the bars), and the A2 reference trainer. |
 | [`bench/`](bench/README.md) | Per-tick latency benches (the 30 Hz gate). |
-| [`docs/`](docs/README.md) | The design record: `BUILD.md` (the plan), `TRAINING_PLAN.md`, `PERCEPTION.md` (the perception contract), `ARCHITECTURE_RESEARCH.md`, `FIDELITY.md`, `AGENT_BRIEF.md`. |
+| [`docs/`](docs/README.md) | The design record: `BUILD.md` (the plan), `TRAINING_PLAN.md`, `PERCEPTION.md` (the perception contract), `VIRTUAL_HUMAN.md` (the agreed architecture), `ARCHITECTURE_RESEARCH.md`, `FIDELITY.md`, `AGENT_BRIEF.md`. |
 
 ## 1. Create, register, use (the guide)
 

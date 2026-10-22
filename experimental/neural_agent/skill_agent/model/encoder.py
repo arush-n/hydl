@@ -40,17 +40,30 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from experimental.neural_agent.skill_agent.contract.surface import TOKEN_SCHEMA_V1, TOKEN_SCHEMAS
+from experimental.neural_agent.skill_agent.contract.surface import TOKEN_SCHEMA_V1, TOKEN_SCHEMA_V2, TOKEN_SCHEMAS
+from experimental.neural_agent.skill_agent.contract.tokens_v3 import (
+    TOKEN_SCHEMA_V3,
+    TOKEN_TYPES_V3,
+    TRUNK_TYPE_NAMES_V3,
+)
 
 TRUNK_TYPE_NAMES: tuple[str, ...] = ("entity", "block_candidate", "inventory_slot", "geometry", "self", "kit")
-"""The token types the trunk reads, in its sequence order, under every token schema."""
+"""The token types the trunk reads, in its sequence order, under ``skill_tokens_v1`` and ``skill_tokens_v2``."""
+
+_TRUNK_SCHEMAS: dict[str, tuple[tuple[str, ...], dict]] = {
+    TOKEN_SCHEMA_V1: (TRUNK_TYPE_NAMES, dict(TOKEN_SCHEMAS[TOKEN_SCHEMA_V1])),
+    TOKEN_SCHEMA_V2: (TRUNK_TYPE_NAMES, dict(TOKEN_SCHEMAS[TOKEN_SCHEMA_V2])),
+    TOKEN_SCHEMA_V3: (TRUNK_TYPE_NAMES_V3, dict(TOKEN_TYPES_V3)),
+}
+"""Schema id -> (the trunk's type names in sequence order, the schema's types). v3 has its own types and order
+(``contract/tokens_v3.py``)."""
 
 
 def trunk_types(schema: str = TOKEN_SCHEMA_V1) -> tuple[tuple[str, type], ...]:
-    """The trunk's token types under ``schema`` (``surface.TOKEN_SCHEMAS``): (name, record class) in sequence order."""
+    """The trunk's token types under ``schema``: (name, record class) in sequence order."""
 
-    types = TOKEN_SCHEMAS[schema]
-    return tuple((name, types[name]) for name in TRUNK_TYPE_NAMES)
+    names, types = _TRUNK_SCHEMAS[schema]
+    return tuple((name, types[name]) for name in names)
 
 
 def token_widths(schema: str = TOKEN_SCHEMA_V1) -> tuple[tuple[str, int], ...]:
@@ -63,7 +76,7 @@ def token_widths(schema: str = TOKEN_SCHEMA_V1) -> tuple[tuple[str, int], ...]:
 TRUNK_TYPES: tuple[tuple[str, type], ...] = trunk_types(TOKEN_SCHEMA_V1)
 """The token types the trunk reads under ``skill_tokens_v1``, in its sequence order: (name, record class)."""
 
-assert all(cls.FEATURES[-1] == "marked" for schema in TOKEN_SCHEMAS for _, cls in trunk_types(schema)), \
+assert all(cls.FEATURES[-1] == "marked" for schema in _TRUNK_SCHEMAS for _, cls in trunk_types(schema)), \
     "each token's last feature must be 'marked'"
 
 _LAYER_NORM_EPSILON: float = 1e-5
@@ -90,6 +103,13 @@ class EncoderConfig:
         layers: Pre-LayerNorm transformer blocks.
         mlp_ratio: The block MLP's hidden width is ``mlp_ratio * width``.
         output: The width of the context vector.
+        memory_slots: Latent memory slots carried from tick to tick (owner, 2026-10-20 night: a memory tensor encoding
+            past states). 0, the default, is the trunk without memory: the same parameters and outputs as before.
+        condition_types: Token types whose first valid token conditions every token (the agent's persona and
+            affect, owner 2026-10-21: the scalars "modify the other inputs"). With c the concatenation of those
+            tokens' features (zeros where a type has no valid token), every token of type t becomes
+            ``h * (1 + gamma_t(c)) + beta_t(c)`` after its embedding (FiLM), with ``[gamma_t; beta_t] = Dense_t(c)``
+            initialised at zero, so a new trunk starts as one without conditioning. () by default: no change.
 
     Raises:
         ValueError: If a size is not a positive integer, ``width`` is not a multiple of ``heads``, a feature
@@ -102,10 +122,14 @@ class EncoderConfig:
     layers: int = 2
     mlp_ratio: int = 2
     output: int = 128
+    memory_slots: int = 0
+    condition_types: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         for name in ("width", "heads", "layers", "mlp_ratio", "output"):
             _positive(getattr(self, name), name)
+        if isinstance(self.memory_slots, bool) or not isinstance(self.memory_slots, int) or self.memory_slots < 0:
+            raise ValueError(f"memory_slots must be a non-negative integer, got {self.memory_slots!r}")
         for name, features in self.token_types:
             _positive(features, f"feature width of {name!r}")
         names = [name for name, _ in self.token_types]
@@ -113,6 +137,16 @@ class EncoderConfig:
             raise ValueError(f"token type names must be unique, got {names}")
         if self.width % self.heads:
             raise ValueError(f"width {self.width} must be a multiple of heads {self.heads}")
+        unknown = sorted(set(self.condition_types) - set(names))
+        if unknown or len(set(self.condition_types)) != len(self.condition_types):
+            raise ValueError(f"condition_types must be distinct configured token types, got {self.condition_types}")
+
+    @property
+    def condition_width(self) -> int:
+        """The width of the conditioning vector c: the condition types' feature widths summed."""
+
+        widths = dict(self.token_types)
+        return sum(widths[name] for name in self.condition_types)
 
 
 class DenseParams(NamedTuple):
@@ -155,19 +189,33 @@ class BlockParams(NamedTuple):
     mlp_out: DenseParams
 
 
+class MemoryParams(NamedTuple):
+    """The latent memory: its learned initial slots [S, W], its type vector [W], and the gate Dense(2 W -> W) that
+    blends a slot's new value with its previous one."""
+
+    initial: jax.Array
+    type_vector: jax.Array
+    gate: DenseParams
+
+
 class EncoderParams(NamedTuple):
     types: dict[str, TypeParams]
     marked_vector: jax.Array
     blocks: tuple[BlockParams, ...]
     norm: LayerNormParams
     readout: DenseParams
+    memory: MemoryParams | None = None
+    condition: dict[str, DenseParams] | None = None  # per token type: Dense(C -> 2W), zero at initialisation
 
 
 class EncoderOutput(NamedTuple):
-    """``context`` is float32[B, output]; ``tokens`` maps each configured type to float32[B, N_t, width]."""
+    """``context`` is float32[B, output]; ``tokens`` maps each configured type to float32[B, N_t, width];
+    ``memory`` is the next latent memory float32[B, S, width] (the tokens a reader can attend to, and the state to
+    pass back next tick), None without memory."""
 
     context: jax.Array
     tokens: dict[str, jax.Array]
+    memory: jax.Array | None = None
 
 
 def _init_normal(key: jax.Array, shape: tuple[int, ...], fan_in: int) -> jax.Array:
@@ -221,13 +269,28 @@ def init_encoder(key: jax.Array, config: EncoderConfig) -> EncoderParams:
                 mlp_out=_init_dense(next(keys), hidden, width),
             )
         )
-    return EncoderParams(
-        types=types,
-        marked_vector=marked_vector,
-        blocks=tuple(blocks),
-        norm=_init_norm(width),
-        readout=_init_dense(next(keys), 4 * width, config.output),
-    )
+    readout = _init_dense(next(keys), 4 * width, config.output)
+    memory = None
+    if config.memory_slots:  # its own keys, so a trunk without memory draws exactly as before
+        memory_keys = jax.random.split(jax.random.fold_in(key, 0x6D656D), 3)
+        memory = MemoryParams(initial=_init_normal(memory_keys[0], (config.memory_slots, width), width),
+                              type_vector=_init_normal(memory_keys[1], (width,), width),
+                              gate=_init_dense(memory_keys[2], 2 * width, width))
+    condition = None
+    if config.condition_types:  # zero kernels: no key drawn, so the other parameters draw exactly as before
+        condition = {name: DenseParams(jnp.zeros((config.condition_width, 2 * width), jnp.float32),
+                                       jnp.zeros((2 * width,), jnp.float32)) for name, _ in config.token_types}
+    return EncoderParams(types=types, marked_vector=marked_vector, blocks=tuple(blocks), norm=_init_norm(width),
+                         readout=readout, memory=memory, condition=condition)
+
+
+def initial_memory(params: EncoderParams, config: EncoderConfig, batch: int) -> jax.Array | None:
+    """The memory of B agents at an episode's start: the learned initial slots float32[B, S, W] (None without
+    memory). A caller resets a lane's memory to this on a new episode."""
+
+    if not config.memory_slots:
+        return None
+    return jnp.broadcast_to(params.memory.initial, (batch, config.memory_slots, config.width))
 
 
 def _linear(params: DenseParams, inputs: jax.Array) -> jax.Array:
@@ -273,14 +336,24 @@ def _block(params: BlockParams, inputs: jax.Array, valid: jax.Array, heads: int)
     return inputs + _linear(params.mlp_out, hidden)
 
 
-def apply_encoder(params: EncoderParams, batch: Mapping[str, tuple[Any, Any]], config: EncoderConfig) -> EncoderOutput:
+def apply_encoder(params: EncoderParams, batch: Mapping[str, tuple[Any, Any]], config: EncoderConfig,
+                  memory: jax.Array | None = None) -> EncoderOutput:
     """Encode the token sets of B agents: the context float32[B, O] and each type's token embeddings.
+
+    With ``config.memory_slots`` S > 0 the trunk carries a latent memory: the S memory slots (``memory``, or the
+    learned initial slots when None) join the token sequence after every token type, always valid, with their own
+    type vector, and pass through the same blocks; each slot's output is blended with its previous value by a
+    learned gate, ``m' = g * out + (1 - g) * m`` with ``g = sigmoid(Dense([out; m]))``, and returned as
+    ``EncoderOutput.memory`` for the next tick. The pooled context includes the memory; the marked and self
+    readouts do not.
 
     Args:
         params: The parameters from :func:`init_encoder` for this ``config``.
         batch: Type name -> (features float32[B, N_t, F_t], mask bool[B, N_t]), as :func:`stack_batch` returns.
             A configured type missing from the mapping counts as empty. A padded slot may hold anything.
         config: The trunk's sizes (static under :func:`encoder_apply_jit`).
+        memory: float32[B, S, W], last tick's ``EncoderOutput.memory``; None starts from the initial slots. Ignored
+            without memory.
 
     Returns:
         An :class:`EncoderOutput`.
@@ -325,6 +398,18 @@ def apply_encoder(params: EncoderParams, batch: Mapping[str, tuple[Any, Any]], c
     if total == 0:
         raise ValueError("the batch has no token slot")
 
+    condition = None
+    if config.condition_types:
+        parts = []
+        for name in config.condition_types:  # each type's first valid token, or zeros
+            valid, values = valid_of[name], features_of[name]
+            if not valid.shape[1]:
+                parts.append(jnp.zeros((batch_size, values.shape[2]), jnp.float32))
+                continue
+            row = values[jnp.arange(batch_size), jnp.argmax(valid.astype(jnp.int32), axis=1)]
+            parts.append(jnp.where(jnp.any(valid, axis=1)[:, None], row, 0.0))
+        condition = jnp.concatenate(parts, axis=-1)  # float32[B, C]
+
     sequence, valid_parts, marked_parts = [], [], []
     for name in names:
         valid = valid_of[name]
@@ -332,9 +417,18 @@ def apply_encoder(params: EncoderParams, batch: Mapping[str, tuple[Any, Any]], c
         marked = valid & (values[..., -1] > 0.5)
         embedding = params.types[name]
         hidden = _token_mlp(embedding.embedding, values) + embedding.type_vector
+        if condition is not None:
+            scale, shift = jnp.split(_linear(params.condition[name], condition), 2, axis=-1)
+            hidden = hidden * (1.0 + scale[:, None, :]) + shift[:, None, :]
         sequence.append(hidden + jnp.where(marked[..., None], params.marked_vector, 0.0))
         valid_parts.append(valid)
         marked_parts.append(marked)
+    previous = None
+    if config.memory_slots:
+        previous = initial_memory(params, config, batch_size) if memory is None else jnp.asarray(memory, jnp.float32)
+        sequence.append(previous + params.memory.type_vector)
+        valid_parts.append(jnp.ones((batch_size, config.memory_slots), dtype=jnp.bool_))
+        marked_parts.append(jnp.zeros((batch_size, config.memory_slots), dtype=jnp.bool_))
     x = jnp.concatenate(sequence, axis=1)
     valid_tokens = jnp.concatenate(valid_parts, axis=1)
     marked_tokens = jnp.concatenate(marked_parts, axis=1)
@@ -342,6 +436,11 @@ def apply_encoder(params: EncoderParams, batch: Mapping[str, tuple[Any, Any]], c
     for block in params.blocks:
         x = _block(block, x, valid_tokens, config.heads)
     x = _layer_norm(params.norm, x)
+    next_memory = None
+    if config.memory_slots:
+        out = x[:, total:]
+        gate = jax.nn.sigmoid(_linear(params.memory.gate, jnp.concatenate([out, previous], axis=-1)))
+        next_memory = gate * out + (1.0 - gate) * previous
 
     keep = valid_tokens[..., None]
     count = jnp.sum(valid_tokens, axis=1, keepdims=True).astype(jnp.float32)
@@ -360,7 +459,7 @@ def apply_encoder(params: EncoderParams, batch: Mapping[str, tuple[Any, Any]], c
 
     summary = jnp.concatenate([mean, maximum, mark, self_vector], axis=-1)
     tokens = {name: x[:, first_slot:last_slot] for name, (first_slot, last_slot) in slots.items()}
-    return EncoderOutput(context=_linear(params.readout, summary), tokens=tokens)
+    return EncoderOutput(context=_linear(params.readout, summary), tokens=tokens, memory=next_memory)
 
 
 @functools.lru_cache(maxsize=None)
@@ -434,6 +533,8 @@ def stack_batch(
 
 
 __all__ = [
+    "MemoryParams",
+    "initial_memory",
     "TRUNK_TYPES",
     "TRUNK_TYPE_NAMES",
     "AttentionParams",
