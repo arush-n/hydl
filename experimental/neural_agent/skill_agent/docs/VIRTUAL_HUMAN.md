@@ -572,6 +572,14 @@ work in tandem with everything"): verified on real duel observations and on the 
 E11, `test_sa_tandem_v3.py`): the tokens feed the trunk every tick, with its memory and the persona and affect
 conditioning; saving, loading and migration continue exactly; the generalist head runs on the result.
 
+**Does it model the world?** (2026-10-21, owner: "does it properly model the world"; `PERCEPTION.md` E12): its
+picture of the present is exact to the channel's 0.1-block rounding, and its memory of things that stay put (terrain)
+is exact. A thing that moves out of view is remembered where it was last seen: the error is exactly its movement since
+(3.6 blocks after half a second to a second and a half, for a chaser). Predicting where it went is the latent
+memory's job once trained (`PERCEPTION.md` N1, N2); the trunk is untrained, so today the picture is the inputs and the
+stores. What the world does not show yet (sound, events, more than one entity, time) is the simulator's asks (S11 to
+S15, ask 3).
+
 **Not yet connected (PROPOSED as step 1b, waiting on the owner):** nothing that acts reads v3. The generalist head's
 cross-attention reads only the six v1 token types (`model/generalist.py`: not the action history, status,
 projectiles, hazards, recipes, persona or affect, which reach it only through the trunk's own attention); the skill
