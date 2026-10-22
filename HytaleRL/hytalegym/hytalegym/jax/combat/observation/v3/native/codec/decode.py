@@ -305,6 +305,16 @@ def _actor(value: Any, entity_id: int) -> dict[str, Any]:
             raise ValueError("present native actor has no positive max health")
         if not 0.0 <= result["health"] <= result["max_health"] + 1.0e-6:
             raise ValueError("native actor health is outside its declared range")
+        if (
+            motion_force["projection_source"] == MOTION_FORCE_SOURCE_AMBIGUOUS_PENDING
+            and not result["defense_available"][3]
+            and result["defense_values"][3] == 0.0
+        ):
+            # The force slot the bridge left out; _motion_force resolved the projection on the host.
+            result["defense_available"][3] = True
+            result["defense_values"][3] = float(
+                np.linalg.norm(motion_force["projected_velocity"])
+            )
         if not np.all(result["defense_available"]):
             raise ValueError("native defense evidence is incomplete")
         if bool(result["defense_available"][3]) != bool(
@@ -463,6 +473,14 @@ def _motion_force(value: Any) -> dict[str, Any]:
         or not np.allclose(projected, expected, rtol=0.0, atol=1.0e-12)
     ):
         raise ValueError("native force projection is inconsistent with raw channels")
+    if expected_source == MOTION_FORCE_SOURCE_AMBIGUOUS_PENDING:
+        # The bridge refuses to choose when current motion and a staged knockback overlap (live 0.7.2: a hit lands
+        # while the body is airborne after a jump; the frame used to fail the whole step). Every channel is present,
+        # so the host resolves it: the staged knockback adds to the current motion, as the simulator applies a hit's
+        # impulse on the hit tick and as the bridge already projects a lone staged knockback (source 4). The source
+        # stays AMBIGUOUS_PENDING so the record says the host, not the bridge, made the sum.
+        projected_available = True
+        projected = current + pending
     return {
         "legacy_external_available": legacy_available,
         "legacy_external_velocity": legacy,
