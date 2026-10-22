@@ -567,6 +567,22 @@ approach. Missing:
 
 Every step is measured first with 2 agents, then scaled up (16.3).
 
+**The state layer and the trunk together** (2026-10-21, owner: "did you verify the encoder and the state layer to
+work in tandem with everything"): verified on real duel observations and on the replayed live ones (`PERCEPTION.md`
+E11, `test_sa_tandem_v3.py`): the tokens feed the trunk every tick, with its memory and the persona and affect
+conditioning; saving, loading and migration continue exactly; the generalist head runs on the result.
+
+**Not yet connected (PROPOSED as step 1b, waiting on the owner):** nothing that acts reads v3. The generalist head's
+cross-attention reads only the six v1 token types (`model/generalist.py`: not the action history, status,
+projectiles, hazards, recipes, persona or affect, which reach it only through the trunk's own attention); the skill
+modules and the runtime still build v1 tokens (`model/observation_adapter.py`); and a request cannot point at a v3
+entity row: the resolver matches a request's entity handle against v1 token records (`contract/references.py`,
+`entity_index`), while the v3 rows carry no handle and `layer.step` does not return the row ids it knows (perceived
+and remembered). Step 1b would move the body's path onto the state layer and v3: the head reads every type, the
+runtime ticks the state layer, and `layer.step` returns each entity row's id so a request can point at a perceived or
+a remembered entity; the tandem test then covers request to action. Without it, steps 2 to 9 add inputs that no skill
+reads.
+
 **The encoding tested** (2026-10-21, owner: "test the encoding in the sim and the real server"): the state layer's
 tick on simulator duels, a Region world and the live 0.7.2 server (`PERCEPTION.md` section 10.5; the tools are
 `../bench/encoding_audit.py` and `../bench/live_encoding.py`). Everything published arrives, at the same scales

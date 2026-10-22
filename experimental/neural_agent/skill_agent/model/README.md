@@ -15,5 +15,6 @@ simulator's legal observation to the trunk's token sets. Pure JAX: parameters ar
 | `observation_adapter.py` | 206 | `legal_tokens`: the legal observation as the trunk's token sets (the self token and entity slot 0, in the body frame). |
 
 Gates: `test_sa_encoder.py`, `test_sa_freezing.py`, `test_sa_generalist.py`, `test_sa_skill_modules.py`,
-`test_sa_observation_adapter.py`, `test_sa_tokens_v2.py`, `test_sa_tokens_v3.py`, `test_sa_state_registry.py`. The
+`test_sa_observation_adapter.py`, `test_sa_tokens_v2.py`, `test_sa_tokens_v3.py`, `test_sa_state_registry.py`,
+`test_sa_tandem_v3.py` (the v3 trunk on the state layer's real tokens; the generalist reads only the v1 types, E11). The
 latency gates are in `../bench/`; the trainer is `../training/`.

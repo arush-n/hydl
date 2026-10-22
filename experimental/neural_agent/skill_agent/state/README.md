@@ -50,6 +50,8 @@ folder and rename it properly and add documentation"). The content registry and 
 - `test_sa_state_affect.py`: the emotion rules, A1 to A7 and A4b (a hit landing as the attacker enters recovery).
 - `test_sa_state_registry.py`: the registry and the composability rules (section 14): only agent-side variables, the
   trait list, queries, migration of a saved state by name, and a trunk that grows exactly or is compressed by a map.
+- `test_sa_tandem_v3.py`: this layer and the trunk together on real duel observations (`../docs/PERCEPTION.md` E11):
+  memory, conditioning, padding, reset, save and load, migration, and the generalist head on the result.
 
 The certification table is `../docs/PERCEPTION.md` section 10.2.
 
