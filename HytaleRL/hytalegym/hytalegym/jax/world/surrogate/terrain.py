@@ -23,6 +23,10 @@ from hytalegym.worldgen.surrogate import (
     TERRAIN_PARAMETER_COUNT,
     WorldStructureProfile,
 )
+from hytalegym.worldgen.surrogate.block_identity import (
+    AIR_IDENTITY_ROW,
+    CompiledBlockIdentity,
+)
 from hytalegym.worldgen.surrogate.biomes import (
     LocalBiomeCatalog,
     SurrogateBiomeMaterialPlan,
@@ -66,6 +70,10 @@ class TerrainGeneratorConfig(NamedTuple):
     subsurface_cell_code: jax.Array
     default_surface_cell_code: jax.Array
     default_subsurface_cell_code: jax.Array
+    surface_identity_index: jax.Array
+    subsurface_identity_index: jax.Array
+    default_surface_identity_index: jax.Array
+    default_subsurface_identity_index: jax.Array
 
 
 @dataclass(frozen=True)
@@ -105,6 +113,7 @@ class TerrainGeneratorSpec:
     biome_names: tuple[str, ...]
     profile_sha256: str
     source: SurrogateTerrainSource
+    identity: CompiledBlockIdentity | None = None
 
 
 class SurrogateTerrainTile(NamedTuple):
@@ -123,6 +132,8 @@ class SurrogateTerrainTile(NamedTuple):
     cave_span_mask: jax.Array
     cave_min_y: jax.Array
     cave_max_y: jax.Array
+    surface_identity_index: jax.Array
+    subsurface_identity_index: jax.Array
 
 
 class SurrogateTerrainColumnSample(NamedTuple):
@@ -144,6 +155,8 @@ class _TerrainFields(NamedTuple):
     cave_mask: jax.Array
     cave_min_y: jax.Array
     cave_max_y: jax.Array
+    surface_identity: jax.Array
+    subsurface_identity: jax.Array
 
 
 def default_terrain_parameters() -> np.ndarray:
@@ -177,6 +190,11 @@ def primary_zone_v1_terrain_generator_spec(
     default_surface_cell_code: int,
     default_subsurface_cell_code: int,
     parameters: Sequence[float] | None = None,
+    identity: CompiledBlockIdentity | None = None,
+    surface_identity_rows: Mapping[str, int] | None = None,
+    subsurface_identity_rows: Mapping[str, int] | None = None,
+    default_surface_identity_row: int | None = None,
+    default_subsurface_identity_row: int | None = None,
 ) -> TerrainGeneratorSpec:
     """Build a provenance-complete primary-zone v1 surrogate terrain spec."""
 
@@ -196,6 +214,11 @@ def primary_zone_v1_terrain_generator_spec(
         default_subsurface_cell_code=default_subsurface_cell_code,
         parameters=parameters,
         biome_parameters=preset.biome_parameters,
+        identity=identity,
+        surface_identity_rows=surface_identity_rows,
+        subsurface_identity_rows=subsurface_identity_rows,
+        default_surface_identity_row=default_surface_identity_row,
+        default_subsurface_identity_row=default_subsurface_identity_row,
     )
     sources = tuple(
         SurrogateTerrainBiomeSource(
@@ -241,6 +264,11 @@ def terrain_generator_spec_from_profile(
     default_subsurface_cell_code: int,
     parameters: Sequence[float] | None = None,
     biome_parameters: Mapping[str, Sequence[float]] | None = None,
+    identity: CompiledBlockIdentity | None = None,
+    surface_identity_rows: Mapping[str, int] | None = None,
+    subsurface_identity_rows: Mapping[str, int] | None = None,
+    default_surface_identity_row: int | None = None,
+    default_subsurface_identity_row: int | None = None,
 ) -> TerrainGeneratorSpec:
     """Build a padded numeric config from one validated local asset profile."""
 
@@ -276,11 +304,20 @@ def terrain_generator_spec_from_profile(
     if supplied_biomes and set(supplied_biomes) != expected_biomes:
         raise ValueError("biome parameter bindings must match profile biomes")
 
+    _identity_arguments(
+        identity,
+        surface_identity_rows,
+        subsurface_identity_rows,
+        default_surface_identity_row,
+        default_subsurface_identity_row,
+    )
     minimum = np.zeros(BIOME_CAPACITY, dtype=np.float32)
     maximum = np.zeros(BIOME_CAPACITY, dtype=np.float32)
     mask = np.zeros(BIOME_CAPACITY, dtype=np.bool_)
     surface = np.zeros(BIOME_CAPACITY, dtype=np.uint16)
     subsurface = np.zeros(BIOME_CAPACITY, dtype=np.uint16)
+    surface_identity = np.zeros(BIOME_CAPACITY, dtype=np.uint16)
+    subsurface_identity = np.zeros(BIOME_CAPACITY, dtype=np.uint16)
     geometry = np.zeros(
         (BIOME_CAPACITY, TERRAIN_PARAMETER_COUNT),
         dtype=np.float32,
@@ -301,6 +338,19 @@ def terrain_generator_spec_from_profile(
             biome.biome,
             "subsurface",
         )
+        if identity is not None:
+            surface_identity[index] = _identity_row(
+                surface_identity_rows,
+                biome.biome,
+                "surface",
+                identity,
+            )
+            subsurface_identity[index] = _identity_row(
+                subsurface_identity_rows,
+                biome.biome,
+                "subsurface",
+                identity,
+            )
         biome_vector = (
             vector
             if not supplied_biomes
@@ -342,11 +392,34 @@ def terrain_generator_spec_from_profile(
             ),
             dtype=jnp.uint16,
         ),
+        surface_identity_index=jnp.asarray(surface_identity),
+        subsurface_identity_index=jnp.asarray(subsurface_identity),
+        default_surface_identity_index=jnp.asarray(
+            0
+            if identity is None
+            else _non_air_identity_row(
+                default_surface_identity_row,
+                "default surface identity row",
+                identity,
+            ),
+            dtype=jnp.uint16,
+        ),
+        default_subsurface_identity_index=jnp.asarray(
+            0
+            if identity is None
+            else _non_air_identity_row(
+                default_subsurface_identity_row,
+                "default subsurface identity row",
+                identity,
+            ),
+            dtype=jnp.uint16,
+        ),
     )
     return TerrainGeneratorSpec(
         config=config,
         biome_names=tuple(names),
         profile_sha256=profile.provenance.content_sha256,
+        identity=identity,
         source=SurrogateTerrainSource(
             schema=SURROGATE_TERRAIN_SOURCE_SCHEMA,
             mode=PROFILE_ONLY_TERRAIN_SOURCE,
@@ -434,6 +507,16 @@ def generate_surrogate_terrain(
             known[..., None],
             fields.cave_max_y,
             jnp.int16(0),
+        ),
+        surface_identity_index=jnp.where(
+            known,
+            fields.surface_identity,
+            jnp.uint16(0),
+        ),
+        subsurface_identity_index=jnp.where(
+            known,
+            fields.subsurface_identity,
+            jnp.uint16(0),
         ),
     )
 
@@ -537,6 +620,16 @@ def _terrain_fields(
         jnp.take(config.subsurface_cell_code, biome_index),
         config.default_subsurface_cell_code,
     )
+    surface_identity = jnp.where(
+        has_biome,
+        jnp.take(config.surface_identity_index, biome_index),
+        config.default_surface_identity_index,
+    )
+    subsurface_identity = jnp.where(
+        has_biome,
+        jnp.take(config.subsurface_identity_index, biome_index),
+        config.default_subsurface_identity_index,
+    )
     biome_code = jnp.where(
         has_biome,
         biome_index,
@@ -597,6 +690,8 @@ def _terrain_fields(
         height=height,
         surface=surface.astype(jnp.uint16),
         subsurface=subsurface.astype(jnp.uint16),
+        surface_identity=surface_identity.astype(jnp.uint16),
+        subsurface_identity=subsurface_identity.astype(jnp.uint16),
         biome_code=biome_code,
         cave_mask=jnp.stack(cave_masks, axis=-1),
         cave_min_y=jnp.stack(cave_minimums, axis=-1),
@@ -703,6 +798,10 @@ def _validate_config_shapes(config: TerrainGeneratorConfig) -> None:
         "subsurface_cell_code": (BIOME_CAPACITY,),
         "default_surface_cell_code": (),
         "default_subsurface_cell_code": (),
+        "surface_identity_index": (BIOME_CAPACITY,),
+        "subsurface_identity_index": (BIOME_CAPACITY,),
+        "default_surface_identity_index": (),
+        "default_subsurface_identity_index": (),
     }
     if not isinstance(config, TerrainGeneratorConfig):
         raise TypeError("config must be a TerrainGeneratorConfig")
@@ -738,6 +837,56 @@ def _cell_code(values: Mapping[str, int], biome: str, label: str) -> int:
     except KeyError as error:
         raise ValueError(f"missing {label} cell code for {biome!r}") from error
     return _uint16(value, f"{label} cell code")
+
+
+def _identity_arguments(
+    identity: CompiledBlockIdentity | None,
+    surface_rows: Mapping[str, int] | None,
+    subsurface_rows: Mapping[str, int] | None,
+    default_surface_row: int | None,
+    default_subsurface_row: int | None,
+) -> None:
+    supplied = (
+        surface_rows,
+        subsurface_rows,
+        default_surface_row,
+        default_subsurface_row,
+    )
+    if identity is None:
+        if any(value is not None for value in supplied):
+            raise ValueError("identity rows require a block identity table")
+        return
+    if not isinstance(identity, CompiledBlockIdentity):
+        raise TypeError("identity must be a CompiledBlockIdentity")
+    if any(value is None for value in supplied):
+        raise ValueError(
+            "block identity requires surface, subsurface and default rows"
+        )
+
+
+def _identity_row(
+    values: Mapping[str, int] | None,
+    biome: str,
+    label: str,
+    table: CompiledBlockIdentity,
+) -> int:
+    assert values is not None
+    try:
+        value = values[biome]
+    except KeyError as error:
+        raise ValueError(f"missing {label} identity row for {biome!r}") from error
+    return _non_air_identity_row(value, f"{label} identity row for {biome!r}", table)
+
+
+def _non_air_identity_row(
+    value: int,
+    label: str,
+    table: CompiledBlockIdentity,
+) -> int:
+    row = _uint16(value, label)
+    if row == AIR_IDENTITY_ROW or row >= len(table.rows):
+        raise ValueError(f"{label} must name a non-air identity row")
+    return row
 
 
 def _uint16(value: int, label: str) -> int:

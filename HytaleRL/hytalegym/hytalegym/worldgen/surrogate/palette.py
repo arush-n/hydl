@@ -13,6 +13,11 @@ from hytalegym.geometry.contract import (
     MOVEMENT_FEATURES,
 )
 from hytalegym.worldgen.surrogate.assets import HytaleAssetError
+from hytalegym.worldgen.surrogate.block_identity import (
+    IDENTITY_INDEX_DTYPE,
+    CompiledBlockIdentity,
+    compile_block_identity,
+)
 from hytalegym.worldgen.surrogate.contract import SurrogateWorldCapacity
 from hytalegym.worldgen.surrogate.prefab import CompiledPrefabOverlay
 from hytalegym.worldgen.surrogate.semantics import (
@@ -87,6 +92,8 @@ class ResolvedPrefabOverlay:
     cell_code: np.ndarray
     state_slot: np.ndarray
     palette: CompiledSemanticPalette
+    identity: CompiledBlockIdentity
+    cell_identity: np.ndarray
 
     @property
     def cell_count(self) -> int:
@@ -410,13 +417,20 @@ def resolve_static_prefab_overlay(
             semantic.support,
             semantic.filler,
         )
+    identity = compile_block_identity(resolved)
+    cell_identity = np.zeros(overlay.cell_mask.shape, dtype=IDENTITY_INDEX_DTYPE)
+    for index, semantic in active:
+        cell_identity[index] = identity.row_for(semantic)
     cell_code.flags.writeable = False
     state_slot.flags.writeable = False
+    cell_identity.flags.writeable = False
     return ResolvedPrefabOverlay(
         source=overlay,
         cell_code=cell_code,
         state_slot=state_slot,
         palette=palette,
+        identity=identity,
+        cell_identity=cell_identity,
     )
 
 

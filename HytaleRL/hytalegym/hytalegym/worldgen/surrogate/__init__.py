@@ -91,6 +91,15 @@ from hytalegym.worldgen.surrogate.props import (
     biome_prefab_source_bundle_sha256,
     plan_biome_prefab_tile,
 )
+from hytalegym.worldgen.surrogate.block_identity import (
+    AIR_IDENTITY_ROW,
+    BLOCK_IDENTITY_PROVENANCE,
+    IDENTITY_INDEX_DTYPE,
+    BlockIdentityRow,
+    CompiledBlockIdentity,
+    compile_block_identity,
+    merge_block_identities,
+)
 from hytalegym.worldgen.surrogate.palette import (
     CompiledSemanticPalette,
     ResolvedPrefabOverlay,
@@ -134,7 +143,14 @@ from hytalegym.worldgen.surrogate.spawn_markers import (
 )
 
 __all__ = [
+    "AIR_IDENTITY_ROW",
     "ASSIGNMENT_PREFIX",
+    "BLOCK_IDENTITY_PROVENANCE",
+    "BlockIdentityRow",
+    "CompiledBlockIdentity",
+    "IDENTITY_INDEX_DTYPE",
+    "compile_block_identity",
+    "merge_block_identities",
     "BIOME_PREFIX",
     "BIOME_CAPACITY",
     "BLOCK_SET_PREFIX",

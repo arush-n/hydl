@@ -11,6 +11,11 @@ from hytalegym.worldgen.surrogate.assets import (
     HytaleAssetError,
     decode_prefab_filler,
 )
+from hytalegym.worldgen.surrogate.block_identity import (
+    IDENTITY_INDEX_DTYPE,
+    CompiledBlockIdentity,
+    compile_block_identity,
+)
 from hytalegym.worldgen.surrogate.contract import SurrogateWorldCapacity
 from hytalegym.worldgen.surrogate.palette import (
     CompiledSemanticPalette,
@@ -48,6 +53,7 @@ class CompiledStatefulBlocks:
     transition_mask: np.ndarray
     asset_ids: tuple[str, ...]
     state_names: tuple[tuple[str, ...], ...]
+    variant_identity: np.ndarray
 
     @property
     def block_count(self) -> int:
@@ -82,6 +88,8 @@ class ResolvedStatefulPrefabOverlay:
     state_slot: np.ndarray
     palette: CompiledSemanticPalette
     stateful: CompiledStatefulBlocks
+    identity: CompiledBlockIdentity
+    cell_identity: np.ndarray
 
     @property
     def cell_count(self) -> int:
@@ -213,6 +221,11 @@ def resolve_stateful_prefab_overlay(
             semantic.filler,
         )
 
+    identity = compile_block_identity(semantics)
+    cell_identity = np.zeros(overlay.cell_mask.shape, dtype=IDENTITY_INDEX_DTYPE)
+    for index, semantic in active:
+        cell_identity[index] = identity.row_for(semantic)
+
     block_capacity = layout.stateful_block_capacity
     states = layout.states_per_block
     block_mask = np.zeros(block_capacity, dtype=np.bool_)
@@ -231,6 +244,7 @@ def resolve_stateful_prefab_overlay(
     initial_state = np.zeros(block_capacity, dtype=np.uint8)
     yaw = np.zeros(block_capacity, dtype=np.uint8)
     variant_code = np.zeros((block_capacity, states), dtype=np.uint16)
+    variant_identity = np.zeros((block_capacity, states), dtype=IDENTITY_INDEX_DTYPE)
     success_target = np.zeros(
         (block_capacity, states, DOOR_SIDE_COUNT),
         dtype=np.uint8,
@@ -268,6 +282,11 @@ def resolve_stateful_prefab_overlay(
                 open_out.filler,
             ),
         ]
+        variant_identity[slot, :DOOR_PHYSICAL_STATE_COUNT] = [
+            identity.row_for(default),
+            identity.row_for(open_in),
+            identity.row_for(open_out),
+        ]
         success_target[slot, DOOR_CLOSED] = [DOOR_OPEN_OUT, DOOR_OPEN_IN]
         success_target[slot, DOOR_OPEN_IN] = DOOR_CLOSED
         success_target[slot, DOOR_OPEN_OUT] = DOOR_CLOSED
@@ -294,6 +313,9 @@ def resolve_stateful_prefab_overlay(
             )
             for variant in simple.variants
         ]
+        variant_identity[offset, : len(simple.names)] = [
+            identity.row_for(variant) for variant in simple.variants
+        ]
         for source, target in enumerate(simple.target_by_state):
             success_target[offset, source] = source
             blocked_target[offset, source] = source
@@ -306,6 +328,7 @@ def resolve_stateful_prefab_overlay(
 
     arrays = (
         cell_code,
+        cell_identity,
         state_slot,
         block_mask,
         block_key,
@@ -315,6 +338,7 @@ def resolve_stateful_prefab_overlay(
         initial_state,
         yaw,
         variant_code,
+        variant_identity,
         success_target,
         blocked_target,
         transition_mask,
@@ -326,6 +350,8 @@ def resolve_stateful_prefab_overlay(
         cell_code=cell_code,
         state_slot=state_slot,
         palette=palette,
+        identity=identity,
+        cell_identity=cell_identity,
         stateful=CompiledStatefulBlocks(
             block_mask=block_mask,
             block_key=block_key,
@@ -340,6 +366,7 @@ def resolve_stateful_prefab_overlay(
             transition_mask=transition_mask,
             asset_ids=tuple(asset_ids),
             state_names=tuple(state_names),
+            variant_identity=variant_identity,
         ),
     )
 

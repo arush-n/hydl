@@ -17,6 +17,9 @@ from hytalegym.jax.world.surrogate.artifact import (
     create_surrogate_world_artifact,
 )
 from hytalegym.jax.world.surrogate.atlas import surrogate_atlas_from_tiles
+from hytalegym.jax.world.surrogate.block_identity import (
+    surrogate_block_identity_from_tiles,
+)
 from hytalegym.jax.world.surrogate.capabilities import (
     SURROGATE_CAPABILITY_BLOCK_GEOMETRY,
     SURROGATE_CAPABILITY_ENTITY_GEOMETRY,
@@ -122,6 +125,9 @@ def build_offline_surrogate_world(
         raise TypeError("terrain_spec must be a TerrainGeneratorSpec")
     if not isinstance(terrain_palette, CompiledSemanticPalette):
         raise TypeError("terrain_palette must be a CompiledSemanticPalette")
+    if terrain_spec.identity is None:
+        raise ValueError("terrain block identity is required for surrogate artifacts")
+    _validate_terrain_identity(terrain_spec, terrain_palette)
     layers = tuple(biome_prefab_layers)
     if any(not isinstance(value, SurrogateBiomePrefabLayer) for value in layers):
         raise TypeError("biome_prefab_layers contains an invalid layer")
@@ -249,10 +255,18 @@ def build_offline_surrogate_world(
     graph_slots: list[CompiledTraversalGraph | None] = list(graphs)
     graph_slots.extend([None] * (tiles - len(graphs)))
     traversal = traversal_atlas_from_graphs(atlas, graph_slots)
+    block_identity = surrogate_block_identity_from_tiles(
+        terrain,
+        terrain_spec.identity,
+        overlays,
+        capacity=layout,
+        tile_capacity=tiles,
+    )
     artifact = create_surrogate_world_artifact(
         atlas,
         traversal,
         spawn_markers,
+        block_identity=block_identity,
         contract=_artifact_contract(
             archive=archive,
             terrain_spec=terrain_spec,
@@ -284,6 +298,54 @@ def build_offline_surrogate_world(
         entities=entities,
         graphs=graphs,
     )
+
+
+def _validate_terrain_identity(
+    terrain_spec: TerrainGeneratorSpec,
+    palette: CompiledSemanticPalette,
+) -> None:
+    identity = terrain_spec.identity
+    if identity is None:
+        raise ValueError("terrain block identity is required")
+    config = terrain_spec.config
+    count = len(terrain_spec.biome_names)
+    surface_codes = np.asarray(jax.device_get(config.surface_cell_code))
+    subsurface_codes = np.asarray(jax.device_get(config.subsurface_cell_code))
+    surface_rows = np.asarray(jax.device_get(config.surface_identity_index))
+    subsurface_rows = np.asarray(jax.device_get(config.subsurface_identity_index))
+    pairs = [
+        (surface_codes[index], surface_rows[index], "surface")
+        for index in range(count)
+    ] + [
+        (subsurface_codes[index], subsurface_rows[index], "subsurface")
+        for index in range(count)
+    ]
+    pairs.append(
+        (
+            np.asarray(jax.device_get(config.default_surface_cell_code)),
+            np.asarray(jax.device_get(config.default_surface_identity_index)),
+            "default surface",
+        )
+    )
+    pairs.append(
+        (
+            np.asarray(jax.device_get(config.default_subsurface_cell_code)),
+            np.asarray(jax.device_get(config.default_subsurface_identity_index)),
+            "default subsurface",
+        )
+    )
+    for code, row, label in pairs:
+        key = identity.keys[int(row)]
+        if key is None:
+            raise ValueError(f"{label} terrain identity is air")
+        try:
+            expected = palette.cell_code(*key)
+        except KeyError as error:
+            raise ValueError(
+                f"{label} terrain identity is absent from the terrain palette"
+            ) from error
+        if expected != int(code):
+            raise ValueError(f"{label} terrain identity names another cell code")
 
 
 def _validate_biome_prefab_layers(

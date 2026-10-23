@@ -15,6 +15,12 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from hytalegym.jax.world.surrogate.block_identity import (
+    CELL_KINDS,
+    SurrogateBlockIdentity,
+    surrogate_cell_identity,
+    validate_block_identity,
+)
 from hytalegym.jax.world.surrogate.perception import (
     surrogate_entity_visibility_contract,
 )
@@ -33,6 +39,7 @@ from hytalegym.jax.world.surrogate.types import (
 )
 from hytalegym.worldgen.region import CHUNK_SIZE
 from hytalegym.worldgen.surrogate import (
+    BLOCK_IDENTITY_PROVENANCE,
     SURROGATE_BIOME_PREFAB_LAYER_VERSION,
     SURROGATE_WORLD_SCHEMA,
     SURROGATE_WORLD_VERSION,
@@ -42,13 +49,16 @@ from hytalegym.worldgen.surrogate import (
     estimate_surrogate_atlas_bytes,
 )
 
-SURROGATE_ARTIFACT_SCHEMA = "hytalerl_surrogate_world_artifact_v5"
-SURROGATE_ARTIFACT_VERSION = 5
+SURROGATE_ARTIFACT_SCHEMA = "hytalerl_surrogate_world_artifact_v6"
+SURROGATE_ARTIFACT_VERSION = 6
+_LEGACY_SURROGATE_ARTIFACT_SCHEMA = "hytalerl_surrogate_world_artifact_v5"
+_LEGACY_SURROGATE_ARTIFACT_VERSION = 5
 _MANIFEST_KEY = "__manifest_json__"
 _DIGEST_KEY = "__artifact_sha256__"
 _ATLAS_PREFIX = "atlas__"
 _SPAWN_MARKER_PREFIX = "spawn_marker__"
 _TRAVERSAL_PREFIX = "traversal__"
+_IDENTITY_PREFIX = "identity__"
 _PROBABILITY_EPSILON = 1e-12
 
 
@@ -60,6 +70,7 @@ class SurrogateWorldArtifact:
     atlas: SurrogateAtlas
     traversal: SurrogateTraversalAtlas
     spawn_markers: SurrogateSpawnMarkerCatalog
+    block_identity: SurrogateBlockIdentity | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.atlas, SurrogateAtlas):
@@ -68,27 +79,55 @@ class SurrogateWorldArtifact:
             raise TypeError("traversal must be a SurrogateTraversalAtlas")
         if not isinstance(self.spawn_markers, SurrogateSpawnMarkerCatalog):
             raise TypeError("spawn_markers must be a SurrogateSpawnMarkerCatalog")
+        if self.block_identity is not None and not isinstance(
+            self.block_identity,
+            SurrogateBlockIdentity,
+        ):
+            raise TypeError("block_identity must be a SurrogateBlockIdentity")
         manifest = _json_copy(self.manifest)
         _validate_manifest(
             manifest,
             self.atlas,
             self.traversal,
             self.spawn_markers,
+            self.block_identity,
         )
         object.__setattr__(self, "manifest", manifest)
 
     @property
     def semantic_sha256(self) -> str:
         digest = hashlib.sha256(_canonical_json(self.manifest).encode())
-        for prefix, tree in (
-            (_ATLAS_PREFIX, self.atlas),
-            (_TRAVERSAL_PREFIX, self.traversal),
-            (_SPAWN_MARKER_PREFIX, self.spawn_markers),
+        for prefix, tree in _artifact_trees(
+            self.atlas,
+            self.traversal,
+            self.spawn_markers,
+            self.block_identity,
         ):
             for name, value in zip(tree._fields, tree, strict=True):
                 digest.update(f"{prefix}{name}".encode())
                 _update_array_digest(digest, value)
         return digest.hexdigest()
+
+    @property
+    def has_block_identity(self) -> bool:
+        """False for schema v5 artifacts, which store no block identity."""
+
+        return self.block_identity is not None
+
+    def cell_semantic_ids(self, kind: str) -> np.ndarray:
+        """Semantic ID of every stored cell of one kind, read from its index."""
+
+        return self._cell_identity(kind)[0]
+
+    def cell_asset_ids(self, kind: str) -> np.ndarray:
+        """Asset ID string of every stored cell of one kind, read from its index."""
+
+        return self._cell_identity(kind)[1]
+
+    def _cell_identity(self, kind: str) -> tuple[np.ndarray, np.ndarray]:
+        if self.block_identity is None:
+            raise ValueError("surrogate artifact has no block identity (schema v5)")
+        return surrogate_cell_identity(self.block_identity, kind)
 
     def save(self, path: str | Path) -> Path:
         """Atomically write compressed numeric arrays without pickle payloads."""
@@ -99,10 +138,11 @@ class SurrogateWorldArtifact:
             _MANIFEST_KEY: np.asarray(_canonical_json(self.manifest)),
             _DIGEST_KEY: np.asarray(self.semantic_sha256),
         }
-        for prefix, tree in (
-            (_ATLAS_PREFIX, self.atlas),
-            (_TRAVERSAL_PREFIX, self.traversal),
-            (_SPAWN_MARKER_PREFIX, self.spawn_markers),
+        for prefix, tree in _artifact_trees(
+            self.atlas,
+            self.traversal,
+            self.spawn_markers,
+            self.block_identity,
         ):
             payload.update(
                 {
@@ -131,9 +171,16 @@ class SurrogateWorldArtifact:
 
     @classmethod
     def load(cls, path: str | Path) -> "SurrogateWorldArtifact":
-        """Load, schema-check, and hash-check a portable artifact."""
+        """Load, schema-check, and hash-check a portable artifact.
+
+        Schema v5 artifacts load with block identity absent; v6 loads both.
+        """
 
         with np.load(Path(path), allow_pickle=False) as archive:
+            if _MANIFEST_KEY not in archive.files:
+                raise ValueError("surrogate artifact manifest is missing")
+            manifest = json.loads(str(archive[_MANIFEST_KEY].item()))
+            identity_expected = _declares_block_identity(manifest)
             expected = {
                 _MANIFEST_KEY,
                 _DIGEST_KEY,
@@ -146,6 +193,11 @@ class SurrogateWorldArtifact:
                     f"{_SPAWN_MARKER_PREFIX}{name}"
                     for name in SurrogateSpawnMarkerCatalog._fields
                 ),
+                *(
+                    f"{_IDENTITY_PREFIX}{name}"
+                    for name in SurrogateBlockIdentity._fields
+                    if identity_expected
+                ),
             }
             actual = set(archive.files)
             if actual != expected:
@@ -154,7 +206,6 @@ class SurrogateWorldArtifact:
                     f"missing={sorted(expected - actual)}, "
                     f"extra={sorted(actual - expected)}"
                 )
-            manifest = json.loads(str(archive[_MANIFEST_KEY].item()))
             declared = str(archive[_DIGEST_KEY].item())
             atlas = SurrogateAtlas(
                 *(
@@ -174,11 +225,20 @@ class SurrogateWorldArtifact:
                     for name in SurrogateSpawnMarkerCatalog._fields
                 )
             )
+            block_identity = None
+            if identity_expected:
+                block_identity = SurrogateBlockIdentity(
+                    *(
+                        np.asarray(archive[f"{_IDENTITY_PREFIX}{name}"]).copy()
+                        for name in SurrogateBlockIdentity._fields
+                    )
+                )
         artifact = cls(
             manifest=manifest,
             atlas=atlas,
             traversal=traversal,
             spawn_markers=spawn_markers,
+            block_identity=block_identity,
         )
         if declared != artifact.semantic_sha256:
             raise ValueError("surrogate artifact semantic SHA-256 mismatch")
@@ -191,24 +251,86 @@ def create_surrogate_world_artifact(
     spawn_markers: SurrogateSpawnMarkerCatalog,
     *,
     contract: Mapping[str, Any],
+    block_identity: SurrogateBlockIdentity,
 ) -> SurrogateWorldArtifact:
     """Bind validated fixed arrays to one canonical host contract."""
 
+    if not isinstance(block_identity, SurrogateBlockIdentity):
+        raise TypeError("block_identity must be a SurrogateBlockIdentity")
+    host_contract = _json_copy(contract)
+    host_contract["block_identity"] = {
+        "provenance": BLOCK_IDENTITY_PROVENANCE,
+        "table_rows": int(block_identity.identity_asset_id.shape[0]),
+        "cell_kinds": list(CELL_KINDS),
+        "index_dtype": "uint16",
+    }
     manifest = {
         "schema": SURROGATE_ARTIFACT_SCHEMA,
         "version": SURROGATE_ARTIFACT_VERSION,
         "authority": "non_authoritative_hytale_informed_surrogate",
         "world_schema": SURROGATE_WORLD_SCHEMA,
         "world_version": SURROGATE_WORLD_VERSION,
-        "contract": _json_copy(contract),
-        "arrays": _array_specs(atlas, traversal, spawn_markers),
+        "contract": host_contract,
+        "arrays": _array_specs(
+            atlas,
+            traversal,
+            spawn_markers,
+            block_identity,
+        ),
     }
     return SurrogateWorldArtifact(
         manifest=manifest,
         atlas=atlas,
         traversal=traversal,
         spawn_markers=spawn_markers,
+        block_identity=block_identity,
     )
+
+
+def _declares_block_identity(manifest: object) -> bool:
+    if not isinstance(manifest, dict):
+        raise TypeError("surrogate artifact manifest must be an object")
+    pair = (manifest.get("schema"), manifest.get("version"))
+    if pair == (SURROGATE_ARTIFACT_SCHEMA, SURROGATE_ARTIFACT_VERSION):
+        return True
+    if pair == (_LEGACY_SURROGATE_ARTIFACT_SCHEMA, _LEGACY_SURROGATE_ARTIFACT_VERSION):
+        return False
+    raise ValueError("unsupported surrogate artifact contract")
+
+
+def _artifact_trees(
+    atlas: SurrogateAtlas,
+    traversal: SurrogateTraversalAtlas,
+    spawn_markers: SurrogateSpawnMarkerCatalog,
+    block_identity: SurrogateBlockIdentity | None,
+) -> list[tuple[str, tuple[Any, ...]]]:
+    trees: list[tuple[str, tuple[Any, ...]]] = [
+        (_ATLAS_PREFIX, atlas),
+        (_TRAVERSAL_PREFIX, traversal),
+        (_SPAWN_MARKER_PREFIX, spawn_markers),
+    ]
+    if block_identity is not None:
+        trees.append((_IDENTITY_PREFIX, block_identity))
+    return trees
+
+
+def _validate_block_identity_contract(
+    value: object,
+    identity: SurrogateBlockIdentity,
+) -> None:
+    if not isinstance(value, dict) or set(value) != {
+        "provenance",
+        "table_rows",
+        "cell_kinds",
+        "index_dtype",
+    }:
+        raise ValueError("block identity contract fields differ")
+    if value["provenance"] != BLOCK_IDENTITY_PROVENANCE:
+        raise ValueError("block identity provenance must be surrogate")
+    if value["table_rows"] != int(identity.identity_asset_id.shape[0]):
+        raise ValueError("block identity table size differs from manifest")
+    if value["cell_kinds"] != list(CELL_KINDS) or value["index_dtype"] != "uint16":
+        raise ValueError("block identity cell layout differs from manifest")
 
 
 def _validate_manifest(
@@ -216,6 +338,7 @@ def _validate_manifest(
     atlas: SurrogateAtlas,
     traversal: SurrogateTraversalAtlas,
     spawn_markers: SurrogateSpawnMarkerCatalog,
+    block_identity: SurrogateBlockIdentity | None = None,
 ) -> None:
     if set(manifest) != {
         "schema",
@@ -227,10 +350,11 @@ def _validate_manifest(
         "arrays",
     }:
         raise ValueError("surrogate artifact manifest fields differ")
+    identity_expected = _declares_block_identity(manifest)
+    if identity_expected != (block_identity is not None):
+        raise ValueError("block identity presence differs from the manifest schema")
     if (
-        manifest["schema"] != SURROGATE_ARTIFACT_SCHEMA
-        or manifest["version"] != SURROGATE_ARTIFACT_VERSION
-        or manifest["authority"] != "non_authoritative_hytale_informed_surrogate"
+        manifest["authority"] != "non_authoritative_hytale_informed_surrogate"
         or manifest["world_schema"] != SURROGATE_WORLD_SCHEMA
         or manifest["world_version"] != SURROGATE_WORLD_VERSION
     ):
@@ -256,8 +380,15 @@ def _validate_manifest(
         "unsupported_mechanics",
         "certification",
     }
+    if identity_expected:
+        required = {*required, "block_identity"}
     if set(contract) != required:
         raise ValueError("surrogate artifact contract fields differ")
+    if block_identity is not None:
+        _validate_block_identity_contract(
+            contract["block_identity"],
+            block_identity,
+        )
     if contract["entity_visibility_contract"] != surrogate_entity_visibility_contract():
         raise ValueError("surrogate entity visibility contract differs")
     capacity_values = contract["capacity"]
@@ -282,8 +413,15 @@ def _validate_manifest(
     graph_mask = np.asarray(jax.device_get(traversal.graph_mask), dtype=np.bool_)
     if not np.array_equal(active, graph_mask):
         raise ValueError("atlas and traversal publication masks differ")
-    if manifest["arrays"] != _array_specs(atlas, traversal, spawn_markers):
+    if manifest["arrays"] != _array_specs(
+        atlas,
+        traversal,
+        spawn_markers,
+        block_identity,
+    ):
         raise ValueError("surrogate artifact array schema differs")
+    if block_identity is not None:
+        validate_block_identity(block_identity, atlas)
     if (
         not _all_finite(atlas)
         or not _all_finite(traversal)
@@ -893,12 +1031,14 @@ def _array_specs(
     atlas: SurrogateAtlas,
     traversal: SurrogateTraversalAtlas,
     spawn_markers: SurrogateSpawnMarkerCatalog,
+    block_identity: SurrogateBlockIdentity | None = None,
 ) -> dict[str, dict[str, object]]:
     result: dict[str, dict[str, object]] = {}
-    for prefix, tree in (
-        (_ATLAS_PREFIX, atlas),
-        (_TRAVERSAL_PREFIX, traversal),
-        (_SPAWN_MARKER_PREFIX, spawn_markers),
+    for prefix, tree in _artifact_trees(
+        atlas,
+        traversal,
+        spawn_markers,
+        block_identity,
     ):
         for name, value in zip(tree._fields, tree, strict=True):
             array = np.asarray(jax.device_get(value))
