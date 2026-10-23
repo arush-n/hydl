@@ -11,7 +11,21 @@ Switch ``Constructs.magic_costs``: gen 5 keeps the native NPC rows (cost x2, no 
   (javap of HytaleServer.jar): the cost is taken once.
 * Spellbook: ``Interactions/Weapons/Spellbook/Attacks/Spellbook_Cast_Hurl_Charged.json`` gates on ``Costs`` (25 by default,
   100 by ``InteractionVars/Spellbook_Cast_Hurl_Charged/Costs``) and charges ``Spellbook_Cast_Hurl_Cost`` (-100).
-* Zero mana: Crystal_Flame (MagicCharges and DeployablePreview only), Crystal_Ice (Stamina 0.1 gate), Stoneskin and Root wands.
+* Zero mana: Crystal_Flame (MagicCharges and DeployablePreview only), Crystal_Ice (its Summon cost is 0; the cast below
+  carries the stamina), Stoneskin and Root wands.
+
+0.7.2 authored stamina (same asset tree, read 2026-10-23; FIDELITY row 7c, stamina part):
+* Staff cast: ``Staff_Cast_Summon_Charged.json`` ``Replace`` ``Staff_Cast_Summon_StaminaCost`` with the default ``ChangeStat``
+  Stamina -5 at RunTime 0.167 (Parallel). No staff item in ``Items/Weapon/Staff/*.json`` overrides it except Crystal_Ice.
+  No ``StatsCondition``: never refused. Applies to every staff row below except Crystal_Flame and Crystal_Ice.
+* Crystal_Ice, NOT APPLIED (the sim keeps its current gen-5 stamina rows): its ``InteractionVars/Staff_Cast_Summon_StaminaCost``
+  is zeroed, and its ``Staff_Cast_Summon_Launch`` override carries ``ChangeStat`` Stamina -5 at 0.167. The cast is reached
+  through the Primary root ``Ice_Staff_Primary_Wrapper.json`` (``StatsCondition`` Stamina 0.1, then ``Staff_Primary`` ->
+  Charging -> index 1 ``Staff_Cast_Summon_Charged``). The bolt ``Ice/Ice_Staff_Primary_Entry.json`` is a ``StatsCondition``
+  Stamina 1.51, then ``ChangeStat`` Stamina -1.5 at 0. Not applied: the authored ice chain needs ``Ingredient_Ice_Essence``
+  (ModifyInventory), which the sim does not model; decided separately.
+  The legacy ``Staff_Primary`` has no Stamina gate.
+* Wands, spellbooks, Crystal_Flame, Stoneskin and Root: no Stamina in their item or interaction JSON (scan of ``Assets.zip``).
 
 ``skeleton_mage_spellbook`` compiles the NPC root ``Server/Item/Interactions/NPCs/Undead/Skeleton_Sand_Mage/
 Skeleton_Sand_Mage_Spellbook_Corruption_Orb.json`` (profiles/hytale_0_5_7.py:3367-3373), which has no Mana, Cost,
@@ -86,13 +100,26 @@ ROWS: dict[str, MagicRow] = {
     "root_wand": MagicRow("Weapon_Wand_Root", 0.0, False),
 }
 
+#: Stamina per profile: ((ability asset or None for the cast ability, authored cost, authored gate, commit seconds), ...).
+#: Authored in the module docstring (0.7.2 staff cast default -5 at 0.167). Crystal_Ice is not listed; see the comment below.
+_STAFF_CAST = (None, 5.0, 0.0, COMMIT_SECONDS)
+STAMINA: dict[str, tuple[tuple[str | None, float, float, float], ...]] = {
+    name: (_STAFF_CAST,)
+    for name, row in ROWS.items()
+    if (row.item.startswith("Weapon_Staff_") or row.item == "Halloween_Broomstick")
+    and row.item not in ("Weapon_Staff_Crystal_Flame", "Weapon_Staff_Crystal_Ice")
+}
+# ice_staff is deliberately absent: not applied. The authored ice chain needs Ingredient_Ice_Essence (ModifyInventory), which
+# the sim does not model; decided separately. Its stamina stays at the current sim rows (gen-5 values).
+
 
 def construct_entities(original: Any, profile: Any) -> Any:
-    """Wrap ``hytale_0_5_7_entity_loadouts``: for magic entities, one 0.7.2 mana charge on the cast ability.
+    """Wrap ``hytale_0_5_7_entity_loadouts``: for magic entities, one 0.7.2 mana and stamina charge per cast.
 
     The cast ability is the last authored ability of each magic profile (the staff, wand and spellbook casts are appended
-    after the melee or the single attack). The cost kind becomes ``SINGLE_APPLICATION`` (x1, not the gen-5 NPC x2); a
-    wand or spellbook gets ``ability_resource_minimum`` = cost, which refuses the cast below it (``ability.py`` admission).
+    after the melee or the single attack). The cost kind becomes ``SINGLE_APPLICATION``
+    (x1, not the gen-5 NPC x2); a wand or spellbook gets ``ability_resource_minimum`` = mana cost, which refuses the cast
+    below it (``ability.py`` admission). A stamina row sets its authored gate (0 where the cast has none).
     """
 
     if not profile.constructs.magic_costs:
@@ -100,6 +127,7 @@ def construct_entities(original: Any, profile: Any) -> Any:
 
     env = original.__globals__
     mana = env["RESOURCE_MANA"]
+    stamina = env["RESOURCE_STAMINA"]
     single = env["RESOURCE_COST_SINGLE_APPLICATION"]
     parallel = env["EVENT_FLAG_PARALLEL_FORK"]
 
@@ -107,20 +135,26 @@ def construct_entities(original: Any, profile: Any) -> Any:
     def hytale_0_5_7_entity_loadouts(entity_profiles: Any) -> Any:
         loadout = original(entity_profiles)
         catalog = env["_CATALOG"]  # defined after this hook is applied, so read it per call
-        edits = [
+        mana_edits = [
             (i, j, name)
             for i, row in enumerate(entity_profiles)
             for j, name in enumerate(row)
             if name in ROWS and ROWS[name].mana > 0.0
         ]
-        if not edits:
+        stamina_edits = [
+            (i, j, name)
+            for i, row in enumerate(entity_profiles)
+            for j, name in enumerate(row)
+            if name in STAMINA
+        ]
+        if not mana_edits and not stamina_edits:
             return loadout
         cost = loadout.ability_resource_cost
         kind = loadout.ability_resource_cost_kind
         commit = loadout.ability_resource_commit_time_seconds
         flags = loadout.ability_resource_commit_flags
         minimum = loadout.ability_resource_minimum
-        for i, j, name in edits:
+        for i, j, name in mana_edits:
             row = ROWS[name]
             ability = len(catalog[name]()["abilities"]) - 1
             index = (i, j, ability, mana)
@@ -129,6 +163,16 @@ def construct_entities(original: Any, profile: Any) -> Any:
             commit = commit.at[index].set(jnp.float32(COMMIT_SECONDS))
             flags = flags.at[index].set(parallel)
             minimum = minimum.at[index].set(jnp.float32(row.mana if row.gate else 0.0))
+        for i, j, name in stamina_edits:
+            assets = [a.get("asset") for a in catalog[name]()["abilities"]]
+            for asset, amount, gate, seconds in STAMINA[name]:
+                ability = len(assets) - 1 if asset is None else assets.index(asset)
+                index = (i, j, ability, stamina)
+                cost = cost.at[index].set(jnp.float32(amount))
+                kind = kind.at[index].set(single)
+                commit = commit.at[index].set(jnp.float32(seconds))
+                flags = flags.at[index].set(parallel)
+                minimum = minimum.at[index].set(jnp.float32(gate))
         return loadout._replace(
             ability_resource_cost=cost,
             ability_resource_cost_kind=kind,

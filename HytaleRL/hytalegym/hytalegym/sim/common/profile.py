@@ -41,8 +41,9 @@ class Constructs:
     # Rune items cast abilities (fireball, wind strike, chain hook, ground slam,
     # charged shot, enrage, poison imbue...). Owner: mana.py (P3).
     rune_casting: bool = False
-    # Magic casts charge the 0.7.2 mana once (staff 50, wand 25 with a refusal gate, spellbook 100 with a gate). Gen 5 keeps
-    # the native NPC cost (two applications). Owner: sim/gen7/mechanics/magic_costs.py (row 7c).
+    # Magic casts charge the 0.7.2 mana once (staff 50, wand 25 with a refusal gate, spellbook 100 with a gate) and a staff
+    # cast's stamina once (5). Gen 5 keeps the native NPC cost (two applications). Owner: sim/gen7/mechanics/magic_costs.py
+    # (row 7c).
     magic_costs: bool = False
     # Tool_Hookshot: fire, attach, pull. Owner: hookshot.py (P3, on demand).
     hookshot: bool = False

@@ -1053,10 +1053,12 @@ HOOKS = (
          "loadout (arsenal/factory.py mechanics_rules_for_loadout), so the reset and the observation read 100 / 100"),
     Hook("magic_costs", PROFILE_JAX, "hytale_0_5_7_entity_loadouts",
          f"{_MECHANICS}.magic_costs:construct_entities", "magic_costs", "active", "7c",
-         "tests/sim/test_magic_mana.py: per named weapon the gen-7 loadout reads the 0.7.2 cost and kind; the render "
-         "drain (run_magic harness): iron staff 50, wood wand 25, fire spellbook 100, grimoire 100, ice staff 0; gen 5 unchanged",
-         "one 0.7.2 charge per cast (SINGLE_APPLICATION x1, was NATIVE_NPC_INSTANT_ADD_STAT x2); wands and spellbooks refuse "
-         "below their cost (ability_resource_minimum); the purple grimoire's skeleton profile gains its 100 cost"),
+         "tests/sim/test_magic_mana.py and test_magic_stamina.py: per named weapon the gen-7 loadout reads the 0.7.2 cost and "
+         "kind; the render drain (run_magic harness): mana iron staff 50, wood wand 25, fire spellbook 100, grimoire 100, ice "
+         "staff 0; stamina 5 per staff cast (was 10); gen 5 unchanged",
+         "one 0.7.2 mana and stamina charge per cast (SINGLE_APPLICATION x1, was NATIVE_NPC_INSTANT_ADD_STAT x2); wands and "
+         "spellbooks refuse below their mana cost (ability_resource_minimum); skeleton_mage_spellbook (the NPC root) has no "
+         "cost; the ice staff's authored stamina is not applied (its chain needs Ingredient_Ice_Essence)"),
     Hook("rune_casting", PROFILE_JAX, "hytale_0_5_7_loadouts",
          f"{_MECHANICS}.mana:construct", "rune_casting", "stub", "7b",
          "one differential per rune: cost, cooldown, cast time, flight, effect",
