@@ -1286,3 +1286,8 @@ verdict: COMMITTED; not pushed.
 command: the coordinator's request (2026-10-22), after this lane offered it, to connect the decision layer's `writes` section (their 3a2d564) and the combiner's outcomes to the per-tick state.
 result: `step_lanes(trunk, state, observation, *, last_action, reset=None, write_lists=None, **step) -> (view, state, reasons)`: each lane's `Write` list at a decision (`shared_state.skill_writes.writes_for_tick`; None between decisions, since entries persist) is checked by `written.lower`, then `tick` runs with `respawn`, `outcomes` and `outcome_verbs`; the refusal reasons come back aligned with the lists for `record_write_results`, and `state.written.applied` gives the device's refusals as full. A new test drives it on the duel (one write accepted, one refused as wrong writer, a request outcome logged, an entry kept without a resend, a respawn restarting alarm and startle, a lane-count mismatch refused). The runtime, state and tandem tests: 56 passed. Additive (a new function, no existing path changed), so the package gate was not re-run for it; step 3's gate (8cba43a) is the base.
 verdict: COMMITTED; not pushed. The host loop that calls it is the coordinator's.
+
+## 2026-10-22 — skill_agent: the request outcomes' verb id space pinned (docstrings)
+command: the coordinator's question on `step_lanes` (their 99ad53a, 6c5d8b6): which index space `outcome_verbs` uses.
+result: the modules' verb vocabulary, `neural_skills/spec.py` `VERBS` (append-only; the ids the body's requests use), with -1 for a verb outside it, so an event's detail can never read as `walk_to` (id 0) by default. `state/events.py` `Observed.outcome_verbs` and `state/layer.py` `step`'s Args say so. Docstrings only.
+verdict: COMMITTED; not pushed.

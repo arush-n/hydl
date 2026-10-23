@@ -126,7 +126,8 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
         capacities: Slots per type.
         outcomes: int32[B, OUTCOME_SLOTS], this tick's request outcomes from the runtime (0 none, 1 done, 2 failed,
             3 aborted), or zeros when None.
-        outcome_verbs: int32[B, OUTCOME_SLOTS], each request's verb index, or zeros when None.
+        outcome_verbs: int32[B, OUTCOME_SLOTS], each request's verb id in ``neural_skills/spec.py`` ``VERBS`` (the
+            modules' append-only vocabulary; -1 for a verb outside it), or zeros when None.
         **adapter: Passed to ``adapter_v3.perceive_rows`` (``body_yaw_degrees``, ``tables``, ``action_surface``,
             ``block_reach_blocks``, ``light``, ``view_half_angle_degrees``).
     """

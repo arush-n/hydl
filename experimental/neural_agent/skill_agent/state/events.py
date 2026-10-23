@@ -101,7 +101,8 @@ class Observed(NamedTuple):
     item_counts: jax.Array  # float32[B, S]
     item_consumable: jax.Array  # bool[B, S]
     outcomes: jax.Array  # int32[B, R]: this tick's request outcomes; 0 none, 1 done, 2 failed, 3 aborted
-    outcome_verbs: jax.Array  # int32[B, R]: each request's verb index
+    outcome_verbs: jax.Array  # int32[B, R]: each request's verb id in ``neural_skills/spec.py`` ``VERBS`` (the
+    # modules' append-only vocabulary, the ids the body's requests use); -1 for a verb outside it
 
 
 class EventLog(NamedTuple):
