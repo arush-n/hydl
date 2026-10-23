@@ -34,7 +34,7 @@ from experimental.neural_agent.skill_agent.model.encoder import (
 from experimental.neural_agent.skill_agent.model.generalist import ARG_GROUPS, GeneralistRequests
 from experimental.neural_agent.skill_agent.model.skill_module import SkillModule, Trunk, check_trunk, module_outputs
 from experimental.neural_agent.skill_agent.runtime.combiner import AgentContext, BodyStep
-from experimental.neural_agent.skill_agent.contract.tokens_v3 import CAPACITIES_V3
+from experimental.neural_agent.skill_agent.contract.tokens_v3 import CAPACITIES_V3, EntityTokenV3
 from experimental.neural_agent.skill_agent.state import layer
 from experimental.neural_agent.skill_agent.state.action_history import HEAD_NEUTRAL
 from experimental.neural_agent.skill_agent.state.written import Write, lower
@@ -73,6 +73,46 @@ def tick(trunk: Trunk, state: layer.AgentState, observation: Any, *, last_action
                                  block=written.get("block_candidate", memory.block))
     view = StateView(encoded, {name: valid for name, (_, valid) in tokens.items()}, state.entity_ids)
     return view, state._replace(latent=encoded.memory, background=encoded.background, memory=memory)
+
+
+_ENTITY = {name: index for index, name in enumerate(EntityTokenV3.FEATURES)}
+_ATTITUDES = ("ignore", "hostile", "neutral", "friendly", "revered")
+
+
+def known_entities(state: layer.AgentState, own_position: Any = None, dt_seconds: float = 0.045
+                   ) -> list[list[dict[str, Any]]]:
+    """Each lane's known entities, for the shared scratchpad (host side, at a decision; the owner's ruling of
+    2026-10-22: the decision layer names entities by the ids this layer perceives). Read from the entity store
+    (``state/memory.py``), which holds every entity perceived lately, by id, with where it was and its columns as last
+    perceived. Per lane, visible ones first, then the most recently seen:
+
+    ``{"id", "visible", "age_s", "position" [x, y, z] (world, blocks; as last seen), "distance" (blocks, when
+    ``own_position`` float[B, 3] is given, else None), "hostile", "attitude" (or None while unknown), "health",
+    "alive", "player", "tagged"}``. The ids are the ones requests (``point``) and writes (``state/written.py``) take.
+    Empty lists without the agent's position (the stores do not anchor then)."""
+
+    store, now = state.memory.entity, np.asarray(state.memory.now)
+    valid, ids, ticks = np.asarray(store.valid), np.asarray(store.key_id), np.asarray(store.tick)
+    world, rows, tags = np.asarray(store.world), np.asarray(store.rows), np.asarray(store.tag)
+    here = None if own_position is None else np.asarray(own_position, np.float64)
+    lanes = []
+    for lane in range(valid.shape[0]):
+        known = []
+        for slot in np.flatnonzero(valid[lane] & (ids[lane] >= 0)):
+            row = rows[lane, slot]
+            attitudes = row[[_ENTITY[f"attitude_{name}"] for name in _ATTITUDES]]
+            known.append({
+                "id": int(ids[lane, slot]), "visible": bool(ticks[lane, slot] == now[lane]),
+                "age_s": float((now[lane] - ticks[lane, slot]) * dt_seconds),
+                "position": [float(x) for x in world[lane, slot]],
+                "distance": None if here is None else float(np.linalg.norm(world[lane, slot] - here[lane])),
+                "hostile": float(max(row[_ENTITY["attitude_hostile"]], row[_ENTITY["hostile"]])),
+                "attitude": _ATTITUDES[int(np.argmax(attitudes))] if row[_ENTITY["known"]] > 0.5 else None,
+                "health": float(row[_ENTITY["health_fraction"]]), "alive": bool(row[_ENTITY["alive"]] > 0.5),
+                "player": bool(row[_ENTITY["player"]] > 0.5), "tagged": float(tags[lane, slot])})
+        known.sort(key=lambda entity: (not entity["visible"], entity["age_s"]))
+        lanes.append(known)
+    return lanes
 
 
 class OwnPose(NamedTuple):
@@ -282,4 +322,4 @@ class ModuleBody:
 
 
 __all__ = ["AgentView", "Lowering", "ModuleBody", "OwnPose", "StateView", "encode_contexts", "entity_rows",
-           "host_inputs", "module_factors", "own_pose_channel", "point", "step_lanes", "tick"]
+           "host_inputs", "known_entities", "module_factors", "own_pose_channel", "point", "step_lanes", "tick"]
