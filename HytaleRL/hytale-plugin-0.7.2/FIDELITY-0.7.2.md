@@ -2359,7 +2359,7 @@ integrated jar `1F874DFC`).
 | landing slide | planar on L..L+3 | 0 | x0.672 per tick over 4 ground ticks | measured |
 | walk resume | first walking tick after landing (forward held) | L+3 | L+5 on both | measured |
 | distance in the air | | 0 | about 1.2 blocks | measured |
-| landing tick and L+4 | under load (1F874DFC smoke, 5-min average 12.8) | | the body lands one tick earlier (first-tick rise 0.193 against 0.170) and L+4 reads 0.261 (0.203 quiet); horizontal factors and the L+5 walk unchanged | LOAD-SENSITIVE; quiet re-run queued |
+| landing tick and L+4 | 1F874DFC smoke (5-min average 12.8) and the quiet re-run (start 5.6) | | both identical on all 8 jumps: the body lands one tick earlier (first-tick rise 0.193 against 0.170, i.e. about 0.0378 s ticks) and L+4 reads 0.261 (0.203 on DBB3736B); horizontal per-tick factors unchanged. Not load: run-phase s/tick 0.0363 and 0.0374 on 1F874DFC against 0.0344 on DBB3736B (task #137) | OPEN (native tick length) |
 | sim (gen-7 render) | the same arc | jump straight up (matched the old bridge) | construct `npc_jump_carry` (8d641b2): every tick within 0.02 blocks/s of the quiet DBB3736B arc; L+4 factor 0.45 fitted to one value | FIXED (quiet arc) |
 
 World-geometry token capacity on 0.7.2: 44 -> 96 (ServerProfile `world_geometry_token_capacity`; 0.5.7 keeps 44). The
