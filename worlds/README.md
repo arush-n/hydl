@@ -96,8 +96,9 @@ own spawn and target inside its world.
 
 Training runs currently always use the default library. `GET /api/worlds` lists
 the others so you can see what exists, but choosing one per run is not wired up
-yet — use `libraries.select(..., library=...)` directly if you need a specific
-library today.
+yet — use `libraries.select(..., library=...)` directly, or
+`worlds.region.load_region(library=...)` to bind a Region to one, if you need a
+specific library today.
 
 ## Adding a library
 

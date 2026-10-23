@@ -60,6 +60,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from worlds import libraries
+
 #: The Gym checkout whose published artifacts this library reads. Derived here
 #: rather than imported from ADK: this is the shared layer both ADK and Arena
 #: sit on, so it must not depend on either of them.
@@ -85,15 +87,29 @@ HYTALE_ROOT = GYM_ROOT.parent
 #: block interaction heads close. Verify with the provider check in
 #: `arena/tests/test_region_library_pin.py`, not by building a fixture.
 LIBRARY = HYTALE_ROOT / "artifacts" / "worldgen" / "region-library-v3-288"
-REGION_MANIFEST = LIBRARY / "manifest.json"
-#: v3 keeps the traversal sidecar at the library root; the pilot libraries
-#: nested it under `traversal-v2/`.
-TRAVERSAL_MANIFEST = (
-    LIBRARY / "traversal-manifest.json"
-    if (LIBRARY / "traversal-manifest.json").is_file()
-    else LIBRARY / "traversal-v2" / "traversal-manifest.json"
+
+
+def _library_manifests(library: Path) -> tuple[Path, Path, Path]:
+    """The region, traversal and block-semantic manifests under one library root.
+
+    v3 keeps its traversal sidecar at the library root; the pilot libraries nest
+    it under `traversal-v2/`. The block-semantic path is returned even when the
+    file is absent -- see :func:`block_semantics_available`.
+    """
+
+    traversal = library / "traversal-manifest.json"
+    if not traversal.is_file():
+        traversal = library / "traversal-v2" / "traversal-manifest.json"
+    return (
+        library / "manifest.json",
+        traversal,
+        library / "block-semantics-v1" / "manifest.json",
+    )
+
+
+REGION_MANIFEST, TRAVERSAL_MANIFEST, BLOCK_SEMANTIC_MANIFEST = _library_manifests(
+    LIBRARY
 )
-BLOCK_SEMANTIC_MANIFEST = LIBRARY / "block-semantics-v1" / "manifest.json"
 
 #: One directory per bridge generation, named by the leading bytes of the jar
 #: it was recorded against. Nothing here is authoritative on its own; the
@@ -126,6 +142,28 @@ def block_semantics_available() -> bool:
 
     return BLOCK_SEMANTIC_MANIFEST.is_file()
 
+
+def _resolve_library(library: str | None) -> tuple[Path, Path, Path | None]:
+    """The region, traversal and block-semantic manifests a Region load binds.
+
+    ``None`` is the default library and returns the module constants unchanged.
+    The block-semantic path is ``None`` where the chosen library has no sidecars.
+    """
+
+    if library is None:
+        return (
+            REGION_MANIFEST,
+            TRAVERSAL_MANIFEST,
+            BLOCK_SEMANTIC_MANIFEST if block_semantics_available() else None,
+        )
+    resolved = libraries.get(library)
+    if resolved is None:
+        known = ", ".join(item.id for item in libraries.discover()) or "none discovered"
+        raise ValueError(f"unknown Region library {library!r}; known: {known}")
+    region, traversal, block = _library_manifests(resolved.path)
+    return region, traversal, block if block.is_file() else None
+
+
 #: Seeds the Gym's action-surface gate uses, kept so a result here is
 #: comparable with theirs rather than being a fresh, unanchored sample.
 SELECTION_KEY = 1_197_923_983
@@ -137,7 +175,7 @@ NODE_SEED = 570_057
 CANDIDATE_CAPACITY = 16
 
 
-def missing() -> tuple[Path, ...]:
+def missing(paths: tuple[Path, ...] = REQUIRED) -> tuple[Path, ...]:
     """Which required artifacts are absent.
 
     A Region scene depends on published data, not only on code, so an empty
@@ -146,7 +184,7 @@ def missing() -> tuple[Path, ...]:
     broken".
     """
 
-    return tuple(path for path in REQUIRED if not path.exists())
+    return tuple(path for path in paths if not path.exists())
 
 
 def available() -> bool:
@@ -431,6 +469,7 @@ def load_region(
     working_set_capacity: int = 1,
     environment_diversity: bool = False,
     selection_seeds: tuple[int, ...] | None = None,
+    library: str | None = None,
 ) -> LoadedRegion:
     """Load the Region fixture and everything bound to it, without an environment.
 
@@ -475,6 +514,12 @@ def load_region(
     experiments only.** Any reach other than :func:`authored_reach` measures a
     world the server does not implement, so a number taken under an override
     is not a fidelity result -- it is evidence about the encoding's limits.
+
+    ``library`` names a world library from :mod:`worlds.libraries`, e.g.
+    ``region-library-pilot-v2-072``, the 0.7.2 library with block identity.
+    ``None`` is the default library and binds the module constants unchanged.
+    The block-semantic sidecars are bound only where that library has them, and
+    an unknown id raises ``ValueError`` naming the known ones.
     """
 
     if policy_controlled_targets and target_weapons is None:
@@ -486,7 +531,10 @@ def load_region(
         hytale_0_5_7_loadouts,
     )
 
-    absent = missing()
+    region_manifest, traversal_manifest, block_semantic_manifest = _resolve_library(
+        library
+    )
+    absent = missing((region_manifest, traversal_manifest, FIXTURE_BUILDER))
     if absent:
         raise FileNotFoundError(
             "the Region corpus is incomplete; a world-action measurement here "
@@ -526,10 +574,10 @@ def load_region(
         crafting_recording = candidate if candidate.exists() else None
 
     fixture = module.load_arsenal_region_fixture(
-        region_manifest=REGION_MANIFEST,
-        traversal_manifest=TRAVERSAL_MANIFEST,
-        expected_region_sha256=_identity(REGION_MANIFEST),
-        expected_traversal_sha256=_identity(TRAVERSAL_MANIFEST),
+        region_manifest=region_manifest,
+        traversal_manifest=traversal_manifest,
+        expected_region_sha256=_identity(region_manifest),
+        expected_traversal_sha256=_identity(traversal_manifest),
         batch_size=batch,
         selection_key=selection_key,
         assignment_key=ASSIGNMENT_KEY,
@@ -542,9 +590,7 @@ def load_region(
         environment_diversity=environment_diversity,
         selection_seeds=selection_seeds,
         action_surface_config=module.RegionActionSurfaceConfig(
-            block_semantic_manifest=(
-                BLOCK_SEMANTIC_MANIFEST if block_semantics_available() else None
-            ),
+            block_semantic_manifest=block_semantic_manifest,
             mutation_capacity=mutation_capacity,
             maximum_distance=reach,
             view_sector_full_angle_degrees=view_degrees,
