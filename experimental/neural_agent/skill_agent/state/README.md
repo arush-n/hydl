@@ -32,7 +32,7 @@ folder and rename it properly and add documentation"). The content registry and 
 | `action_history.py` | 72 | What the body last did: for each gen-7 action head, the last choice, whether it changed, and how many ticks it has been held (the `act` tokens). In neuroscience terms, an efference copy. |
 | `memory.py` | 322 | What the body remembers of where things are. The spatial map holds geometry cells, kept by recency (32 nearby cells since 2026-10-22, the background's cache beside the trunk's summary slots). The salient store holds entities by id and blocks by cell, kept by tag, then salience, then recency, each with its object latent (`docs/VIRTUAL_HUMAN.md` section 18: kept while the slot holds the same thing, zero for a new one). Both are anchored to the world by the agent's position, and written in one parallel pass a tick (2026-10-22: 7 to 13 times faster than the serial write, equal to it slot for slot when there is room; when candidates compete, the most salient win and pinned or refreshed slots stay). `object_slots` maps each important token row to its slot. Entity velocity and facing, and cell edges, are stored in world axes and turned into the current body frame on reading. Its tags are the decision layer's `remember` entries (`written.py`). |
 | `persona.py` | 121 | Identity: the registry's self section (`TRAITS`), 15.6's 23 traits and the motor signature's bias, each in [-1, 1] (APPROVED, `../docs/VIRTUAL_HUMAN.md` section 15.6). `sample_personas` draws correlated populations; `big_five` is a derived narrative view. The body reads 10 of them (15.1). |
-| `affect.py` | 314 | A proposal for the emotion variables: hand-coded rules for fear, anger, startle, valence, coping, a three-axis mood, and feelings toward up to 16 entities. Their constants are estimates. To reshape under the rulings: feelings toward others become written by the top two layers, and a fast reflex response stays a fixed rule (open question 1). |
+| `affect.py` | 385 | A proposal for the emotion variables: hand-coded rules for fear, anger, startle, valence, coping, a three-axis mood, and feelings toward up to 16 entities. Their constants are estimates. Since step 3 (2026-10-22, `../docs/VIRTUAL_HUMAN.md` 20.7) the startle follows 15.5: fear potentiation, prepulse inhibition (a warning 30 to 500 ms before), habituation, the unseen doubling and darkness; a respawn restarts alarm and startle. It also exposes the entity a hit was credited to (`attributed`, for the event log). To reshape under the rulings: feelings toward others become written by the top two layers, and a fast reflex response stays a fixed rule (open question 1). |
 
 **One tick (`layer.step`):**
 1. the action history takes last tick's action;
@@ -45,6 +45,20 @@ folder and rename it properly and add documentation"). The content registry and 
 8. each entity token gets the feelings toward it;
 9. everything is packed into the token sets, with the persona and affect tokens (read from the variables).
 
+**Provenance** (`../docs/VIRTUAL_HUMAN.md` 10.8 and 20.2): every value says where it came from, by construction.
+
+| Value | How its origin is marked |
+|---|---|
+| A token row | `remembered` 0 (perceived this tick) or 1 (from the stores), with its `age` |
+| A written entry | the writer (`decision` or `llm`) and the tick of its last write (`written.py`) |
+| An event | observed or inferred (`events.py`): an attributed hit or eating is inferred until the simulator says so |
+| A variable | its source in the registry: `birth`, `rule` or `written` (`../contract/variables.py`) |
+
+"Told" (from another agent) arrives with communication (section 12). `test_sa_state_step3.py` pins the first three.
+
+**Respawn** (16.2): `layer.step(..., respawn=)` restarts the alarm, the startle and the action history on those lanes;
+everything else is kept, since the agent is the same person after a normal death. `reset` stays the episode boundary.
+
 **Cost.** The full tick plus the trunk with conditioning measured 5.27 ms p95 for 8 agents, against a 15 ms gate
 (`../docs/VIRTUAL_HUMAN.md` section 7).
 
@@ -55,6 +69,9 @@ folder and rename it properly and add documentation"). The content registry and 
   a remembered entity given as writes.
 - `test_sa_state_written.py`: the writes: every refusal, order, the full table, ejecting, reset, the derived tags,
   and save and load (a save from before step 2 loads with no entries).
+- `test_sa_state_events.py`: the event log's detectors, the ring, reset, jit, and through `layer.step` (counters in the
+  variables, request outcomes, save and load).
+- `test_sa_state_step3.py`: each startle factor's direction, respawn, and provenance.
 - `test_sa_state_affect.py`: the emotion rules, A1 to A7 and A4b (a hit landing as the attacker enters recovery).
 - `test_sa_state_memory_write.py`: the parallel write against the serial one it replaced, and its rules when
   candidates compete. `test_sa_object_slots.py`: object latents follow their thing's identity through the tick.

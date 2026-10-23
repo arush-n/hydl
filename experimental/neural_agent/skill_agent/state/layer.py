@@ -8,7 +8,8 @@ variables (``state/registry.py``: the persona, ``state/persona.py``, and the emo
 ``state/affect.py``; ``docs/VIRTUAL_HUMAN.md``), the affect rules' own working state, and the trunk's latent memory (``model/encoder.py``, ``memory_slots``; the trunk call fills it, this module only carries and
 stores it). One tick, :func:`step`:
 
-1. the action history takes the action the agent sent last tick;
+1. the action history takes the action the agent sent last tick, and a respawn restarts it (16.2; the alarm and startle
+   restart in item 3, 20.2);
 2. the senses read this tick's perceived rows;
 3. the emotional state appraises them, with the persona's gains, and is published to the variables;
 4. the event log registers this tick's changes (``state/events.py``, section 21), and its counters are published to the
@@ -96,8 +97,17 @@ def initial_state(batch: int, latent: jax.Array | None = None, persona: jax.Arra
                                                    slots=capacities["inventory_slot"], outcomes=events.OUTCOME_SLOTS))
 
 
+def _restarts(reset: jax.Array | None, respawn: jax.Array | None) -> jax.Array | None:
+    """The lanes whose action history starts over: a new episode (``reset``) or a respawn (``respawn``); None if neither
+    is given."""
+
+    if respawn is None:
+        return reset
+    return respawn if reset is None else reset | respawn
+
+
 def step(observation: Any, state: AgentState, *, last_action: jax.Array,
-             reset: jax.Array | None = None, writes: written.Writes | None = None,
+             reset: jax.Array | None = None, respawn: jax.Array | None = None, writes: written.Writes | None = None,
              capacities: Mapping[str, int] = v3.CAPACITIES_V3, outcomes: jax.Array | None = None,
              outcome_verbs: jax.Array | None = None, **adapter: Any
              ) -> tuple[dict[str, tuple[jax.Array, jax.Array]], AgentState]:
@@ -109,6 +119,9 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
         last_action: int32[B, 21], the gen-7 action the agent sent last tick.
         reset: bool[B], lanes that start a new episode this tick (their history, stores and emotional state start
             over, the persona stays; the trunk's latent memory is reset by its caller).
+        respawn: bool[B], lanes that respawned this tick (16.2, normal death): their alarm, startle and action history
+            start over, and nothing else. The stores, the written entries, the event log, the persona, the feelings and
+            the mood are kept (20.2), since the agent is the same person after its death.
         writes: This tick's writes from the top layers (``written.lower``), or None.
         capacities: Slots per type.
         outcomes: int32[B, OUTCOME_SLOTS], this tick's request outcomes from the runtime (0 none, 1 done, 2 failed,
@@ -118,9 +131,9 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
             ``block_reach_blocks``, ``light``, ``view_half_angle_degrees``).
     """
 
-    history = update_history(state.history, last_action, reset)
+    history = update_history(state.history, last_action, _restarts(reset, respawn))
     perceived = perceive_rows(observation, inventory_capacity=capacities["inventory_slot"], **adapter)
-    affect = feeling.update(state.affect, perceived, registry.take(state.variables, TRAITS), reset)
+    affect = feeling.update(state.affect, perceived, registry.take(state.variables, TRAITS), reset, respawn=respawn)
     values = registry.put(state.variables, v3.AFFECT_FEATURES, feeling.affect_features(affect))
     if outcomes is None:
         outcomes = jnp.zeros((observation.base.self_f32.shape[0], events.OUTCOME_SLOTS), jnp.int32)

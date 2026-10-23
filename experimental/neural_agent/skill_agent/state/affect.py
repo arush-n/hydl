@@ -25,13 +25,33 @@ attributed to a visible hostile within reach in its sweep, or else in its recove
 the attacker enters recovery, ``docs/PERCEPTION.md`` section 10.5), or else counts as unattributed (and, with no
 hostile in view at all, as unseen, which doubles fear and startles).
 
+**Startle** (15.5; 20.2 and 20.6) is the reflex to damage that lands now, times four factors from the startle literature
+and the persona's gain ``g_S = exp(negative_emotionality / 2)``. Its impulse is ``I_S = min(DAMAGE_GAIN taken P E H U D,
+1)``, where:
+
+- ``P = 1 + fear``: fear-potentiated startle, so a threat the agent has been watching raises its startle through alarm
+  (20.6; Grillon et al. 1991). ``fear`` is last tick's;
+- ``E = 1 - PREPULSE_INHIBITION cue``: expectation, prepulse inhibition (about 65% in healthy people, 20.6). ``cue``
+  is 1 when the last warning onset came ``PREPULSE_MIN_TICKS`` to ``PREPULSE_MAX_TICKS`` ticks (30 to 500 ms) ago. A
+  warning is a visible hostile in its windup within ``THREAT_REACH_BLOCKS``, or a hostile projectile on course; its
+  onset is the first tick it shows. A threat seen for longer does not inhibit: it raises alarm, which potentiates;
+- ``H = 1 / (1 + n)``: habituation to repeats, ``n`` the recent impulses, recovering with ``TAU_HABITUATION`` [E] (20.6:
+  repeats habituate within a session; no source gives the recovery time in humans);
+- ``U = 1 + unseen``: 2 when no hostile is in view, as before;
+- ``D = 1 + d``: darkness, ``d = 1 - light`` of the nearest perceived cell (0 when no light is known) [E]. Darkness
+  raises startle through affect, not attention (Grillon et al. 1997, 20.6).
+
+The calm no longer makes it stronger: that proxy (the agent is not expecting the hit) is what ``E`` models (15.5). A
+respawn (16.2) sets ``fear`` and ``S`` to 0 at the start of its tick, and nothing else.
+
 **Dynamics** (leaky integrators, fixed shapes, no branches; ``lam(tau) = exp(-dt / tau)``)::
 
     c <- c + (c* - c)(1 - lam(TAU_COPING)),   c* = sigmoid(1 + 2 (h - 1/2) + risk_taking - 1.5 n_attacking + p)
     F <- F + (F* - F)(1 - lam(tau_F)) + g_F I_F (1 - F),   F* = T (1 - c)(1 + MU max(0, -mood_P))
     a0 <- a0 + (A* - a0)(1 - lam(TAU_ANGER)) + g_A I_0 (1 - a0),   A* = T c / 2
     a_j <- lam(TAU_ANGER) a_j + g_A K harm_j (1 - a_j),            anger = 1 - (1 - a0) prod_j (1 - a_j)
-    S <- lam(TAU_STARTLE) S + g_S I_S (1 - S)
+    S <- lam(TAU_STARTLE) S + g_S I_S (1 - S),   I_S as above (P E H U D)
+    n <- lam(TAU_HABITUATION) n + I_S
     V <- clip(lam(TAU_VALENCE) V + VALENCE_GAIN (g+ dealt - g- taken), -1, 1)
     M <- M + (1 - lam(TAU_MOOD))(M0 - M) + MOOD_PULL dt sum_e w_e (P_e - M)
 
@@ -76,6 +96,14 @@ TAU_HOSTILITY, TAU_FEAR_MEMORY, TAU_TRUST = 600.0, 900.0, 1800.0
 minutes (WASABI; Left 4 Dead's director; Verduyn and Lavrijsen 2015), feelings toward an entity last many minutes."""
 DAMAGE_GAIN: float = 4.0
 """Impulse per unit of my maximum health lost (a hit taking 10% gives an impulse of 0.4) [E]."""
+PREPULSE_INHIBITION: float = 0.65
+"""How much a warning lowers a startle that comes 30 to 500 ms after it (20.6: about 65% in healthy people)."""
+PREPULSE_MIN_TICKS, PREPULSE_MAX_TICKS = 1, 11
+"""That window in ticks: 30 to 500 ms at 0.045 s a tick (20.6; leads of 2 to 4.5 s facilitate instead)."""
+TAU_HABITUATION: float = 120.0
+"""Seconds for a startle's habituation to recover [E] (20.6: no source gives the recovery time in humans)."""
+NO_WARNING_TICKS: int = 1_000_000
+"""``since_warning`` before any warning, and its ceiling: the count saturates there."""
 EXPECTED_HIT: float = 0.1
 """The cost of one expected hit, as a fraction of my maximum health [E]."""
 THREAT_REACH_BLOCKS: float = 3.75
@@ -99,6 +127,7 @@ _E = {name: index for index, name in enumerate(v3.EntityTokenV3.FEATURES)}
 _P = {name: index for index, name in enumerate(v3.ProjectileTokenV3.FEATURES)}
 _H = {name: index for index, name in enumerate(v3.HazardTokenV3.FEATURES)}
 _S = {name: index for index, name in enumerate(v3.SelfTokenV3.FEATURES)}
+_G = {name: index for index, name in enumerate(v3.GeometryTokenV3.FEATURES)}
 
 
 class AffectState(NamedTuple):
@@ -117,6 +146,9 @@ class AffectState(NamedTuple):
     last_seen: jax.Array  # int32[B, K]: the tick it was last perceived
     now: jax.Array  # int32[B]
     attributed: jax.Array  # int32[B]: the entity id this tick's damage taken was credited to; -1 none
+    warned: jax.Array  # bool[B]: a warning was in view last tick (20.2)
+    since_warning: jax.Array  # int32[B]: ticks since the last warning onset (as of last tick); saturates
+    recent: jax.Array  # float32[B]: the recent startle impulses, recovering with TAU_HABITUATION (habituation's n)
 
 
 def mood_baseline(persona: jax.Array) -> jax.Array:
@@ -141,7 +173,9 @@ def initial_affect(persona: jax.Array) -> AffectState:
                        jnp.full((batch,), -1.0, jnp.float32), jnp.full((batch, ENTITY_SLOTS), -1, jnp.int32),
                        jnp.zeros((batch, ENTITY_SLOTS, len(v3.FEELINGS)), jnp.float32),
                        jnp.zeros((batch, ENTITY_SLOTS), jnp.float32), jnp.zeros((batch, ENTITY_SLOTS), jnp.int32),
-                       jnp.zeros((batch,), jnp.int32), jnp.full((batch,), -1, jnp.int32))
+                       jnp.zeros((batch,), jnp.int32), jnp.full((batch,), -1, jnp.int32),
+                       jnp.zeros((batch,), jnp.bool_), jnp.full((batch,), NO_WARNING_TICKS, jnp.int32),
+                       jnp.zeros((batch,), jnp.float32))
 
 
 def _lam(tau: jax.Array | float, dt: float) -> jax.Array:
@@ -182,15 +216,36 @@ def _slots(affect: AffectState, ids: jax.Array, valid: jax.Array) -> tuple[jax.A
     return jax.vmap(one)(affect.entity_id, affect.last_seen, ids, valid, affect.now)
 
 
+def _darkness(perceived: Perceived) -> jax.Array:
+    """float32[B]: ``d = 1 - light`` of the nearest perceived cell, light the larger of its sky and block light (the
+    ``light_*`` columns, 0 to 1); 0 with no cell, or with no light known (the factor ``1 + d`` is then 1)."""
+
+    cells, valid = _rows(perceived, "geometry", len(v3.GeometryTokenV3.FEATURES))  # float32[B, G, F], bool[B, G]
+    batch, count = valid.shape
+    if count == 0:  # the shapes are static: no geometry rows this tick
+        return jnp.zeros((batch,), jnp.float32)
+    nearest = jnp.argmin(jnp.where(valid, _distance(cells), jnp.inf), axis=1)
+    cell = jnp.take_along_axis(cells, nearest[:, None, None], axis=1)[:, 0]  # float32[B, F]
+    sky_valid, block_valid = cell[:, _G["light_sky_valid"]], cell[:, _G["light_block_light_rgb_valid"]]
+    block = cell[:, _G["light_block_light_red"]:_G["light_block_light_blue"] + 1].max(axis=1)
+    light = jnp.maximum(sky_valid * cell[:, _G["light_sky_light"]], block_valid * block)
+    known = jnp.any(valid, axis=1) & (jnp.maximum(sky_valid, block_valid) > 0.5)
+    return jnp.where(known, 1.0 - light, 0.0)
+
+
 def update(affect: AffectState, perceived: Perceived, persona: jax.Array, reset: jax.Array | None = None,
-           dt: float = DT_SECONDS) -> AffectState:
+           dt: float = DT_SECONDS, respawn: jax.Array | None = None) -> AffectState:
     """The emotional state after this tick's perception (module docstring). Lanes where ``reset`` bool[B] is True start
-    from :func:`initial_affect` first."""
+    from :func:`initial_affect` first. Lanes where ``respawn`` bool[B] is True (16.2) start their alarm and startle
+    over at the start of the tick, and keep everything else."""
 
     if reset is not None:
         fresh = initial_affect(persona)
         affect = jax.tree_util.tree_map(
             lambda new, old: jnp.where(reset.reshape(reset.shape + (1,) * (old.ndim - 1)), new, old), fresh, affect)
+    if respawn is not None:
+        affect = affect._replace(fear=jnp.where(respawn, 0.0, affect.fear),
+                                 startle=jnp.where(respawn, 0.0, affect.startle))
     batch = persona.shape[0]
     now = affect.now + 1
     self_rows, _ = _rows(perceived, "self", len(v3.SelfTokenV3.FEATURES))
@@ -250,9 +305,24 @@ def update(affect: AffectState, perceived: Perceived, persona: jax.Array, reset:
     anger0 = affect.anger_unattributed + (anger_target - affect.anger_unattributed) * (1.0 - _lam(TAU_ANGER, dt))
     anger0 = jnp.clip(anger0 + anger_gain * unattributed * (1.0 - anger0), 0.0, 1.0)
 
-    surprise = unseen.astype(jnp.float32) + (affect.fear < 0.2).astype(jnp.float32)  # booleans: add as numbers
-    startle_impulse = jnp.minimum(DAMAGE_GAIN * taken * surprise, 1.0)
-    startle = _lam(TAU_STARTLE, dt) * affect.startle + jnp.exp(0.5 * negative) * startle_impulse * (1.0 - affect.startle)
+    # The warning (20.2): a visible hostile in its windup within reach, or a hostile projectile on course. Its cue is
+    # the age of the last onset, counted before this tick's onset, so a warning on the same tick as the hit inhibits
+    # nothing.
+    windup = entities[..., _E[f"phase_{ATTACK_PHASES[1]}"]] > 0.5
+    warning = jnp.any((hostile > 0) & (entities[..., _E["visible"]] > 0.5) & windup
+                      & (distance <= THREAT_REACH_BLOCKS), axis=1)
+    warning = warning | jnp.any(projectile_valid & on_course & (projectiles[..., _P["hostile"]] > 0), axis=1)
+    since = jnp.minimum(affect.since_warning + 1, NO_WARNING_TICKS)  # ticks since the last onset, this tick included
+    cue = (since >= PREPULSE_MIN_TICKS) & (since <= PREPULSE_MAX_TICKS)
+    since_warning = jnp.where(warning & ~affect.warned, 0, since)
+    # The startle (15.5; module docstring): the damage now, times fear potentiation, expectation (prepulse inhibition),
+    # habituation, the unseen doubling and darkness. The calm no longer raises it.
+    expectation = 1.0 - PREPULSE_INHIBITION * cue.astype(jnp.float32)
+    startle_impulse = jnp.minimum(DAMAGE_GAIN * taken * (1.0 + affect.fear) * expectation / (1.0 + affect.recent)
+                                  * (1.0 + unseen.astype(jnp.float32)) * (1.0 + _darkness(perceived)), 1.0)
+    startle = (_lam(TAU_STARTLE, dt) * affect.startle
+               + jnp.exp(0.5 * negative) * startle_impulse * (1.0 - affect.startle))
+    recent = _lam(TAU_HABITUATION, dt) * affect.recent + startle_impulse
 
     slot, fresh, table = _slots(affect, ids, entity_valid)
     rows_index = jnp.arange(batch)[:, None]
@@ -287,7 +357,8 @@ def update(affect: AffectState, perceived: Perceived, persona: jax.Array, reset:
     credited = jnp.where(attributed, jnp.take_along_axis(ids, attacker[:, None], axis=1)[:, 0], -1).astype(jnp.int32)
     return AffectState(fear, anger0, startle, valence, coping, jnp.clip(mood, -1.0, 1.0), health, table, feelings,
                        entity_health, affect.last_seen.at[rows_index, slot].set(
-                           jnp.where(entity_valid, now[:, None], affect.last_seen[rows_index, slot])), now, credited)
+                           jnp.where(entity_valid, now[:, None], affect.last_seen[rows_index, slot])), now, credited,
+                       warning, since_warning, recent)
 
 
 def anger(affect: AffectState) -> jax.Array:

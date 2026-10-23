@@ -562,7 +562,7 @@ approach. Missing:
 | 1b | DONE 2026-10-22: the body's path on v3: the generalist reads every token type; every entity row carries its id; the runtime ticks the state layer (`runtime/state_tick.py`); a request points at a perceived or remembered entity; request to action tested. The trainers stay on v1 until training resumes | 13 (this section) |
 | 1c | DONE 2026-10-22: the memory design: a parallel write; object files for entities and block candidates (one latent each, keyed by identity); a gist of 16 latent slots plus a cache of 32 remembered cells for the background; the tick a quarter to a third faster on real rows (18.4) | 18 |
 | 2 | Structured writes from the top two layers; the tags move onto them. DESIGNED and APPROVED 2026-10-22 (section 19, rulings in 19.7) | 10.4, 19 |
-| 3 | Fixed rules on game time: alarm and startle, sleep pressure and fatigue, hunger and the other drives; then lifecycle under normal death, and provenance. DESIGNED and APPROVED 2026-10-22 (section 20; the drives wait for the clock, 20.5) | 10.5, 10.7, 10.8, 16.1, 16.2, 16.5, 20 |
+| 3 | Fixed rules on game time: alarm and startle, sleep pressure and fatigue, hunger and the other drives; then lifecycle under normal death, and provenance. DESIGNED and APPROVED 2026-10-22; BUILT: startle, respawn, provenance (section 20.7); the drives wait for the clock (20.5) | 10.5, 10.7, 10.8, 16.1, 16.2, 16.5, 20 |
 | 4 | The event log and its tokens; the activity counters and levels. DESIGNED and APPROVED 2026-10-22; BUILT (section 21.6; the event tokens wait for step 7) | 10.6, 11.1, 16.6, 21 |
 | 5 | The long-term spatial memory: places, routes, coordinates | 10.11, 16.4 |
 | 6 | Hearing: the sound registry, the hearing rule, heard entries in the stores, the orienting reflex (the token reads zero until S12) | 17 |
@@ -1462,6 +1462,12 @@ coordinator reported them; built there against this interface, with no edit to `
 Each write's result returns on the `skills` status stream: applied, or refused with this layer's host reason or `full`
 (`AgentState.written.applied`).
 
+BUILT there as 3a2d564 (the coordinator, 2026-10-22): `experimental/neural_agent/shared_state/skill_writes.py`
+`writes_for_tick` gives each agent's `Write` list from the `writes` section (written at host decisions, every 11
+ticks), and `record_write_results` takes `written.lower`'s reasons and `AgentState.written.applied` back. The per-tick
+host loop that calls `runtime/state_tick.tick(writes=, outcomes=, outcome_verbs=, respawn=)` is the next piece, on the
+host's side.
+
 ### 19.8 Built (2026-10-22), and how it was checked
 
 What was built is 19.2 and 19.3 with the rulings of 19.7 (`state/written.py`; `contract/variables.py` `WRITERS`,
@@ -1525,7 +1531,8 @@ The owner, 2026-10-22: "continue with other tasks in the background". This is st
 **Startle, as 15.5 designed it.** The impulse is the stimulus (damage landing now; a sudden sound once S12 publishes
 sound) times:
 - **the persona's gain:** `exp(negative_emotionality / 2)`, as today;
-- **fear potentiation:** `1 + alarm`;
+- **fear potentiation:** `1 + alarm` (its gain of 1 is an estimate [E]: the sources give the direction, not this
+  size);
 - **expectation (prepulse inhibition):** `1 - 0.65 cue`, where `cue` is 1 when a warning (a hostile's wind-up
   starting, a projectile appearing on course) came 30 to 500 ms before the stimulus: 1 to 11 ticks at 0.045 s. A
   threat seen for longer does not inhibit: it raises alarm, which potentiates (corrected from research, 20.6);
@@ -1615,6 +1622,31 @@ Depth of reading is stated for each; full texts were not read unless said.
   agrees in direction: energy cost by activity (the 2011 Compendium of Physical Activities, MET values; through
   secondary tables: walking about 3, swimming laps about 7, running 10 to 12). So hunger can rise with the step 4
   counters, which work today, plus a basal rate on game time, which waits for the clock. Proposed for 20.5 item 2.
+
+### 20.7 Built (2026-10-22), and how it was checked
+
+What was built is 20.2's startle, respawn and provenance, with the rulings of 20.5; the drives wait for a clock. A Haiku
+subagent wrote it in its own worktree from a written spec; it was reviewed and re-run here.
+- `state/affect.py`: the startle impulse `min(DAMAGE_GAIN taken P E H U D, 1)` with fear potentiation `P = 1 + fear`,
+  prepulse inhibition `E = 1 - 0.65 cue` (a warning onset 1 to 11 ticks before: a visible hostile's windup within
+  reach, or a hostile projectile on course), habituation `H = 1 / (1 + n)` (`n` the recent impulses, recovering with
+  120 s [E]), `U = 1 + unseen`, and darkness `D = 1 + d` (`d = 1 - light` of the nearest perceived cell, from its sky
+  and block light; 0 when no light is known). Today's "calm makes it stronger" is gone. New `AffectState` fields:
+  `warned`, `since_warning`, `recent`. `update(..., respawn=)` restarts fear and startle on those lanes.
+- `state/layer.py`: `step(..., respawn=)`: the action history restarts too; nothing else (16.2).
+
+Checks: `test_sa_state_step3.py`, 6 tests, each comparing two runs that differ in one thing: more alarm, a larger
+startle; a warning 5 ticks before, a smaller one, and 20 ticks before or on the same tick, the same as none; a repeat
+habituates and recovers to within 5% after 600 s; a dark nearest cell, larger; respawn resets exactly fear, startle and
+the history (stores, written entries, events, feelings and mood kept); provenance pinned (a remembered row's
+`remembered`, a written entry's writer, an inferred event). The existing affect tests pass unchanged (A5: unseen damage
+startles more).
+
+**A property to know** (found by the subagent, measured): a second identical hit right after the first lands with
+about the same impulse (0.401 against 0.402, neutral persona). The first hit's alarm potentiates the second by about
+1.41 and habituation divides it by about 1.40. Both factors are as designed; the size of the potentiation is the
+estimate above. If repeats should weaken, the potentiation's gain is the knob (`state/affect.py`, the `1.0 + affect.fear`
+term).
 
 ## 21. Step 4: the event log and the activity counters (DESIGNED and APPROVED 2026-10-22)
 
