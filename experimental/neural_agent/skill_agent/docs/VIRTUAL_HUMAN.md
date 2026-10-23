@@ -562,8 +562,8 @@ approach. Missing:
 | 1b | DONE 2026-10-22: the body's path on v3: the generalist reads every token type; every entity row carries its id; the runtime ticks the state layer (`runtime/state_tick.py`); a request points at a perceived or remembered entity; request to action tested. The trainers stay on v1 until training resumes | 13 (this section) |
 | 1c | DONE 2026-10-22: the memory design: a parallel write; object files for entities and block candidates (one latent each, keyed by identity); a gist of 16 latent slots plus a cache of 32 remembered cells for the background; the tick a quarter to a third faster on real rows (18.4) | 18 |
 | 2 | Structured writes from the top two layers; the tags move onto them. DESIGNED and APPROVED 2026-10-22 (section 19, rulings in 19.7) | 10.4, 19 |
-| 3 | Fixed rules on game time: alarm and startle, sleep pressure and fatigue, hunger and the other drives; then lifecycle under normal death, and provenance | 10.5, 10.7, 10.8, 16.1, 16.2, 16.5 |
-| 4 | The event log and its tokens; the activity counters and levels | 10.6, 11.1, 16.6 |
+| 3 | Fixed rules on game time: alarm and startle, sleep pressure and fatigue, hunger and the other drives; then lifecycle under normal death, and provenance. DESIGNED 2026-10-22 (section 20), waiting on the owner's yes | 10.5, 10.7, 10.8, 16.1, 16.2, 16.5, 20 |
+| 4 | The event log and its tokens; the activity counters and levels. DESIGNED and APPROVED 2026-10-22 (section 21) | 10.6, 11.1, 16.6, 21 |
 | 5 | The long-term spatial memory: places, routes, coordinates | 10.11, 16.4 |
 | 6 | Hearing: the sound registry, the hearing rule, heard entries in the stores, the orienting reflex (the token reads zero until S12) | 17 |
 | 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry (with it the status token's identity: which effect, its source entity, its damage cause, all in the observation and dropped today; `PERCEPTION.md` section 10.5), places, the proficiencies | 11.1 to 11.4, 11.6, 16.6, 17.8 |
@@ -831,7 +831,8 @@ It corresponds to the owner's rulings:
 **Design.** A reflex's strength is its base gain (the persona) times four factors from the startle literature:
 - **fear potentiation:** a reflex is stronger under alarm or fear (fear-potentiated startle);
 - **expectation:** a warning cue shortly before the stimulus reduces the reflex. A weak prestimulus 6 to 2,000 ms
-  before a startling one reduces the startle or abolishes it (prepulse inhibition);
+  before a startling one reduces the startle or abolishes it (prepulse inhibition). Corrected 2026-10-22 (20.6):
+  the inhibiting window is 30 to 500 ms, and leads of 2 to 4.5 s facilitate;
 - **habituation:** the same stimulus repeated draws a weaker response. It is stimulus-specific and recovers after
   minutes without it;
 - **context:** a pleasant state attenuates it; a fearful one enhances it (affective modulation of startle).
@@ -1478,6 +1479,229 @@ it from a written spec; it was reviewed and re-run here.
 - **Never evict, never fade.** The owner's ruling (19.7, 1), not a research finding: what the decision layer marks
   stays until the decision layer ejects it.
 
+## 20. Step 3: the fixed rules and the lifecycle (DESIGNED 2026-10-22, waiting on the owner's yes)
+
+The owner, 2026-10-22: "continue with other tasks in the background". This is step 3 of section 13 (10.5, 10.7 and
+10.8, with 16.1, 16.2 and 16.5). Nothing is built until the owner's yes.
+
+### 20.1 What exists
+
+- **Alarm** is today's `fear` rule (`state/affect.py`). It rises with a 0.3 s time constant toward the threat's
+  intensity (a hostile winding up within reach, a projectile on course, a hazard), jumps when damage lands, and fades
+  over about 6 s (slower for a higher negative emotionality). That is section 8's alarm in all but name.
+- **Startle** today is a spike (time constant 1.2 s) when damage lands. It is doubled when no hostile is in view, and
+  also when fear was below 0.2: a calm agent is taken as not expecting the hit.
+- **A conflict with 15.5.** 15.5 (approved) says fear makes a startle stronger (fear-potentiated startle). Today's
+  rule does the opposite: it is stronger when calm. Its proxy, "calm means not expecting it", is what 15.5 models
+  separately as expectation: a warning cue shortly before reduces the startle.
+- **No respawn.** `reset` restarts a lane at an episode boundary: the history, the stores, the emotional state and the
+  written entries. The combat simulator never respawns within an episode (a search of `hytalegym/jax` finds "respawn"
+  only in the world surrogate's spawn markers). The live game respawns (16.2).
+- **No game clock.** The simulator has none (16.1, S14), and the skill layer reads none: the live bridge's
+  `time_of_day` is read by `hytalegym/envs/hytale_env.py`, not by this lane's live path.
+- **Light** reaches the agent per terrain cell, as the geometry tokens' `light_*` columns, not at its own position.
+- **Provenance**, in part: every token row says whether it is perceived or remembered (its `remembered` column), and
+  every written entry keeps its writer (step 2).
+
+### 20.2 The design
+
+**Startle, as 15.5 designed it.** The impulse is the stimulus (damage landing now; a sudden sound once S12 publishes
+sound) times:
+- **the persona's gain:** `exp(negative_emotionality / 2)`, as today;
+- **fear potentiation:** `1 + alarm`;
+- **expectation (prepulse inhibition):** `1 - 0.65 cue`, where `cue` is 1 when a warning (a hostile's wind-up
+  starting, a projectile appearing on course) came 30 to 500 ms before the stimulus: 1 to 11 ticks at 0.045 s. A
+  threat seen for longer does not inhibit: it raises alarm, which potentiates (corrected from research, 20.6);
+- **habituation:** `1 / (1 + n)`, where `n` counts recent startles and fades with a time constant of about two
+  minutes [E];
+- **unseen:** 2 when no hostile is in view, as today;
+- **darkness:** `1 + d` [E], where `d` is the darkness of the nearest terrain cell (the geometry tokens' light
+  columns).
+
+This replaces today's "calm makes it stronger". Fatigue's effect waits for the clock. Every constant is an estimate,
+certified by step and monotonicity tests like the affect rules' (A1 to A7).
+
+**Alarm** stays today's fear rule, called alarm in the docs. The variable keeps its name, `fear`, until step 7 trims
+the emotion token, so the token layout changes once.
+
+**The lifecycle under normal death (16.2).** A `respawn` input to `layer.step`, beside `reset`:
+- `respawn` resets alarm, startle and the action history only. Everything else is kept: the persona, the written
+  entries, the stores, the feelings toward others, the mood.
+- `reset` stays the episode boundary.
+- The runtime sets `respawn` from the environment's death and respawn (the game tells the player). The simulator
+  never respawns today, so it is tested synthetically and engages live.
+- The death's event (step 4) and "where I died" as a place (step 5) come with those steps.
+
+**Provenance (10.8).** No new state: a token row is perceived or remembered, and a written entry carries its writer.
+"Told" arrives with communication (section 12). Step 3 pins this with a test and a table in `state/README.md`.
+
+**The clock rules.** Sleep pressure and hunger take the elapsed game time as an input, since 16.1 integrates elapsed
+game time, not ticks:
+- sleep pressure follows the two-process model (it rises with a time constant of 18.2 game hours awake and falls with
+  4.2 hours asleep);
+- hunger rises at a rate [E] and falls when the agent eats (16.5).
+
+With no clock source the elapsed time is 0, and they hold still (16.1: off in simulator runs until S14). Drowsiness
+acting on the outputs is a regulator, future (19.7).
+
+### 20.3 Files
+
+- `state/affect.py`: the startle rule; the darkness and cue inputs.
+- `state/drives.py` (new, if 20.5 item 2 is yes): sleep pressure and hunger, registered in `contract/variables.py`
+  (source `rule`; the body reads neither, 16.1).
+- `state/layer.py`: `step(..., respawn=)`.
+- Tests: the affect tests extended (each startle factor's direction); respawn; provenance; the drives with a
+  synthetic clock.
+
+### 20.4 How it is verified
+
+1. **Each startle factor in its direction:** more alarm gives a larger startle; a cue, a smaller one; repeats, smaller
+   and recovering; darker, larger.
+2. **On real observations** (the duel and the Region world): alarm and startle stay finite and in range, and fire on
+   the hits.
+3. **Respawn:** a synthetic death mid-episode resets exactly alarm, startle and the history.
+4. **Cost and the package gate,** as for every step.
+
+### 20.5 Decisions for the owner
+
+1. **Startle as 15.5 designed it** (fear potentiation, expectation, habituation, darkness), replacing today's "calm
+   makes it stronger"? Recommended: yes. It follows the approved design and the literature, and today's proxy
+   contradicts potentiation.
+2. **Sleep pressure and hunger now,** with the elapsed game time as an input but no clock yet (so they hold still
+   until a clock reaches the state layer)? Recommended: yes; they are small and tested with a synthetic clock. The
+   alternative is to wait for S14. Added after the research (20.6): hunger also rises with activity, from the step 4
+   counters (sprinting, swimming, jumping, hits), as a game's exhaustion does, so it moves in the simulator today.
+3. **`respawn` as its own input,** separate from `reset`? Recommended: yes; 16.2's lifecycle needs both.
+
+### 20.6 What grounds it (searched 2026-10-22, owner: "ensure that you are designing based on some sort of research or something else that grounds your design")
+
+Depth of reading is stated for each; full texts were not read unless said.
+
+- **Fear potentiation.** Startle is stronger while a threat is anticipated: the threat-of-shock paradigm (Grillon,
+  Ameli, Woods, Merikangas and Davis 1991, Psychophysiology; through later papers that cite it), including long
+  unpredictable threat periods. So a threat the agent has been watching raises its startle through alarm.
+- **Expectation is narrow.** Prepulse inhibition is a weak prestimulus 30 to 500 ms before the startling one, in any
+  sense (Braff, Geyer and Swerdlow 2001, abstract); it reaches about 65% in healthy people, strongest near 120 ms
+  (a secondary figure); a 2025 review puts the window at 50 to 500 ms and finds facilitation at leads of 2 to 4.5 s.
+  This corrects the first draft of 20.2 (a cue within 2 s inhibiting by 0.8) and 15.5's "6 to 2,000 ms".
+- **Darkness.** Darkness increased startle in two studies of 25 people each, without changing prepulse inhibition,
+  read as a change in affect, not attention (Grillon, Pellowski, Merikangas and Davis 1997, Biological Psychiatry
+  42(6), 453-460, abstract). So darkness raises startle, and the factor sits with the affective ones.
+- **Habituation.** Repeated probes habituate quickly within a session (a study of 75 children, probes 15 to 25 s
+  apart); no source found gives the minutes over which it recovers in humans. The two-minute constant stays an
+  estimate [E].
+- **Hunger** (16.5). A game's precedent ties hunger to activity, not only time: Minecraft's exhaustion (Minecraft Wiki,
+  "Hunger", read 2026-10-22) adds 0.1 per metre sprinted, 0.01 per metre swum, 0.05 per jump (0.2 sprinting), 0.1 per
+  hit landed or taken, nothing for walking, and every 4.0 removes one point of saturation, then of hunger. Physiology
+  agrees in direction: energy cost by activity (the 2011 Compendium of Physical Activities, MET values; through
+  secondary tables: walking about 3, swimming laps about 7, running 10 to 12). So hunger can rise with the step 4
+  counters, which work today, plus a basal rate on game time, which waits for the clock. Proposed for 20.5 item 2.
+
+## 21. Step 4: the event log and the activity counters (DESIGNED and APPROVED 2026-10-22)
+
+This is step 4 of section 13 (10.6, 11.1 and 16.6), designed while step 2's gate ran. Nothing is built until the
+owner's yes.
+
+### 21.1 What the agent can observe now
+
+Everything below is legal, read from its own observation and its own actions:
+- **damage taken:** its own health dropping. Who did it is today's attribution (`state/affect.py`: a visible hostile
+  in its sweep or recovery within reach), an inference; the simulator does not say who hit whom (S11);
+- **damage dealt:** an opponent in view losing health within a few ticks of the agent's own swing, with the opponent
+  in reach. Also an inference until S11;
+- **items gained and lost:** count changes in its own inventory tokens (the perception channel);
+- **eating:** its consume action followed by that food's count dropping (16.5);
+- **deaths:** the `respawn` input of step 3 (20.2);
+- **request outcomes:** done, failed or aborted, from the combiner's status stream (`MIDDLE_LAYER.md` section 5). The
+  runtime passes them in; the state layer does not see them today;
+- **movement:** its own movement state (the self token's `moving_*` columns) and its position's change, for the
+  distance counters. The native NPC controller never writes the sprinting state (`PERCEPTION.md` gap table: not a
+  gap), and under `npc_walk` a requested sprint is a run (`hytalegym/sim/gen7/overlay.py`, hook
+  `npc_walk_sprint_learner`). So "sprinted" counts the running or sprinting state, with no speed threshold.
+
+Not yet observable: reflexes fired (no reflex is built; 15.5), trades and items given to someone (no trade or give is
+published), and exact hits (S11).
+
+### 21.2 The design
+
+**The event log.** A fixed ring of 32 events per agent, the oldest giving way. Each event holds:
+- its kind;
+- the tick (game time once there is a clock);
+- the other party's entity id, or -1;
+- an amount (health lost or dealt, as a fraction of maximum health; an item count);
+- an item id for item events;
+- the world position where it happened.
+
+Each event is also marked **inferred** or **observed**: damage attributed by today's rule is inferred, a count change
+is observed. This is provenance (10.8) for events. When S11 lands, hits become observed.
+
+**The counters** (16.6). One running count per activity, held as `rule` variables in the registry so they are named,
+saved and migrated like every variable:
+- distance walked, sprinted, swum and climbed, in blocks;
+- damage dealt and taken (inferred until S11);
+- items gained, and food eaten;
+- deaths.
+
+Blocks mined and placed, items crafted and trades wait on those actions being published to the agent. The proficiency
+curve of 16.6 (`p = 1 - exp(-N / tau)`) needs each activity's `tau`, which the owner left for the future, so only
+the counts are built.
+
+**Who reads them.**
+- The decision layer and the LLM: through the formatted views (step 8). The log is the raw material of the LLM's
+  episodic memory (section 5).
+- The body: the last 8 events as an `event` token type (11.1, step 7). A new type does not touch the other types'
+  weights (section 14), but it is a schema change, so it waits until after the geometry capacity change.
+
+**Lifecycle** (16.2). The log and the counters survive a death. The death itself is logged.
+
+**The log is not memory** (RULED 2026-10-22: "log is fine but note memories are separate and can keep track of logged
+information"). The ring is a short recent history, and an event that rolls off it is gone from the log. The memories
+are separate stores, and they can keep what was logged: the LLM's episodic memory (section 5), the long-term spatial
+memory (16.4, step 5: where I died, where I was hit), and the written entries (section 19). Each reads the log and
+keeps what it needs, on its own terms.
+
+### 21.3 Files
+
+- `state/events.py` (new): the ring, the detectors above, the counters' rules.
+- `contract/variables.py`: the counters, source `rule`, read by the body later (step 7).
+- `state/layer.py`: `step(..., outcomes=)` for the request outcomes; the log in `AgentState`.
+- Tests: one per detector on synthetic observations; the ring's order and overflow; on the duel, damage dealt and
+  taken, and the opponent's id where today's attribution gives one.
+
+### 21.4 Decisions for the owner
+
+1. **Log inferred hits now**, marked inferred, or wait for S11? Recommended: now, marked. The feelings toward others
+   already use the same inference, and S11 later only flips the mark.
+2. **The ring's size:** 32 events, the body reading the last 8? Recommended: yes, as a configuration (a capacity never
+   changes the trunk's parameters).
+
+   Items 1 and 2: APPROVED 2026-10-22 ("log is fine"), with the note above that the memories are separate.
+3. **Counters only, no proficiency yet** (`tau` is future, 16.6)? Recommended: yes. APPROVED 2026-10-22 ("yes you can
+   do counters as well"), with: "ensure to keep everything tracked and organized with good documentation and
+   explanations of why and what is being done; furthermore ensure that you are designing based on some sort of
+   research or something else that grounds your design" (21.5).
+
+### 21.5 What grounds it (searched 2026-10-22)
+
+- **A log is not memory.** The multi-store model separates a short store, lost unless transferred, from a long-term
+  store (Atkinson and Shiffrin 1968; recalled). Generative Agents keeps every observation in a memory stream and
+  retrieves by recency, importance and relevance, with reflections as higher-level memories (Park et al. 2023). The
+  owner's ruling has the same shape: the log is the short raw record, and the memories keep what they need from it.
+- **What counts as an event.** Event segmentation theory: people cut ongoing activity into events where its features
+  change, at points of prediction error (Zacks, Speer, Swallow, Braver and Reynolds 2007, Psychological Bulletin
+  133(2), 273-293; the citation checked, the framework through a later abstract by Zacks). This design's events are
+  the discrete changes the agent registers: a health drop, a count change, a death, the end of a request.
+- **Observed or inferred.** Source monitoring: memory attributes an origin to what it holds, and errors come from
+  confusing sources (Johnson, Hashtroudi and Lindsay 1993, Psychological Bulletin 114(1), 3-28; citation and scope
+  checked). Keeping the mark explicit stops an inferred hit from being taken as a fact.
+- **The counters.** A game's precedent: Minecraft keeps lifetime statistics of the same kind, among them the
+  distances walked, sprinted, swum, climbed and fallen (in centimetres), damage dealt and taken, deaths and jumps (a
+  listing of the game's built-in stat ids; not the official wiki). Use-based progression: in Skyrim a skill gains a
+  little experience each time it is used (UESP wiki, "Leveling"). The curve the counts will feed is 16.6's
+  (Heathcote, Brown and Mewhort 2000).
+- **Not from research:** the ring of 32 and the 8 events the body reads are engineering choices, a token budget,
+  sized like the other capacities and changeable without retraining (section 14).
+
 ## Sources
 
 - Steel, P. (2007). The nature of procrastination. Psychological Bulletin 133(1), 65-94.
@@ -1550,3 +1774,20 @@ it from a written spec; it was reviewed and re-run here.
   Wolpert (1998); Flash and Hogan (1985); Mackworth (1948); boredom proneness's scale.
 - The emotion and personality literature in section 6, as relayed by the 2026-10-21 research surveys: the papers'
   existence was checked by search; the depth of reading is stated where it matters.
+- Sections 20.6 and 21.5, searched 2026-10-22 (abstracts, citations and secondary accounts unless said):
+  Grillon, C., Ameli, R., Woods, S. W., Merikangas, K., and Davis, M. (1991), fear-potentiated startle in humans under
+  threat of shock, Psychophysiology (through later papers that cite it). Braff, D. L., Geyer, M. A., and Swerdlow,
+  N. R. (2001), human studies of prepulse inhibition of startle, Psychopharmacology (abstract); the 65% and 120 ms
+  figures through Wikipedia, "Prepulse inhibition"; the 50 to 500 ms window and 2 to 4.5 s facilitation from a 2025
+  review (abstract). Grillon, C., Pellowski, M., Merikangas, K. R., and Davis, M. (1997), Darkness facilitates the
+  acoustic startle reflex in humans, Biological Psychiatry 42(6), 453-460 (abstract). Habituation: a study of 75
+  children's cardiac responses to startle probes (Frontiers in Psychology 2014, doi 10.3389/fpsyg.2014.01288,
+  abstract). Minecraft Wiki, "Hunger" (the exhaustion table, read 2026-10-22, https://minecraft.wiki/w/Hunger).
+  Ainsworth et al. (2011), 2011 Compendium of Physical Activities, Medicine and Science in Sports and Exercise 43(8),
+  1575-1581 (PubMed 21681120; MET values through secondary tables). Zacks, J. M., Speer, N. K., Swallow, K. M.,
+  Braver, T. S., and Reynolds, J. R. (2007), Event perception: a mind-brain perspective, Psychological Bulletin
+  133(2), 273-293 (citation). Johnson, M. K., Hashtroudi, S., and Lindsay, D. S. (1993), Source monitoring,
+  Psychological Bulletin 114(1), 3-28, doi 10.1037/0033-2909.114.1.3 (citation and scope). Minecraft's statistic ids
+  through a registry listing (https://azalea.matdoes.dev/azalea_registry/builtin/enum.CustomStat.html); UESP wiki,
+  Skyrim "Leveling" and skill experience (https://content1.uesp.net/wiki/Skyrim:Adept). Atkinson, R. C., and
+  Shiffrin, R. M. (1968), the multi-store model (recalled).
