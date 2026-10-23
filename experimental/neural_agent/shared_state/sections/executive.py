@@ -26,6 +26,7 @@ from experimental.neural_agent.contracts import (
 from experimental.neural_agent.executive.store import validate_against_schema
 
 from .._common import (
+    DIRECTABLE_RELATIONS,
     _SPEC_FIELDS,
     _TEXT_FIELDS,
     _instances,
@@ -82,8 +83,8 @@ class GoalEntry:
         intent: What the LLM wants from this goal, free text. May be empty.
         when: The condition, in the LLM's words. May be empty.
         note: Any other remark on this goal. May be empty.
-        relation: The goal's relationship directives (:class:`RelationDirective`). Empty by default. Not carried by
-            ``to_dict`` / ``from_dict`` yet: the LLM's schema (``contracts.py``) has no field for it.
+        relation: The goal's relationship directives (:class:`RelationDirective`). Empty by default. The LLM's optional
+            ``relation`` list carries them through ``to_dict`` / ``from_dict``; ``integrity`` and ``remember`` are refused.
     """
 
     skill_id: str
@@ -122,12 +123,29 @@ def entry_to_spec(entry: GoalEntry) -> GoalSpec:
     return GoalSpec(**{key: getattr(entry, key) for key in _SPEC_FIELDS})
 
 
-def spec_to_entry(spec: GoalSpec, *, intent: str = "", when: str = "", note: str = "") -> GoalEntry:
-    """Return the goal entry for ``spec`` with the given words (empty by default)."""
+def spec_to_entry(
+    spec: GoalSpec, *, intent: str = "", when: str = "", note: str = "", relation: tuple[RelationDirective, ...] = ()
+) -> GoalEntry:
+    """Return the goal entry for ``spec`` with the given words and relation directives (empty by default)."""
 
     if not isinstance(spec, GoalSpec):
         raise TypeError(f"spec must be a GoalSpec, got {type(spec).__name__}")
-    return GoalEntry(**{key: getattr(spec, key) for key in _SPEC_FIELDS}, intent=intent, when=when, note=note)
+    return GoalEntry(**{key: getattr(spec, key) for key in _SPEC_FIELDS}, intent=intent, when=when, note=note,
+                     relation=relation)
+
+
+def _relation_of(goal: Mapping[str, Any], index: int) -> tuple[RelationDirective, ...]:
+    """The relation directives of one goal's JSON object (absent means none). The schema has checked the shape; a name
+    the decision layer does not write (``integrity``, ``remember``, or anything unknown) is refused here."""
+
+    directives = []
+    for item in goal.get("relation", []):
+        if item["name"] not in DIRECTABLE_RELATIONS:
+            raise ValueError(
+                f"$.executive.goals[{index}].relation: {item['name']!r} cannot be set by a directive; use one of "
+                f"{list(DIRECTABLE_RELATIONS)} (integrity and remember are not directable)")
+        directives.append(RelationDirective(entity=item["entity"], name=item["name"], value=item["value"]))
+    return tuple(directives)
 
 
 @dataclass(frozen=True)
@@ -190,6 +208,7 @@ class ExecutiveSection:
         mapping = json.loads(self.to_executive_state().to_json())
         for item, goal in zip(mapping["goals"], self.goals):
             item.update({key: getattr(goal, key) for key in _TEXT_FIELDS})
+            item["relation"] = [{"entity": d.entity, "name": d.name, "value": d.value} for d in goal.relation]
         mapping["notes"] = self.notes
         return mapping
 
@@ -207,8 +226,8 @@ class ExecutiveSection:
         typed["goals"] = [{key: goal[key] for key in _SPEC_FIELDS} for goal in mapping["goals"]]
         state = ExecutiveState.from_dict(typed)
         goals = tuple(
-            spec_to_entry(spec, **{key: goal[key] for key in _TEXT_FIELDS})
-            for spec, goal in zip(state.goals, mapping["goals"])
+            spec_to_entry(spec, relation=_relation_of(goal, index), **{key: goal[key] for key in _TEXT_FIELDS})
+            for index, (spec, goal) in enumerate(zip(state.goals, mapping["goals"]))
         )
         return cls(
             state.version, state.issued_tick, goals, state.budget, state.facts, mapping["notes"],

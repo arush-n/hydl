@@ -263,6 +263,6 @@ a directive that holds against the rules; a 151st individual causing one ejectio
 7. Fear's ratio is the meeting's damage taken over damage dealt, clamped to 2 [E].
 
 **Open.**
-- The LLM cannot send a directive yet: the LLM-facing contract has no `relation` field, so directives are host-side only.
+- The LLM's goal may carry an optional `relation` list ({entity, name, value}), read into `GoalEntry.relation` by `ExecutiveSection.from_dict`; `integrity` and `remember` are refused there. Its rule-side hold is tested in `test_na_relation_directive.py`.
 - A refused write waits when no record can be ejected. The remember path asks the LLM in that case; this path does not yet.
 - The skill layer's `views.facts(dt_seconds)` has no production caller to pass seconds to.

@@ -22,6 +22,7 @@ from experimental.neural_agent.contracts import (
     _non_negative_int,
     _text,
 )
+from experimental.neural_agent.skill_agent.contract import variables
 
 
 
@@ -66,6 +67,12 @@ EVENT_WINDOW_TICKS: int = 11
 
 _SPEC_FIELDS: tuple[str, ...] = tuple(item.name for item in dataclasses.fields(GoalSpec))
 _TEXT_FIELDS: tuple[str, ...] = ("intent", "when", "note")
+DIRECTABLE_RELATIONS: tuple[str, ...] = tuple(
+    entry.name for entry in variables.ENTITY_ENTRIES if entry.name not in ("remember", "integrity")
+)
+"""The relationship fields a goal's relation directive may name (MIDDLE_LAYER.md section 11): the skill layer's entity
+fields except ``remember`` (the remember policy's) and ``integrity`` (never written by the decision layer). The same set
+as ``jev/relations.py`` WRITABLE."""
 
 
 def _string(value: Any, name: str) -> str:

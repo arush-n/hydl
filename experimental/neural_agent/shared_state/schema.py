@@ -21,6 +21,7 @@ from experimental.neural_agent.contracts import (
 from experimental.neural_agent.executive.store import validate_against_schema
 
 from ._common import (
+    DIRECTABLE_RELATIONS,
     KNOWN_ENTITY_LIMIT,
     LATENT_PREFIX_WIDTH,
     SECTION_NAMES,
@@ -66,6 +67,24 @@ _GOAL_ENTRY_SCHEMA["properties"].update(
         ),
     },
     note={"type": "string", "description": "Anything else about this goal; may be empty."},
+    relation={
+        "type": "array",
+        "description": (
+            "Optional relationship directives for this goal: each {entity, name, value} sets one relationship field"
+            " with a perceived entity while the goal is in force. name is one of "
+            f"{', '.join(DIRECTABLE_RELATIONS)}; integrity and remember are not allowed. Omit or leave empty when none."
+        ),
+        "items": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["entity", "name", "value"],
+            "properties": {
+                "entity": {"type": "integer", "minimum": 0},
+                "name": {"type": "string", "minLength": 1},
+                "value": {"type": "number"},
+            },
+        },
+    },
 )
 _EXECUTIVE_SECTION_SCHEMA = _object_schema(
     {
@@ -327,5 +346,5 @@ def validate(payload: Any) -> None:
 
 
 EXECUTIVE_SECTION_JSON_SCHEMA: dict[str, Any] = _EXECUTIVE_SECTION_SCHEMA
-"""The executive section's schema: ExecutiveState's keys plus the words per goal (intent, when, note) and
-``notes``. What the LLM replies in (``executive/anthropic_backend.py``)."""
+"""The executive section's schema: ExecutiveState's keys plus the words per goal (intent, when, note), the optional
+relation directives per goal, and ``notes``. What the LLM replies in (``executive/anthropic_backend.py``)."""
