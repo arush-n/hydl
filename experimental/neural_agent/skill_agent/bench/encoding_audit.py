@@ -41,6 +41,9 @@ from experimental.neural_agent.skill_agent.training.blocks import HEAD_NAMES
 REPO = Path(__file__).resolve().parents[4]
 REGISTRY_072 = REPO / "agent_skills/training_runs/perception/registry_072"
 """The saved 0.7.2 content registry (the private folder: read in place, never copied)."""
+EFFECTS_072 = REPO / "agent_skills/training_runs/perception/effects_072"
+"""The saved 0.7.2 status-effect registry, built from the game's archive (the private folder: read in place, never
+copied; ``perception/effects.py`` builds it)."""
 GYM_HEADS = len(HEAD_NAMES)
 assert tuple(head.name for head in head_layout("gen7"))[:GYM_HEADS] == tuple(HEAD_NAMES)
 
@@ -53,6 +56,16 @@ def registry_tables(prefix: Path = REGISTRY_072):
     from experimental.neural_agent.skill_agent.perception.registry import load_registry
 
     return v2.registry_tables(load_registry(prefix))
+
+
+def effect_tables(prefix: Path = EFFECTS_072):
+    """The status-effect registry's tables for the status token, or None when the saved folder is absent."""
+
+    from experimental.neural_agent.skill_agent.perception import effects
+
+    if not (prefix.with_suffix(".npz").exists() and prefix.with_suffix(".json").exists()):
+        return None
+    return effects.effect_tables(effects.load_effects(prefix))
 
 
 def gen7_action(factors: jax.Array) -> jax.Array:
@@ -154,7 +167,7 @@ def duel_steps(ticks: int, batch: int) -> Iterator[Step]:
     from experimental.neural_agent.tasks.duel_arena import make_duel_arena
     from hytalegym.jax.combat.observation.v3.policy.layout import neutral_arsenal_policy_action_factors
 
-    tables = registry_tables()
+    tables, effects = registry_tables(), effect_tables()
     for run_index, loadouts in enumerate((("iron_sword", "iron_sword"), ("iron_shortbow", "iron_sword"),
                                           ("iron_battleaxe", "iron_sword"))):
         arena = make_duel_arena(batch, loadouts, view_sector_full_angle_radians=VIEW_SECTOR_RADIANS,
@@ -174,7 +187,8 @@ def duel_steps(ticks: int, batch: int) -> Iterator[Step]:
         factors = neutral_arsenal_policy_action_factors(batch)
         for tick in range(ticks):
             yield observation, gen7_action(factors), {"body_yaw_degrees": state.arsenal.combat.yaw[:, 0],
-                                                      "tables": tables, "reset": jnp.full((batch,), tick == 0)}
+                                                      "tables": tables, "effects": effects,
+                                                      "reset": jnp.full((batch,), tick == 0)}
             factors = pick(jax.random.key(1000 * run_index + tick), mask, factors)
             state, observation, opponent, mask, opponent_mask, _, _ = step(
                 state, factors, chase(opponent, opponent_mask), jax.random.split(jax.random.key(tick), batch))
@@ -191,7 +205,7 @@ def region_steps(ticks: int, batch: int, library: str | None = None) -> Iterator
 
     chosen = {"library": library} if library else {}
     scene = region_scene(weapons=("iron_sword",) * batch, target_active=True, **chosen)
-    tables = registry_tables()
+    tables, effects = registry_tables(), effect_tables()
     reset, step, pick = jax.jit(scene.environment.reset), jax.jit(scene.environment.step), jax.jit(random_legal)
     state, policy, _ = reset(jax.random.split(jax.random.key(7), scene.batch))
     channel = getattr(state.learner_observation, "perception_v2", None) is not None
@@ -199,7 +213,7 @@ def region_steps(ticks: int, batch: int, library: str | None = None) -> Iterator
     factors = neutral_arsenal_policy_action_factors(scene.batch)
     for tick in range(ticks):
         light = state.light_tokens
-        adapter = {"tables": tables, "reset": jnp.full((scene.batch,), tick == 0),
+        adapter = {"tables": tables, "effects": effects, "reset": jnp.full((scene.batch,), tick == 0),
                    "light": Light(light.token_f32, light.token_mask & light.available[:, None]),
                    "action_surface": state.action_surface, "block_reach_blocks": float(scene.maximum_distance)}
         if not channel:

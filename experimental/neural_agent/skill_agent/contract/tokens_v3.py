@@ -98,6 +98,18 @@ AFFECT_FEATURES: tuple[str, ...] = variables.names("inner", body_reads=True)
 control over the threat, in [0, 1]."""
 FEELINGS: tuple[str, ...] = ("hostility", "fear", "trust", "anger")
 """The agent's feelings toward one known entity (``state/affect.py``), on that entity's token as ``feel_*``."""
+EFFECT_FEATURES: tuple[str, ...] = (
+    "debuff", "infinite", "duration_log10", "overlap_overwrite", "overlap_extend", "overlap_ignore",
+    "damage_over_time", "modifies_stats", "modifies_damage_taken", "modifies_damage_dealt", "speed_multiplier",
+    "invulnerable", "changes_model", "conditional",
+)
+"""A status effect's registry properties, ``perception/effects.py``'s ``EFFECT_FEATURES``. Copied here, not imported:
+that module imports the perception adapter, which imports the encoder, which reads this one. A test asserts equality."""
+PLACE_KINDS: tuple[str, ...] = ("stay", "danger", "death", "find", "marked")
+"""A long-term place's kinds, ``state/places.py``'s ``PLACE_KINDS`` (copied as above; a test asserts equality)."""
+EVENT_KINDS: tuple[str, ...] = ("damage_taken", "damage_dealt", "item_gained", "item_lost", "ate", "request_done",
+                                "request_failed", "request_aborted", "death")
+"""An event's kinds, ``state/events.py``'s ``EVENT_KINDS`` (copied as above; a test asserts equality)."""
 
 _DESCRIPTION = tuple(f"description_{index}" for index in range(DESCRIPTION_WIDTH))
 _RESERVE = tuple(f"reserve_{index}" for index in range(RESERVE_WIDTH))
@@ -144,11 +156,15 @@ class KitTokenV3:
 
 
 class StatusTokenV3:
-    """One of the agent's own status effects: its timing and per-cycle effects, and what it does to me (the flag bits:
-    invulnerable, movement, abilities or sprint disabled, knockback ignored, a debuff). Which effect it is waits on an
-    effects registry (``effect_id`` is published; its description is the reserve)."""
+    """One of the agent's own status effects: its timing and per-cycle effects, what it does to me (the flag bits:
+    invulnerable, movement, abilities or sprint disabled, knockback ignored, a debuff), and which effect it is: its
+    registry properties (``EFFECT_FEATURES``) and its description, looked up by the id the observation publishes in the
+    effects registry (``perception/effects.py``; ``docs/VIRTUAL_HUMAN.md`` sections 11.4 and 24). ``effect_known`` is 0
+    for an id the registry does not hold, and the effect columns read zero where no registry is given."""
 
-    FEATURES = (*STATUS_FIELDS, *(f"flag_{name}" for name in STATUS_FLAGS), *_RESERVE, "marked")
+    FEATURES = (*STATUS_FIELDS, *(f"flag_{name}" for name in STATUS_FLAGS), *_RESERVE,
+                *(f"effect_{name}" for name in EFFECT_FEATURES),
+                *(f"effect_description_{index}" for index in range(DESCRIPTION_WIDTH)), "effect_known", "marked")
 
 
 class EntityTokenV3:
@@ -229,6 +245,24 @@ class RecipeTokenV3:
     FEATURES = (*(f"recipe_{index}" for index in range(RECIPE_WIDTH)), "marked")
 
 
+class PlaceTokenV3:
+    """A long-term place (``state/places.py``, section 22): where it is (its ``where`` block, from me), its kinds, its
+    strength, its visits and the time since its last one (both log-scaled), and whether I am inside it. The body reads
+    the few places that matter most to it (section 24): the marked ones first, then the strong and the near."""
+
+    FEATURES = (*WHERE_FEATURES, *(f"place_{kind}" for kind in PLACE_KINDS), "strength", "visits_log",
+                "since_visit_log", "inside", *_RESERVE, "marked")
+
+
+class EventTokenV3:
+    """One of the last events (``state/events.py``, section 21): its kind, its age (log ticks), its amount, whether it
+    was inferred, whether the other party is a known entity now, and where it happened (its ``where`` block, and
+    ``where_known`` 0 when it has no place)."""
+
+    FEATURES = (*WHERE_FEATURES, *(f"event_{kind}" for kind in EVENT_KINDS), "age_log", "amount", "inferred",
+                "other_known", "where_known", *_RESERVE, "marked")
+
+
 TOKEN_TYPES_V3: Mapping[str, type] = {
     "self": SelfTokenV3,
     "act": ActTokenV3,
@@ -243,8 +277,11 @@ TOKEN_TYPES_V3: Mapping[str, type] = {
     "recipe": RecipeTokenV3,
     "persona": PersonaTokenV3,
     "affect": AffectTokenV3,
+    "place": PlaceTokenV3,
+    "event": EventTokenV3,
 }
-"""Token type name -> its feature list under ``skill_tokens_v3``."""
+"""Token type name -> its feature list under ``skill_tokens_v3``. The places and events come last, so no type's
+position changes (``docs/VIRTUAL_HUMAN.md`` section 14)."""
 
 TRUNK_TYPE_NAMES_V3: tuple[str, ...] = tuple(TOKEN_TYPES_V3)
 """The token types the trunk reads under v3, in its sequence order."""
@@ -256,22 +293,24 @@ section 18; 84 until 2026-10-22)."""
 CAPACITIES_V3: Mapping[str, int] = {
     "self": 1, "act": len(ActTokenV3.HEADS), "kit": ABILITY_SLOTS, "status": 8, "entity": 16, "projectile": 16,
     "hazard": 8, "geometry": WORLD_GEOMETRY_TOKEN_CAPACITY + REMEMBERED_GEOMETRY_CELLS, "block_candidate": 16 + 16,
-    "inventory_slot": 76, "recipe": 16, "persona": 1, "affect": 1,
+    "inventory_slot": 76, "recipe": 16, "persona": 1, "affect": 1, "place": 8, "event": 8,
 }
 """Default capacities. Geometry and block candidates hold this tick's plus remembered ones. This tick's geometry is the
 gym's world-geometry capacity for the server line (``WORLD_GEOMETRY_TOKEN_CAPACITY``: 96 on 0.7.2 since 04c3b18, from
 a 20-seed census, ``docs/VIRTUAL_HUMAN.md`` 18.4; 44 on 0.5.7), read at import like the gym's own; block candidates
 are 16. The remembered ones are ``REMEMBERED_GEOMETRY_CELLS`` and 16. Entities hold perceived and remembered together.
-A capacity is a configuration: the trunk's parameters never depend on it."""
+The body reads 8 places and the last 8 events (``docs/VIRTUAL_HUMAN.md`` section 24). A capacity is a configuration:
+the trunk's parameters never depend on it."""
 
 assert RESOURCE_COUNT == len(RESOURCES)
 assert all(cls.FEATURES[-1] == "marked" for cls in TOKEN_TYPES_V3.values())
 assert all(len(set(cls.FEATURES)) == len(cls.FEATURES) for cls in TOKEN_TYPES_V3.values())
 
-__all__ = ["ABILITY_SLOTS", "AFFECT_FEATURES", "AFFORDANCES", "CAPACITIES_V3", "DESCRIPTION_WIDTH", "FEELINGS",
-           "GATHER_BITS", "GEOMETRY_BOXES", "GEOMETRY_BOX_FIELDS", "GEOMETRY_EDGES", "GEOMETRY_EDGE_FIELDS",
-           "GEOMETRY_FLAGS", "HOLD_THRESHOLDS", "ITEM_PROPERTIES_V3", "MEMORY_FEATURES", "PERSONA_FEATURES",
-           "RECIPE_WIDTH", "REMEMBERED_GEOMETRY_CELLS", "RESERVE_WIDTH", "RESOURCES", "STATUS_FIELDS", "STATUS_FLAGS",
-           "TOKEN_SCHEMA_V3", "TOKEN_TYPES_V3", "TRUNK_TYPE_NAMES_V3", "WHERE_FEATURES", "ActTokenV3", "AffectTokenV3",
-           "BlockCandidateTokenV3", "EntityTokenV3", "GeometryTokenV3", "HazardTokenV3", "InventorySlotTokenV3",
-           "KitTokenV3", "PersonaTokenV3", "ProjectileTokenV3", "RecipeTokenV3", "SelfTokenV3", "StatusTokenV3"]
+__all__ = ["ABILITY_SLOTS", "AFFECT_FEATURES", "AFFORDANCES", "CAPACITIES_V3", "DESCRIPTION_WIDTH", "EFFECT_FEATURES",
+           "EVENT_KINDS", "FEELINGS", "GATHER_BITS", "GEOMETRY_BOXES", "GEOMETRY_BOX_FIELDS", "GEOMETRY_EDGES",
+           "GEOMETRY_EDGE_FIELDS", "GEOMETRY_FLAGS", "HOLD_THRESHOLDS", "ITEM_PROPERTIES_V3", "MEMORY_FEATURES",
+           "PERSONA_FEATURES", "PLACE_KINDS", "RECIPE_WIDTH", "REMEMBERED_GEOMETRY_CELLS", "RESERVE_WIDTH", "RESOURCES",
+           "STATUS_FIELDS", "STATUS_FLAGS", "TOKEN_SCHEMA_V3", "TOKEN_TYPES_V3", "TRUNK_TYPE_NAMES_V3",
+           "WHERE_FEATURES", "ActTokenV3", "AffectTokenV3", "BlockCandidateTokenV3", "EntityTokenV3", "EventTokenV3",
+           "GeometryTokenV3", "HazardTokenV3", "InventorySlotTokenV3", "KitTokenV3", "PersonaTokenV3", "PlaceTokenV3",
+           "ProjectileTokenV3", "RecipeTokenV3", "SelfTokenV3", "StatusTokenV3"]

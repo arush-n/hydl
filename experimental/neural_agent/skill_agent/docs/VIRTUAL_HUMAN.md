@@ -566,7 +566,7 @@ approach. Missing:
 | 4 | The event log and its tokens; the activity counters and levels. DESIGNED and APPROVED 2026-10-22; BUILT (section 21.6; the event tokens wait for step 7) | 10.6, 11.1, 16.6, 21 |
 | 5 | The long-term spatial memory: places, routes, coordinates. DESIGNED and APPROVED 2026-10-22; BUILT (section 22.7; the place tokens are step 7, section 24) | 10.11, 16.4, 22 |
 | 6 | Hearing: the sound registry, the hearing rule, heard entries in the stores, the orienting reflex (the token reads zero until S12) | 17 |
-| 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry (with it the status token's identity: which effect, its source entity, its damage cause, all in the observation and dropped today; `PERCEPTION.md` section 10.5), places, the proficiencies. First part DESIGNED and APPROVED 2026-10-22 (section 24: status identity, places, events) | 11.1 to 11.4, 11.6, 16.6, 17.8, 24 |
+| 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry (with it the status token's identity: which effect, its source entity, its damage cause, all in the observation and dropped today; `PERCEPTION.md` section 10.5), places, the proficiencies. First part DESIGNED and APPROVED 2026-10-22; BUILT (section 24.7: status identity, places, events) | 11.1 to 11.4, 11.6, 16.6, 17.8, 24 |
 | 8 | The formatted views (typed facts, words) and the recording | 10.3, 10.9 |
 | 9 | The social section (approved, 15.3) | 12, 15.3 |
 | W | World interaction: breaking, placing, using, picking up, and the commands (crafting, tools, items); the perception of break progress and items on the ground. DESIGNED and APPROVED 2026-10-22 (section 23); the perception follows the simulator's asks, the skills train when training resumes | 23 |
@@ -2082,7 +2082,7 @@ effects table, as it looks items up with the content registry. 22 columns become
 marked, the visits (log), the time since the last visit (log), and whether the agent is inside it. Which 8: marked
 places first, then by `strength / (1 + distance / 16)` [E], so near and strong places win.
 
-**An `event` token, 8 slots** (11.1; section 21). The last 8 events, each: its kind (10 bits), its age (log ticks), its
+**An `event` token, 8 slots** (11.1; section 21). The last 8 events, each: its kind (9 bits), its age (log ticks), its
 amount, inferred or observed, the `where` block of where it happened, and whether the other party is a known entity
 now. The trunk relates an event to an entity token by attention over their positions.
 
@@ -2117,6 +2117,47 @@ committed, against E8's gate (`PERCEPTION.md` 10.2).
    assets, so it stays out of the repository). The alternative is rebuilding it each run (about a minute).
    Built there 2026-10-22: `agent_skills/training_runs/perception/effects_072` (260 effects, tables SHA-256 66163d97...,
    the same as the first build; ignored by git).
+
+### 24.7 Built (2026-10-22), and how it was checked
+
+What was built is 24.2 with the rulings of 24.5. A Haiku subagent wrote it in its own worktree from a written spec;
+it was reviewed and re-run here.
+- `contract/tokens_v3.py`: the status token's effect columns (22 -> 101); `PlaceTokenV3` (28 columns) and
+  `EventTokenV3` (33: the event kinds are 9, not the 10 first written), appended after the other types; 15 types,
+  356 tokens an agent on 0.7.2 and 304 on 0.5.7. The token's last `marked` column (an instructed target) stays 0 for
+  places and events; a place's decision-layer mark is `place_marked`.
+- `state/senses.py`: `perceive_rows(effects=)` looks each own status's `effect_id` up in the effects table.
+- `state/layer.py`: the place rows and the event rows (constants [E]: the pull distance 16 blocks, the visit and
+  age horizons). A known limit: an event whose stored world position is exactly (0, 0, 0) reads as placed nowhere
+  (`where_known` 0), since the log keeps no position flag; only an agent standing at the world's origin hits it.
+- `bench/encoding_audit.py`: both scenarios read the effects table from the private folder.
+
+Checks:
+- **On the Region world with block identity** (`encoding_audit run region --library region-library-pilot-v2-072`,
+  gen 7 with the perception channel, 4 agents x 300 ticks): the status token names its effect on every row
+  (`Immunity_Environmental`: `effect_known` 1, infinite, damage taken modified); 980 place rows (about 0.8 an
+  agent-tick), 15 columns varying (the where block, kinds: all danger places from the Trork's hits and a few stays,
+  strength 0.73 to 0.99, visits, the time since the last visit, inside); 2,456 event rows (about 2 an agent-tick), 14
+  columns varying (the where block, the hit's amount 0.12 to 0.22, its age, inferred on 98% of rows, the attacker
+  known now on 98%, where known on all).
+- **Unit tests:** `test_sa_tokens_step7.py`, 10 (the layout and the copied names, the status identity with the saved
+  table and an unknown id, a death place and a request event read through `layer.step`, nothing without a position,
+  the trunk finite on the new tokens and its output moving with them); `test_sa_tokens_v3.py`'s width pin updated.
+- **The gate:** pass 1 1,374 -> 1,384 passed, the same 11 failing names as the baseline; pass 2 (the stand-in on 0.5.7)
+  the same 30 failing names. No new failure by name.
+- **Cost** (the whole tick: the state layer and the trunk with its memory, background and object slots; the scratch
+  probe `tick_cost.py`; gen-7 render of 66376d7 with the perception channel, the Region world; old = 18bda81, new =
+  with this step; old and new interleaved, two rounds; the machine shared with other sessions at load 13 to 36 on 18
+  cores, so the rounds differ more than old from new). p50 / p95 in ms:
+
+  | Batch | Old, round 1 | New, round 1 | Old, round 2 | New, round 2 |
+  |---|---|---|---|---|
+  | 1 | 1.54 / 1.68 | 1.65 / 1.83 | 1.89 / 3.44 | 1.55 / 1.67 |
+  | 8 | 5.27 / 5.72 | 5.04 / 5.61 | 8.51 / 10.83 | 7.81 / 9.35 |
+  | 64 | 37.98 / 44.74 | 37.38 / 43.78 | 49.83 / 155.87 | 48.28 / 62.12 |
+
+  No cost that stands out of the noise: the new tick is the faster of the pair in 5 of 6 (the other by 0.11 ms), and
+  batch 8 stays under E8's 15 ms.
 
 ### 24.6 What grounds it
 

@@ -20,7 +20,8 @@ stores it). One tick, :func:`step`:
 7. the stores give back what is remembered but not perceived;
 8. every entity token, perceived or remembered, gets the agent's feelings toward it (``feel_*``);
 9. everything is packed into the ``skill_tokens_v3`` token sets the trunk reads, with the persona and affect
-   tokens, whose columns are the body-read variables (``tokens_v3.PERSONA_FEATURES``, ``AFFECT_FEATURES``).
+   tokens, whose columns are the body-read variables (``tokens_v3.PERSONA_FEATURES``, ``AFFECT_FEATURES``), and the
+   place and event tokens, read from the places and the event log the steps above updated (sections 22, 21 and 24).
 
 :func:`save` and :func:`load` write and read a state as one ``.npz`` (memory "stored as well", owner 2026-10-20 night),
 with the variables' names and the token layout, so a save migrates by name to a later registry or schema
@@ -30,6 +31,7 @@ with the variables' names and the token layout, so a save migrates by name to a 
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any, Mapping, NamedTuple, Sequence
 
@@ -53,8 +55,18 @@ from experimental.neural_agent.skill_agent.state.action_history import (
     initial_history,
     update_history,
 )
-from experimental.neural_agent.skill_agent.state.frames import POSITION_SCALE_BLOCKS
-from experimental.neural_agent.skill_agent.state.senses import Perceived, append_rows, fit_ids, pack, perceive_rows
+from experimental.neural_agent.skill_agent.state.frames import POSITION_SCALE_BLOCKS, world_to_body
+from experimental.neural_agent.skill_agent.state.senses import (
+    Perceived,
+    Pose,
+    _put,
+    _zeros,
+    append_rows,
+    fit_ids,
+    pack,
+    perceive_rows,
+    where_of,
+)
 from experimental.neural_agent.skill_agent.state.persona import TRAITS, neutral_persona
 from hytalegym.jax.combat.observation.v3.tokens.inventory import INVENTORY_POLICY_FLOAT_FEATURES
 
@@ -120,6 +132,76 @@ def _logged(log: events.EventLog, now: jax.Array, kind: str) -> jax.Array:
     return jnp.any((log.kind == events.EVENT_KINDS.index(kind)) & (log.tick == now[:, None]), axis=1)
 
 
+PLACE_PULL_BLOCKS: float = 16.0
+"""A place's pull on the body halves at this distance, in blocks [E]: the places the body reads rank by
+``strength / (1 + distance / PLACE_PULL_BLOCKS)`` after the marked ones (section 24)."""
+PLACE_VISITS_HORIZON: float = 1000.0
+"""A place's visits are log-scaled to [0, 1] over this many visits [E]."""
+PLACE_SINCE_HORIZON_TICKS: float = 1_000_000.0
+"""The time since a place's last visit is log-scaled to [0, 1] over this many ticks [E] (section 22)."""
+EVENT_AGE_HORIZON_TICKS: float = 1800.0
+"""An event's age is log-scaled to [0, 1] over this many ticks [E]: 81 s at 0.045 s a tick."""
+
+
+def _take(values: jax.Array, order: jax.Array) -> jax.Array:
+    """``values`` float32[B, P, ...] (or bool, int) at the slots ``order`` int32[B, C]: [B, C, ...]."""
+
+    return jnp.take_along_axis(values, order.reshape(order.shape + (1,) * (values.ndim - 2)), axis=1)
+
+
+def _place_rows(placed: places.PlaceState, pose: Pose, capacity: int) -> tuple[jax.Array, jax.Array]:
+    """The places the body reads (section 24): the marked ones first, then by ``strength / (1 + distance /
+    PLACE_PULL_BLOCKS)``, the first ``capacity`` kept. Each has its ``where`` block from me, its kinds, its strength,
+    its visits and time since its last visit (log-scaled), and whether I am inside it. Needs ``pose.position``."""
+
+    displacement, distance, valid = places.relative(placed, pose.position, pose.body_yaw)
+    store = placed.places
+    pull = store.strength / (1.0 + distance / PLACE_PULL_BLOCKS)
+    rank = jnp.where(valid, -jnp.where(store.marked, jnp.inf, pull), jnp.inf)  # the lowest ranks first
+    order = jnp.argsort(rank, axis=1, stable=True)[:, :capacity]
+    since = jnp.maximum(placed.now[:, None] - _take(store.last, order), 0)
+    rows = _put(_zeros(placed.now.shape[0], capacity, "place"), {
+        "forward": where_of(_take(displacement, order), pose, 0.0),
+        "place_stay": _take(store.kinds, order),
+        "strength": _take(store.strength, order),
+        "visits_log": jnp.minimum(jnp.log1p(_take(store.visits, order)) / math.log1p(PLACE_VISITS_HORIZON), 1.0),
+        "since_visit_log": jnp.minimum(jnp.log1p(since) / math.log1p(PLACE_SINCE_HORIZON_TICKS), 1.0),
+        "inside": order == placed.inside[:, None],
+    }, "place")
+    chosen = _take(valid, order)
+    return jnp.where(chosen[..., None], rows, 0.0), chosen
+
+
+def _event_rows(logged: events.EventState, pose: Pose, entity_ids: jax.Array, capacity: int
+                ) -> tuple[jax.Array, jax.Array]:
+    """The last ``capacity`` events, oldest first (section 24): kind, age, amount, inferred or observed, whether the
+    other party is a known entity now (one of this tick's ``entity_ids``), and where it happened: its ``where`` block
+    from me, when I have a position and the event has one (``where_known``; an event at the world origin reads as
+    having none)."""
+
+    recent = events.recent(logged, capacity)
+    batch = recent.kind.shape[0]
+    age = jnp.maximum(logged.now[:, None] - recent.tick, 0)
+    other_known = (recent.other >= 0) & jnp.any(recent.other[..., None] == entity_ids[:, None, :], axis=-1)
+    where_known = jnp.zeros((batch, capacity), jnp.bool_)
+    block = jnp.zeros((batch, capacity, len(v3.WHERE_FEATURES)), jnp.float32)
+    if pose.position is not None:
+        where_known = recent.valid & jnp.any(recent.world != 0.0, axis=-1)
+        offset = recent.world - pose.position[:, None, :]
+        block = jnp.where(where_known[..., None], where_of(world_to_body(offset, pose.body_yaw[:, None]), pose, 0.0),
+                          0.0)
+    rows = _put(_zeros(batch, capacity, "event"), {
+        "forward": block,
+        "event_damage_taken": jax.nn.one_hot(recent.kind, len(events.EVENT_KINDS)),
+        "age_log": jnp.minimum(jnp.log1p(age) / math.log1p(EVENT_AGE_HORIZON_TICKS), 1.0),
+        "amount": jnp.clip(recent.amount, -1.0, 1.0),
+        "inferred": recent.inferred,
+        "other_known": other_known,
+        "where_known": where_known,
+    }, "event")
+    return jnp.where(recent.valid[..., None], rows, 0.0), recent.valid
+
+
 def step(observation: Any, state: AgentState, *, last_action: jax.Array,
              reset: jax.Array | None = None, respawn: jax.Array | None = None, writes: written.Writes | None = None,
              capacities: Mapping[str, int] = v3.CAPACITIES_V3, outcomes: jax.Array | None = None,
@@ -142,8 +224,10 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
             3 aborted), or zeros when None.
         outcome_verbs: int32[B, OUTCOME_SLOTS], each request's verb id in ``neural_skills/spec.py`` ``VERBS`` (the
             modules' append-only vocabulary; -1 for a verb outside it), or zeros when None.
-        **adapter: Passed to ``adapter_v3.perceive_rows`` (``body_yaw_degrees``, ``tables``, ``action_surface``,
-            ``block_reach_blocks``, ``light``, ``view_half_angle_degrees``).
+        **adapter: Passed to ``senses.perceive_rows``: ``body_yaw_degrees``, ``tables`` (the content registry),
+            ``action_surface``, ``block_reach_blocks``, ``light``, ``view_half_angle_degrees``, and ``effects`` (the
+            status-effect registry's tables, ``perception/effects.effect_tables``; None reads the effect columns as
+            zero, with ``effect_known`` 0).
     """
 
     history = update_history(state.history, last_action, _restarts(reset, respawn))
@@ -180,6 +264,9 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
     rows["entity"] = (features.at[..., feel:feel + len(v3.FEELINGS)].set(feelings), valid)
     batch = observation.base.self_f32.shape[0]
     one = jnp.ones((batch, 1), jnp.bool_)
+    if perceived.pose.position is not None:  # the long-term places need a position (22.1)
+        rows["place"] = _place_rows(placed, perceived.pose, capacities["place"])
+    rows["event"] = _event_rows(logged, perceived.pose, entity_ids, capacities["event"])
     for name in ("persona", "affect"):  # the body-read variables, the token's ``marked`` 0
         columns = registry.take(values, v3.TOKEN_TYPES_V3[name].FEATURES[:-1])
         rows[name] = (jnp.pad(columns, ((0, 0), (0, 1)))[:, None, :], one)

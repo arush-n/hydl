@@ -24,13 +24,15 @@ the simulator gates them (the coordinator's S7).
 
 Seams. Fields the simulator does not publish yet read zero, with ``known`` 0: creature role, kind and attitude
 (S2), other entities beyond row 0 (S3, they fill as soon as the rows are published), held items (S4), block ids (S5),
-the agent's maximum health, status effect ids.
+and the agent's maximum health. A status effect's id is read through the effects registry (``effects=``,
+``perception/effects.py``): which effect it is, with ``effect_known`` 0 for an id the registry does not hold; without
+the registry its effect columns read zero.
 """
 
 from __future__ import annotations
 
 from functools import cache
-from typing import Any, Mapping, NamedTuple
+from typing import TYPE_CHECKING, Any, Mapping, NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -58,6 +60,7 @@ from hytalegym.jax.combat.observation.v1.schema.contract import (
 from hytalegym.jax.combat.observation.v3.schema.contract import (
     ABILITY_FLOAT_FEATURES,
     ABILITY_INTEGER_FEATURES,
+    STATUS_INTEGER_FEATURES,
     WEAPON_INTEGER_FEATURES,
 )
 from hytalegym.jax.combat.observation.v3.tokens.world import (
@@ -66,6 +69,9 @@ from hytalegym.jax.combat.observation.v3.tokens.world import (
     WORLD_TOKEN_EDGE_FLOAT_SIZE,
 )
 from hytalegym.jax.combat.types import AGENT_ENTITY
+
+if TYPE_CHECKING:  # the annotation only: the registry imports the perception adapter, which imports the encoder
+    from experimental.neural_agent.skill_agent.perception.effects import EffectTables
 
 VIEW_HALF_ANGLE_DEGREES: float = 60.0
 """Half the 120-degree view sector the neural agent's arenas use, centred on the head's yaw."""
@@ -133,7 +139,8 @@ def perceive_rows(observation: Any, *, body_yaw_degrees: jax.Array | None = None
                   tables: v2.RegistryTables | None = None, action_surface: Any = None,
                   block_reach_blocks: float | None = None, light: Light | None = None,
                   inventory_capacity: int = v3.CAPACITIES_V3["inventory_slot"],
-                  view_half_angle_degrees: float = VIEW_HALF_ANGLE_DEGREES) -> Perceived:
+                  view_half_angle_degrees: float = VIEW_HALF_ANGLE_DEGREES,
+                  effects: EffectTables | None = None) -> Perceived:
     """This tick's perceived rows of every type but ``act`` (stateless; the arguments as :func:`legal_tokens_v3`'s)."""
 
     channel = getattr(observation, "perception_v2", None)
@@ -153,7 +160,7 @@ def perceive_rows(observation: Any, *, body_yaw_degrees: jax.Array | None = None
     rows = {
         "self": _self_rows(observation, channel, pose, tables),
         "kit": _kit_rows(observation),
-        "status": _status_rows(observation),
+        "status": _status_rows(observation, effects),
         "entity": _entity_rows(observation, channel, pose, tables),
         "projectile": _projectile_rows(base, pose),
         "hazard": _hazard_rows(base, pose),
@@ -179,7 +186,8 @@ def legal_tokens_v3(observation: Any, *, body_yaw_degrees: jax.Array | None = No
                     capacities: Mapping[str, int] = v3.CAPACITIES_V3, tables: v2.RegistryTables | None = None,
                     action_surface: Any = None, block_reach_blocks: float | None = None, light: Light | None = None,
                     actions: ActionHistory | None = None, remembered: Remembered | None = None,
-                    view_half_angle_degrees: float = VIEW_HALF_ANGLE_DEGREES) -> dict[str, tuple[jax.Array, jax.Array]]:
+                    view_half_angle_degrees: float = VIEW_HALF_ANGLE_DEGREES,
+                    effects: EffectTables | None = None) -> dict[str, tuple[jax.Array, jax.Array]]:
     """Build the ``skill_tokens_v3`` token sets of B agents (one tick; ``state/layer.py`` runs the stateful
     tick with the memory).
 
@@ -197,6 +205,8 @@ def legal_tokens_v3(observation: Any, *, body_yaw_degrees: jax.Array | None = No
         actions: The agent's action history; None leaves the ``act`` tokens invalid.
         remembered: The stored memory's rows for this tick, or None.
         view_half_angle_degrees: The view sector's half angle for the rows the gym does not gate.
+        effects: The status-effect registry's tables (``perception/effects.effect_tables``), or None: the status token's
+            effect columns then read zero.
 
     Returns:
         ``{type: (features float32[B, N_t, F_t], mask bool[B, N_t])}`` for every type of ``TRUNK_TYPE_NAMES_V3``.
@@ -205,7 +215,7 @@ def legal_tokens_v3(observation: Any, *, body_yaw_degrees: jax.Array | None = No
     perceived = perceive_rows(observation, body_yaw_degrees=body_yaw_degrees, tables=tables,
                               action_surface=action_surface, block_reach_blocks=block_reach_blocks, light=light,
                               inventory_capacity=capacities["inventory_slot"],
-                              view_half_angle_degrees=view_half_angle_degrees)
+                              view_half_angle_degrees=view_half_angle_degrees, effects=effects)
     rows = dict(perceived.rows)
     if actions is not None:
         rows["act"] = (act_features(actions), jnp.ones(actions.last_choice.shape, jnp.bool_))
@@ -370,12 +380,20 @@ def _kit_rows(observation) -> tuple[jax.Array, jax.Array]:
     return jnp.where(mask[..., None], rows, 0.0), mask
 
 
-def _status_rows(observation) -> tuple[jax.Array, jax.Array]:
+def _status_rows(observation, effects: EffectTables | None = None) -> tuple[jax.Array, jax.Array]:
+    """The agent's status effects: timing, flags, and (with ``effects``) which effect each is, by its published id."""
+
     status = observation.status_f32[:, AGENT_ENTITY]  # [B, 8, 6]
     flags = jnp.asarray(observation.status_flags[:, AGENT_ENTITY], jnp.uint32)  # [B, 8]: the flag word
     bits = (flags[..., None] >> jnp.arange(len(v3.STATUS_FLAGS), dtype=jnp.uint32)) & jnp.uint32(1)
     mask = jnp.asarray(observation.status_mask[:, AGENT_ENTITY], jnp.bool_)
-    rows = _put(_zeros(*mask.shape, "status"), {"remaining_fraction": status, "flag_invulnerable": bits}, "status")
+    columns = {"remaining_fraction": status, "flag_invulnerable": bits}
+    if effects is not None:
+        ids = observation.status_i32[:, AGENT_ENTITY, :, STATUS_INTEGER_FEATURES.index("effect_id")]  # [B, 8]
+        row, found = v2.lookup(effects.keys, effects.rows, ids)
+        columns |= {f"effect_{v3.EFFECT_FEATURES[0]}": effects.features[row],
+                    "effect_description_0": effects.descriptions[row], "effect_known": found}
+    rows = _put(_zeros(*mask.shape, "status"), columns, "status")
     return jnp.where(mask[..., None], rows, 0.0), mask
 
 
