@@ -103,8 +103,9 @@ class Constructs:
     slope_limits: bool = False
     # 0.7.2 drops a block's health entry on any block write. Owner: block_health.py.
     block_health_reset_on_write: bool = False
-    # Weapon durability maximum and loss per hit: "shipped_json" (HEAD: hytale_0_5_7_item_programs_v1.json) or
-    # "gen7_table" (the 0.7.2 durability table). Owner: sim/gen7/mechanics/durability.py (row 8d).
+    # Weapon durability maximum and loss per hit: "shipped_json" (HEAD: hytale_0_5_7_item_programs_v1.json),
+    # "gen7_table" (the 0.7.2 durability table, a Player wielder) or "gen7_npc_wielder" (the table's maxima, no loss:
+    # 0.7.2 wears only a Player's item). Owner: sim/gen7/mechanics/durability.py (row 8d).
     weapon_durability: str = "shipped_json"
     # Walk after a landing: "at_once" (HEAD: the walk resumes on the first tick after touchdown) or "third_tick" (0.7.2
     # NPC walk: after an accepted jump the planar walk is held for the two ticks after touchdown). Owner:

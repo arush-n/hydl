@@ -949,11 +949,11 @@ HOOKS = (
          "forward/back slots and drops left/right"),
     Hook("weapon_durability_catalog", "combat/arsenal/item_programs.py", "hytale_0_5_7_item_program_catalog",
          f"{_MECHANICS}.durability:construct", "weapon_durability", "active", "8d",
-         "file-sourced (sim/gen7/data/durability.json, the 0.7.2 item rows); loss per hit not measured: the bridge "
-         "exposes durability on its inventory frame (NativeInventoryCapture.java:72), not in info, and a read needs a "
-         "policy attack",
-         "the catalog's weapon_items: max_durability and durability_loss_on_hit of all 143 rows from the 0.7.2 table "
-         "(57 maxima and 82 losses change); the rest of the catalog, semantic_sha256 included, unchanged"),
+         "file-sourced (sim/gen7/data/durability.json, the 0.7.2 item rows); gen 7 sets gen7_npc_wielder: loss 0.0 "
+         "because live 0.7.2 wears no weapon held by an NPC body (no Player component; receipt "
+         "artifacts/fidelity_evidence/gen7_probes/durability_loss.json, durability 250.0 on every tick)",
+         "the catalog's weapon_items: max_durability of all 143 rows from the 0.7.2 table (57 maxima change) and "
+         "durability_loss_on_hit 0.0 on every row; the rest of the catalog, semantic_sha256 included, unchanged"),
     # Row 1a, NPC sprint is run (construct npc_walk_sprint_as_run): a sprint request under npc_walk is a run request for the
     # learner. Listed before the landing hook: hooks on one function apply in tuple order and the first applied is the
     # outermost, so landing_walk (which reads original.__globals__) stays innermost (sim/PORTING.md, hook-chaining note).

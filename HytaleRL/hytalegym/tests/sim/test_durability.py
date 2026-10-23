@@ -41,3 +41,20 @@ def test_gen7_construct_serves_the_072_maximum_and_loss_for_named_weapons() -> N
 def test_gen5_construct_is_the_original_loader() -> None:
     profile = replace(GEN5, constructs=SimpleNamespace(weapon_durability="shipped_json"))
     assert durability.construct(ORIGINAL, profile) is ORIGINAL
+
+
+def test_npc_wielder_serves_the_072_maximum_and_zero_loss() -> None:
+    # Live 0.7.2: an NPC-held weapon is never worn (no Player component; receipt durability_loss.json, 250.0 every tick).
+    profile = replace(GEN7, constructs=SimpleNamespace(weapon_durability="gen7_npc_wielder"))
+    served = _by_id(durability.construct(ORIGINAL, profile)())
+    assert _values(served["Weapon_Sword_Iron"]) == (250.0, 0.0)
+    for item_id, item in served.items():
+        assert item["durability_loss_on_hit"] == 0.0, item_id
+    table = _by_id(durability.construct(ORIGINAL, replace(GEN7, constructs=SimpleNamespace(
+        weapon_durability="gen7_table")))())
+    for item_id, item in served.items():
+        assert item["max_durability"] == table[item_id]["max_durability"], item_id
+
+
+def test_the_shipped_gen7_profile_uses_npc_wielder() -> None:
+    assert GEN7.constructs.weapon_durability == "gen7_npc_wielder"
