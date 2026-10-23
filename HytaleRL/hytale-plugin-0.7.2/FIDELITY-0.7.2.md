@@ -2457,3 +2457,16 @@ fixed 1/30 s is task #137's question.
   the tick's dt is the skill layer's call (their tick-length change takes one per world; a per-tick dt is held back unless
   live jitter is shown to matter). Calibrating `native_time_dilation` to (1/30) / measured dt is possible but scales every
   system and is not recommended without a check.
+
+## (at) Live battery, first receipts (2026-10-23; jar `1F874DFC`; receipts `HytaleRL/artifacts/fidelity_evidence/gen7_probes/`)
+
+Probes from the live battery (task #118: rows never measured live), runner `tmp/live_battery/run_battery.sh`. The
+machine was heavily loaded (1-minute load 48 to 70), so only probes whose answer is not a time were run.
+
+| Row | Probe | Live result | Status |
+|---|---|---|---|
+| 5b sword knockback on the hit body (Trork, two seeds) | `sword_knockback.json` | hit on request + 8 (damage 10 both swings); the body moves from the next tick, settles within 4 ticks: Swing_Left 0.210 and 0.195 blocks, Swing_Right 0.245 and 0.269 blocks (authored forces 4.3 and 5.0, direction (0, 0.2, -1)) | MEASURED live. Sim side: the target slot is pushed only with the #108 opt-in two-actor path; the comparison is next |
+| 6a shortbow tiers 0 to 4; 6b bow full draw | `shortbow_tiers.json` | every run: `ValueError('unsupported NPC semantic-observation contract')` | BLOCKED on this jar: the bridge's NPC observation constant is stale (task #139); needs the next jar (fix in the hold-wire candidate) |
+| 6b crossbow standard | `crossbow_standard_slot0.json` | same error | BLOCKED, as above |
+| (no row) Trork_Shaman ranged attacks on a Kweebec body at 12 blocks | `npc_moves_Trork_Shaman_seed570057.json` | every hit at about 12 blocks: 16 damage twice, 300 ticks apart (about 10.3 s at 0.0345 s/tick); 5 damage fourteen times, every 30 to 50 ticks (1.0 to 1.7 s); repositions at about 8 blocks/s; the 105-HP body died by tick 748 | MEASURED live; the sim has no Shaman (build in progress, owner "reachable attacks only") |
+| (no row) world-verb break of Rock_Stone with Tool_Pickaxe_Iron, fixture `synthetic_world_verbs` | `ground_items_seed570057_wv2.json` | accepted on request + 1, finished 15 ticks later (about 0.5 s), mutation applied; no entity spawned, no inventory gain | MEASURED. The synthetic path resolves drops but does not spawn them, so it cannot answer S13; a learner holding a pickaxe is needed |
