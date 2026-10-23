@@ -2341,3 +2341,35 @@ Trork (MaxSpeed 8) and is superseded.
 | Walk resume after a knockback landing (Kweebec learner, Trork_Brawler opponent; `gen7_probes/knockback_landing/knockback_landing_hit_Kweebec_Razorleaf_20261022b.json`, run 3 of `live_20261022/`) | the Trork's hit queues a purely vertical push (0, 3, 0); airborne 3 ticks; with forward held from the hit the body is still on L+1 and walks from rest on L+2 (4 of 4 landings, 2 seeds); idle after the hit: no sliding (4 of 4). A standing start walks on its request tick (gait receipt), so L+1 is a one-tick hold. Jump landings on the same harness walk on L+3 (10 of 10; section (o) reproduced) | the render walks on L+2 too (seeds 0-3, the legacy Trork melee, forward held from the hit): the engine's knockback control lock holds one tick; `landing_walk_resume` holds jumps only (L+3) | MATCH (no change needed; pinned by tests/sim/test_landing_walk_knockback.py, 29b01d7) |
 | Body yaw while pushed, on the learner body (Kweebec; `gen7_probes/turn_under_knockback/turn_*_kweebec_20261022.json`, verdict `live_20261022/analysis/turn_verdict_kweebec_seed570057.txt`) | held on 4 of 4 hits: pushed ticks median 0.00 deg/tick (85 % under 1), unpushed 21.0; control run 18.0 | slot 0 held; slot 1 held with the duel opt-in | MATCH (the Trork-body row above, now on the real learner body) |
 | Mana at reset (Kweebec and Trork bodies; `native_agent_mana` in the turn receipts) | 100 / 100 at tick 0 | every gen-7 reset read 0 / 0: the rules and the reset follow the input loadout, which carries no mana | FIXED (65a74bb, hook `mana_pool_loadout`; row 7a) |
+
+## (ap) Bridge jump keeps horizontal momentum, and the 0.7.2 world-geometry capacity 96 (2026-10-22; owner rulings "Bridge keeps momentum" and "Raise to 96"; jar `1F874DFC`, commits 04c3b18 and 8d641b2; receipts `HytaleRL/artifacts/fidelity_evidence/gen7_probes/knockback_landing/`)
+
+Before (jar `6DFD8682`, `knockback_landing_jump_Kweebec_Razorleaf_20261022.json`, forward held, a jump every 30 ticks): the
+learner body stops dead at take-off and in the air (planar 0.0 on every airborne tick), lands on L and walks again on L+3.
+A native player or NPC keeps its run velocity through a jump; the bridge's jump path set the body's velocity without the
+Velocity component's x and z.
+
+Fix: `NativeEnvironmentSession.java` carries the Velocity component's x and z into the jump (scratch build `DBB3736B`,
+integrated jar `1F874DFC`).
+
+| Row | Measure | Before (6DFD8682) | After (DBB3736B quiet; 1F874DFC smoke under load) | Status |
+|---|---|---|---|---|
+| jump take-off | planar speed on the take-off tick | 0 | 5.0 blocks/s (the run speed) | FIXED (bridge) |
+| air | planar per tick while airborne | 0 | x0.9216 per tick over 10 airborne ticks, no steering | measured |
+| landing slide | planar on L..L+3 | 0 | x0.672 per tick over 4 ground ticks | measured |
+| walk resume | first walking tick after landing (forward held) | L+3 | L+5 on both | measured |
+| distance in the air | | 0 | about 1.2 blocks | measured |
+| landing tick and L+4 | under load (1F874DFC smoke, 5-min average 12.8) | | the body lands one tick earlier (first-tick rise 0.193 against 0.170) and L+4 reads 0.261 (0.203 quiet); horizontal factors and the L+5 walk unchanged | LOAD-SENSITIVE; quiet re-run queued |
+| sim (gen-7 render) | the same arc | jump straight up (matched the old bridge) | construct `npc_jump_carry` (8d641b2): every tick within 0.02 blocks/s of the quiet DBB3736B arc; L+4 factor 0.45 fitted to one value | FIXED (quiet arc) |
+
+World-geometry token capacity on 0.7.2: 44 -> 96 (ServerProfile `world_geometry_token_capacity`; 0.5.7 keeps 44). The
+learner actor-evidence contract E93BBEBE -> FC928136 and the 0.7.2 Arsenal Region suite v8 (54B3057C) replace v7 (kept as
+a record, fail-closed on 0.7.2). Census: `HytaleRL/artifacts/fidelity_evidence/region_token_capacity/`. Rollout
+fingerprints unchanged on both lines (d8477b63 batch 8, b02ee274 batch 64).
+
+Gait on 1F874DFC (smoke, `gen7_probes/gait_speeds/gait_integ_1F874DFC.json`): run forward 5.0, back 3.25, strafe 4.0,
+diagonal 4.528, walk 1.5, sneak 2.75 and 2.0, sprint 5.0 blocks/s; every ratio equals the simulator's; a hotbar slot past
+the role's capacity completes the step. Handshake: reset and 20 steps under contract FC928136 on 5562/25580.
+
+Not done: recertification run 12 under 1F874DFC (the nine `test_native_world_recordings.py` failures until then; the
+combat contract stamp); the quiet jump re-run on 1F874DFC.
