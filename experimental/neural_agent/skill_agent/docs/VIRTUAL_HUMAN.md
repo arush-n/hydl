@@ -567,7 +567,7 @@ approach. Missing:
 | 5 | The long-term spatial memory: places, routes, coordinates. DESIGNED and APPROVED 2026-10-22; BUILT (section 22.7; the place tokens are step 7, section 24) | 10.11, 16.4, 22 |
 | 6 | Hearing: the sound registry, the hearing rule, heard entries in the stores, the orienting reflex (the token reads zero until S12) | 17 |
 | 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry (with it the status token's identity: which effect, its source entity, its damage cause, all in the observation and dropped today; `PERCEPTION.md` section 10.5), places, the proficiencies. First part DESIGNED and APPROVED 2026-10-22; BUILT (section 24.7: status identity, places, events) | 11.1 to 11.4, 11.6, 16.6, 17.8, 24 |
-| 8 | The formatted views (typed facts, words) and the recording | 10.3, 10.9 |
+| 8 | The formatted views (typed facts, words) and the recording. DESIGNED and APPROVED 2026-10-22; BUILT (section 25.6: the facts, the words, the recording) | 10.3, 10.9, 25 |
 | 9 | The social section (approved, 15.3) | 12, 15.3 |
 | W | World interaction: breaking, placing, using, picking up, and the commands (crafting, tools, items); the perception of break progress and items on the ground. DESIGNED and APPROVED 2026-10-22 (section 23); the perception follows the simulator's asks, the skills train when training resumes | 23 |
 
@@ -2172,6 +2172,106 @@ Checks:
 - **Sets of things as tokens.** The trunk already reads sets by attention, after Perceiver and object files (section
   18's sources); places and events are two more such sets.
 
+## 25. Step 8: the views and the recording (DESIGNED and APPROVED 2026-10-22, with the rulings of 25.4)
+
+The owner, 2026-10-22: "continue". This is step 8 of section 13 (10.3, 10.9): how the top layers read the state
+built in steps 1 to 5, and how a run is recorded. Nothing is built until the owner's yes.
+
+### 25.1 What exists
+
+- **The state** (`state/`): the persona and the emotional state, the counters and the deaths (the registry's
+  variables); the written entries (step 2); the event log (step 4); the long-term places and routes (step 5); the
+  stores; the entities by perceived id (`runtime/state_tick.known_entities`, which the coordinator's host loop writes
+  into the shared scratchpad's `skills` section each tick).
+- **The shared scratchpad** (`experimental/neural_agent/docs/MIDDLE_LAYER.md`) has a briefing view for the LLM
+  (markdown, JSON, compact). It is the coordinator's; it shows what is written into S_t.
+- **Save and load** write the whole state as one file and migrate by name (section 14).
+- **Missing:** one place that turns the state into typed facts for the decision layer and words for the LLM (the
+  ruling of section 3: "it can be queried and formatted"), and a recording of a run.
+
+### 25.2 The design
+
+**`state/views.py`, off the tick** (at a decision, on the host):
+- **`facts(state, lane, own_position=None)`**: one agent's state as typed, JSON-safe facts:
+  - who it is: the persona's traits by name;
+  - how it feels: alarm (`fear`), anger, startle, valence, coping, the mood's three axes;
+  - what it has done: the counters and deaths;
+  - what it knows of others: `known_entities` (id, visible, age, where, hostility, health);
+  - where it has been: each place (kinds, strength, marked, visits, distance and bearing from it now) and the routes
+    between them (best travel time, how often);
+  - what happened lately: the event log, newest first (kind, age, amount, observed or inferred, the other party);
+  - what the top layers wrote: the live entries, with their writer and when.
+- **`words(facts, budget)`**: the same facts as short plain sentences for the LLM, from fixed templates (no model in
+  the loop, so the words are exactly the facts and testable). Within the budget, items are chosen as Generative Agents
+  retrieves memories: by recency, importance and relevance, each scaled to [0, 1] and weighted equally (25.5 item 2).
+  Importance here is the event's amount and the place's strength, not a model's rating.
+- **Who places them:** the coordinator's host writes them where S_t wants them (the briefing view reads them).
+
+**The recording** (10.9), as event sourcing: the state is the snapshots plus the events between them.
+- a snapshot (`layer.save`, which already migrates by name) every 300 ticks [E] and at each episode's end;
+- between snapshots, the stream of what changed: each event as the log records it, each written entry applied or
+  refused, each place formed or evicted;
+- one folder per run, the stream as JSON lines. The overhead is fixed: a snapshot every so often, and the stream only
+  when something happens.
+- Deterministic replay of the whole run (the world and the body) stays the host's: the simulator is deterministic in
+  its seeds and actions, and the state layer is deterministic in its inputs.
+
+### 25.3 Files
+
+- `state/views.py` (new): `facts`, `words`.
+- `state/recording.py` (new): the recorder (snapshots and the change stream) and a reader: the whole state at each
+  snapshot, and the recorded parts (events, written entries, places) at any tick from the stream. Rebuilding the
+  whole state between snapshots would need the raw observations, which are not recorded.
+- Tests: the facts of a known state; the words naming exactly those facts within a budget; a recording replayed back to
+  the state it recorded.
+
+### 25.4 Decisions (RULED 2026-10-22)
+
+1. **The words from fixed templates** (no model; exact and testable)? Recommended: yes. The alternative is a language
+   model that summarises the facts. RULED: "start with templates but language model summarizing later": templates
+   now; a model's summary of the facts is a later option, beside them.
+2. **Choosing what fits the LLM's budget by recency, importance and relevance,** weighted equally? Recommended: yes.
+   RULED: "yes".
+3. **The recording as snapshots every 300 ticks plus the stream of changes?** Recommended: yes. The alternative is the
+   whole state every tick (much larger). RULED: "sure".
+
+### 25.6 Built (2026-10-22), and how it was checked
+
+What was built is 25.2 with the rulings of 25.4. A Haiku subagent wrote it in its own worktree from a written spec;
+it was reviewed and re-run here. Two changes were made in review: a place within 1 block reads "is here", and the
+test of the recording also checks the written entry's mark and ejection in the stream.
+- `state/views.py` (284 lines): `facts(state, lane, own_position=, body_yaw_degrees=)` reads one lane into JSON-safe
+  facts (the traits, the feelings, the counters; the entities by perceived id; the places and routes, each place with
+  its distance and bearing; the event log, newest first; the written entries with their writer and age). `words(facts,
+  budget=1200)` says them in fixed-template sentences, the items that fit chosen by recency, importance and relevance,
+  each min-max scaled, weighted equally.
+- `state/recording.py` (188 lines): `Recorder(folder, every=300).record(state, tick, final=)` writes a snapshot with
+  `layer.save` every 300 ticks and at an episode's end, and between them `stream.jsonl`: each new event, each written
+  entry that appeared, changed or was freed, and each place formed or evicted. `read(folder, tick, like)` gives the
+  latest snapshot at or before the tick, its tick, and the changes after it.
+
+Checks (`test_sa_state_views.py`, 3 tests, on the duel through `layer.step`):
+- the facts are JSON-safe and name what the state holds: the traits, the entity at about 4 blocks, a death in the
+  counters, the events newest first, a death place with its distance, the written `remember` entry with its writer and
+  age;
+- the words name the entity and the death within 1,200 characters; a 300-character budget keeps the feelings first; of
+  two events, the older is the one left out when only one fits;
+- a recorded run reads back to its snapshot exactly (the variables equal at tick 5), and the stream after it holds the
+  death event, the death place and the written entry's mark (tick 3) and its ejection (tick 8); the final snapshot is
+  written at the episode's end.
+
+### 25.5 What grounds it (searched 2026-10-22; depth of reading stated)
+
+- **What an LLM agent is told.** Voyager-style prompts give the model the biome, the time, nearby blocks and entities,
+  health, hunger, position, equipment, inventory, and the tasks done and failed (a fine-tuning dataset built on
+  Voyager's prompts; Voyager's own template not verified). `facts` covers the same ground from this agent's state.
+- **Choosing what to show.** Generative Agents scores memories by recency, importance and relevance, each min-max
+  normalised to [0, 1], with all weights 1 in its implementation (Park et al. 2023, arXiv:2304.03442; the paper's text
+  as quoted in search results).
+- **Recording as events.** Event sourcing captures every change to an application's state as a sequence of events, so
+  the state can be rebuilt by replaying them; snapshots taken periodically spare a replay from the start (Fowler,
+  about 2005; through secondary write-ups). The recording is that pattern.
+
 ## Sources
 
 - Steel, P. (2007). The nature of procrastination. Psychological Bulletin 133(1), 65-94.
@@ -2277,3 +2377,6 @@ Checks:
   semi-MDPs, Artificial Intelligence 112, 181-211 (abstract). Gibson, J. J. (1979), The Ecological Approach to Visual
   Perception (recalled).
 - Section 24.6: Cowan, N. (2001), The magical number 4 in short-term memory, Behavioral and Brain Sciences 24 (recalled).
+- Section 25.5, searched 2026-10-22: a Voyager-style fine-tuning dataset's prompt fields
+  (https://huggingface.co/datasets/baptistecolle/voyager-fine-tuning); Park, J. S., et al. (2023), Generative Agents,
+  arXiv:2304.03442 (the retrieval function, quoted); Fowler, M., Event Sourcing (about 2005; secondary write-ups).
