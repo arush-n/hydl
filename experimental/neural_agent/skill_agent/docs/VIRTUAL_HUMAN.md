@@ -2481,9 +2481,12 @@ Checks:
 - **The gate** (the package's two passes, against the baseline taken at 6acadad): pass 1, 5 failed and 6 errors, the
   same 11 names as the baseline, and 1,466 passed against 1,403 (the 63 new); pass 2 (`stand_in_pursuit` on
   0.5.7), 19 failed and 11 errors, the same 30 names. No test fails that did not fail before.
-- **Cost:** not timed yet. The machine's load stayed between 49 and 68 on 18 cores through the build (other
-  sessions' tests and lanes), which would make a timing say more about them than about step 9. It is timed on a
-  quiet machine and recorded here, as 24.7 and 25.6 were.
+- **Cost** (measured 2026-10-23, 04:33 to 05:16, load 9 to 13 on 18 cores): the whole tick (the state layer and
+  the trunk) on the gen-7 Region render, step 8's tree (6acadad) against step 9 with the tick fix (1f2e2dc),
+  interleaved, two rounds each, the median per tick: batch 1, 1.73 and 1.73 ms against 1.82 and 1.70; batch 8, 5.9
+  and 7.7 against 7.1 and 6.4; batch 64, 30.2 and 28.0 against 29.3 and 26.5. The difference is inside the spread
+  of one tree's own two rounds (up to 30% at batch 8), so step 9 adds no cost these runs can see; the token count is
+  unchanged (356). The 95th percentiles (2 to 100 ms) follow the machine's load more than either tree.
 
 ## 27. The world's tick length (DESIGNED and APPROVED 2026-10-23, with the ruling of 27.5)
 
