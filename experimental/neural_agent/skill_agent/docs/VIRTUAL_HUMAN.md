@@ -565,7 +565,7 @@ approach. Missing:
 | 3 | Fixed rules on game time: alarm and startle, sleep pressure and fatigue, hunger and the other drives; then lifecycle under normal death, and provenance. DESIGNED and APPROVED 2026-10-22; BUILT: startle, respawn, provenance (section 20.7); the drives wait for the clock (20.5) | 10.5, 10.7, 10.8, 16.1, 16.2, 16.5, 20 |
 | 4 | The event log and its tokens; the activity counters and levels. DESIGNED and APPROVED 2026-10-22; BUILT (section 21.6; the event tokens wait for step 7) | 10.6, 11.1, 16.6, 21 |
 | 5 | The long-term spatial memory: places, routes, coordinates. DESIGNED and APPROVED 2026-10-22; BUILT (section 22.7; the place tokens are step 7, section 24) | 10.11, 16.4, 22 |
-| 6 | Hearing: the sound registry, the hearing rule, heard entries in the stores, the orienting reflex (the token reads zero until S12) | 17 |
+| 6 | Hearing: the sound registry, the hearing rule, heard entries in the stores, the orienting reflex (the token reads zero until S12). DESIGNED and APPROVED 2026-10-23 for today's inputs (section 28): the sound registry now; the rest when positional sounds are published (S12) | 17, 28 |
 | 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry (with it the status token's identity: which effect, its source entity, its damage cause, all in the observation and dropped today; `PERCEPTION.md` section 10.5), places, the proficiencies. First part DESIGNED and APPROVED 2026-10-22; BUILT (section 24.7: status identity, places, events) | 11.1 to 11.4, 11.6, 16.6, 17.8, 24 |
 | 8 | The formatted views (typed facts, words) and the recording. DESIGNED and APPROVED 2026-10-22; BUILT (section 25.6: the facts, the words, the recording) | 10.3, 10.9, 25 |
 | 9 | The social section (approved, 15.3). DESIGNED and APPROVED 2026-10-22 (section 26, with the rulings of 26.5) | 12, 15.3, 26 |
@@ -2515,6 +2515,73 @@ Every rule stated in seconds counts ticks of 0.045 s. On gen 7, whose ticks are 
   not re-checked).
 - The tick lengths are the project's own measurements: `contract/surface.py` (1/30 s, the owner's 30 Hz ruling) and
   the coordinator's live window (0.037 s mean, FIDELITY (aq)).
+
+## 28. Step 6: hearing, as far as today's inputs allow (DESIGNED and APPROVED 2026-10-23, with the ruling of 28.5)
+
+The owner, 2026-10-23: "see if you can do any of the work in parallel". This is step 6 of section 13: hearing, approved
+as a design in section 17, mapped onto what the game and the simulator publish today.
+
+### 28.1 What exists (checked 2026-10-23)
+
+- **The game's sounds** (`Server/Audio/SoundEvents/` in the 0.7.2 `Assets.zip`): 1,569 sound events. By attenuation
+  preset, through their `Parent` chains: Moderate 700, Quiet 462, Loud 113, VeryQuiet 53, VeryLoud 18, ExtremelyQuiet
+  6, and 217 with none (31 set their own `MaxDistance`). 1,421 name an `AudioCategory` (ambient 115, block sounds 114,
+  effects 105, inventory 72, weapons 59, footsteps 43, sword 41, ...). Folders: `SFX` 1,283, `BlockSounds` 186,
+  `Environments` 94.
+- **Live:** the 0.7.2 bridge publishes an audio frame (`hytalerl_audio_frame_v1`, `hytalegym/audio.py`): up to 16 events
+  an observation, each with its kind (2D, 3D, entity), the server's `sound_event_index`, category, a relative position
+  when spatial, volume, pitch and age. But the headless server has no listener for positional sound: the bridge reports
+  `audio_captures_3d` false, with the limitation `headless_world_broadcasts_only_no_spatial_3d_listener`
+  (`NativeEnvironmentSession.java` lines 7372-7381). The 2D and entity sounds it does capture carry no position and no
+  source id. So no sound arrives with a direction.
+- **The simulator:** an audio observation type exists (`hytalegym/jax/world/audio`), but nothing produces it for the
+  agent (no use in the v3 observation). That is S12, asked on 2026-10-21.
+- **The index:** the frame names a sound by the server's runtime `sound_event_index`, not its asset id. A registry
+  keyed by asset id needs the index-to-id table (the server's asset map order).
+
+### 28.2 The design
+
+**Build now: the sound registry** (`perception/sounds.py`, the pattern of `perception/effects.py`). Each sound event,
+resolved through its `Parent` chain: how far it carries (`MaxDistance`) and where it starts to fade
+(`StartAttenuationDistance`), its volume, its spatial blend, its category (one-hot over the categories present), and a
+64-number description vector from its id and folders through the pinned sentence encoder, projected and stored like the
+effects'. Built offline from `Assets.zip` into the private folder (`perception/sounds_072`), looked up by asset id. It
+is what the hearing rule needs to decide whether a sound carries to the agent (17.2 item 1) and what it is (item 2),
+and it is checkable against the census above.
+
+**Waits for S12** (positional sound events, in the simulator and live): the hearing rule (17.2: carry, masking,
+direction blur, distance compression, who), the `sound` token (17.8), heard entries in the salient store (17.5), the
+orienting reflex (17.4), the agent's own noise (17.6). Built against no real input, they could only be tested on
+made-up events, and their constants (the blur, the masking margin, the compression) could not be checked against the
+game's own attenuation until S12 says how the server applies it.
+
+### 28.3 Files
+
+`perception/sounds.py` (new); its test (`test_sa_sounds.py`: the census counts, a Quiet sound carries 15 blocks and
+starts to fade at 4, a sound with its own `MaxDistance` keeps it, the description is stable across rebuilds); the
+perception README row. The tables go to the private folder.
+
+### 28.4 Asks to the coordinator (with S12)
+
+- the index-to-asset-id table for `sound_event_index` (live and simulator);
+- a positional listener in the headless server, or the source's position for entity sounds, so a live sound has a
+  direction;
+- the attenuation curve between the start and maximum distances, and whether walls muffle (17.9, still open).
+
+### 28.5 Decisions (RULED 2026-10-23)
+
+1. **Build the sound registry now, and the rest of hearing when S12 lands?** Recommended: yes. The alternative, the
+   whole of section 17 now on made-up events, gives a token that reads zero and constants no data can check.
+   RULED: "continue with the next steps", taken as the recommendation; the asks of 28.4 sent to the coordinator.
+
+### 28.6 What grounds it
+
+- The game's own assets (the census in 28.1, read with the archive's JSON on 2026-10-23) and the bridge's own report
+  of what it captures (28.1, read in the source).
+- The registry follows the project's registries (`perception/registry.py`, `perception/effects.py`), so a sound is
+  described the same way an item, a creature and an effect are.
+- Section 17's psychoacoustics (Mills 1958; Zahorik, Brungart and Bronkhorst 2005; Sokolov's orienting response) apply
+  to the parts that wait.
 
 ## Sources
 
