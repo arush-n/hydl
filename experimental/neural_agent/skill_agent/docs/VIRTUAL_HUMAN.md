@@ -564,7 +564,7 @@ approach. Missing:
 | 2 | Structured writes from the top two layers; the tags move onto them. DESIGNED and APPROVED 2026-10-22 (section 19, rulings in 19.7) | 10.4, 19 |
 | 3 | Fixed rules on game time: alarm and startle, sleep pressure and fatigue, hunger and the other drives; then lifecycle under normal death, and provenance. DESIGNED and APPROVED 2026-10-22; BUILT: startle, respawn, provenance (section 20.7); the drives wait for the clock (20.5) | 10.5, 10.7, 10.8, 16.1, 16.2, 16.5, 20 |
 | 4 | The event log and its tokens; the activity counters and levels. DESIGNED and APPROVED 2026-10-22; BUILT (section 21.6; the event tokens wait for step 7) | 10.6, 11.1, 16.6, 21 |
-| 5 | The long-term spatial memory: places, routes, coordinates. DESIGNED 2026-10-22 (section 22), waiting on the owner's yes | 10.11, 16.4, 22 |
+| 5 | The long-term spatial memory: places, routes, coordinates. DESIGNED and APPROVED 2026-10-22 (section 22) | 10.11, 16.4, 22 |
 | 6 | Hearing: the sound registry, the hearing rule, heard entries in the stores, the orienting reflex (the token reads zero until S12) | 17 |
 | 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry (with it the status token's identity: which effect, its source entity, its damage cause, all in the observation and dropped today; `PERCEPTION.md` section 10.5), places, the proficiencies | 11.1 to 11.4, 11.6, 16.6, 17.8 |
 | 8 | The formatted views (typed facts, words) and the recording | 10.3, 10.9 |
@@ -1781,7 +1781,7 @@ Checks:
   (among them the six duel fingerprints the coordinator re-pinned per server line meanwhile). Pass 2 (0.5.7): the
   same 30 names on both.
 
-## 22. Step 5: the long-term spatial memory (DESIGNED 2026-10-22, waiting on the owner's yes)
+## 22. Step 5: the long-term spatial memory (DESIGNED and APPROVED 2026-10-22, with the rulings of 22.5)
 
 The owner, 2026-10-22: "yes continue". This is step 5 of section 13 (10.11, 16.4), turned from 16.4's sketch into a
 design that fits what steps 2 to 4 built. Nothing is built until the owner's yes.
@@ -1844,8 +1844,8 @@ item 3).
 - **The body** (step 7): the few relevant places as `place` tokens, chosen by nearness, strength and marks (11.6).
 - **The decision layer and the LLM** (step 8): the graph, and the best known route between two places, a shortest path
   over the routes, computed on the host off the tick.
-- **Meanings** ("home", "ours", "dangerous") stay the decision layer's labels (section 5). Names in words come with the
-  LLM's own written fields (19.7 item 3).
+- **Meanings** ("home", "ours", "dangerous") stay the decision layer's labels (section 5). Names and tags are the
+  middle layer's (22.5 item 2).
 
 ### 22.3 Files
 
@@ -1863,16 +1863,18 @@ item 3).
 2. **Each rule in isolation**, as listed in 22.3.
 3. **Cost** at batch 8 and 64, and **the package gate**, both passes.
 
-### 22.5 Decisions for the owner
+### 22.5 Decisions (RULED 2026-10-22)
 
 1. **Fading and giving way.** Recommended: places the agent formed itself fade with time since the last visit and the
    weakest gives way when the store is full; places the decision layer marked never fade and are never evicted (your
-   step 2 ruling). The alternative is that nothing fades and a full store refuses new places.
+   step 2 ruling). The alternative is that nothing fades and a full store refuses new places. RULED: "yes".
 2. **Names.** Recommended: kinds only now; names in words come with the LLM's written fields (step 8 or 9). The
-   alternative is a name field now.
+   alternative is a name field now. RULED: "middle layer handles names and tagging": names and tags are the
+   decision layer's (its semantic memory, section 5), written through its own fields when they come, not the
+   LLM's; the state layer keeps kinds only.
 3. **A new episode.** Recommended: the places restart at an episode boundary (a simulator episode is a new world), and
    are kept across a respawn and across save and load. The alternative is to keep them across episodes in the same
-   world, which needs the runtime to say when the world is the same.
+   world, which needs the runtime to say when the world is the same. RULED: "yes".
 
 ### 22.6 What grounds it (searched 2026-10-22; depth of reading stated)
 
