@@ -370,18 +370,34 @@ values. The runs:
 
 **Columns carrying information** (varying + constant non-zero, of all; valid rows):
 
-| Type | duel (gen 7) | channel (gen 7) | region (gen 7) | live 0.7.2 |
-|---|---|---|---|---|
-| self | 99+19 of 173 (7,200) | 90+18 (4,800) | 35+81 (1,200) | 30+83 (204) |
-| act | 25 of 26 | 25 | 25 | 25 |
-| kit | 24+1 of 39 | 16+1 | 14+1 | 14+1 |
-| status | 0+2 of 22 | 0+2 | 0+2 | 0+2 |
-| entity | 27+4 of 158 (2,480) | 22+4 (4,451) | 31+4 (1,200) | 27+5 (204) |
-| projectile | 19+1 of 23 (382) | no rows | no rows | no rows |
-| geometry | no rows | no rows | 71+4 of 185 (55,534) | 13+10 (2,147) |
-| inventory slot | no rows | 67+8 of 106 | 1+74 | no rows |
-| hazard, block candidate, recipe | no rows | no rows | no rows | no rows |
-| persona, affect | 10 of 11, 8 of 9 | 10, 7 | 10, 8 | 10 (one agent: constant), 8 |
+| Type | duel (gen 7) | channel (gen 7) | region (gen 7) | live 0.7.2 | region at 96 (211dc21) |
+|---|---|---|---|---|---|
+| self | 99+19 of 173 (7,200) | 90+18 (4,800) | 35+81 (1,200) | 30+83 (204) | 33+83 (1,200) |
+| act | 25 of 26 | 25 | 25 | 25 | 25 |
+| kit | 24+1 of 39 | 16+1 | 14+1 | 14+1 | 14+1 |
+| status | 0+2 of 22 | 0+2 | 0+2 | 0+2 | 0+2 |
+| entity | 27+4 of 158 (2,480) | 22+4 (4,451) | 31+4 (1,200) | 27+5 (204) | 31+77 (1,200) |
+| projectile | 19+1 of 23 (382) | no rows | no rows | no rows | no rows |
+| geometry | no rows | no rows | 71+4 of 185 (55,534) | 13+10 (2,147) | 71+4 (38,608) |
+| inventory slot | no rows | 67+8 of 106 | 1+74 | no rows | 1+74 |
+| hazard, block candidate, recipe | no rows | no rows | no rows | no rows | no rows |
+| persona, affect | 10 of 11, 8 of 9 | 10, 7 | 10, 8 | 10 (one agent: constant), 8 | 10, 8 |
+
+**The re-audit after the geometry capacity change** (2026-10-22, agreed with the coordinator: one re-audit for the
+role id and the capacity together). The region run again at 211dc21 (this lane's 96 contract) on a fresh render
+of 66376d7 (the coordinator's 04c3b18 and 8d641b2), 4 agents x 300 ticks, report
+`bench/encoding_audit.py run region` (kept in the session's scratch, not the repo):
+- **The role id arrives.** Every entity row is now `known` 1.0 with its creature's registry row (health, motion,
+  size, attack distance) and its attitude (hostile 1.0): 77 constant non-zero entity columns, against 4 before
+  65a74bb. The target is one creature, so those columns are constant within the run.
+- **No terrain row is lost.** Perceived terrain rows per agent-tick at capacity 96: min 3, median 25, p99 47, max
+  52 over 1,200 agent-ticks; no tick with zero rows, none at the capacity. The maximum is above the old 44, so
+  those ticks would have lost their whole row before. Fewer stored rows in all (38,608 against 55,534) because
+  the remembered cells went from 84 to 32 in step 1c (VIRTUAL_HUMAN.md 18.4), not from fewer perceived.
+- **Collision boxes still read 0** (every `box_*` column over 38,608 rows). Not a gap: a full cube has zero box
+  fields by design, and non-full boxed shapes are 0.096% of cells (coordinator's diagnosis,
+  `HytaleRL/hytalegym/tools/worldgen/README.md`, "World geometry tokens"); this run's agents never met one.
+  Traversal edges now fill (`edge_k_kind` non-zero in up to 65% of rows).
 
 **What arrives, everywhere it is published.** The body's motion, movement states, head and heading, health,
 stamina and the other resources, defense, attack state; the held item with its registry properties and description;
@@ -397,7 +413,7 @@ scales (the self speed column peaks at 0.928 in both).
 | FIXED (coordinator, 745a0cf): the live decoder refused a frame (`ValueError: native defense evidence is incomplete`) when a hit's knockback was queued while the agent was airborne after a jump; the decoder now sums the projection on the host. The same random program then ran 300 live ticks, all valid (2026-10-22) | live | coordinator |
 | FIXED (coordinator, 3f8aded): guard on gen 7. The mask marked `guard_off_on` legal and the step rejected it, so guard never engaged: a re-entry patch closed the guard choice while a guard was held, dropping it on its second tick. Now a held guard engages on tick 3, as live; `defense_guard_active` varies in the duel and the Region world (audits re-run on a render of 3f8aded) | gen-7 render | coordinator |
 | `perception_v2` exists only on the state-taking encoder; the duel's multi-actor path and the live native assembly carry none. There, no position (so no memory), no inventory, no entity kind or held item. The observation has no other legal position (`actor_world` is medium, submersion and drop) | duel, live | coordinator (asks 1, 2, 5 and the live channel) |
-| FIXED (coordinator, 65a74bb), not yet re-audited here: the channel's role id was 0 (its seam), so every `kind_*`, `attitude_*` and `known` column read 0. Now a visible row carries the semantic id of the target's NPC role (0 for a player-backed target or an empty role), named by `arsenal_runtime_config(entity_role_ids=...)`: the duel's `roles=`, else the matchup pair. The agent's own role is on the config, not in the channel | all | coordinator |
+| FIXED (coordinator, 65a74bb), re-audited 2026-10-22 (above: every entity row `known`, 77 creature columns): the channel's role id was 0 (its seam), so every `kind_*`, `attitude_*` and `known` column read 0. Now a visible row carries the semantic id of the target's NPC role (0 for a player-backed target or an empty role), named by `arsenal_runtime_config(entity_role_ids=...)`: the duel's `roles=`, else the matchup pair. The agent's own role is on the config, not in the channel | all | coordinator |
 | One entity row only, in every run | all | coordinator (ask 3) |
 | The Region fixture gates no entity row by the view sector or the sensor range (`project_world_runtime` omits both), so there the agent perceives what is behind it: only line of sight and the 24-block radius hide an entity (`HytaleRL/examples/jax_arsenal_world_benchmark.py`, `geometry_arsenal_world_capabilities` called without them) | region | coordinator: filed; that file has another session's uncommitted edits, so the fix waits for them or the owner |
 | No block candidates: the 0.7.2 Region library has no block semantics (only the 0.5.7-captured `region-library-pilot-v2` does), and they cannot be made offline because the stored Regions keep no block identity (e9d5f7c; `HytaleRL/hytalegym/tools/worldgen/README.md`, "Block-semantic sidecar"). Owner, 2026-10-22: capture the 20 seeds live to a stage; promotion and the `worlds/region.py` binding wait for the owner. Live needs the world-action adapter, which has not run live | all | coordinator (asks 4, S5) |
