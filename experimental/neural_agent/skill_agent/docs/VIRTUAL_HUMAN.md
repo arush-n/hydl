@@ -569,7 +569,7 @@ approach. Missing:
 | 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry (with it the status token's identity: which effect, its source entity, its damage cause, all in the observation and dropped today; `PERCEPTION.md` section 10.5), places, the proficiencies | 11.1 to 11.4, 11.6, 16.6, 17.8 |
 | 8 | The formatted views (typed facts, words) and the recording | 10.3, 10.9 |
 | 9 | The social section (approved, 15.3) | 12, 15.3 |
-| W | World interaction: breaking, placing, using, picking up, and the commands (crafting, tools, items); the perception of break progress and items on the ground. DESIGNED 2026-10-22 (section 23), waiting on the owner's yes; the skills train when training resumes | 23 |
+| W | World interaction: breaking, placing, using, picking up, and the commands (crafting, tools, items); the perception of break progress and items on the ground. DESIGNED and APPROVED 2026-10-22 (section 23); the perception follows the simulator's asks, the skills train when training resumes | 23 |
 
 Every step is measured first with 2 agents, then scaled up (16.3).
 
@@ -1903,7 +1903,7 @@ item 3).
 - **Not from research:** the capacities (128 places, 256 routes), the merge radius and the strength constants are
   engineering choices or estimates [E], changeable without retraining (section 14).
 
-## 23. World interaction: placing, breaking, using and crafting (DESIGNED 2026-10-22, waiting on the owner's yes)
+## 23. World interaction: placing, breaking, using and crafting (DESIGNED and APPROVED 2026-10-22, with the rulings of 23.5)
 
 The owner, 2026-10-22: "how are we handling placing and interacting with the world", then, on the four gaps found:
 the 0.7.2 Regions need block identity ("yes, all it needs is some identity"), placing opens in the simulator, recipes,
@@ -1987,14 +1987,15 @@ shelter, cook a meal, from these skills and commands.
    then `place_block` (after placing opens); the commands as exact scripts beside them.
 3. The decision layer's activities after the skills exist.
 
-### 23.5 Decisions for the owner
+### 23.5 Decisions (RULED 2026-10-22)
 
 1. **One break skill** for mining, chopping, digging and picking, with the gather type as context? Recommended: yes
    (the token carries the gather type and the tool fit; the tool choice is a command). The alternative is a skill per
-   tool.
+   tool. RULED: "sure".
 2. **Items on the ground as entity rows** (an item kind) rather than a new token type? Recommended: yes (one reader,
-   and a request can point at them like any entity).
+   and a request can point at them like any entity). RULED: "yes".
 3. **The order** of 23.4: perception now, skills when training resumes, placing after it opens? Recommended: yes.
+   RULED: "your choice"; taken as recommended.
 
 ### 23.6 What grounds it (searched 2026-10-22; depth of reading stated)
 
