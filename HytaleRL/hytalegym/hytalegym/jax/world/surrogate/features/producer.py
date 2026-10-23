@@ -8,6 +8,7 @@ import jax.numpy as jnp
 from hytalegym.jax.combat.observation.v1.runtime.factory import (
     empty_injected_world_features,
 )
+from hytalegym.jax.world.surrogate.block_identity import SurrogateBlockIdentity
 from hytalegym.jax.world.surrogate.features.common import (
     validate_feature_shapes,
 )
@@ -38,8 +39,14 @@ def produce_surrogate_world_features(
     runtime: SurrogateRuntimeState,
     actor_positions: jax.Array,
     actor_yaw_degrees: jax.Array,
+    block_identity: SurrogateBlockIdentity | None = None,
 ) -> SurrogateWorldFeatureResult:
-    """Produce privileged terrain and door candidates for each actor."""
+    """Produce privileged terrain and door candidates for each actor.
+
+    ``block_identity`` is the opt-in v6 per-cell identity (``artifact.block_identity``).
+    When given, terrain tokens also carry ``terrain_block_type_id``; when None the
+    tokens are exactly as before.
+    """
 
     if not isinstance(atlas, SurrogateAtlas):
         raise TypeError("atlas must be a SurrogateAtlas")
@@ -47,6 +54,20 @@ def produce_surrogate_world_features(
         raise TypeError("traversal must be a SurrogateTraversalAtlas")
     if not isinstance(runtime, SurrogateRuntimeState):
         raise TypeError("runtime must be a SurrogateRuntimeState")
+    if block_identity is not None:
+        if not isinstance(block_identity, SurrogateBlockIdentity):
+            raise TypeError("block_identity must be a SurrogateBlockIdentity")
+        pairs = (
+            (block_identity.surface_identity_index, atlas.surface_cell_code),
+            (block_identity.subsurface_identity_index, atlas.subsurface_cell_code),
+            (block_identity.structure_identity_index, atlas.structure_cell_code),
+            (
+                block_identity.stateful_variant_identity_index,
+                atlas.stateful_variant_cell_code,
+            ),
+        )
+        if any(index.shape != code.shape for index, code in pairs):
+            raise ValueError("block identity cell layout differs from the atlas")
     positions = jnp.asarray(actor_positions, dtype=jnp.float32)
     yaw_degrees = jnp.asarray(actor_yaw_degrees, dtype=jnp.float32)
     if positions.ndim != 2 or positions.shape[1] != 3:
@@ -67,6 +88,7 @@ def produce_surrogate_world_features(
         runtime,
         safe_positions,
         actor_valid,
+        block_identity,
     )
     interactions = interaction_features(
         atlas,
@@ -139,6 +161,7 @@ def produce_surrogate_world_features(
         terrain_source_tile_index=terrain.tile_index,
         interaction_source_tile_index=interactions.tile_index,
         traversal_provider_available=jnp.zeros(batch, dtype=jnp.bool_),
+        terrain_block_type_id=terrain.block_type_id,
     )
 
 

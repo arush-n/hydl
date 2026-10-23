@@ -341,6 +341,10 @@ class SurrogateWorldFeatureResult(NamedTuple):
     terrain_source_tile_index: Array
     interaction_source_tile_index: Array
     traversal_provider_available: Array
+    # Opt-in per-token v6 block identity (semantic id of the cell's asset).
+    # None when no block identity was supplied; kept outside ``features`` so
+    # the injected-feature schema and its contract hashes stay unchanged.
+    terrain_block_type_id: Array | None = None
 
 
 __all__ = [

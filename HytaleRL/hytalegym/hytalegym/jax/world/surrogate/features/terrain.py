@@ -11,7 +11,12 @@ from hytalegym.jax.combat.observation.v1.schema.contract import (
     TERRAIN_RADIUS_BLOCKS,
     TERRAIN_TOKEN_CAPACITY,
 )
+from hytalegym.jax.world.surrogate._lookup import (
+    _find_structure_cells,
+    lookup_surrogate_columns,
+)
 from hytalegym.jax.world.surrogate.atlas import lookup_surrogate_blocks
+from hytalegym.jax.world.surrogate.block_identity import SurrogateBlockIdentity
 from hytalegym.jax.world.surrogate.features.common import (
     decode_capture_keys,
     pad_tokens,
@@ -27,7 +32,13 @@ from hytalegym.jax.world.surrogate.types import (
     SurrogateRuntimeState,
     SurrogateTraversalAtlas,
 )
-from hytalegym.worldgen.region import CHUNK_SIZE, CORE_BLOCKS_PER_AXIS
+from hytalegym.worldgen.region import (
+    CAPTURE_BLOCKS_PER_AXIS,
+    CHUNK_SIZE,
+    CORE_BLOCKS_PER_AXIS,
+    MIN_Y,
+    WORLD_HEIGHT,
+)
 
 
 class TerrainFeatures(NamedTuple):
@@ -42,6 +53,88 @@ class TerrainFeatures(NamedTuple):
     graph_unavailable: jax.Array
     graph_diagnostics: jax.Array
     tile_index: jax.Array
+    block_type_id: jax.Array | None
+
+
+def _cell_block_type_ids(
+    atlas: SurrogateAtlas,
+    runtime: SurrogateRuntimeState,
+    identity: SurrogateBlockIdentity,
+    blocks: jax.Array,
+) -> jax.Array:
+    """Identity semantic id of the cell that ``lookup_surrogate_blocks`` reads.
+
+    Mirrors its kind selection: a structure cell wins, then the stateful variant
+    that the structure declares, else surface or subsurface by terrain height.
+    Air and unavailable blocks read 0 because the caller masks by availability.
+    """
+
+    column = lookup_surrogate_columns(
+        atlas,
+        runtime,
+        blocks[..., (0, 2)],
+        require_core=False,
+    )
+    inside_y = (blocks[..., 1] >= MIN_Y) & (blocks[..., 1] < MIN_Y + WORLD_HEIGHT)
+    usable = column.available & inside_y
+    tile = jnp.where(usable, column.tile_index, 0)
+    local = jnp.where(usable[..., None], column.local_xz, 0)
+    local_x = local[..., 0]
+    local_z = local[..., 1]
+    local_y = blocks[..., 1] - MIN_Y
+    key = (
+        local_y * CAPTURE_BLOCKS_PER_AXIS**2
+        + local_z * CAPTURE_BLOCKS_PER_AXIS
+        + local_x
+    )
+    height = atlas.terrain_height[tile, local_x, local_z]
+    carved = jnp.any(
+        atlas.cave_span_mask[tile, local_x, local_z]
+        & (blocks[..., 1, None] >= atlas.cave_min_y[tile, local_x, local_z])
+        & (blocks[..., 1, None] < atlas.cave_max_y[tile, local_x, local_z]),
+        axis=-1,
+    )
+    surface_ids = jnp.asarray(identity.surface_identity_index)
+    subsurface_ids = jnp.asarray(identity.subsurface_identity_index)
+    terrain_row = jnp.where(
+        carved,
+        0,
+        jnp.where(
+            local_y == height,
+            surface_ids[tile, local_x, local_z],
+            jnp.where(local_y < height, subsurface_ids[tile, local_x, local_z], 0),
+        ),
+    ).astype(jnp.int32)
+    found, structure_index = _find_structure_cells(atlas, tile, key)
+    structure_ids = jnp.asarray(identity.structure_identity_index)
+    base_row = jnp.where(
+        found,
+        structure_ids[tile, structure_index].astype(jnp.int32),
+        terrain_row,
+    )
+    raw_definition = atlas.structure_state_slot[tile, structure_index]
+    declared = found & (raw_definition >= 0)
+    definition = jnp.clip(raw_definition, 0, atlas.stateful_mask.shape[1] - 1)
+    runtime_slot = atlas.stateful_runtime_slot[tile, definition]
+    runtime_capacity = runtime.stateful_state.shape[1]
+    batch_axis = jnp.arange(blocks.shape[0])[:, None]
+    current_state = runtime.stateful_state[
+        batch_axis,
+        jnp.clip(runtime_slot, 0, runtime_capacity - 1),
+    ]
+    state = jnp.clip(
+        current_state,
+        0,
+        atlas.stateful_variant_cell_code.shape[2] - 1,
+    )
+    variant_ids = jnp.asarray(identity.stateful_variant_identity_index)
+    row = jnp.where(
+        declared,
+        variant_ids[tile, definition, state].astype(jnp.int32),
+        base_row,
+    )
+    semantic_table = jnp.asarray(identity.identity_semantic_id, dtype=jnp.int32)
+    return semantic_table[row]
 
 
 def terrain_features(
@@ -50,6 +143,7 @@ def terrain_features(
     runtime: SurrogateRuntimeState,
     actor_positions: jax.Array,
     actor_valid: jax.Array,
+    block_identity: SurrogateBlockIdentity | None = None,
 ) -> TerrainFeatures:
     """Sample exact runtime-legal surfaces for every actor."""
 
@@ -137,13 +231,14 @@ def terrain_features(
     )[..., 0]
     surface_found = jnp.any(stack_mask, axis=2)
     support_key = traversal.node_support_key[safe_tile, selected_node]
+    support_blocks = decode_capture_keys(
+        support_key,
+        traversal.core_min_chunk_xz[safe_tile],
+    )
     support = lookup_surrogate_blocks(
         atlas,
         runtime,
-        decode_capture_keys(
-            support_key,
-            traversal.core_min_chunk_xz[safe_tile],
-        ),
+        support_blocks,
         require_core=False,
     )
     relative = selected_position - actor_positions[:, None, :]
@@ -191,6 +286,15 @@ def terrain_features(
     )
     f32 = jnp.clip(f32, -1.0, 1.0)
     semantic_id = support.cell_code.astype(jnp.int32)
+    block_type_id = (
+        None
+        if block_identity is None
+        else jnp.where(
+            support.available,
+            _cell_block_type_ids(atlas, runtime, block_identity, support_blocks),
+            0,
+        )
+    )
     flags = support.flags.astype(jnp.uint32)
     source = jnp.broadcast_to(
         jnp.arange(sample_xz.shape[1], dtype=jnp.int32),
@@ -226,7 +330,19 @@ def terrain_features(
         jnp.take_along_axis(flags, order, axis=1),
         0,
     )
+    sorted_block_type = None
+    if block_type_id is not None:
+        sorted_block_type = pad_tokens(
+            jnp.where(
+                sorted_mask,
+                jnp.take_along_axis(block_type_id, order, axis=1),
+                0,
+            ),
+            TERRAIN_TOKEN_CAPACITY,
+            0,
+        )
     return TerrainFeatures(
+        block_type_id=sorted_block_type,
         f32=pad_tokens(sorted_f32, TERRAIN_TOKEN_CAPACITY, 0.0),
         semantic_id=pad_tokens(sorted_semantic, TERRAIN_TOKEN_CAPACITY, 0),
         flags=pad_tokens(sorted_flags, TERRAIN_TOKEN_CAPACITY, 0),
