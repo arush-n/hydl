@@ -35,6 +35,7 @@ from experimental.neural_agent.skill_agent.model.generalist import ARG_GROUPS, G
 from experimental.neural_agent.skill_agent.model.skill_module import SkillModule, Trunk, check_trunk, module_outputs
 from experimental.neural_agent.skill_agent.runtime.combiner import AgentContext, BodyStep
 from experimental.neural_agent.skill_agent.state import layer
+from experimental.neural_agent.skill_agent.state.written import Write, lower
 from experimental.neural_agent.skill_agent.training.blocks import HEAD_NAMES, HEAD_SIZES, HEAD_STARTS, NEUTRAL
 
 
@@ -69,6 +70,35 @@ def tick(trunk: Trunk, state: layer.AgentState, observation: Any, *, last_action
                                  block=written.get("block_candidate", memory.block))
     view = StateView(encoded, {name: valid for name, (_, valid) in tokens.items()}, state.entity_ids)
     return view, state._replace(latent=encoded.memory, background=encoded.background, memory=memory)
+
+
+def step_lanes(trunk: Trunk, state: layer.AgentState, observation: Any, *, last_action: jax.Array,
+               reset: jax.Array | None = None, write_lists: Sequence[Sequence[Write]] | None = None,
+               **step: Any) -> tuple[StateView, layer.AgentState, list[list[str | None]] | None]:
+    """One host tick, as the host loop calls it (``docs/VIRTUAL_HUMAN.md`` sections 19 to 21; the loop and the shared
+    scratchpad are the coordinator's, the device side is this one): the top layers' writes for this tick, given as each
+    lane's ``Write`` list in lane order (``shared_state.skill_writes.writes_for_tick`` at a decision; None between
+    decisions, since entries persist), lowered and checked by ``state/written.py`` ``lower``, then :func:`tick`.
+    ``step`` carries ``layer.step``'s other keywords: ``respawn``, ``outcomes``, ``outcome_verbs`` and the senses'.
+
+    Returns the view, the state, and each write's refusal reason (None where it passed; None instead of the lists when
+    ``write_lists`` is None), aligned with ``write_lists`` for ``record_write_results``. A write that passed can still
+    be refused as full on the device: ``state.written.applied`` bool[B, W] says which took effect, the passing writes
+    in slot order.
+
+    Raises:
+        ValueError: If ``write_lists`` does not have one list per lane.
+    """
+
+    if write_lists is None:
+        writes, reasons = None, None
+    else:
+        if len(write_lists) != state.entity_ids.shape[0]:
+            raise ValueError(f"write_lists needs one list per lane ({state.entity_ids.shape[0]}), "
+                             f"got {len(write_lists)}")
+        writes, reasons = lower(write_lists)
+    view, state = tick(trunk, state, observation, last_action=last_action, reset=reset, writes=writes, **step)
+    return view, state, reasons
 
 
 def _carried(held: jax.Array | None, initial: jax.Array | None, reset: jax.Array | None) -> jax.Array | None:
@@ -193,4 +223,4 @@ class ModuleBody:
 
 
 __all__ = ["AgentView", "Lowering", "ModuleBody", "StateView", "encode_contexts", "entity_rows", "module_factors",
-           "point", "tick"]
+           "point", "step_lanes", "tick"]
