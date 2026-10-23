@@ -113,7 +113,7 @@ explicit, typed and inspectable, and it is where real LLM wording will be learne
   write = id, agent, tick, writer `decision`, name (`remember`), value, one key (an entity id or a world position),
   goal slot, executive version, program step. At most 8 records per agent per tick; a ninth is refused, not dropped.
   The skill layer applies them (`skill_agent/state/written.py`: `lower`, then `apply`); the adapter is
-  `shared_state/skill_writes.py` (`writes_for_tick`, `record_write_results`). Each write's result comes back in the
+  `shared_state/skill_writes.py` (`writes_for_tick`, `record_write_results`; and `outcomes_for_tick`, the per-tick request outcomes for the skill layer's event log). Each write's result comes back in the
   `skills` section as a `WriteStatus`: `write_applied`, or `write_refused(reason)` with the host's reason
   (`unknown field`, `wrong writer`, `out of range`, `bad key`, `two keys`, `too many writes this tick`) or `full`
   (the device table had no free entry). Policy (`jev/remember.py`, `jev/programs.py` item 10): (1) a program step

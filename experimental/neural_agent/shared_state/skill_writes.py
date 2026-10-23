@@ -10,6 +10,10 @@ by design. The skill layer's runtime calls it once per tick:
 
 A write refused by the host, or refused by the device as "full" (no free entry), is a ``write_refused`` status; the
 decision layer reads it at its next decision (``jev/programs.py``).
+
+Every tick the state tick also takes the requests that ended (``state_tick.tick(outcomes=, outcome_verbs=)``, the
+skill layer's event log, step 4): :func:`outcomes_for_tick` builds both int32[B, 4] arrays from the tick's terminal
+statuses in the skills section (``done`` with its ``SkillOutcome``, or ``aborted``).
 """
 
 from __future__ import annotations
@@ -19,6 +23,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
+from experimental.neural_agent.contracts import SkillOutcome
 from experimental.neural_agent.shared_state.document import SharedState
 from experimental.neural_agent.shared_state.sections.writes import WriteStatus
 from experimental.neural_agent.skill_agent.state.written import Write
@@ -115,3 +120,67 @@ def record_write_results(
     skills = document.skills
     updated = dataclasses.replace(skills, write_statuses=skills.write_statuses + tuple(statuses))
     return document.write("skills", updated, writer=SECTION_WRITERS["skills"], tick=tick)
+
+
+OUTCOME_SLOTS: int = 4
+"""Columns of the outcome arrays: the combiner's active-request table, 4 per agent."""
+OUTCOME_NONE, OUTCOME_DONE, OUTCOME_FAILED, OUTCOME_ABORTED = 0, 1, 2, 3
+_DONE_CODES = {
+    SkillOutcome.COMPLETED: OUTCOME_DONE,
+    SkillOutcome.FAILED: OUTCOME_FAILED,
+    SkillOutcome.TIMEOUT: OUTCOME_FAILED,
+    SkillOutcome.INTERRUPTED: OUTCOME_ABORTED,
+}
+
+
+def outcomes_for_tick(
+    document: SharedState,
+    tick: int,
+    agents: int,
+    verb_index: Any,
+    verbs: Any = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return ``(outcomes, outcome_verbs)``, int32[B, 4] each, for the requests that ended at ``tick``.
+
+    A column per ended request of the agent, in request-id order: 1 done (``done`` with ``COMPLETED``), 2 failed
+    (``done`` with ``FAILED`` or ``TIMEOUT``), 3 aborted (``aborted``, or ``done`` with ``INTERRUPTED``); 0 where nothing
+    ended. ``outcome_verbs`` holds the ended request's verb index beside it (0 where nothing ended).
+
+    Args:
+        document: The S_t document; its skills section holds the statuses.
+        tick: The tick whose ended requests to report.
+        agents: The number of agents B.
+        verb_index: Maps a verb (a skill id) to the index the state tick logs (the skill layer's vocabulary).
+        verbs: Optional mapping ``(agent, request_id) -> verb`` for requests no longer in the requests section; by
+            default the verb is read from ``document.requests.live``.
+
+    Raises:
+        ValueError: If more than ``OUTCOME_SLOTS`` requests of one agent end on one tick, a status names an agent
+            outside ``agents``, or an ended request's verb is unknown.
+    """
+
+    if agents < 1:
+        raise ValueError(f"agents must be at least 1, got {agents}")
+    known = {(request.agent, request.request_id): request.verb for request in document.requests.live}
+    if verbs is not None:
+        known.update({(int(a), int(r)): v for (a, r), v in dict(verbs).items()})
+    ended: list[list[tuple[int, int, str]]] = [[] for _ in range(agents)]
+    for status in document.skills.statuses:
+        if status.tick != tick or status.kind not in ("done", "aborted"):
+            continue
+        if not 0 <= status.agent < agents:
+            raise ValueError(f"status of request {status.request_id} names agent {status.agent}; there are {agents}")
+        code = OUTCOME_ABORTED if status.kind == "aborted" else _DONE_CODES[SkillOutcome(status.outcome)]
+        verb = known.get((status.agent, status.request_id))
+        if verb is None:
+            raise ValueError(f"request {status.request_id} of agent {status.agent} ended at tick {tick}, verb unknown")
+        ended[status.agent].append((status.request_id, code, verb))
+    outcomes = np.zeros((agents, OUTCOME_SLOTS), dtype=np.int32)
+    outcome_verbs = np.zeros((agents, OUTCOME_SLOTS), dtype=np.int32)
+    for agent, rows in enumerate(ended):
+        if len(rows) > OUTCOME_SLOTS:
+            raise ValueError(f"agent {agent} ended {len(rows)} requests at tick {tick}; the table has {OUTCOME_SLOTS}")
+        for column, (_, code, verb) in enumerate(sorted(rows)):
+            outcomes[agent, column] = code
+            outcome_verbs[agent, column] = int(verb_index[verb])
+    return outcomes, outcome_verbs
