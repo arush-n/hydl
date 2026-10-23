@@ -628,7 +628,9 @@ the status token's identity (step 7).
 **The simulator asks** (the coordinator's):
 - S1 to S9: the owner assigned them; in progress after the 0.7.2 certification.
 - S10: sent.
-- S11 to S15 and S17a (my maximum health): new scope, waiting on the owner's yes.
+- S11 to S15 and S17a (my maximum health): new scope, waiting on the owner's yes. Since then S13 was APPROVED
+  (2026-10-22 night, "measure live first"), and S12 (positional sound) and S14 (clock and weather) on 2026-10-23
+  ("ok continue in parallel", on the recommendation to start with them). S11, S15 and S17a still wait.
 - S16: filed under S3.
 - S17b (a block's break progress): filed under S5.
 - S18: emotes, waiting; it needs the bridge as well.

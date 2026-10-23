@@ -1401,3 +1401,8 @@ verdict: COMMITTED; not pushed. Tests are local (gitignored).
 command: owner, 2026-10-23: "continue with the remaining work".
 result: The plan table now says what is built and what waits: step 2 BUILT (19.8); the event and place tokens built with step 7 (24.7); step 7's rest waits (sound on S12; the trimmed emotion token on 26.5 item 1, which keeps the rule's feelings, marked provisional; the proficiencies on 16.6's future learning constants). With S5 read and the tick fix in, every approved step that has its inputs is built; what remains waits on S12, S13, S14 or a ruling.
 verdict: COMMITTED (docs); not pushed.
+
+## 2026-10-23 — skill_agent: asks S12 and S14 approved (`skill_agent/docs/PERCEPTION_ASKS.md`, `VIRTUAL_HUMAN.md` 13)
+command: owner, 2026-10-23, on the recommendation to start with positional sound (S12) and the clock and weather (S14): "ok continue in parallel".
+result: S12 and S14 recorded as approved; with S13 (approved 2026-10-22 night) they are the simulator's side of what this lane still waits on: the rest of hearing (section 28) needs S12; hunger and sleep pressure (20.5 item 2, "wait for it") need S14's clock. S11 (who hit whom) and S15 (teams) still wait on the owner. The approval goes to the coordinator, whose work it is; its two earlier notes from this lane today were held and expired.
+verdict: COMMITTED (docs); not pushed.

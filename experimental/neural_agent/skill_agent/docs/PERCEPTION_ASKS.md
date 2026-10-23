@@ -56,7 +56,9 @@ range; at range it needs the Region route.
 
 From the field-by-field audit of the learner observation and the literature check (`PERCEPTION.md` section 11). Sent
 to the coordinator on 2026-10-21. S16 is filed under ask 3, which the owner assigned; S11 to S15 are new scope,
-waiting on the owner. S17 sent the same day.
+waiting on the owner. S17 sent the same day. Since then: S13 APPROVED 2026-10-22 night ("measure live first"); S12
+and S14 APPROVED 2026-10-23 (the owner, on the recommendation to start with them: "ok continue in parallel"); S11
+and S15 still wait.
 
 | # | Ask | Today | Proposed field | Legal basis |
 |---|---|---|---|---|
