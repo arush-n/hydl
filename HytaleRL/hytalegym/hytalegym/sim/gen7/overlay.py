@@ -205,6 +205,17 @@ _GUARD_NOTE = (
 )
 
 
+_VOID_SCYTHE_HOLD = (
+    "0.7.2 Battleaxe_Scythe_Void_Attack (sim/gen7/data/weapons.json rows/interaction:Battleaxe_Scythe_Void_Attack, "
+    "file-sourced: Charging, thresholds [0.0, 1.67], AllowIndefiniteHold false). tests/sim/test_void_scythe_charge.py "
+    "pins the rendered table and the gen-5 absence; the gen-7 tap and hold runs are in mechanics_072.md"
+)
+_VOID_SCYTHE_HOLD_NOTE = (
+    "the two spin abilities (Spear_Spin_Swing_Left/Right) get hold tables ((0.0, i), (1.67, 2)); before, slot 0 fired "
+    "the spin on press and never the charged swing"
+)
+
+
 def _guard_root(family: str, energy: int) -> Patch:
     old = f"        guard_stamina_value,\n        {{RESOURCE_SIGNATURE_ENERGY: {energy}}},\n    )\n"
     new = (
@@ -328,6 +339,17 @@ PATCHES = (
           "Iron template only (Weapon_Daggers_Iron Swing_Left/Right 4 -> 6). Mithril (8 -> 12) and the "
           "other materials are rows of hytalegym/combat/assets/weapon_variants/hytale_0_5_7.py (a shared "
           "module outside the rendered package): their swings come from the hook dagger_swing_damage (5c, phase 4)"),
+    Patch("void_scythe_spin_hold_table", PROFILE_JAX,
+          "                random_percentage=0.2,\n            ),\n        )\n"
+          "        for ability_asset, selector, force in normal\n",
+          "                random_percentage=0.2,\n            ),\n"
+          "            # Battleaxe_Scythe_Void_Attack (asset: sim/gen7/data/weapons.json rows/interaction): Charging{0 -> spin\n"
+          "            # swing chain, 1.67 -> Battleaxe_Swing_Left_Charged (slot 2)}, AllowIndefiniteHold false. Each spin is\n"
+          "            # its own 0 branch and the root fires at the top threshold.\n"
+          "            hold_table=((0.0, index), (1.67, 2)),\n"
+          "        )\n"
+          "        for index, (ability_asset, selector, force) in enumerate(normal)\n",
+          "5f", _VOID_SCYTHE_HOLD, _VOID_SCYTHE_HOLD_NOTE),
     _guard_root("sword", 20),
     _guard_root("mace", 8),
     _guard_root("battleaxe", 9),

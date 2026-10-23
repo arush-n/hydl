@@ -351,3 +351,33 @@ the agent walk's `max_climb_height` (1.3, the 0.5.7 ruleset value; the 0.7.2 lea
 0 < rise <= lift. Hook `_tick_agent_geometry_motion`, listed before `npc_jump_arc_fall_speed` (outermost; the construct unwraps
 to read the rendered globals). Unit tests: `tests/sim/test_auto_step_up.py`. Not differential-gated: no 0.7.2 up-step
 fixture exists (FIDELITY row 1d). Live check pending: a bridge probe walking into a one-block ledge.
+
+## Void scythe spin hold tables (row 5f, 2026-10-23; lane `lane_scythe`)
+
+**Native (asset).** `Battleaxe_Scythe_Void_Attack` (`sim/gen7/data/weapons.json`, `rows/interaction`, file
+`Server/Item/Interactions/Weapons/Battleaxe/Deprecated/Variants/Battleaxe_Scythe_Void_Attack.json`): `Type` Charging,
+`charge_thresholds` [0.0, 1.67], `AllowIndefiniteHold` false. Branch 0 is a Chaining node (ChainingAllowance 1.5) into
+`Spear_Spin_Swing_Left` or `Spear_Spin_Swing_Right`; branch 1.670 is `Battleaxe_Swing_Left_Charged`. Confirmed by reading
+the asset row.
+
+**Before (HEAD, `profiles/hytale_0_5_7.py` `_void_scythe`).** Only the charged swing carried a hold table. Slot 0 fired a
+spin on press and never reached the charged swing.
+
+**Render (gen 7 only).** A `Patch` (`void_scythe_spin_hold_table`) makes the spin abilities `hold_table=((0.0, i), (1.67, 2))`
+with `i` the spin's own slot (0 Left, 1 Right). Gen 5 keeps no table.
+
+**Measured on a fresh render, 1000 HP target 1.2 blocks ahead (probe `lane_scythe/probe_scythe.py`, 1-based ticks, 1/30 s).**
+
+| Run | Gen 7 before | Gen 7 after | Gen 5 (before = after) |
+|---|---|---|---|
+| Tap: slot 0 requested on tick 1 only | spin (slot 0) on tick 1, to tick 33 | spin on tick 2 (release), to tick 34 | spin on tick 1, to 32 |
+| Hold: slot 0 requested on ticks 1-90 | spin on 1, re-fires 34 and 67 (never the charged swing) | charged swing (slot 2) on tick 51 = 1.70 s, to 74; a new hold from 75 releases on 91 into the spin, to 123 | spin on 1, 33, 65 |
+| Target HP at tick 60 (tap / hold) | 876 / 759 | 879 / 782 | 878 / 773 |
+
+**Threshold quantisation.** `hold_table` thresholds are stored as floats, not rounded to ticks (`profiles/hytale_0_5_7.py`
+~:1078-1140). The hold clock accumulates 1/30 s per tick, so 1.67 is compared against 50/30 = 1.667 (not reached) and then
+51/30 = 1.70 (reached): the charged swing fires on the 51st held tick.
+
+**Confirmed vs inferred.** Confirmed: the asset values (file read), the probe transitions (`probe_g7_before2.json`,
+`probe_g7_after.json`), gen-5 identical before and after. Inferred: the spin firing on release on the real game (follows
+from the Charging semantics in `programs/charge.py`); not live-measured.
