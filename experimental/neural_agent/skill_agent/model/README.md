@@ -12,7 +12,7 @@ simulator's legal observation to the trunk's token sets. Pure JAX: parameters ar
 | `freezing.py` | 450 | One shared trunk and one adapter per verb: adding a verb never changes a frozen one (B4, E13). `encode_agents` and `encode_contexts` run the trunk once per tick; `VerbBody` is a trained verb as a body. |
 | `generalist.py` | 417 | The request-conditioned generalist: request tokens (verb, typed arguments with presence masks, scope, entity and cell pointers), one query per scope, factored head logits, status and progress. Its cross-attention reads every token type its trunk outputs (2026-10-22: all thirteen of v3; a v1 trunk's six, bit-identical to before). |
 | `skill_module.py` | 215 | A skill's own module (owner, 2026-10-19): the generalist's head with the skill's own weights on the shared frozen trunk (`Trunk`); it drives its scope's heads, reads its own done, and sees only the requests of skills it knows (`visible_requests`); save and load with the SHA-256 of its weights and of its trunk; `save_trunk` records the token layout and its fingerprint, and `load_trunk` given today's layout migrates a trunk saved under another (`migrate.py`); `trunk_from_run` takes the trunk of an A2 reference run. |
-| `observation_adapter.py` | 206 | `legal_tokens`: the legal observation as the trunk's token sets (the self token and entity slot 0, in the body frame). |
+| `observation_adapter.py` | 208 | `legal_tokens`: the legal observation as the trunk's token sets (the self token and entity slot 0, in the body frame). |
 
 Gates: `test_sa_encoder.py`, `test_sa_freezing.py`, `test_sa_generalist.py`, `test_sa_skill_modules.py`,
 `test_sa_observation_adapter.py`, `test_sa_tokens_v2.py`, `test_sa_tokens_v3.py`, `test_sa_state_registry.py`,
