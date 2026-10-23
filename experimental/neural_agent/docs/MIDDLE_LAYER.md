@@ -248,3 +248,21 @@ a directive that holds against the rules; a 151st individual causing one ejectio
 **Decisions (RULED 2026-10-23):** (1) the rates and half-lives above, as starting values marked [E]: "use these";
 (2) `ability` and `benevolence` move by rule now, `integrity` waits: "yes, by rule now"; (3) role flags `rival` and
 `friend` by rule, any role by LLM directive, and a directive holds against the rules: "by rule + LLM".
+
+**Built (2026-10-23).**
+- **Code.** The rules are in `jev/relations.py`. They are called at each host decision from `ProgramExecutor._issue_requests` (`jev/programs.py`), and the results settle at the next decision (`_settle_relations`). `session.py` binds `agent_state` to the skill layer's state, so with no binding the decision layer writes nothing. Elapsed time is in seconds: the device clock times `tick_seconds`. Relationship writes share the 8-per-agent budget after the remember writes. A goal carries an optional `relation` (`RelationDirective`, `shared_state/sections/executive.py`).
+- **Tests.** `test_na_relations.py`, 18 tests, one or more per rule: a fight where the opponent struck first, with anger halving after 60 s; fear and hostility half-lives; peace and spared chances; rival, friend, and that ingroup and integrity are never written; a directive holding against the rules; the budget; and a 151st individual causing one ejection and a retry.
+
+**Readings of the rule set made in the build (accepted; each marked where it is in the code):**
+1. The 0.05 floor applies per individual, using the largest change; the smaller changes for that individual go with it.
+2. The peace credit of 1/30 is written although it is under 0.05. Without that exception closeness never rises from peace.
+3. "Out of contact" and "out of view" both read as "not perceived this tick". The records have no separate contact signal.
+4. `ability` moves toward `2 × their share of hits − 1` at rate 0.1 [E].
+5. Rivalry (+0.2 d) counts the damage I dealt while I struck first in the meeting.
+6. Ejection skips entries holding a `remember` value.
+7. Fear's ratio is the meeting's damage taken over damage dealt, clamped to 2 [E].
+
+**Open.**
+- The LLM cannot send a directive yet: the LLM-facing contract has no `relation` field, so directives are host-side only.
+- A refused write waits when no record can be ejected. The remember path asks the LLM in that case; this path does not yet.
+- The skill layer's `views.facts(dt_seconds)` has no production caller to pass seconds to.

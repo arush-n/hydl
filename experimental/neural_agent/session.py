@@ -312,6 +312,10 @@ def run_session(
             host_decider.tick_seconds = config.tick_seconds
         if hasattr(host_decider, "host_respects_commitment"):
             host_decider.host_respects_commitment = config.host_respects_commitment
+        if state_binding is not None and hasattr(host_decider, "agent_state"):
+            host_decider.agent_state = lambda: state_binding.state  # the relationship rules read the skill layer's state
+    if state_binding is not None and hasattr(state_binding, "tick_seconds"):
+        state_binding.tick_seconds = config.tick_seconds  # one tick length for the binding, the skill layer and the rules
     binds_tick = host_decider is not None and hasattr(host_decider, "current_tick")
     observes_ticks = host_decider is not None and callable(getattr(host_decider, "on_tick", None))
 

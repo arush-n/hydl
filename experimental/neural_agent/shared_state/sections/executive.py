@@ -8,6 +8,7 @@ from __future__ import annotations
 
 
 import json
+import math
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
@@ -39,6 +40,37 @@ from ..schema import (
 
 
 @dataclass(frozen=True)
+class RelationDirective:
+    """One relationship directive a goal carries (MIDDLE_LAYER.md section 11): set ``name`` of the relationship with
+    the individual ``entity`` to ``value``, for as long as the goal is in the section. The decision layer writes it; the
+    rules of ``jev/relations.py`` leave that field alone meanwhile.
+
+    Attributes:
+        entity: The perceived entity id the directive is about, a non-negative integer.
+        name: The relationship field, for example ``"friend"`` or ``"closeness"``. Checked by the skill layer's host check.
+        value: The value, finite. Its range is checked by the skill layer, not here.
+
+    Raises:
+        ValueError: If the entity is not a non-negative integer, or the value is not finite.
+    """
+
+    entity: int
+    name: str
+    value: float
+
+    def __post_init__(self) -> None:
+        """Check the entity and the value, and normalize the value to a float."""
+
+        if isinstance(self.entity, bool) or not isinstance(self.entity, int) or self.entity < 0:
+            raise ValueError(f"RelationDirective.entity must be a non-negative integer, got {self.entity!r}")
+        _string(self.name, "RelationDirective.name")
+        value = float(self.value)
+        if not math.isfinite(value):
+            raise ValueError(f"RelationDirective.value must be finite, got {self.value!r}")
+        object.__setattr__(self, "value", value)
+
+
+@dataclass(frozen=True)
 class GoalEntry:
     """One goal as the LLM writes it: GoalSpec's typed fields plus its own words.
 
@@ -50,6 +82,8 @@ class GoalEntry:
         intent: What the LLM wants from this goal, free text. May be empty.
         when: The condition, in the LLM's words. May be empty.
         note: Any other remark on this goal. May be empty.
+        relation: The goal's relationship directives (:class:`RelationDirective`). Empty by default. Not carried by
+            ``to_dict`` / ``from_dict`` yet: the LLM's schema (``contracts.py``) has no field for it.
     """
 
     skill_id: str
@@ -64,6 +98,7 @@ class GoalEntry:
     intent: str = ""
     when: str = ""
     note: str = ""
+    relation: tuple[RelationDirective, ...] = ()
 
     def __post_init__(self) -> None:
         """Validate the typed fields through GoalSpec and require strings for the words."""
@@ -73,6 +108,10 @@ class GoalEntry:
             object.__setattr__(self, key, getattr(spec, key))
         for key in _TEXT_FIELDS:
             _string(getattr(self, key), f"GoalEntry.{key}")
+        relation = tuple(self.relation)
+        if not all(isinstance(item, RelationDirective) for item in relation):
+            raise TypeError("GoalEntry.relation must hold RelationDirective values")
+        object.__setattr__(self, "relation", relation)
 
 
 def entry_to_spec(entry: GoalEntry) -> GoalSpec:

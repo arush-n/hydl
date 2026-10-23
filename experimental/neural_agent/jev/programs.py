@@ -198,7 +198,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any, Mapping, NamedTuple, Sequence
+from typing import Any, Callable, Mapping, NamedTuple, Sequence
 
 import jax.numpy as jnp
 import numpy as np
@@ -242,6 +242,7 @@ from experimental.neural_agent.requests import (
     rejection_code,
     validate,
 )
+from experimental.neural_agent.jev.relations import RelationRules, directives_of, read_device
 from experimental.neural_agent.jev.remember import REMEMBER, RememberLedger, WriteOp, key_of, remember_value
 from experimental.neural_agent.shared_state import (
     SECTION_WRITERS,
@@ -826,6 +827,13 @@ class ProgramExecutor:
         self._remember = RememberLedger(lanes)
         self._next_write = np.zeros(lanes, dtype=np.int64)
         self._issued_writes: list[dict[int, WriteOp]] = [{} for _ in range(lanes)]
+        # The relationship writes (jev/relations.py, MIDDLE_LAYER.md section 11): the rules, each lane's writes of the
+        # last decision, and the skill layer's state, read at each decision when the session binds it (session.py).
+        # tick_seconds is the session's TICK_SECONDS unless the session sets it.
+        self.agent_state: Callable[[], Any] | None = None
+        self.tick_seconds: float = 0.045
+        self._relations = RelationRules(lanes)
+        self._relation_issued: list[dict[int, tuple[int, str, float]]] = [{} for _ in range(lanes)]
 
     # ------------------------------------------------------------------ lane state, for tests and reports
 
@@ -924,6 +932,7 @@ class ProgramExecutor:
 
         if bound:
             self._settle_writes(tick, self.scratchpad.skills.write_statuses)
+            self._settle_relations(self.scratchpad.skills.write_statuses)
         for lane in range(lanes):
             program = self._programs[lane]
             steps = program.steps
@@ -1207,6 +1216,19 @@ class ProgramExecutor:
                     self._ask_for_room(tick, lane, op)
             self._issued_writes[lane] = {}
 
+    def _settle_relations(self, statuses: Sequence[WriteStatus]) -> None:
+        """Take the results of the relationship writes issued at the last decision (jev/relations.py)."""
+
+        by_id = {(status.agent, status.write_id): status for status in statuses}
+        for lane in range(self._lanes):
+            for write_id, write in self._relation_issued[lane].items():
+                status = by_id.get((lane, write_id))
+                if status is None:
+                    continue
+                reason = None if status.kind == "write_applied" else status.reason
+                self._relations.settle(lane, write, reason)
+            self._relation_issued[lane] = {}
+
     def _ask_for_room(self, tick: int, lane: int, op: WriteOp) -> None:
         """Ask the LLM: the table is full and every entry this layer wrote is still referenced (item 10)."""
 
@@ -1323,6 +1345,10 @@ class ProgramExecutor:
                 if not interrupt and k < len(self._programs[lane].steps) and (key := key_of(request)) is not None:
                     self._remember.hold(lane, int(self._run[lane]), key, priority, goal_slot, int(version[lane]), k)
         state = self.scratchpad
+        views = None  # the relationship rules' view of each lane, when the session binds the skill layer's state
+        if self.agent_state is not None:
+            device = self.agent_state()
+            views = [read_device(device, lane) for lane in range(self._lanes)]
         others = tuple(request for request in state.requests.live if not 0 <= request.agent < self._lanes)
         mine = tuple(request for live in self._live for request in live.values())
         section = RequestsSection(live=others + mine, limit=state.requests.limit)
@@ -1344,6 +1370,19 @@ class ProgramExecutor:
                     )
                 )
             self._issued_writes[lane] = issued
+            if views is not None:
+                room = WRITES_PER_AGENT_TICK - len(issued)
+                directives = directives_of(state.executive, lane)
+                for entity, name, value in self._relations.plan(lane, views[lane], directives, room, self.tick_seconds):
+                    write_id = int(self._next_write[lane])
+                    self._next_write[lane] += 1
+                    self._relation_issued[lane][write_id] = (entity, name, value)
+                    records.append(
+                        WriteRecord(
+                            id=write_id, agent=lane, tick=tick, name=name, value=value, entity=entity,
+                            executive_version=int(self.scratchpad.executive.version),
+                        )
+                    )
         kept = tuple(record for record in state.writes.records if not 0 <= record.agent < self._lanes)
         state.write("writes", WritesSection(records=kept + tuple(records)), writer=SECTION_WRITERS["writes"], tick=tick)
 

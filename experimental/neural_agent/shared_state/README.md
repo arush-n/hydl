@@ -9,7 +9,7 @@ Import path: `experimental.neural_agent.shared_state` (unchanged by the 2026-10-
 |---|---:|---|
 | `_common.py` | 152 | Section names and writers, the history bounds (`DECISION_HISTORY`, `INFORMATION_HISTORY`, `STATUS_HISTORY`, ...), the validation helpers every section uses. |
 | `schema.py` | 250 | The JSON Schema of the whole document (only the keywords the manual validator enforces) and `validate`. |
-| `sections/executive.py` | 162 | `GoalEntry` (the typed goal fields plus the LLM's words), `ExecutiveSection`; `entry_to_spec` / `spec_to_entry`. Writer: the LLM through the harness. |
+| `sections/executive.py` | 162 | `GoalEntry` (the typed goal fields plus the LLM's words, and `relation`: its `RelationDirective`s, 2026-10-23, host-side only: `to_dict` and `from_dict` do not carry it yet), `ExecutiveSection`; `entry_to_spec` / `spec_to_entry`. Writer: the LLM through the harness. |
 | `sections/belief.py` | 150 | `BeliefLane`, `BeliefSection.from_belief`. Writer: the session, from the belief module. |
 | `sections/decision.py` | 250 | `GoalInForce`, `DecisionRecord`, `InformationRequest` (questions to the LLM), `GoalReading` (how each goal was understood), `DecisionSection`. Writer: the decision layer, through the session's scribe. |
 | `sections/requests.py` | 153 | `RequestsSection`: the live typed requests to the skills. Writer: the decision layer. |

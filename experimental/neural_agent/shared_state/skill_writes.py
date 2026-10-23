@@ -260,6 +260,7 @@ class StateTickBinding:
                 self._verbs.pop((int(status.agent), int(status.request_id)), None)
         observation, last_action, reset, respawn = self.observe(transition)
         step = dict(self.step_kwargs)
+        step.setdefault("tick_seconds", self.tick_seconds)  # the skill layer's rules tick at the same length (VIRTUAL_HUMAN.md 27.7)
         if respawn is not None:
             step["respawn"] = respawn
         self.view, self.state, reasons = step_lanes(
