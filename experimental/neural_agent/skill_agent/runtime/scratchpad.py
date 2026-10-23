@@ -104,11 +104,15 @@ def target_seen(belief: Any) -> np.ndarray:
     return known[:, _SEEN] & (features[:, _SEEN] * np.float32(TICKS_SATURATION) < np.float32(TICKS_SATURATION))
 
 
-def lane_contexts(seen: Any, world_bounds: Any = ANY_WORLD) -> dict[int, AgentContext]:
-    """One context per lane: the target entity is known exactly where ``seen`` is True."""
+def lane_contexts(seen: Any, world_bounds: Any = ANY_WORLD, records: Any = ()) -> dict[int, AgentContext]:
+    """One context per lane. A lane with a record of the entities it knows (``records``: the scratchpad's
+    ``skills.known_entities``, ``AgentEntities`` written from ``state_tick.known_entities``) knows exactly those ids,
+    as the decision layer names them since the owner's ruling of 2026-10-22 (#140). A lane without one keeps the
+    earlier convention: the target entity (``TARGET_ENTITY``) is known exactly where ``seen`` is True."""
 
+    known = {record.agent: frozenset(entity.id for entity in record.entities) for record in records or ()}
     return {lane: AgentContext(world_bounds=world_bounds,
-                               known_entities=frozenset({TARGET_ENTITY}) if flag else frozenset())
+                               known_entities=known.get(lane, frozenset({TARGET_ENTITY}) if flag else frozenset()))
             for lane, flag in enumerate(np.asarray(seen, dtype=bool))}
 
 
@@ -186,7 +190,8 @@ class CombiningDecider:
             return
         object.__setattr__(self, "_combined_tick", tick)
         seen = target_seen(transition.hierarchy_step.belief_update.belief)
-        steps = combine_from_scratchpad(state, self.combiner, tick, lane_contexts(seen, self.world_bounds),
+        records = getattr(state.skills, "known_entities", ())
+        steps = combine_from_scratchpad(state, self.combiner, tick, lane_contexts(seen, self.world_bounds, records),
                                         reports=self._reports(transition))
         object.__setattr__(self, "last_steps", steps)
         for step in steps.values():
