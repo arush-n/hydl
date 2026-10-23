@@ -1316,6 +1316,12 @@ HOOKS = (
          "an empty role, and a player-backed target (the channel's role id reads 0)",
          note="sets ArsenalRuntimeConfig.entity_role_semantic_ids (semantic_id of each role name) from entity_role_ids or the "
          "matchup default; applied after hit_interrupt_roles, which replaces its measured roles with '' before the original"),
+    Hook("game_clock", "combat/observation/v3/encoding/encoder.py", "encode_learner_observation_v3",
+         f"{_MECHANICS}.game_clock:construct", "game_clock", "active",
+         differential="tests/sim/test_game_clock.py: the rate over N ticks, the day/night boundary, time to next across midnight, "
+         "the switch-off identity, the rendered field and the unchanged flat layout",
+         note="sim/gen7/mechanics/game_clock.py: opt-in game_clock field after the existing learner fields; reads tick_count and "
+         "the step; weather published as unknown; gen 5 returns the original"),
 )
 
 OVERLAY = Overlay(

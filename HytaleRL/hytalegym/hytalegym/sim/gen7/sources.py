@@ -886,4 +886,10 @@ DECLARATIONS = {
     "perception_roles": Derived(
         "construct (fidelity row none): its differential is in the Hook row"
     ),
+    "game_clock": (
+        # S14 (owner 2026-10-23): the 0.7.2 day and night lengths; SECONDS_PER_DAY 86400 and the 0.6 day split are
+        # WorldTimeResource constants (javap), checked by tests/sim/test_game_clock.py.
+        AssetSource("Server/GameplayConfigs/Default.json", "/World/DaytimeDurationSeconds", 1728),
+        AssetSource("Server/GameplayConfigs/Default.json", "/World/NighttimeDurationSeconds", 1152),
+    ),
 }
