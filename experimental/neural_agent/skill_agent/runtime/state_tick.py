@@ -34,9 +34,12 @@ from experimental.neural_agent.skill_agent.model.encoder import (
 from experimental.neural_agent.skill_agent.model.generalist import ARG_GROUPS, GeneralistRequests
 from experimental.neural_agent.skill_agent.model.skill_module import SkillModule, Trunk, check_trunk, module_outputs
 from experimental.neural_agent.skill_agent.runtime.combiner import AgentContext, BodyStep
+from experimental.neural_agent.skill_agent.contract.tokens_v3 import CAPACITIES_V3
 from experimental.neural_agent.skill_agent.state import layer
+from experimental.neural_agent.skill_agent.state.action_history import HEAD_NEUTRAL
 from experimental.neural_agent.skill_agent.state.written import Write, lower
 from experimental.neural_agent.skill_agent.training.blocks import HEAD_NAMES, HEAD_SIZES, HEAD_STARTS, NEUTRAL
+from hytalegym.jax.combat.observation.v3.tokens.inventory import INVENTORY_POLICY_FLOAT_FEATURES
 
 
 class StateView(NamedTuple):
@@ -70,6 +73,62 @@ def tick(trunk: Trunk, state: layer.AgentState, observation: Any, *, last_action
                                  block=written.get("block_candidate", memory.block))
     view = StateView(encoded, {name: valid for name, (_, valid) in tokens.items()}, state.entity_ids)
     return view, state._replace(latent=encoded.memory, background=encoded.background, memory=memory)
+
+
+class OwnPose(NamedTuple):
+    """A perception channel carrying only the agent's own pose (its position and body yaw: proprioception, which the
+    agent knows) and nothing about others: entity kinds, held items, roles and the inventory read empty. It stands in
+    for ``perception_v2`` where the gym publishes none, as on the multi-actor duel path (``docs/PERCEPTION.md`` 10.5),
+    so the stores can anchor and the event log can measure distance."""
+
+    body_yaw_sin: jax.Array  # float32[B]
+    body_yaw_cos: jax.Array  # float32[B]
+    self_position: jax.Array  # float32[B, 3]: world, blocks
+    entity_kind: jax.Array  # int32[B, N]
+    entity_held_item_id: jax.Array  # int32[B, N]
+    entity_role_id: jax.Array  # int32[B, N]
+    inventory_i32: jax.Array  # int32[B, S, 3]
+    inventory_f32: jax.Array  # float32[B, S, len(INVENTORY_POLICY_FLOAT_FEATURES)]
+    inventory_mask: jax.Array  # bool[B, S]
+
+
+def own_pose_channel(observation: Any, position: jax.Array, body_yaw_degrees: jax.Array) -> Any:
+    """``observation`` with an :class:`OwnPose` channel as its ``perception_v2``: ``position`` float32[B, 3] and
+    ``body_yaw_degrees`` float32[B] are the agent's own. An observation that already carries a channel is returned as
+    it is."""
+
+    if getattr(observation, "perception_v2", None) is not None:
+        return observation
+    batch, entities = observation.base.entity_mask.shape[:2]
+    slots = CAPACITIES_V3["inventory_slot"]
+    radians = jnp.deg2rad(jnp.asarray(body_yaw_degrees, jnp.float32))
+    zeros = jnp.zeros((batch, entities), jnp.int32)
+    channel = OwnPose(jnp.sin(radians), jnp.cos(radians), jnp.asarray(position, jnp.float32), zeros, zeros, zeros,
+                      jnp.zeros((batch, slots, 3), jnp.int32),
+                      jnp.zeros((batch, slots, len(INVENTORY_POLICY_FLOAT_FEATURES)), jnp.float32),
+                      jnp.zeros((batch, slots), jnp.bool_))
+    with_channel = NamedTuple("WithOwnPose", [(name, Any) for name in observation._fields] + [("perception_v2", Any)])
+    return with_channel(*observation, channel)
+
+
+def host_inputs(observation: Any, action_factors: jax.Array, done: jax.Array, *, own_position: jax.Array | None = None,
+                own_yaw_degrees: jax.Array | None = None) -> tuple[Any, jax.Array, jax.Array, None]:
+    """What :func:`step_lanes` needs from one host transition, in plain arrays (the session's transition type stays the
+    host's): ``observation``, the one the agent sees after the step; ``action_factors`` int32[B, 12], the gym's heads
+    it sent; ``done`` bool[B], lanes whose episode ended, so the next observation starts a new one (an
+    auto-reset); and, where the observation carries no perception channel, the agent's own position and body yaw
+    for :func:`own_pose_channel`.
+
+    Returns ``(observation, last_action int32[B, 21], reset bool[B], respawn)``: the gym's 12 heads then the planned
+    heads at neutral; ``respawn`` is None (the simulator never respawns within an episode, ``docs/VIRTUAL_HUMAN.md``
+    20.1)."""
+
+    if own_position is not None and own_yaw_degrees is not None:
+        observation = own_pose_channel(observation, own_position, own_yaw_degrees)
+    factors = jnp.asarray(action_factors, jnp.int32)
+    width = len(HEAD_NEUTRAL) - factors.shape[1]
+    planned = jnp.broadcast_to(jnp.asarray(HEAD_NEUTRAL[factors.shape[1]:]), (factors.shape[0], width))
+    return observation, jnp.concatenate([factors, planned], axis=1), jnp.asarray(done, jnp.bool_), None
 
 
 def step_lanes(trunk: Trunk, state: layer.AgentState, observation: Any, *, last_action: jax.Array,
@@ -222,5 +281,5 @@ class ModuleBody:
                          if scope_of(head.name) == self.module.scope})
 
 
-__all__ = ["AgentView", "Lowering", "ModuleBody", "StateView", "encode_contexts", "entity_rows", "module_factors",
-           "point", "step_lanes", "tick"]
+__all__ = ["AgentView", "Lowering", "ModuleBody", "OwnPose", "StateView", "encode_contexts", "entity_rows",
+           "host_inputs", "module_factors", "own_pose_channel", "point", "step_lanes", "tick"]
