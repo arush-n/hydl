@@ -2371,5 +2371,7 @@ Gait on 1F874DFC (smoke, `gen7_probes/gait_speeds/gait_integ_1F874DFC.json`): ru
 diagonal 4.528, walk 1.5, sneak 2.75 and 2.0, sprint 5.0 blocks/s; every ratio equals the simulator's; a hotbar slot past
 the role's capacity completes the step. Handshake: reset and 20 steps under contract FC928136 on 5562/25580.
 
-Not done: recertification run 12 under 1F874DFC (the nine `test_native_world_recordings.py` failures until then; the
-combat contract stamp); the quiet jump re-run on 1F874DFC.
+Recertified (same evening): run 12 under 1F874DFC passed and was promoted (receipt
+`world-evidence-history/1F874DFC/publication-v12.json`), the recording tests pass, v8 re-frozen 9058D229, combat contract
+stamp `combat-contract-stamp-0e41e0d0` (repo b8a2a73; publication tests 12 passed). Not done: the quiet jump re-run on
+1F874DFC.
