@@ -1,5 +1,10 @@
 """Landing walk resume (0.7.2 NPC walk). Switch ``Constructs.landing_walk_resume``; row 1c (F1c).
 
+Scope (2026-10-22, owner ruling on the bridge jump): with ``Constructs.npc_jump_carry`` on, this hold arms only on a STANDING
+jump (zero take-off horizontal speed). A running jump keeps its take-off velocity and walks on L+5 (npc_jump_carry.py). The
+standing-jump captures below are the evidence for L+3; the old running-jump arc (zero horizontal motion in the air, walk on
+L+3, knockback receipt knockback_landing_jump_Kweebec_Razorleaf_20261022.json) was on the bridge before the change.
+
 Measured on the live 0.7.2 bridge (FIDELITY-0.7.2.md section (o), row 1c): after a jump the NPC lands on tick L and, with
 forward held, starts walking on tick L + 3; HEAD's engine walks on L + 1. The saved capture ``single-jump-30`` (seed 570057,
 ledge fixture) shows it: grounded from step 11, native z unchanged on steps 12 and 13, first displacement on step 14. The
@@ -82,6 +87,8 @@ def construct(original: Any, profile: Any) -> Any:
     env = original.__globals__
     jnp = env["jnp"]
     npc_walk = env["AGENT_MOTION_NPC_WALK"]
+    agent = env["AGENT_ENTITY"]
+    carried = bool(profile.constructs.npc_jump_carry)
     planar_columns = jnp.asarray(
         (env["ACTION_FORWARD"], env["ACTION_BACK"], env["ACTION_LEFT"], env["ACTION_RIGHT"]), dtype=jnp.int32
     )
@@ -94,6 +101,10 @@ def construct(original: Any, profile: Any) -> Any:
         held = jnp.where(hold[:, None] & columns[None, :], jnp.zeros_like(actions), actions)
         updated, attack, accepted = original(state, held, pause_draw, params, *rest, **kwargs)
         jumped = state.agent_grounded & ~updated.agent_grounded
+        if carried:
+            # npc_jump_carry carries a running jump (the slide, then the walk on L+5); this hold covers a standing jump.
+            standing = (state.velocity[:, agent, 0] == 0.0) & (state.velocity[:, agent, 2] == 0.0)
+            jumped = jumped & standing
         following = countdown(jnp, state.agent_grounded, jumped, state.agent_landing_hold_ticks)
         following = jnp.where(walking_model, following, jnp.int32(0))
         return updated._replace(agent_landing_hold_ticks=following), attack, accepted

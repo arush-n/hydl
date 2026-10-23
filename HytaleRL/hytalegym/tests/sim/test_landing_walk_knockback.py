@@ -1,11 +1,11 @@
 """Walk after a landing, by cause (gen 7, row 1c; rendered and run on the npc_walk body).
 
 Live 0.7.2 (knockback_landing receipts, 2026-10-22, learner Kweebec_Razorleaf, Trork melee): a hit knocks the idle learner
-up three airborne ticks; the touchdown tick L and L+1 do not move, and with forward held the body walks from L+2. A jump
-landing walks from L+3 (construct landing_walk_resume), and a walk-off with no jump walks from L+1 (the construct's
-docstring). The render reproduces the knockback timing without the construct: the one-tick hold after a hit is the engine's
-knockback control lock (CombatState.knockback_control_lock: set by the hit, still set on L, cleared on L+1). The jump and
-walk-off tests pin the construct's other two cases.
+up three airborne ticks; the touchdown tick L and L+1 do not move, and with forward held the body walks from L+2. A standing
+jump's landing walks from L+3 (construct landing_walk_resume); a running jump keeps its take-off velocity and walks
+at full speed on L+5 (construct npc_jump_carry); a walk-off with no jump walks from L+1 (the construct's docstring). The render reproduces the knockback timing without the construct: the one-tick hold after a hit is the engine's
+knockback control lock (CombatState.knockback_control_lock: set by the hit, still set on L, cleared on L+1). The running jump
+and walk-off tests pin the other two cases (the standing jump is in test_jump_carry.py).
 
 The opponent is the engine's legacy Trork melee: a target with no arsenal loadout. An arsenal-loaded target is controlled by
 its own programs and never swings at this range (the coordinator's quick script, 2026-10-22).
@@ -145,16 +145,23 @@ def test_a_knockback_landing_walks_on_the_second_tick_after_touchdown(hit_rows) 
         assert all(_planar(rows, t) == 0.0 for t in range(landing, landing + 8))  # idle: no sliding after touchdown
 
 
-def test_a_jump_landing_still_walks_on_the_third_tick_after_touchdown(package) -> None:
+def test_a_running_jump_landing_slides_and_walks_at_full_speed_on_the_fifth_tick_after_touchdown(package) -> None:
+    """The jump keeps its take-off velocity (construct npc_jump_carry): no hold, the carried slide, and full speed on L+5.
+
+    The jump requested on tick 40 is the second landing of this loop (touchdown 50); tests/sim/test_jump_carry.py pins the
+    per-tick speeds against the live list.
+    """
+
     learner = _Learner(package, target_active=False)
     carry = learner.reset()
     rows = [learner.row(carry)]
-    for tick in range(1, 31):
+    for tick in range(1, 61):
         carry, _ = learner.tick(carry, learner.jump if tick % 30 == 10 else learner.forward, tick)
         rows.append(learner.row(carry))
-    landing = _touchdowns(rows)[0]
-    assert _planar(rows, landing + 1) == 0.0 and _planar(rows, landing + 2) == 0.0  # the two-tick hold (the construct)
-    assert _walk_after(rows, landing) == 3
+    landing = _touchdowns(rows)[1]
+    assert landing == 50
+    assert _planar(rows, landing + 1) > MOVING  # carried, not held
+    assert next(k for k in range(1, 8) if _planar(rows, landing + k) > 0.16) == 5  # full run speed (5 / 30 per tick)
 
 
 def test_a_walk_off_landing_without_a_jump_walks_on_the_first_tick_after_touchdown(package) -> None:

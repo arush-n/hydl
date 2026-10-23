@@ -171,6 +171,10 @@ class Constructs:
     # Simple -> Replace -> Selector melee attack starts one tick later, the live 0.7.2 sword hit on tick 9). False in gen 5;
     # True in the gen-7 profile (sim/gen7/profile.py). Owner: sim/gen7/mechanics/replace_default_hop.py.
     replace_default_hop: bool = False
+    # NPC jump carries its take-off horizontal velocity (row 1c, owner ruling 2026-10-22): False (HEAD: the air speed is the
+    # carried move speed, undamped, and the landing is the landing_walk_resume hold) or True (gen 7: a running jump falls by the
+    # engine's air drag each tick, slides on the ground and walks at full speed on L+5). Owner: sim/gen7/mechanics/npc_jump_carry.py.
+    npc_jump_carry: bool = False
 
 
 @dataclass(frozen=True)

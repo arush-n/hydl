@@ -201,12 +201,19 @@ _POTION = (
 )
 
 
+_JUMP_CARRY = (
+    "tests/sim/test_jump_carry.py: the running jump's horizontal speed per tick on the gen-7 render against the live 0.7.2 "
+    "bridge DBB3736B (receipt knockback_landing_jump_Kweebec_Razorleaf_carry_DBB3736B.json, two seeds, five jumps each, all "
+    "identical): within 0.02 blocks/s per tick, touchdown on L = 50, walk at full speed on L+5; the switch off restores the "
+    "HEAD arc"
+)
+
 _LANDING_WALK = (
     "native_motion_differential on the gen-7 render against the live 0.7.2 bridge, npc_walk, ledge fixture: "
     "--steps 30 --jump-steps 1 (single jump then forward), --steps 12 --jump-steps 1 --forward-steps 0 (jump in "
     "place) and --steps 30 --jump-steps 0 (walk off the ledge, no jump: must not be held), seeds 570057 and 913771; "
-    "bar 5e-4 m and 1e-3 m/s per step; after an accepted jump the walk starts on the third tick after touchdown "
-    "(native z first moves on L+3)"
+    "bar 5e-4 m and 1e-3 m/s per step; after an accepted standing jump the walk starts on the third tick after touchdown "
+    "(native z first moves on L+3); a running jump is carried by npc_jump_carry when that switch is on"
 )
 
 _BENCH_TIERS = (
@@ -447,6 +454,19 @@ PATCHES = (
           "the restore (45 percent) and the 0.7 s ability are unchanged; the status goes and the cooldown is 30 s. "
           "Residual (inferred from the asset, not measured): the engine starts the cooldown at admission, the server "
           "when the 0.5 s charge completes (Consume_Charge_Potion_Fastest, Next 0.5)"),
+    # Row 1c, jump carry (construct npc_jump_carry): the carried jump's counter (1 on take-off, +1 per grounded tick).
+    Patch("jump_carry_state_field", "combat/types.py",
+          "    agent_locomotion_stamina_regen_delay: Array\n",
+          "    agent_locomotion_stamina_regen_delay: Array\n"
+          "    # Gen 7 (row 1c, jump carry): 1 on the take-off tick of a carried jump, +1 per grounded tick, 0 idle.\n"
+          "    agent_jump_carry_ticks: Array\n",
+          "1c", _JUMP_CARRY,
+          "the CombatState field the npc_jump_carry construct reads and writes (int32; gen 5 does not apply this patch)"),
+    Patch("jump_carry_state_init", "combat/runtime/reset.py",
+          "        agent_locomotion_stamina_regen_delay=zeros_f,\n",
+          "        agent_locomotion_stamina_regen_delay=zeros_f,\n"
+          "        agent_jump_carry_ticks=zeros_i,\n",
+          "1c", _JUMP_CARRY, "the counter starts at zero at reset (no carry before the first jump)"),
     # Row 1c, landing walk (construct landing_walk_resume): the countdown the construct reads and writes.
     Patch("landing_walk_state_field", "combat/types.py",
           "    agent_locomotion_stamina_regen_delay: Array\n",
@@ -905,10 +925,18 @@ HOOKS = (
          "tests/sim/test_npc_sprint.py (sprint and run trajectories bit-identical on npc_walk)",
          "a requested sprint under npc_walk is a run for actor zero: same multipliers on every axis, no stamina drain and "
          "no regen block (stamina regenerates as for run); the player model keeps its sprint (1.273)"),
+    Hook("npc_jump_carry", "combat/runtime/step.py", "_apply_action",
+         f"{_MECHANICS}.npc_jump_carry:construct", "npc_jump_carry", "active", "1c", _JUMP_CARRY,
+         "a running npc_walk jump (take-off speed > 0) keeps its take-off horizontal velocity: the engine's force path "
+         "(air factor 0.9216, ground factor 0.6724 per tick, no steering, move speed held) and a 0.45 factor on L+4 and a "
+         "release on L+5 (the live list: tests/sim/test_jump_carry.py); a standing jump is not carried; a knockback "
+         "during the carry ends it; the L+4 factor 0.45 is fitted to one live value (0.203), its mechanism is not "
+         "identified; the carry is inferred for a walk-ramp take-off and for re-jumps during a carry"),
     Hook("landing_walk_resume", "combat/runtime/step.py", "_apply_action",
          f"{_MECHANICS}.landing_walk:construct", "landing_walk_resume", "active", "1c", _LANDING_WALK,
          "after an accepted jump, holds forward, back, left and right for the two grounded ticks after touchdown "
-         "(npc_walk only); a landing without a jump is not held; the jump request is not held; the native pause before "
+         "(npc_walk only; with npc_jump_carry on, only a standing jump, since a running jump is carried); a landing "
+         "without a jump is not held; the jump request is not held; the native pause before "
          "a re-jump (F1c) is the existing patch npc_rejump_after_landing; a knockback landing is not held here (the "
          "engine's knockback control lock holds one tick natively: the render walks on L+2, as live; "
          "tests/sim/test_landing_walk_knockback.py)"),

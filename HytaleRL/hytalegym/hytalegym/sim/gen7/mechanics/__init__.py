@@ -37,6 +37,7 @@ CONSTRUCT_MODULES = {
     "block_health_reset_on_write": "block_health",
     "weapon_durability": "durability",
     "landing_walk_resume": "landing_walk",
+    "npc_jump_carry": "npc_jump_carry",
     "crafting_bench_tier": "bench_tiers",
     "crafting_memories": "crafting_memories",
     "crafting_time": "timed_crafting",

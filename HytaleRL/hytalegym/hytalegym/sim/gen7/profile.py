@@ -52,6 +52,9 @@ PROFILE = SimProfile(
         block_health_reset_on_write=True,
         weapon_durability="gen7_table",
         landing_walk_resume="third_tick",
+        # Jump carry (row 1c, owner ruling 2026-10-22): a running jump keeps its take-off velocity and walks on L+5; the
+        # landing_walk_resume hold above then covers standing jumps only. Owner: sim/gen7/mechanics/npc_jump_carry.py.
+        npc_jump_carry=True,
         crafting_bench_tier="placed_bench",
         crafting_memories="recorded_count",
         crafting_time="timed_job",
