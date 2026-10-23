@@ -2423,3 +2423,17 @@ Dodge head (row 9). Both seeds, 121 ticks each: the advertised dodge set is {lef
 a forward or back request is not legal (`applied_legal` False on the request tick); left and right apply. This matches
 `Constructs.dodge_action_head = ("left", "right")`. The receipt carries no agent position, so impulse and invulnerability
 timing are not re-measured here.
+
+## (ar) Rows 11 and 1c re-read in seconds (2026-10-23; no new live run; receipts as cited)
+
+The certification rebuild (task #118, `CERTIFICATION_v2.md`) listed rows 11 and 1c as OPEN. Both rest on tick counts taken
+while the native tick ran long (task #137). In seconds, using each receipt's own tick length:
+
+| Row | Live | Render | In seconds | Status |
+|---|---|---|---|---|
+| 11, timed craft output (Armor_Copper_Chest 3.0 s, section (ag) line "Live, this section") | output on R+82, per-tick progress 0.03669 s mean | R+90 at 1/30 s | live 82 x 0.03669 = 3.009 s; render 3.000 s; the phase-4k receipts (quieter) R+88 to R+90 | MATCH in seconds (inside one tick). Row 11 stays OPEN only for the processing rows not run live and the bench tiers 2 and up not built |
+| 1c, jump landing tick (section (ap)) | lands one tick earlier on 1F874DFC; first-tick rise 0.193 | rise 0.170 on DBB3736B and the render | 0.193 / 0.170 = 1.135 = 0.0378 / 0.0333: the rise is the same velocity times a longer tick | landing tick: tick length, MATCH in seconds. L+4 factor 0.261 against 0.203: NOT explained by tick length (a decay rate fitted at 0.0344 s would give about 0.18 at 0.0374 s, not 0.26); stays OPEN |
+
+The general point stands for every count-based row on 1F874DFC: a live tick averages about 0.037 s against the render's
+1/30 s (section (aq)), so counts run about 10 % low live for the same seconds. Whether the bridge can step the world at a
+fixed 1/30 s is task #137's question.
