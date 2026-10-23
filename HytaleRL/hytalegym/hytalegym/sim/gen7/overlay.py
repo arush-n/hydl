@@ -380,6 +380,54 @@ _TRORK_SHAMAN_NOTE = (
 _TRORK_SHAMAN_ROW = "Shaman"
 _TRORK_SHAMAN_DIFF = "tests/sim/test_trork_shaman_rubble.py (profile pins); the duel measurement (lane report, 2026-10-23)"
 
+# Skeleton_Archer_Turret's only attack (lane report, 2026-10-23): the variant's Attack is Skeleton_Archer_Bow_Shoot
+# (Server/NPC/Roles/Undead/Skeleton/Skeleton/Skeleton_Archer_Turret.json, Modify.Attack), a Simple RunTime 1 wind-up then
+# LaunchProjectile Skeleton_Archer_Arrow (RunTime 0.2), so the root runs 1.2 s and the arrow leaves at 1.0 s
+# (Server/Item/Interactions/NPCs/Undead/Skeleton_Archer/Skeleton_Archer_Bow_Shoot.json). The arrow
+# (Server/Projectiles/NPCs/Undead/Skeleton_Archer/Skeleton_Archer_Arrow.json) is Arrow_FullCharge with Damage 16; the
+# parent (Server/Projectiles/Arrow_FullCharge.json) gives MuzzleVelocity 50, TerminalVelocity 50, Gravity 10,
+# TimeToLive 20, DeadTime 0.1, Bounciness 0; the hit box is 0.075 (Server/Models/Projectiles/Weapons/Arrow/Arrow_Iron.json).
+# The held item is Weapon_Shortbow_Iron_Rusty (Modify.Weapons), family FAMILY_SHORTBOW. The projectile kind is the arrow
+# kind PROJECTILE_ARROW (1), reused with no contract change; the launch table keys on kind, so the turret's legacy
+# ballistic offsets (HorizontalCenterShot 0, DepthShot 0.8, VerticalCenterShot 0.3) are not applied: the player arrow's
+# entry stays in force (named residual, see the lane report). The duel's pause between attacks is not a builder value:
+# the controller carries it (tasks/turret_controller.py).
+_SKELETON_TURRET_BUILDER = '''def _skeleton_archer_turret_bow() -> dict:
+    return _weapon(
+        "Skeleton_Archer_Bow_Shoot",
+        FAMILY_SHORTBOW,
+        [
+            _ability(
+                "Skeleton_Archer_Bow_Shoot",
+                1.2,
+                _projectile(
+                    1.0,
+                    kind=PROJECTILE_ARROW,
+                    damage_class=DAMAGE_CLASS_UNKNOWN,
+                    damage=16,
+                    cause=DAMAGE_PROJECTILE,
+                    speed=50,
+                    gravity=10,
+                    terminal=50,
+                    half_extent=0.075,
+                    lifetime=20,
+                    dead_time=0.1,
+                ),
+            )
+        ],
+        0,
+        {},
+    )
+
+
+'''
+_SKELETON_TURRET_NOTE = (
+    "Skeleton_Archer_Turret's bow (asset values in the comment above the builder); tests/sim/test_skeleton_archer_turret_bow.py "
+    "pins the rendered profile and the gen-5 absence; the duel measurement is in the lane report"
+)
+_SKELETON_TURRET_ROW = "Skeleton_Archer_Turret"
+_SKELETON_TURRET_DIFF = "tests/sim/test_skeleton_archer_turret_bow.py (profile pins); the duel measurement (lane report, 2026-10-23)"
+
 PATCHES = (
     # Row 11x, augment tags (construct crafting_augment_tags): the grant bits ride the context and the assets; the gate is a hook.
     Patch("augment_context_field", "crafting/types.py",
@@ -947,6 +995,22 @@ PATCHES = (
           '"deployable_terminal": PROJECTILE_DEPLOYABLE,\n',
           '"deployable_terminal": PROJECTILE_DEPLOYABLE,\n                "rock": PROJECTILE_ROCK,\n',
           _TRORK_SHAMAN_ROW, _TRORK_SHAMAN_DIFF, _TRORK_SHAMAN_NOTE),
+    # Skeleton_Archer_Turret's bow: an arrow, so the arrow kind PROJECTILE_ARROW is reused (no contract, validation or
+    # spec change). The held shortbow is FAMILY_SHORTBOW (family > 0 passes the loadout validation).
+    Patch("skeleton_archer_turret_bow_builder", PROFILE_JAX,
+          "def _kunai() -> dict:\n",
+          _SKELETON_TURRET_BUILDER + "def _kunai() -> dict:\n",
+          _SKELETON_TURRET_ROW, _SKELETON_TURRET_DIFF, _SKELETON_TURRET_NOTE),
+    # Anchors are unique in HEAD and after the Shaman's patches: the catalog line after the kunai, and the line
+    # after PROFILE_NAMES (the Shaman's name patch edits the tuple above it).
+    Patch("skeleton_archer_turret_bow_registry", PROFILE_JAX,
+          '    "root_wand": _root_wand,\n',
+          '    "skeleton_archer_turret_bow": _skeleton_archer_turret_bow,\n    "root_wand": _root_wand,\n',
+          _SKELETON_TURRET_ROW, _SKELETON_TURRET_DIFF, _SKELETON_TURRET_NOTE),
+    Patch("skeleton_archer_turret_bow_profile_name", PROFILE_JAX,
+          "SPEAR_PROFILE_NAMES = CORE_PROFILE_NAMES[-16:]\n",
+          'PROFILE_NAMES = (*PROFILE_NAMES, "skeleton_archer_turret_bow")\nSPEAR_PROFILE_NAMES = CORE_PROFILE_NAMES[-16:]\n',
+          _SKELETON_TURRET_ROW, _SKELETON_TURRET_DIFF, _SKELETON_TURRET_NOTE),
 
 )
 

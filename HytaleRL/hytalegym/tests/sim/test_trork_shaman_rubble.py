@@ -89,8 +89,9 @@ def test_gen7_registry_and_profile_name_resolve(gen7_render) -> None:
     package = mount_fresh(gen7_render).__name__
     try:
         profile = import_module(package + ".combat.arsenal.profiles.hytale_0_5_7")
-        assert profile.PROFILE_NAMES[-1] == "trork_shaman_rubble"
-        assert profile._profile_index("trork_shaman_rubble") == len(profile.PROFILE_NAMES)
+        # The turret's bow (test_skeleton_archer_turret_bow.py) is appended after this one, so the Shaman is second to last.
+        assert profile.PROFILE_NAMES[-2] == "trork_shaman_rubble"
+        assert profile._profile_index("trork_shaman_rubble") == len(profile.PROFILE_NAMES) - 1
         assert profile._CATALOG["trork_shaman_rubble"]()["asset"] == "NPC_Rubble_Throw"
     finally:
         unmount(package)
