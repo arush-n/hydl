@@ -468,6 +468,20 @@ def melee_hold_constants(t: ContentTables) -> dict[str, float]:
     }
 
 
+def sword_thrust_timing(t: ContentTables) -> dict[str, float]:
+    """Iron sword thrust: the charged branch's event time (its Simple RunTime), 0.05 on 0.5.7 and 0.043 on 0.7.2.
+
+    The charged branch is the highest ``Next`` threshold: Serial[StaminaCost, StaminaRegenDelay, Simple(event) ->
+    Serial[Force, Selector]]. The thrust's total is not read here: the asset sum on 0.7.2 (0.043 + 0.267 + 0.223 =
+    0.533) ends the render's thrust at r+40 where live ends at r+44 (``mechanics_072.md``, row 5f).
+    """
+
+    nexts = t.interaction("Weapon_Sword_Primary_Thrust").document["Next"]
+    branch = nexts[max(nexts, key=float)]
+    (simple,) = (node for node in branch["Interactions"] if node.get("Type") == "Simple")
+    return {"event_seconds": float(simple["RunTime"])}
+
+
 def shortbow_tiers(t: ContentTables, asset_id: str = "Weapon_Shortbow_Iron") -> dict[str, tuple[float, ...]]:
     """``_iron_shortbow`` draw ladder: thresholds, launch speeds, gravities."""
 
@@ -761,6 +775,9 @@ ADAPTER_SOURCES: dict[str, tuple[str, ...]] = {
         "weapons/interaction:Weapon_Sword_Primary_Thrust#charge_thresholds,document.HorizontalSpeedMultiplier",
         "weapons/interaction:Weapon_Battleaxe_Primary_Downstrike#charge_thresholds",
         "weapons/interaction:Weapon_Mace_Primary_Swing_Left_Charged#charge_thresholds",
+    ),
+    "sword_thrust_timing": (
+        "weapons/interaction:Weapon_Sword_Primary_Thrust#document.Next (the highest threshold's Simple RunTime)",
     ),
     "shortbow_tiers": (
         "weapons/interaction:Weapon_Shortbow_Primary_Shoot_Charge#charge_thresholds",

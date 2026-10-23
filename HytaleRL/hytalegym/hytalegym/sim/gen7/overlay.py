@@ -26,12 +26,11 @@ Not patched, and why: the dodge head size (a remap across the action surface,
 not a constant: hook ``dodge_action_head``); shield bash ``StaminaRegenDelay``
 Set -1.5 -> Min -1 (the engine models only Set; needs a construct); Mithril and
 other dagger materials (rows of ``hytalegym/combat/assets/weapon_variants``, a
-shared module outside the rendered package); the sword thrust's HorizontalSpeedMultiplier
-0.8 -> 0.75 and its chained RunTime 0.043 (``Next/0.565/Interactions/2``: no swap-plan site;
-leads under row 5f, not among the 14 values); the potion drink's status and cooldown (patch
+shared module outside the rendered package); the potion drink's status and cooldown (patch
 ``potion_stamina_072_drink``, row 8e); durability (a JSON table: hook ``weapon_durability_catalog`` on the catalog loader,
-row 8d). The sword, shortbow and crossbow values
-are the ``CONTENT_VALUES`` rows below.
+row 8d). The sword (the thrust's event time and hold
+speed included; its total stays 0.601, see mechanics_072.md row 5f), shortbow and crossbow values are the
+``CONTENT_VALUES`` rows below.
 """
 
 from __future__ import annotations
@@ -67,8 +66,8 @@ CONTENT_LOCOMOTION = tuple(replace(r, status="active") for r in CONTENT_ROWS if 
 #: checks the HEAD expression once at its site. Checked on both tables by every content adapter
 #: (receipts: ~/.claude/jobs/31947bd7/tmp/sim_values/). Not applied here: the potion drink's status and
 #: cooldown (patch potion_stamina_072_drink, row 8e; the swap-plan row stays todo), the weapon durability
-#: (a JSON table: hook weapon_durability_catalog, row 8d), and the sword thrust chained
-#: RunTime 0.043 and HorizontalSpeedMultiplier 0.8 -> 0.75 (leads under row 5f, not among the 14).
+#: (a JSON table: hook weapon_durability_catalog, row 8d). The sword thrust's event time and hold speed are
+#: the three rows at the end of CONTENT_VALUES (row 5f, 2026-10-22); its 0.533 total is not applied (live ends r+44).
 _SWORD_TIMING = (
     "0.7.2 selector RunTime of the six sword attack rows (weapons/interaction:<attack>_Selector#document.RunTime; "
     "file-sourced). differential: row 5f, the iron sword left swing hit tick (native 9 in FIDELITY-0.7.2.md "
@@ -86,6 +85,13 @@ _SHORTBOW = (
     "contact, seeds 20260729 and 7: native damage 1.0 at hit tick 7 on the live bridge, jar 4A5E5D6D (2026-10-18, "
     "sim_values run2 bridge_after4.json); JAX on this render 6.0 at tick 6 before and 1.0 at tick 7 after; the "
     "other tiers' range error (2 % bar) not measured"
+)
+_THRUST_TIMING = (
+    "0.7.2 iron sword thrust event time and hold speed (file-sourced from weapons/interaction:"
+    "Weapon_Sword_Primary_Thrust: the charged branch's Simple RunTime; HorizontalSpeedMultiplier). differential: the "
+    "live forced-charge thrust (fidelity_evidence/gen7_probes/thrust_lunge, jar 1F874DFC, seeds 570057 and 913771) "
+    "first moves at r+27, the render at r+26 with 0.05 or 0.043; the hold speed is not measurable live until the "
+    "hold wire (#138)"
 )
 _CROSSBOW = (
     "0.7.2 Iron crossbow combo damage (weapons/item:Weapon_Crossbow_Iron damage.Combo_Projectile_Damage; "
@@ -136,6 +142,23 @@ CONTENT_VALUES = (
         "iron_template_damage:_iron_crossbow defaults", PROFILE_JAX, "_iron_crossbow", "weapons",
         "item:Weapon_Crossbow_Iron", "damage.Combo_Projectile_Damage.base_first", cast="int", status="active",
         fidelity_row="6c", source=_CROSSBOW, expression="(10, 27, 78)", template="(10, {value}, 78)",
+    ),
+    Redirect(
+        "sword_thrust_timing:dash", PROFILE_JAX, "_iron_sword", "adapter", "sword_thrust_timing", "event_seconds",
+        cast="float", status="active", fidelity_row="5f", source=_THRUST_TIMING,
+        expression="_force(0.05, (0, 0, -10), 20)", template="_force({value}, (0, 0, -10), 20)",
+    ),
+    Redirect(
+        "sword_thrust_timing:stab", PROFILE_JAX, "_iron_sword", "adapter", "sword_thrust_timing", "event_seconds",
+        cast="float", status="active", fidelity_row="5f", source=_THRUST_TIMING,
+        expression="_melee(\n                0.05,\n                thrust,",
+        template="_melee(\n                {value},\n                thrust,",
+    ),
+    Redirect(
+        "melee_hold_constants:sword_thrust_hold_speed_multiplier", PROFILE_JAX, "_iron_sword", "adapter",
+        "melee_hold_constants", "sword_thrust_hold_speed_multiplier", cast="float", status="active",
+        fidelity_row="5f", source=_THRUST_TIMING, expression="hold_speed_multiplier=0.8,",
+        template="hold_speed_multiplier={value},",
     ),
 )
 _VALUE_IDS = frozenset(row.id for row in CONTENT_VALUES)

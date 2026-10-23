@@ -241,7 +241,7 @@ def test_gen7_content_values_render_the_072_table_values(gen7):
     out, manifest = gen7
     applied = {item["id"]: item for item in manifest["applied"]}
     pending = {item["id"] for item in manifest["pending"] if item["kind"] == "redirect"}
-    assert len(CONTENT_VALUES) == 13 and not {r.id for r in CONTENT_VALUES} & pending
+    assert len(CONTENT_VALUES) == 16 and not {r.id for r in CONTENT_VALUES} & pending
     assert all(applied[r.id]["kind"] == "redirect" and applied[r.id]["fidelity_row"] == r.fidelity_row
                for r in CONTENT_VALUES)
     assert {r.fidelity_row for r in CONTENT_VALUES} == {"5f", "6a", "6c"}
@@ -257,6 +257,9 @@ def test_gen7_content_values_render_the_072_table_values(gen7):
     assert values["melee_hold_constants:_SWORD_THRUST_HOLD_SECONDS"] == 0.739
     assert values["melee_hold_constants:_DOWNSTRIKE_HOLD_SECONDS"] == 0.746
     assert values["melee_hold_constants:_MACE_CHARGED_HOLD_SECONDS"] == 1.841
+    assert values["sword_thrust_timing:dash"] == 0.043
+    assert values["sword_thrust_timing:stab"] == 0.043
+    assert values["melee_hold_constants:sword_thrust_hold_speed_multiplier"] == 0.75
     assert values["iron_template_damage:_iron_shortbow defaults"] == [1.0, 2.0, 4.0, 7.0, 19.0, 14.0]
     assert values["shortbow_tiers:shortbow draw ladder launch speeds"] == [12.0, 22.0, 35.0, 50.0, 85.0]
     assert values["iron_template_damage:_iron_crossbow defaults"] == 13.0
@@ -286,8 +289,8 @@ def test_gen7_content_values_render_the_072_table_values(gen7):
                          "_SWORD_THRUST_HOLD_SECONDS = 0.85\n", "_MACE_CHARGED_HOLD_SECONDS = 2.2\n",
                          "(6, 9, 12, 16, 19, 14)", "(15, 30, 50, 70, 85),", "(10, 27, 78)"):
         assert gen5_literal not in profile, gen5_literal
-    # Not applied (see the overlay's comment): the sword thrust hold speed stays 0.8 and the potion row stays pending.
-    assert "hold_speed_multiplier=0.8," in profile
+    # The sword thrust hold speed is 0.75 (row 5f, 2026-10-22); the mace keeps its 0.8 and the potion row stays pending.
+    assert "hold_speed_multiplier=0.75," in profile and "hold_speed_multiplier=0.8," in profile
     assert "potions:_potions values" in pending
 
 

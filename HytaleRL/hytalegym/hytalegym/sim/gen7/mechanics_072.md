@@ -111,7 +111,7 @@ fidelity patch in the gen-7 overlay. Every value below is in the gen-7 tables an
   `PLAYER_JUMP_FORCE` 11.8, where native NPCs jump with 5.099. The uncommitted working tree already uses 5.099.
   Measured on HEAD: 2.38 m error (gen 5), 2.42 m (gen 7). Not changed here.
 
-## Content values applied on the gen-7 render (2026-10-18; 13 of the handoff's 14)
+## Content values applied on the gen-7 render (2026-10-18; 13 of the handoff's 14; three thrust rows, 2026-10-22)
 
 The rows are the `CONTENT_VALUES` redirects of `overlay.py`: each replaces the gen-5 literal at render time and the value
 comes from the 0.7.2 table (`tests/sim/test_render.py::test_gen7_content_values_render_the_072_table_values`). Live status is
@@ -125,6 +125,9 @@ from the run receipts `HytaleRL/artifacts/fidelity_evidence/sim_values/run2/` (J
 | `_SWORD_VORTEX_SPIN_SELECTOR` (field 0) | 0.15 | 0.13 | `Weapon_Sword_Signature_Vortexstrike_Spin_Selector#document.RunTime` | Redirect | 5f | file-sourced; not measured |
 | `_SWORD_THRUST_SELECTOR` (`runtime_seconds`) | 0.3 | 0.267 | `Weapon_Sword_Primary_Thrust_Selector#document.RunTime` | Redirect | 5f | file-sourced; not measured |
 | `_SWORD_VORTEX_STAB_SELECTOR` (`runtime_seconds`) | 0.3 | 0.267 | `Weapon_Sword_Signature_Vortexstrike_Stab_Selector#document.RunTime` | Redirect | 5f | file-sourced; not measured |
+| `_iron_sword` thrust dash event (`_force(0.05, ...)` time) | 0.05 | 0.043 | the 0.565 branch's Simple RunTime, `Weapon_Sword_Primary_Thrust` (adapter `sword_thrust_timing.event_seconds`) | Redirect (overlay-only: no swap-plan record) | 5f | file-sourced; live first move r+27, render r+26 (unchanged by 0.05 → 0.043) |
+| `_iron_sword` thrust stab event (`_melee(0.05, thrust, ...)` time) | 0.05 | 0.043 | the same Simple RunTime (adapter `sword_thrust_timing.event_seconds`) | Redirect (overlay-only) | 5f | file-sourced; no hit measured live |
+| `_iron_sword` thrust `hold_speed_multiplier` | 0.8 | 0.75 | `weapons/interaction:Weapon_Sword_Primary_Thrust#document.HorizontalSpeedMultiplier` (adapter `melee_hold_constants.sword_thrust_hold_speed_multiplier`) | Redirect (overlay-only) | 5f | file-sourced; not measurable live until the hold wire (#138) |
 | `_NESTED_OUTER_GATE_SECONDS` | 0.2 | 0.174 | `Weapon_Sword_Primary#charge_thresholds[1]` (adapter `melee_hold_constants`) | Redirect | 5f | not measured |
 | `_SWORD_THRUST_HOLD_SECONDS` | 0.85 | 0.739 | 0.174 + `Weapon_Sword_Primary_Thrust#charge_thresholds[1]` (0.565), sum rule | Redirect | 5f | not measured |
 | `_DOWNSTRIKE_HOLD_SECONDS` | 0.85 (0.2 + 0.65) | 0.746 | 0.174 + `Weapon_Battleaxe_Primary_Downstrike#charge_thresholds[1]` (0.572) | Redirect | 5f | not measured |
@@ -141,8 +144,12 @@ from the run receipts `HytaleRL/artifacts/fidelity_evidence/sim_values/run2/` (J
   Same values in both: tier-0 open native damage 1.0 at tick 7 (seeds 20260729 and 7); the wall case: damage 0, no hit
   natively; on the render damage 0 with `world_hit_tick` 3 (JAX) against null (native), unchanged by these rows.
   Iron sword left swing native 10 at tick 9 on both jars (seeds 570057 and 1215520385).
-- Not applied, leads under 5f: the sword thrust's chained RunTime 0.043 (`Next/0.565/Interactions/2`) and its
-  HorizontalSpeedMultiplier 0.8 -> 0.75; neither has a swap-plan site.
+- Not applied, against the live receipt: the thrust total 0.533 (the 0.565 branch's Simple 0.043 + selector RunTime 0.267 +
+  its `Next` pad 0.223; 0.5.7 sums 0.05 + 0.3 + 0.251 = 0.601). The live forced-charge thrust (charge 0.739, request at
+  r; `fidelity_evidence/gen7_probes/thrust_lunge`, jar 1F874DFC, seeds 570057 and 913771, identical) first moves at r+27 and
+  clears its slot at r+44; the render first moves at r+26 and clears at r+43 with 0.601, at r+40 with 0.533. Lunge to end
+  is 17 ticks live and with 0.601, 14 with 0.533. The render keeps 0.601 until the cause is known (#119); longer native
+  ticks (#137) would shorten live, not lengthen it.
 - The combo expectation in `tests/fidelity` (`[10, 10, 27]`) follows the 13 value (section (u)); that file is outside this lane.
 
 ## Ability ground continuation (row 5h, 2026-10-21; lane `lane_119f1fix`)

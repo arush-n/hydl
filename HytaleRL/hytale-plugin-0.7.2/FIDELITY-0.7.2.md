@@ -2373,5 +2373,53 @@ the role's capacity completes the step. Handshake: reset and 20 steps under cont
 
 Recertified (same evening): run 12 under 1F874DFC passed and was promoted (receipt
 `world-evidence-history/1F874DFC/publication-v12.json`), the recording tests pass, v8 re-frozen 9058D229, combat contract
-stamp `combat-contract-stamp-0e41e0d0` (repo b8a2a73; publication tests 12 passed). Not done: the quiet jump re-run on
-1F874DFC.
+stamp `combat-contract-stamp-0e41e0d0` (repo b8a2a73; publication tests 12 passed). The quiet jump re-run on 1F874DFC
+is done (the landing row above).
+
+## (aq) Melee timing in seconds, the thrust total, the dodge head (2026-10-22 evening; jar `1F874DFC`; receipts `HytaleRL/artifacts/fidelity_evidence/gen7_probes/melee_timing/`, `thrust_lunge/`, `dodge_seed570057_20261022.json`, `dodge_seed913771_20261022.json`)
+
+Native tick length. The melee run records each tick's `delta_seconds` (the engine's mean dt): 0.0339 to 0.0392 s per
+case, mean about 0.037, at load 3.2 to 8.1. The render steps 1/30 s. Native interactions advance by game seconds, so a
+live tick count is about 10 % lower than the render's for the same seconds (task #137). Compare in seconds: live is the sum
+of dt from the request to the event; the render is (step - 1) / 30. Both round up to their own tick, so a difference
+inside about -0.033 to +0.037 s is no difference.
+
+Steps count from the request (step 1); hit is the first step the target's health reads lower; finish is the first step the
+active slot reads -1 again. Render: `sim_melee.py` on a gen-7 render of bdd0a14 (same runs and distance 1.5; the sim commits since touch the jump
+and the token capacity, not the melee chains).
+
+| Case | Live hit / finish (steps) | Live seconds | Render hit / finish (steps) | Render seconds | Live - render (s) |
+|---|---|---|---|---|---|
+| sword Swing_Left | 9 / 14 | 0.302 / 0.482 | 9 / 14 | 0.267 / 0.433 | +0.035 / +0.049 |
+| sword Swing_Right | 9 / 14 | 0.289 / 0.475 | 9 / 14 | 0.267 / 0.433 | +0.022 / +0.042 |
+| sword Swing_Down | 16 / 22 | 0.569 / 0.781 | 19 / 26 | 0.600 / 0.833 | -0.031 / -0.052 |
+| daggers Swing_Left, Right | 7 / 9 | 0.226, 0.215 / 0.301, 0.295 | 9 / 10 | 0.267 / 0.300 | -0.041, -0.052 / +0.001, -0.005 |
+| daggers Stab_Left, Right | 7 / 9 | 0.235, 0.228 / 0.313, 0.308 | 9 / 10 | 0.267 / 0.300 | -0.032, -0.039 / +0.013, +0.008 |
+| mace Swing_Left, Right, Up_Left | 22 / 34 | 0.785, 0.791, 0.772 / 1.215, 1.241, 1.205 | 24 / 37 | 0.767 / 1.200 | +0.005 to +0.024 / +0.005 to +0.041 |
+| battleaxe Swing_Down | 17 / 33 | 0.588 / 1.187 | 19 / 34 | 0.600 / 1.100 | -0.012 / **+0.087** |
+| battleaxe Swing_Down_Left, Right | 16 / 30 | 0.557, 0.573 / 1.081, 1.048 | 19 / 34 | 0.600 / 1.100 | -0.043, -0.027 / -0.019, -0.052 |
+
+Read: counted in ticks, the live chains look 1 to 4 ticks short; in seconds every row is within about 1.5 render ticks
+(0.05 s), and most within one. The tick-count gaps in task #119 (sword Down, daggers, mace, battleaxe) are the long native
+ticks, not the chains. The sword Left/Right tick match is the exception that looks right only in ticks: in seconds live is
+about one tick longer. Residuals worth a second look: daggers hits about 0.04 s early on all four, sword Left/Right
+finishes about 0.045 s late, and the battleaxe Swing_Down finish +0.087 s (2.6 ticks). Status: MATCH in seconds within
+1.5 ticks, except the battleaxe Swing_Down finish (OPEN).
+
+Charged rows, not comparable yet. The live probe forces the native charge (`charge_sent`); the render can only hold. Mace
+charged (live, forced): starts and never finishes within 120 ticks (render, held 55 ticks: hit at step 66, finish 77).
+Battleaxe charged (live, forced on slot 0): the plain Swing_Down (16 / 30), no Downstrike; render (held): slots 4 then 5,
+finish 48, no hit. Both wait for the hold wire (#138).
+
+Thrust total. The live forced-charge thrust (charge 0.739, request r, both seeds identical; this receipt has no per-tick dt)
+first moves at r+27 and clears its slot at r+44. The render first moves at r+26 and clears at r+43 with the 0.601 total;
+the 0.7.2 asset sum 0.533 (event 0.043 + selector 0.267 + pad 0.223) would clear it at r+40. Lunge to end: 17 ticks live
+and on the render, 14 with 0.533. Long native ticks would shorten live counts, so live is, if anything, longer in seconds
+than the render. The 0.533 total is not applied; the 0.043 event times and the 0.75 hold speed are (row 5f in
+`sim/gen7/mechanics_072.md`). OPEN: where the native thrust's extra time comes from. The probe now records dt for the
+re-run under the hold wire.
+
+Dodge head (row 9). Both seeds, 121 ticks each: the advertised dodge set is {left, right} on every tick (offsets 2 and 3);
+a forward or back request is not legal (`applied_legal` False on the request tick); left and right apply. This matches
+`Constructs.dodge_action_head = ("left", "right")`. The receipt carries no agent position, so impulse and invulnerability
+timing are not re-measured here.
