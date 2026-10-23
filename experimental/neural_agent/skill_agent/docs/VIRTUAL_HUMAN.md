@@ -2397,7 +2397,8 @@ agent, updated each tick after the event log:
 - **the last interaction:** its tick and kind;
 - **chances not taken** (`spared`; added 2026-10-23, 26.5 item 5): a chance is a stretch of ticks when it was
   perceived, alive, within 3.75 blocks of me (the reach `affect.py` assumes for an attacker) and facing me (within 45
-  degrees [E]); it counts when the stretch ends with no hit from it. It is the decision layer's input for benevolence
+  degrees [E]); it counts when the stretch ends with no hit from it. Corrected 2026-10-23 (26.8): the stretch pauses
+  while the person is out of sight and ends only when it is seen out of reach or turned away. It is the decision layer's input for benevolence
   ("could have struck, did not"; `../../docs/MIDDLE_LAYER.md` section 11), counted every tick here because the
   decision layer reads at its own cadence.
 - Helping, trading and talking get their counts when the simulator publishes transfers and speech (12.3, 12.4).
@@ -2554,6 +2555,32 @@ Checks:
   and 7.7 against 7.1 and 6.4; batch 64, 30.2 and 28.0 against 29.3 and 26.5. The difference is inside the spread
   of one tree's own two rounds (up to 30% at batch 8), so step 9 adds no cost these runs can see; the token count is
   unchanged (356). The 95th percentiles (2 to 100 ms) follow the machine's load more than either tree.
+
+### 26.8 Corrected (2026-10-23): `spared` no longer counts my losing sight
+
+**The defect.** As built in 26.7, a chance ended on any tick the person was not seen in reach and facing me, and
+unseen counted as not facing. So a chance also ended, and counted as spared, when I looked away or the person left my
+view. Measured on the duel (8 agents of random play against a chaser, 300 ticks): 54 chances closed, 18 by a hit from
+the opponent and 36 because the agent lost sight of it (median 5 ticks, 0.17 s; 28 shorter than 15 ticks). All 36
+`spared` counts were the agent's own gaze, against an opponent that attacked throughout: the benevolence rule would have
+read the reverse of the truth.
+
+**The rule now** (the design's own intent, "could have struck, did not"):
+- a chance opens on a tick the person is seen alive, in reach and facing me, and closes on a tick it is seen and is
+  not;
+- while the person is out of sight the chance pauses: losing sight is my doing, not its choice;
+- a hit from it during the chance, its first tick and a pause included, takes the chance (it closes unspared);
+- a chance left open from an earlier meeting (unseen for longer than the meeting gap) is dropped uncounted.
+
+**Checked.** The same duel run: 0 spared (the chaser never spared the agent); one chance closed, by a hit. Unit tests:
+the three whose "turned away" was modelled as unseen now see the person turned away; three new (a pause counts once; a
+hit from out of sight takes the paused chance; a chance from an earlier meeting is dropped); `test_sa_social.py` 68
+passed. Gate (two passes, against the 6acadad baseline): pass 1 the same 11 failing names (1,491 passed: the 3
+new), pass 2 the same 30.
+
+**Still open** (not changed; recorded for the owner): a chance closed because the person died while facing me counts
+as spared, though it did not choose; and a chance of a single tick counts, though no attack lands in a tick. Neither
+appeared in the duel run; a minimum length (an attack's windup) and "seen alive" on closing are the fixes if they do.
 
 ## 27. The world's tick length (DESIGNED and APPROVED 2026-10-23, with the ruling of 27.5)
 

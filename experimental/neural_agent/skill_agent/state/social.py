@@ -11,7 +11,8 @@ and they are never written (15.3: "interaction facts and reputation are computed
 - **fights:** the hits taken from it and dealt to it, counts and amounts, from the event log's ``damage_taken`` and
   ``damage_dealt``, each inferred until the simulator says who hit whom (S11); and who struck first in the current
   meeting;
-- **spared:** the chances to strike me that it did not take (a chance is in reach and facing me; see :func:`update`);
+- **spared:** the chances to strike me that it did not take (a chance is seen in reach and facing me, and pauses while
+  it is out of sight; see :func:`update`);
 - **the last interaction:** its tick and the event's kind.
 
 The table holds ``SOCIAL_SLOTS`` records per agent. When it is full, a newcomer replaces the record seen longest ago
@@ -223,12 +224,18 @@ def update(state: SocialState, seen_ids: jax.Array, seen_world: jax.Array | None
     rec = rec._replace(
         last_interaction=jnp.where(interacted, now, rec.last_interaction),
         last_kind=jnp.where(interacted, jnp.take_along_axis(log.kind, latest, axis=1), rec.last_kind))
-    # The chances to strike me (``spared``), after the sightings and the events. A chance is open from the first tick
-    # the person is seen in reach and facing me (a newcomer's included) until a tick it is not. A hit from it during the
-    # chance (its first tick included) means the chance was taken: the chance closes unspared.
-    chance = jnp.any(match & seen_chance[:, :, None], axis=1) | (hit & jnp.take_along_axis(seen_chance, source, axis=1))
-    struck = rec.chance_hit | ((rec.chance_open | chance) & got)
-    rec = rec._replace(spared=rec.spared + (rec.chance_open & ~chance & ~struck).astype(jnp.int32),
+    # The chances to strike me (``spared``), after the sightings and the events. A chance opens on a tick the person is
+    # seen in reach and facing me (a newcomer's included) and closes on a tick it is seen and is not. While the person
+    # is out of sight the chance pauses: losing sight of it is my doing, not its choice. A hit from it during the chance
+    # (its first tick and a pause included) means the chance was taken: it closes unspared. A chance left open from an
+    # earlier meeting is dropped uncounted.
+    seen_now = seen | hit  # perceived this tick, a newcomer included
+    chance_seen = (jnp.any(match & seen_chance[:, :, None], axis=1)
+                   | (hit & jnp.take_along_axis(seen_chance, source, axis=1)))
+    was_open, was_hit = rec.chance_open & ~new_meeting & ~hit, rec.chance_hit & ~new_meeting & ~hit
+    chance = jnp.where(seen_now, chance_seen, was_open)
+    struck = was_hit | ((was_open | chance) & got)
+    rec = rec._replace(spared=rec.spared + (was_open & ~chance & ~struck).astype(jnp.int32),
                        chance_open=chance, chance_hit=struck & chance)
     return SocialState(rec, unrecorded)
 
