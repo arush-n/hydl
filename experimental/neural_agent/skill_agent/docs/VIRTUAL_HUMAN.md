@@ -566,7 +566,7 @@ approach. Missing:
 | 4 | The event log and its tokens; the activity counters and levels. DESIGNED and APPROVED 2026-10-22; BUILT (section 21.6; the event tokens wait for step 7) | 10.6, 11.1, 16.6, 21 |
 | 5 | The long-term spatial memory: places, routes, coordinates. DESIGNED and APPROVED 2026-10-22 (section 22) | 10.11, 16.4, 22 |
 | 6 | Hearing: the sound registry, the hearing rule, heard entries in the stores, the orienting reflex (the token reads zero until S12) | 17 |
-| 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry (with it the status token's identity: which effect, its source entity, its damage cause, all in the observation and dropped today; `PERCEPTION.md` section 10.5), places, the proficiencies | 11.1 to 11.4, 11.6, 16.6, 17.8 |
+| 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry (with it the status token's identity: which effect, its source entity, its damage cause, all in the observation and dropped today; `PERCEPTION.md` section 10.5), places, the proficiencies. First part DESIGNED 2026-10-22 (section 24: status identity, places, events), waiting on the owner's yes | 11.1 to 11.4, 11.6, 16.6, 17.8, 24 |
 | 8 | The formatted views (typed facts, words) and the recording | 10.3, 10.9 |
 | 9 | The social section (approved, 15.3) | 12, 15.3 |
 | W | World interaction: breaking, placing, using, picking up, and the commands (crafting, tools, items); the perception of break progress and items on the ground. DESIGNED and APPROVED 2026-10-22 (section 23); the perception follows the simulator's asks, the skills train when training resumes | 23 |
@@ -2016,6 +2016,82 @@ shelter, cook a meal, from these skills and commands.
 - **The game's facts**: tool power and quality per gather type, bench recipes and the item mechanics are from the
   catalogue's survey of the 0.7.2 archive (2026-10-17).
 
+## 24. Step 7, first part: the tokens for what is built (DESIGNED 2026-10-22, waiting on the owner's yes)
+
+The owner, 2026-10-22: "continue". Step 7 of section 13 is the encoder's new tokens. This first part takes the ones
+whose data exists now (steps 4 and 5 and the status-effect registry); the rest waits for its source. Nothing is built
+until the owner's yes.
+
+### 24.1 What exists
+
+- **13 token types** (`contract/tokens_v3.py`), 340 tokens an agent on 0.7.2. The trunk's parameters do not depend on
+  the counts, and a new type touches no other type's weights (section 14). No trunk is trained on v3 yet, so nothing
+  needs migrating.
+- **The status token** knows an effect's timing, per-cycle effects and flag bits, but not which effect it is. The
+  registry to say so is built (`perception/effects.py`, 260 effects, 14 properties and a 64-number description each,
+  keyed by the id the observation publishes). The built table sits in a temporary folder (24.5 item 3).
+- **The long-term places** (step 5): `places.relative` gives each place in the body frame.
+- **The event log** (step 4): `events.recent` gives the last events, oldest first.
+- **Not yet with data:** sound (S12, step 6), feelings toward others as written entries (step 9), proficiencies (the
+  learning rates are future, 16.6), break progress and items on the ground (S5, S13, asked).
+
+### 24.2 The design
+
+**The status token learns its effect** (11.4). After the flag bits, before `marked` (section 14, rule 1): the effect's
+14 registry properties, its 64-number description and `effect_known`. The state layer looks the id up with the
+effects table, as it looks items up with the content registry. 22 columns become 101.
+
+**A `place` token, 8 slots** (11.6; section 22). Each: the `where` block of the place, its kinds (5 bits), strength,
+marked, the visits (log), the time since the last visit (log), and whether the agent is inside it. Which 8: marked
+places first, then by `strength / (1 + distance / 16)` [E], so near and strong places win.
+
+**An `event` token, 8 slots** (11.1; section 21). The last 8 events, each: its kind (10 bits), its age (log ticks), its
+amount, inferred or observed, the `where` block of where it happened, and whether the other party is a known entity
+now. The trunk relates an event to an entity token by attention over their positions.
+
+**Not in this part:** the `sound` type (step 6, when S12 publishes sounds), the trimmed emotion token (with step 9's
+relationship records, which replace the feelings it carries), the proficiencies (when their learning rates are set),
+break progress (a reserve column of the block candidates, task 11) and items on the ground (entity rows, task 11).
+
+**Cost.** 16 more tokens an agent (356 on 0.7.2) and a wider status row. Measured at batch 1, 8 and 64 before it is
+committed, against E8's gate (`PERCEPTION.md` 10.2).
+
+### 24.3 Files
+
+- `contract/tokens_v3.py`: the status columns, `PlaceTokenV3`, `EventTokenV3`, their capacities.
+- `state/senses.py`: the status identity through the effects table (a new `effects=` input beside `tables=`).
+- `state/layer.py`: the place and event rows from `places.relative` and `events.recent`, packed with the rest.
+- `bench/encoding_audit.py`: the new types counted. Tests for each; the tandem test (state layer and trunk together).
+
+### 24.4 How it is verified
+
+1. **Each new column decodes** to a known value on synthetic rows (the E5 standard, `PERCEPTION.md` 10.2).
+2. **On the Region world**, the encoding audit shows the place, event and status columns carrying information.
+3. **The trunk runs on them** (the tandem test) and the cost stays within E8's gate.
+4. **The package gate**, both passes.
+
+### 24.5 Decisions for the owner
+
+1. **Build this part now**, leaving sound, the trimmed emotion token and the proficiencies for their steps?
+   Recommended: yes.
+2. **8 place tokens and 8 event tokens?** Recommended: yes, as configurations (section 14).
+3. **Where the built effects table lives.** Recommended: in the private folder, beside the content registry
+   (`agent_skills/training_runs/perception/`), built once from the game's archive (it is derived from the game's
+   assets, so it stays out of the repository). The alternative is rebuilding it each run (about a minute).
+
+### 24.6 What grounds it
+
+- **Identity by description.** The owner's perception ruling (2026-10-19: "description vectors now") and the content
+  registry's practice: a thing is described by its properties and a projected description, so a mod's new effect
+  needs no retraining.
+- **Places as a few tokens.** The cognitive map of 22.6 (Tolman 1948; O'Keefe and Nadel 1978): the body needs the
+  relevant places relative to itself, not the whole map; the decision layer plans over the rest (step 8).
+- **The last few events.** Generative Agents retrieves memories by recency among other scores (Park et al. 2023), and
+  working memory holds only a few items at once (Cowan 2001, about four chunks; recalled). The ring keeps 32; the body
+  reads 8.
+- **Sets of things as tokens.** The trunk already reads sets by attention, after Perceiver and object files (section
+  18's sources); places and events are two more such sets.
+
 ## Sources
 
 - Steel, P. (2007). The nature of procrastination. Psychological Bulletin 133(1), 65-94.
@@ -2120,3 +2196,4 @@ shelter, cook a meal, from these skills and commands.
   https://voyager.minedojo.org (press accounts). Sutton, R. S., Precup, D., and Singh, S. (1999), Between MDPs and
   semi-MDPs, Artificial Intelligence 112, 181-211 (abstract). Gibson, J. J. (1979), The Ecological Approach to Visual
   Perception (recalled).
+- Section 24.6: Cowan, N. (2001), The magical number 4 in short-term memory, Behavioral and Brain Sciences 24 (recalled).
