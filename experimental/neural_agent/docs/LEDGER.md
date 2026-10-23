@@ -1396,3 +1396,8 @@ result:
 - **397f986, the Shaman.** `tasks/shaman_controller.py` is an opt-in scripted Trork_Shaman for the duel's entity 1, throwing the gen-7 profile `trork_shaman_rubble`. Measured: throws 4.2 to 4.7 s apart (live 2.7 to 10 s), every hit 16.
 - **Gates.** neural_agent: 133 passed at 397f986, 151 with `test_na_relations` (18). tests/sim on the gen-7 integration: 467 -> 493 -> 500 -> 504.
 verdict: COMMITTED; not pushed. Tests are local (gitignored).
+
+## 2026-10-23 — skill_agent: the plan's statuses brought up to date (`skill_agent/docs/VIRTUAL_HUMAN.md` section 13)
+command: owner, 2026-10-23: "continue with the remaining work".
+result: The plan table now says what is built and what waits: step 2 BUILT (19.8); the event and place tokens built with step 7 (24.7); step 7's rest waits (sound on S12; the trimmed emotion token on 26.5 item 1, which keeps the rule's feelings, marked provisional; the proficiencies on 16.6's future learning constants). With S5 read and the tick fix in, every approved step that has its inputs is built; what remains waits on S12, S13, S14 or a ruling.
+verdict: COMMITTED (docs); not pushed.
