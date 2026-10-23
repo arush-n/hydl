@@ -126,7 +126,8 @@ combiner writes statuses, items 8 and 9 change nothing in items 1 to 7. Ticks ar
    action mask are the combiner's to check, so the executor passes the widest finite box and every scope.
    A request that fails is still sent, so the combiner rejects it and item 8 reacts; ``invalid_requests``
    counts it. The lanes' requests and every other agent's live requests are written as one ``requests``
-   section by its writer "jev": one document version per decision.
+   section by its writer "jev": one document version per decision, and one more when the decision also writes the
+   ``writes`` section (item 10); each section write is one version.
 
 Companions (2026-10-20, task #111). An :class:`Interrupt` may carry ``beside``: companion requests ``(verb, params)``
 issued beside its own request while its goal is in force, so two requests of one agent on disjoint scopes both run
@@ -174,6 +175,17 @@ scratchpad writes them into the ``progress`` of their request's ``accepted`` and
 (``shared_state.views.skills.lane_reports``). A Report condition reads one report by name and falls back to the belief
 when the report is absent; the mapping is in the class docstring. ``Not``, ``AllOf`` and ``Interrupt`` take a Report as
 they take a Predicate. A program that names no Report decides as before.
+
+Writes (2026-10-22, item 10; the owner's rulings 1 to 3). With a scratchpad bound, each decision also writes the
+``writes`` section: one ``WriteRecord`` per write of ``remember`` (``jev/remember.py``). A program step whose goal
+request targets an entity or a place writes ``remember = p`` on that key when the step is issued, p the goal's
+priority clipped to [0, 1] (the mapping of item 9's urgency); a goal with no slot writes nothing. The run ends by
+done, by an abort (a withdrawn request, or an information request) or by a replacement (a restart), and then writes
+``remember = 0`` on each key it wrote, unless ``Program.keep``. A write's result comes back in the skills section
+as a ``WriteStatus`` at the next decision. A refusal as ``full`` ejects the lowest-valued entry this layer wrote that
+no live request refers to, and retries the write at the next decision; when every entry is referenced, the LLM is
+asked (a ``LaneInformationRequest`` for the step's verb). At most ``WRITES_PER_AGENT_TICK`` (8) writes go out per lane
+per decision; the rest wait for the next one.
 """
 
 from __future__ import annotations
@@ -224,7 +236,16 @@ from experimental.neural_agent.requests import (
     rejection_code,
     validate,
 )
-from experimental.neural_agent.shared_state import SECTION_WRITERS, RequestsSection, SharedState
+from experimental.neural_agent.jev.remember import REMEMBER, RememberLedger, WriteOp, key_of, remember_value
+from experimental.neural_agent.shared_state import (
+    SECTION_WRITERS,
+    WRITES_PER_AGENT_TICK,
+    RequestsSection,
+    SharedState,
+    WriteRecord,
+    WritesSection,
+    WriteStatus,
+)
 from experimental.neural_agent.shared_state.views.skills import lane_reports
 from experimental.neural_agent.tasks.composition import (
     EVADER_CONSTRAINT,
@@ -555,10 +576,16 @@ class Interrupt:
 
 @dataclass(frozen=True)
 class Program:
-    """1 to MAX_PROGRAM_STEPS steps run in order, and the interrupts that pre-empt them."""
+    """1 to MAX_PROGRAM_STEPS steps run in order, and the interrupts that pre-empt them.
+
+    ``keep`` (default False): the run keeps the entries it wrote into the agents' written state when it ends, instead
+    of releasing them with ``remember = 0`` (module docstring, item 10). The executive's goal schema has no target to
+    carry it (``contracts.GoalSpec`` has none), so it lives on the program the goal's intent is read into.
+    """
 
     steps: tuple[ProgramStep, ...]
     interrupts: tuple[Interrupt, ...] = ()
+    keep: bool = False
 
     def __post_init__(self) -> None:
         steps, interrupts = tuple(self.steps), tuple(self.interrupts)
@@ -570,6 +597,8 @@ class Program:
             raise TypeError("Program.interrupts must hold Interrupt values")
         object.__setattr__(self, "steps", steps)
         object.__setattr__(self, "interrupts", interrupts)
+        if not isinstance(self.keep, bool):
+            raise TypeError(f"Program.keep must be a bool, got {type(self.keep).__name__}")
 
 
 #: The composition executive's conditional goal: evade while damaged, at the evader's priority.
@@ -768,6 +797,12 @@ class ProgramExecutor:
             ("advance", "resample_step", "raise_urgency", "drop", "information_request"), 0
         )
         self.information_requests: list[LaneInformationRequest] = []
+        # The remember policy (module docstring, item 10): the ledger, each lane's run counter, the next write id and
+        # the writes each lane issued at the last decision, whose results come back at the next one.
+        self._run = np.zeros(lanes, dtype=np.int64)
+        self._remember = RememberLedger(lanes)
+        self._next_write = np.zeros(lanes, dtype=np.int64)
+        self._issued_writes: list[dict[int, WriteOp]] = [{} for _ in range(lanes)]
 
     # ------------------------------------------------------------------ lane state, for tests and reports
 
@@ -864,6 +899,8 @@ class ProgramExecutor:
             for status in self.scratchpad.skills.statuses:
                 history.setdefault(status.agent, []).append(status)
 
+        if bound:
+            self._settle_writes(tick, self.scratchpad.skills.write_statuses)
         for lane in range(lanes):
             program = self._programs[lane]
             steps = program.steps
@@ -959,6 +996,8 @@ class ProgramExecutor:
         if fresh:
             if self._started[lane]:
                 self.restarts[lane] += 1
+                self._release(lane)  # the program that wrote its entries is replaced
+            self._run[lane] += 1
             self._step[lane] = 0
             self._elapsed[lane] = 0.0
             self._age[lane] = 0.0
@@ -1004,6 +1043,7 @@ class ProgramExecutor:
         self._elapsed[lane] = 0.0
         if k + 1 == step_count:
             self.programs_finished[lane] += 1
+            self._release(lane)
 
     def _desired(
         self, lane: int, features: np.ndarray, known: np.ndarray, code: int = -1, reports: Mapping[str, float] | None = None
@@ -1110,6 +1150,7 @@ class ProgramExecutor:
             elif isinstance(action, Drop):
                 live.pop(action.request_id, None)
                 self._withdrawn[lane] = True
+                self._release(lane)  # aborted
             elif isinstance(action, InformationRequest):
                 request = requests[0]
                 self.information_requests.append(
@@ -1119,7 +1160,41 @@ class ProgramExecutor:
                 )
                 live.clear()
                 self._withdrawn[lane] = True
+                self._release(lane)  # aborted
         return ended
+
+    def _release(self, lane: int) -> None:
+        """The lane's program run ends (done, aborted or replaced): release the entries it wrote, unless it keeps them."""
+
+        self._remember.release(lane, int(self._run[lane]), self._programs[lane].keep)
+
+    def _settle_writes(self, tick: int, statuses: Sequence[WriteStatus]) -> None:
+        """Read the results of the writes issued at the last decision and apply them (module docstring, item 10)."""
+
+        by_id = {(status.agent, status.write_id): status for status in statuses}
+        for lane in range(self._lanes):
+            self._remember.requeue(lane, int(self._run[lane]))  # refused last time: retried now
+            live = {key_of(request) for request in self._live[lane].values()} - {None}
+            for write_id, op in self._issued_writes[lane].items():
+                status = by_id.get((lane, write_id))
+                if status is None:
+                    continue
+                reason = None if status.kind == "write_applied" else status.reason
+                if self._remember.on_result(lane, op, reason, live):
+                    self._ask_for_room(tick, lane, op)
+            self._issued_writes[lane] = {}
+
+    def _ask_for_room(self, tick: int, lane: int, op: WriteOp) -> None:
+        """Ask the LLM: the table is full and every entry this layer wrote is still referenced (item 10)."""
+
+        verb = self._skill_ids[self._step_skill[lane][op.program_step]]
+        self.information_requests.append(
+            LaneInformationRequest(
+                tick, lane, op.executive_version, op.program_step, verb,
+                "the written table is full and every entry this layer wrote is still used by a live step; "
+                "say which entry to forget, or whether the table should be larger",
+            )
+        )
 
     def _issue_requests(
         self,
@@ -1212,11 +1287,32 @@ class ProgramExecutor:
                     if self.first_invalid_request is None:
                         self.first_invalid_request = reason
                 live[request.request_id] = request
+                if not interrupt and k < len(self._programs[lane].steps) and (key := key_of(request)) is not None:
+                    self._remember.hold(lane, int(self._run[lane]), key, priority, goal_slot, int(version[lane]), k)
         state = self.scratchpad
         others = tuple(request for request in state.requests.live if not 0 <= request.agent < self._lanes)
         mine = tuple(request for live in self._live for request in live.values())
         section = RequestsSection(live=others + mine, limit=state.requests.limit)
         state.write("requests", section, writer=SECTION_WRITERS["requests"], tick=tick)
+        records: list[WriteRecord] = []
+        for lane in range(self._lanes):
+            issued: dict[int, WriteOp] = {}
+            for op in self._remember.take(lane, WRITES_PER_AGENT_TICK):
+                write_id = int(self._next_write[lane])
+                self._next_write[lane] += 1
+                issued[write_id] = op
+                entity = op.key[1] if op.key[0] == "entity" else None
+                place = op.key[1] if op.key[0] == "place" else None
+                records.append(
+                    WriteRecord(
+                        id=write_id, agent=lane, tick=tick, name=REMEMBER, value=op.value, entity=entity,
+                        place=place, goal_slot=op.goal_slot, executive_version=op.executive_version,
+                        program_step=op.program_step,
+                    )
+                )
+            self._issued_writes[lane] = issued
+        kept = tuple(record for record in state.writes.records if not 0 <= record.agent < self._lanes)
+        state.write("writes", WritesSection(records=kept + tuple(records)), writer=SECTION_WRITERS["writes"], tick=tick)
 
     def _executive_slots(self, arrays: ExecutiveArrays) -> dict[int, np.ndarray]:
         """Return, per used skill index, int32[B]: the highest-priority valid slot naming it, or -1."""

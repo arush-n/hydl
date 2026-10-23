@@ -1,4 +1,4 @@
-"""The S_t document: six sections, one writer each, versioned; the section types and writers table.
+"""The S_t document: seven sections, one writer each, versioned; the section types and writers table.
 
 Split out of the single ``shared_state.py`` on 2026-10-18 without changes; the package docstring
 (``shared_state/__init__.py``) is the design record.
@@ -35,6 +35,9 @@ from .sections.decision import (
 from .sections.requests import (
     RequestsSection,
 )
+from .sections.writes import (
+    WritesSection,
+)
 from .sections.skills import (
     SkillsSection,
 )
@@ -48,6 +51,7 @@ _SECTION_TYPES: dict[str, type] = {
     "belief": BeliefSection,
     "decision": DecisionSection,
     "requests": RequestsSection,
+    "writes": WritesSection,
     "skills": SkillsSection,
     "events": EventsSection,
 }
@@ -57,7 +61,7 @@ _SECTION_TYPES: dict[str, type] = {
 
 
 class SharedState:
-    """The scratchpad S_t: six sections, each with one writer, and a document version.
+    """The scratchpad S_t: seven sections, each with one writer, and a document version.
 
     The constructor builds a document (``from_dict`` uses it); after that the document changes
     only through :meth:`write`. Sections are immutable values that a write replaces whole.
@@ -85,6 +89,7 @@ class SharedState:
         belief: BeliefSection | None = None,
         decision: DecisionSection | None = None,
         requests: RequestsSection | None = None,
+        writes: WritesSection | None = None,
         skills: SkillsSection | None = None,
         events: EventsSection | None = None,
     ) -> None:
@@ -93,6 +98,7 @@ class SharedState:
             "belief": belief,
             "decision": decision,
             "requests": requests,
+            "writes": writes,
             "skills": skills,
             "events": events,
         }
@@ -150,6 +156,12 @@ class SharedState:
         """The requests section (writer ``"jev"``)."""
 
         return self._sections["requests"]
+
+    @property
+    def writes(self) -> WritesSection:
+        """The writes section (writer ``"jev"``)."""
+
+        return self._sections["writes"]
 
     @property
     def skills(self) -> SkillsSection:

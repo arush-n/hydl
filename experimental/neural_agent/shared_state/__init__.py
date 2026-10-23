@@ -95,6 +95,7 @@ from ._common import (
     SECTION_NAMES,
     SECTION_WRITERS,
     STATUS_HISTORY,
+    WRITES_PER_AGENT_TICK,
 )
 from .document import (
     SharedState,
@@ -126,6 +127,11 @@ from .sections.executive import (
 )
 from .sections.requests import (
     RequestsSection,
+)
+from .sections.writes import (
+    WriteRecord,
+    WriteStatus,
+    WritesSection,
 )
 from .sections.skills import (
     SkillsSection,
@@ -162,6 +168,10 @@ __all__ = [
     "SHARED_STATE_JSON_SCHEMA",
     "EXECUTIVE_SECTION_JSON_SCHEMA",
     "STATUS_HISTORY",
+    "WRITES_PER_AGENT_TICK",
+    "WriteRecord",
+    "WriteStatus",
+    "WritesSection",
     "BeliefLane",
     "BeliefSection",
     "DecisionRecord",

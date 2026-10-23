@@ -25,14 +25,15 @@ from experimental.neural_agent.contracts import (
 
 
 
-SECTION_NAMES: tuple[str, ...] = ("executive", "belief", "decision", "requests", "skills", "events")
-"""The six sections of S_t, in document order."""
+SECTION_NAMES: tuple[str, ...] = ("executive", "belief", "decision", "requests", "writes", "skills", "events")
+"""The seven sections of S_t, in document order."""
 SECTION_WRITERS: Mapping[str, str] = MappingProxyType(
     {
         "executive": "llm",
         "belief": "belief",
         "decision": "jev",
         "requests": "jev",
+        "writes": "jev",
         "skills": "skills",
         "events": "runtime",
     }
@@ -49,6 +50,9 @@ OUTCOME_HISTORY: int = 16
 """Default bound of ``SkillsSection.outcomes``."""
 REQUEST_LIMIT: int = 16
 """Default bound of ``RequestsSection.live`` per agent: L = 4 program steps x M = 4 concurrent requests."""
+WRITES_PER_AGENT_TICK: int = 8
+"""Writes of one agent at one tick (``WritesSection``). Equal to the skill layer's ``WRITE_SLOTS``
+(``skill_agent/state/written.py``); a test pins the two equal."""
 STATUS_HISTORY: int = 256
 """Default bound of ``SkillsSection.statuses`` (the module docstring gives the sizing)."""
 LLM_REJECTIONS: int = 5

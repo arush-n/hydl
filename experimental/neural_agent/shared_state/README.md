@@ -1,6 +1,6 @@
 # shared_state/ — the scratchpad S_t
 
-One versioned document between the LLM, the decision layer and the skills: six sections, one writer each,
+One versioned document between the LLM, the decision layer and the skills: seven sections, one writer each,
 a closed JSON schema, and one view per reader. The design record is the package docstring
 (`__init__.py`); the decisions behind it are `../docs/SYSTEM_ONE.md` sections 8.10 and 9.10 to 9.13.
 Import path: `experimental.neural_agent.shared_state` (unchanged by the 2026-10-18 split into a package).
@@ -13,7 +13,9 @@ Import path: `experimental.neural_agent.shared_state` (unchanged by the 2026-10-
 | `sections/belief.py` | 150 | `BeliefLane`, `BeliefSection.from_belief`. Writer: the session, from the belief module. |
 | `sections/decision.py` | 250 | `GoalInForce`, `DecisionRecord`, `InformationRequest` (questions to the LLM), `GoalReading` (how each goal was understood), `DecisionSection`. Writer: the decision layer, through the session's scribe. |
 | `sections/requests.py` | 153 | `RequestsSection`: the live typed requests to the skills. Writer: the decision layer. |
-| `sections/skills.py` | 114 | `SkillsSection`: active skills, bounded outcomes, the bounded status stream. Writers: the lower layer (statuses) and the session (active, outcomes). |
+| `sections/writes.py` | | `WriteRecord` (one write: name, value, one key, provenance), `WritesSection` (at most 8 per agent per tick), `WriteStatus` (`write_applied` or `write_refused(reason)`). Writer of the section: the decision layer; writer of the statuses: the skill layer. BUILT 2026-10-22. |
+| `skill_writes.py` | | The adapter to the skill layer's write path (`skill_agent/state/written.py`, imported here by design): `writes_for_tick` gives the `Write` objects of a tick; `record_write_results` turns the host reasons and the device's applied flags into write statuses. Not imported by the rest of `shared_state`. |
+| `sections/skills.py` | 114 | `SkillsSection`: active skills, bounded outcomes, the bounded status stream, and the write statuses (`write_statuses`, newest `STATUS_HISTORY`). Writers: the lower layer (statuses, write statuses) and the session (active, outcomes). |
 | `sections/events.py` | 69 | `EventsSection`: active interrupt events per lane. Writer: the runtime through the session. |
 | `document.py` | 243 | `SharedState`: the document, `write(section, value, writer=, tick=)`, versions, JSON round trip, `_snapshot`. |
 | `views/briefing.py` | 447 | The LLM's view as typed rows: per-NPC situation in words, goal in force with its condition as the decision layer read it, current request with its latest status, last outcome, events; questions; rejections; status counts; the delta since the LLM's version. |
@@ -22,7 +24,7 @@ Import path: `experimental.neural_agent.shared_state` (unchanged by the 2026-10-
 | `views/jev.py`, `views/skills.py` | 128, 58 | The typed view the decision layer reads; the payload view the skills read. |
 | `writers.py` | 238 | `SessionScribe` (belief, events, skills, decision at the host cadence; outcomes on report), `information_request_record`, `goal_reading`. |
 
-Gates: `test_na_shared_state.py`, `test_na_briefing.py`, `test_na_requests.py` (views of the stream), the
+Gates: `test_na_shared_state.py`, `test_na_briefing.py`, `test_na_requests.py` (views of the stream), `test_na_writes.py` (the writes section, the remember policy, the device path), the
 lower layer's `test_sa_scratchpad.py` and `test_sa_joint.py`, `test_na_session.py` (the scribe in the loop).
 
 ## The LLM's view

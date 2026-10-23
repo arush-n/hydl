@@ -109,6 +109,21 @@ explicit, typed and inspectable, and it is where real LLM wording will be learne
   typed args with presence flags (position[3], direction[3], entity, scalars[4] named by the verb),
   mode (parallel | after id | interrupt), urgency, confidence, priority, goal slot, executive version,
   program step. Positions are absolute world coordinates, directions unit vectors, in the game's frame.
+- `writes` section (writer: the decision layer; BUILT 2026-10-22, the owner's rulings 1 to 3): one `WriteRecord` per
+  write = id, agent, tick, writer `decision`, name (`remember`), value, one key (an entity id or a world position),
+  goal slot, executive version, program step. At most 8 records per agent per tick; a ninth is refused, not dropped.
+  The skill layer applies them (`skill_agent/state/written.py`: `lower`, then `apply`); the adapter is
+  `shared_state/skill_writes.py` (`writes_for_tick`, `record_write_results`). Each write's result comes back in the
+  `skills` section as a `WriteStatus`: `write_applied`, or `write_refused(reason)` with the host's reason
+  (`unknown field`, `wrong writer`, `out of range`, `bad key`, `two keys`, `too many writes this tick`) or `full`
+  (the device table had no free entry). Policy (`jev/remember.py`, `jev/programs.py` item 10): (1) a program step
+  whose request targets an entity or a place writes `remember = p` on that key when the step starts, with p the
+  goal's priority clipped to [0, 1], the mapping the request's urgency uses; a goal with no slot (priority 0) writes
+  nothing, because a write of 0 ejects. (2) The program run that wrote a key ends by done, aborted (a withdrawn request)
+  or replaced (a restart), and writes `remember = 0` on each key it wrote, unless `Program.keep` (default False) keeps
+  them. (3) On `full`: the lowest-valued entry this layer wrote that no live request refers to is ejected, and the
+  refused write is retried at the next decision; when every entry is referenced, the LLM is asked (a
+  `LaneInformationRequest` in the decision section, verb of the step, reason `full`).
 - Status stream in the `skills` section (writer: the dispatcher): accepted | rejected(reason) |
   deferred(conflict) | running | done(outcome) | aborted(reason), progress signals per the verb's
   contract, and per tick which requests drove which heads.

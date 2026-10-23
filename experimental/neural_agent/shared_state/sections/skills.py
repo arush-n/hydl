@@ -36,6 +36,11 @@ from ..sections.requests import (
     _status_from_dict,
     _status_to_dict,
 )
+from .writes import (
+    WriteStatus,
+    write_status_from_dict,
+    write_status_to_dict,
+)
 
 
 # ---- skills section: written by the dispatcher and the skills ----
@@ -55,6 +60,8 @@ class SkillsSection:
         statuses: The status stream of the requests (section 9.10), ``RequestStatus`` records of
             every agent, newest last. Building the section keeps only the newest ``status_limit``.
         status_limit: The bound, at least 1. Default ``STATUS_HISTORY`` (256).
+        write_statuses: The result of each write of the decision layer (``writes`` section), ``WriteStatus``
+            records, newest last. Kept to the newest ``STATUS_HISTORY``.
     """
 
     active: tuple[str, ...] = ()
@@ -63,6 +70,7 @@ class SkillsSection:
     outcome_limit: int = OUTCOME_HISTORY
     statuses: tuple[RequestStatus, ...] = ()
     status_limit: int = STATUS_HISTORY
+    write_statuses: tuple[WriteStatus, ...] = ()
 
     def __post_init__(self) -> None:
         """Validate the fields, store ``runtime`` as JSON values and keep the newest outcomes and statuses."""
@@ -83,6 +91,8 @@ class SkillsSection:
         object.__setattr__(self, "status_limit", status_limit)
         statuses = _instances(self.statuses, RequestStatus, "SkillsSection.statuses")
         object.__setattr__(self, "statuses", statuses[-status_limit:])
+        write_statuses = _instances(self.write_statuses, WriteStatus, "SkillsSection.write_statuses")
+        object.__setattr__(self, "write_statuses", write_statuses[-STATUS_HISTORY:])
 
     def to_dict(self) -> dict[str, Any]:
         """Return the JSON-shaped mapping; an outcome is written by its SkillOutcome name."""
@@ -94,6 +104,7 @@ class SkillsSection:
             "outcome_limit": self.outcome_limit,
             "statuses": [_status_to_dict(status) for status in self.statuses],
             "status_limit": self.status_limit,
+            "write_statuses": [write_status_to_dict(status) for status in self.write_statuses],
         }
 
     @classmethod
@@ -110,5 +121,6 @@ class SkillsSection:
             outcome_limit=mapping["outcome_limit"],
             statuses=tuple(_status_from_dict(item) for item in mapping["statuses"]),
             status_limit=mapping["status_limit"],
+            write_statuses=tuple(write_status_from_dict(item) for item in mapping["write_statuses"]),
         )
 

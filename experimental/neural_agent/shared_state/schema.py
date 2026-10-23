@@ -211,6 +211,31 @@ _STATUS_SCHEMA = _object_schema(
         "signal": {"type": "string"},
     }
 )
+_WRITE_RECORD_SCHEMA = _object_schema(
+    {
+        "id": _count_schema(),
+        "agent": _count_schema(),
+        "tick": _count_schema(),
+        "writer": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1},
+        "value": {"type": "number"},
+        "entity": {"type": ["integer", "null"], "minimum": 0, "maximum": INT32_MAX},
+        "place": _triple_schema({"type": "number"}),
+        "goal_slot": {"type": "integer", "minimum": -1, "maximum": MAX_GOALS - 1},
+        "executive_version": _count_schema(),
+        "program_step": _count_schema(),
+    }
+)
+_WRITES_SECTION_SCHEMA = _object_schema({"records": {"type": "array", "items": _WRITE_RECORD_SCHEMA}})
+_WRITE_STATUS_SCHEMA = _object_schema(
+    {
+        "agent": _count_schema(),
+        "write_id": _count_schema(),
+        "tick": _count_schema(),
+        "kind": {"type": "string", "minLength": 1},
+        "reason": {"type": "string"},
+    }
+)
 _SKILLS_SECTION_SCHEMA = _object_schema(
     {
         "active": {"type": "array", "items": {"type": "string", "minLength": 1}},
@@ -232,6 +257,7 @@ _SKILLS_SECTION_SCHEMA = _object_schema(
         "outcome_limit": _count_schema(1),
         "statuses": {"type": "array", "items": _STATUS_SCHEMA},
         "status_limit": _count_schema(1),
+        "write_statuses": {"type": "array", "items": _WRITE_STATUS_SCHEMA},
     }
 )
 _EVENTS_SECTION_SCHEMA = _object_schema(
@@ -255,6 +281,7 @@ SHARED_STATE_JSON_SCHEMA: dict[str, Any] = {
             "belief": _BELIEF_SECTION_SCHEMA,
             "decision": _DECISION_SECTION_SCHEMA,
             "requests": _REQUESTS_SECTION_SCHEMA,
+            "writes": _WRITES_SECTION_SCHEMA,
             "skills": _SKILLS_SECTION_SCHEMA,
             "events": _EVENTS_SECTION_SCHEMA,
         }
