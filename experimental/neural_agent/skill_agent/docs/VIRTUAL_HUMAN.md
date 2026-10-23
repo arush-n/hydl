@@ -569,6 +569,7 @@ approach. Missing:
 | 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry (with it the status token's identity: which effect, its source entity, its damage cause, all in the observation and dropped today; `PERCEPTION.md` section 10.5), places, the proficiencies | 11.1 to 11.4, 11.6, 16.6, 17.8 |
 | 8 | The formatted views (typed facts, words) and the recording | 10.3, 10.9 |
 | 9 | The social section (approved, 15.3) | 12, 15.3 |
+| W | World interaction: breaking, placing, using, picking up, and the commands (crafting, tools, items); the perception of break progress and items on the ground. DESIGNED 2026-10-22 (section 23), waiting on the owner's yes; the skills train when training resumes | 23 |
 
 Every step is measured first with 2 agents, then scaled up (16.3).
 
@@ -1902,6 +1903,118 @@ item 3).
 - **Not from research:** the capacities (128 places, 256 routes), the merge radius and the strength constants are
   engineering choices or estimates [E], changeable without retraining (section 14).
 
+## 23. World interaction: placing, breaking, using and crafting (DESIGNED 2026-10-22, waiting on the owner's yes)
+
+The owner, 2026-10-22: "how are we handling placing and interacting with the world", then, on the four gaps found:
+the 0.7.2 Regions need block identity ("yes, all it needs is some identity"), placing opens in the simulator, recipes,
+items and doors are wired on the simulator side (both "sure": the coordinator's, who confirms with the owner first), and
+this lane designs the skills and the perception of break progress and dropped items ("yes"). Nothing here is built
+until the owner's yes; the skills themselves are trained when training resumes.
+
+### 23.1 What exists
+
+- **The body's actions** (`contract/surface.py` `head_layout("gen7")`). Executed by the simulator today: `use_off_on`,
+  the block trigger (`block_primary_secondary_trigger`: 1 primary, 2 secondary; primary breaks, secondary places or
+  uses, inferred from the game's input scheme), the choice among 16 block candidates in reach
+  (`block_none_plus_candidates`), and the hotbar. Named but not yet acted on by the simulator: `item_move`,
+  `item_drop_give`, `recipe`, `door`, `mount`.
+- **The simulator** (`hytalegym/jax/combat/arsenal/world_actions/STATUS.md`): break and use run; placing is closed
+  until the placed geometry is proven; crafting runs in the runtime but is not a policy action (gen 7 has timed
+  crafting). The live bridge has no world-action endpoint deployed.
+- **What the agent perceives.** Block-candidate tokens: where the block is, its affordances (breakable, ore,
+  harvestable, soft, door, stateful), its gather type and the quality it needs, its registry properties, how the
+  agent's best and held tools fare against it, and 8 reserve columns. Recipe tokens (the environment's fixed random
+  embedding, 11.5). The inventory, with the perception channel. Nothing on how far a block is broken (S5) or on items
+  lying on the ground (S13). On the 0.7.2 Regions there are no block candidates until the block identity is bound.
+- **The skill catalogue** (`agent_skills/training_runs/SKILL_CATALOGUE.md`, sections 3, 5, 6, 7 and 14) lists the
+  skills with a kind each: learned (a network acts every tick) or command (an exact script). Ruled 2026-10-17:
+  crafting, cooking, equipping and inventory are commands. The only neural skills today are `walk_to` and `look_at`.
+- **Requests and memory.** A request can point at a block-candidate row (`cell_pointer`) or an entity; the stores
+  keep block candidates by cell with their object latents (section 18); step 5 adds "find" places.
+
+### 23.2 The design
+
+**Three kinds of world skills** (the split of 23.6, mapped onto the catalogue's kinds):
+- **Finding** (learned): reach what is needed. `walk_to` exists; a `search_for` reads the long-term places (step 5:
+  find and stay places) and the stores, so the agent goes back to where it found wood or ore.
+- **Manipulation** (learned, one competency each, trained from its prerequisite):
+  - `break_block`: aim at a candidate and hold the primary trigger with a fitting tool until it breaks. One skill for
+    mining, chopping, digging and picking: the block's gather type and the tool fit are in its token, so a separate
+    network per tool is not needed (23.5 item 1);
+  - `place_block`: place the held block on a candidate face (waits for placing to open);
+  - `pick_up`: go to an item on the ground until it is in the inventory;
+  - `use_block`: use a door, lever, chest or bench (the secondary trigger or `use`).
+- **Commands** (exact scripts, the 2026-10-17 ruling): `best_tool_for` and `switch_item` (the hotbar slot whose tool
+  fits the block best, from the token's tool relations), `craft`, `cook` and `smelt` (the recipe head at a bench),
+  `move_item`, `drop_or_give`, `equip`.
+
+**A request and its report** (the options framework of 23.6: a skill starts on a request and ends on a condition):
+- the target is a block-candidate row (perceived or remembered) or an item entity; `place_block` also carries the
+  block item;
+- done when the event log or the candidates show it: the block gone (`break_block`), present (`place_block`), the
+  item count up (`pick_up`, an `item_gained` event), the door's state changed (`use_block`);
+- failed with a reason: the tool cannot break it (its quality is below the block's), out of reach, or a timeout.
+
+**Perception to add** (this lane's tokens; the data is the simulator's, asked of the coordinator):
+1. **Break progress** (S5): how far the targeted block is broken, in [0, 1], in one of the block-candidate token's
+   reserve columns (section 14, rule 1: no change to the layout's width).
+2. **Items on the ground** (S13): each as an entity row with an item kind and the item's registry description (the
+   entity token already describes held items), its count and age. So the trunk reads them as entities and a request
+   can point at one (23.5 item 2).
+3. **Where a block can go**: the simulator's placement candidates, as block-candidate rows with a "placeable face"
+   affordance, once placing opens.
+4. **Recipes**: the trunk owns the recipe encoder's parameters (11.5) once an environment publishes recipes.
+
+**Memory.** Broken blocks leave the stores as the candidates disappear; a place where items were found becomes a
+"find" place (step 5); the decision layer names and tags places (22.5).
+
+**What the decision layer chains** (the catalogue's activities, section 14): get wood, mine for ore, build a
+shelter, cook a meal, from these skills and commands.
+
+### 23.3 Asks to the coordinator (the simulator)
+
+1. S5: each block candidate's break progress in the policy observation.
+2. S13: items on the ground as entity rows with their item id, count and age.
+3. Placement candidates on the policy surface when placing opens.
+4. Recipe candidates on the Region and arena surfaces, and the `item_move`, `item_drop_give`, `recipe` and `door`
+   heads executed (ruled "sure", in progress there).
+
+### 23.4 What waits, and the order
+
+1. Now: this design, then the perception columns as each ask lands (a reserve column, an entity kind), each with an
+   encoding audit.
+2. When training resumes: `break_block` first (its world works today: break runs), then `pick_up`, `use_block`,
+   then `place_block` (after placing opens); the commands as exact scripts beside them.
+3. The decision layer's activities after the skills exist.
+
+### 23.5 Decisions for the owner
+
+1. **One break skill** for mining, chopping, digging and picking, with the gather type as context? Recommended: yes
+   (the token carries the gather type and the tool fit; the tool choice is a command). The alternative is a skill per
+   tool.
+2. **Items on the ground as entity rows** (an item kind) rather than a new token type? Recommended: yes (one reader,
+   and a request can point at them like any entity).
+3. **The order** of 23.4: perception now, skills when training resumes, placing after it opens? Recommended: yes.
+
+### 23.6 What grounds it (searched 2026-10-22; depth of reading stated)
+
+- **Finding, manipulation, crafting.** Plan4MC splits Minecraft skills into finding-skills (explore to locate),
+  manipulation-skills (trained by reinforcement learning once the target is nearby, by running the finding skill
+  first) and crafting-skills (a single action), and plans over a skill graph (Yuan et al. 2023, "Skill Reinforcement
+  Learning and Planning for Open-World Long-Horizon Tasks", arXiv:2303.16563; abstract and summaries). This is 23.2's
+  split, and why crafting stays a command here.
+- **A library of skills, each checked.** Voyager keeps a skill library, an automatic curriculum and self-verification
+  from the environment's feedback (Wang et al. 2023, voyager.minedojo.org; through press accounts). The reports of
+  23.2 check each skill's result against the event log and the candidates.
+- **Skills as temporally extended actions.** Options are closed-loop policies acting over a period of time, usable
+  alongside primitive actions (Sutton, Precup and Singh 1999, Artificial Intelligence 112, 181-211; the paper's
+  abstract). A skill here starts on a request and ends on its done or failed condition.
+- **Affordances.** What an object offers the actor (Gibson 1979, The Ecological Approach to Visual Perception;
+  recalled). The block token's affordance bits and tool fit describe what the agent can do with the block, not only
+  what it is.
+- **The game's facts**: tool power and quality per gather type, bench recipes and the item mechanics are from the
+  catalogue's survey of the 0.7.2 archive (2026-10-17).
+
 ## Sources
 
 - Steel, P. (2007). The nature of procrastination. Psychological Bulletin 133(1), 65-94.
@@ -2001,3 +2114,8 @@ item 3).
   rates of spatial knowledge in humans in the absence of repeated testing", https://hal.archives-ouvertes.fr/hal-01440576
   (abstract). "Long-Term Landmark and Route Memory Retention Acquired in a Real-World Map-Aided Navigation Task",
   Bournemouth University (abstract).
+- Section 23.6, searched 2026-10-22: Yuan, H., et al. (2023), Skill Reinforcement Learning and Planning for
+  Open-World Long-Horizon Tasks (Plan4MC), arXiv:2303.16563 (abstract and summaries). Wang, G., et al. (2023), Voyager,
+  https://voyager.minedojo.org (press accounts). Sutton, R. S., Precup, D., and Singh, S. (1999), Between MDPs and
+  semi-MDPs, Artificial Intelligence 112, 181-211 (abstract). Gibson, J. J. (1979), The Ecological Approach to Visual
+  Perception (recalled).
