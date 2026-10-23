@@ -11,11 +11,13 @@ stores it). One tick, :func:`step`:
 1. the action history takes the action the agent sent last tick;
 2. the senses read this tick's perceived rows;
 3. the emotional state appraises them, with the persona's gains, and is published to the variables;
-4. the top layers' writes are applied (``state/written.py``), and the live ``remember`` entries become the stores' tags;
-5. the stores take them;
-6. the stores give back what is remembered but not perceived;
-7. every entity token, perceived or remembered, gets the agent's feelings toward it (``feel_*``);
-8. everything is packed into the ``skill_tokens_v3`` token sets the trunk reads, with the persona and affect
+4. the event log registers this tick's changes (``state/events.py``, section 21), and its counters are published to the
+   variables;
+5. the top layers' writes are applied (``state/written.py``), and the live ``remember`` entries become the stores' tags;
+6. the stores take them;
+7. the stores give back what is remembered but not perceived;
+8. every entity token, perceived or remembered, gets the agent's feelings toward it (``feel_*``);
+9. everything is packed into the ``skill_tokens_v3`` token sets the trunk reads, with the persona and affect
    tokens, whose columns are the body-read variables (``tokens_v3.PERSONA_FEATURES``, ``AFFECT_FEATURES``).
 
 :func:`save` and :func:`load` write and read a state as one ``.npz`` (memory "stored as well", owner 2026-10-20 night),
@@ -35,8 +37,11 @@ import numpy as np
 
 from experimental.neural_agent.skill_agent.contract import tokens_v3 as v3
 from experimental.neural_agent.skill_agent.contract import variables
+from experimental.neural_agent.skill_agent.contract.surface import ITEM_PROPERTIES
+from experimental.neural_agent.skill_agent.perception.adapter import lookup
 from experimental.neural_agent.skill_agent.state import registry
 from experimental.neural_agent.skill_agent.state import affect as feeling
+from experimental.neural_agent.skill_agent.state import events
 from experimental.neural_agent.skill_agent.state import memory as stores
 from experimental.neural_agent.skill_agent.state import written
 from experimental.neural_agent.skill_agent.state.action_history import (
@@ -45,8 +50,15 @@ from experimental.neural_agent.skill_agent.state.action_history import (
     initial_history,
     update_history,
 )
-from experimental.neural_agent.skill_agent.state.senses import append_rows, fit_ids, pack, perceive_rows
+from experimental.neural_agent.skill_agent.state.frames import POSITION_SCALE_BLOCKS
+from experimental.neural_agent.skill_agent.state.senses import Perceived, append_rows, fit_ids, pack, perceive_rows
 from experimental.neural_agent.skill_agent.state.persona import TRAITS, neutral_persona
+from hytalegym.jax.combat.observation.v3.tokens.inventory import INVENTORY_POLICY_FLOAT_FEATURES
+
+_SELF = {name: index for index, name in enumerate(v3.SelfTokenV3.FEATURES)}
+_ENTITY = {name: index for index, name in enumerate(v3.EntityTokenV3.FEATURES)}
+assert tuple(name for name in variables.NAMES if name in events.COUNTERS) == events.COUNTERS, (
+    "the event log's counters are registry variables, in events.COUNTERS' order (contract/variables.py)")
 
 
 class AgentState(NamedTuple):
@@ -61,6 +73,7 @@ class AgentState(NamedTuple):
     object_slots: dict | None = None  # per important type: int32[B, N], each token row's store slot (-1 for none)
     background: jax.Array | None = None  # float32[B, K, W]: the trunk's last ``EncoderOutput.background``
     written: written.Written | None = None  # the top layers' written entries (state/written.py)
+    events: events.EventState | None = None  # the event log and the counters (state/events.py)
 
 
 def initial_state(batch: int, latent: jax.Array | None = None, persona: jax.Array | None = None,
@@ -78,12 +91,15 @@ def initial_state(batch: int, latent: jax.Array | None = None, persona: jax.Arra
     values = registry.put(values, v3.AFFECT_FEATURES, feeling.affect_features(affect))
     slots = {name: jnp.full((batch, capacities[name]), -1, jnp.int32) for name in ("entity", "block_candidate")}
     return AgentState(initial_history(batch), stores.initial_memory(batch, latent_width=object_width), latent, values,
-                      affect, slots["entity"], slots, background, written=written.initial_written(batch))
+                      affect, slots["entity"], slots, background, written=written.initial_written(batch),
+                      events=events.initial_events(batch, entities=capacities["entity"],
+                                                   slots=capacities["inventory_slot"], outcomes=events.OUTCOME_SLOTS))
 
 
 def step(observation: Any, state: AgentState, *, last_action: jax.Array,
              reset: jax.Array | None = None, writes: written.Writes | None = None,
-             capacities: Mapping[str, int] = v3.CAPACITIES_V3, **adapter: Any
+             capacities: Mapping[str, int] = v3.CAPACITIES_V3, outcomes: jax.Array | None = None,
+             outcome_verbs: jax.Array | None = None, **adapter: Any
              ) -> tuple[dict[str, tuple[jax.Array, jax.Array]], AgentState]:
     """One tick (module docstring): the token sets and the next state.
 
@@ -95,6 +111,9 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
             over, the persona stays; the trunk's latent memory is reset by its caller).
         writes: This tick's writes from the top layers (``written.lower``), or None.
         capacities: Slots per type.
+        outcomes: int32[B, OUTCOME_SLOTS], this tick's request outcomes from the runtime (0 none, 1 done, 2 failed,
+            3 aborted), or zeros when None.
+        outcome_verbs: int32[B, OUTCOME_SLOTS], each request's verb index, or zeros when None.
         **adapter: Passed to ``adapter_v3.perceive_rows`` (``body_yaw_degrees``, ``tables``, ``action_surface``,
             ``block_reach_blocks``, ``light``, ``view_half_angle_degrees``).
     """
@@ -103,6 +122,13 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
     perceived = perceive_rows(observation, inventory_capacity=capacities["inventory_slot"], **adapter)
     affect = feeling.update(state.affect, perceived, registry.take(state.variables, TRAITS), reset)
     values = registry.put(state.variables, v3.AFFECT_FEATURES, feeling.affect_features(affect))
+    if outcomes is None:
+        outcomes = jnp.zeros((observation.base.self_f32.shape[0], events.OUTCOME_SLOTS), jnp.int32)
+    if outcome_verbs is None:
+        outcome_verbs = jnp.zeros_like(outcomes)
+    observed = _observed(observation, perceived, affect, adapter.get("tables"), capacities, outcomes, outcome_verbs)
+    logged = events.update(state.events, observed, reset)
+    values = registry.put(values, events.COUNTERS, logged.counters)
     record = written.apply(state.written, writes, reset)
     memory = stores.update(state.memory, perceived, written.tags(record), reset)
     remembered = stores.read(memory, perceived.pose)
@@ -126,7 +152,62 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
     ids = fit_ids(entity_ids, valid, capacities["entity"])  # aligned with tokens["entity"], perceived and remembered
     slots = stores.object_slots(memory, tokens, ids, perceived.pose)
     return tokens, AgentState(history, memory, state.latent, values, affect, ids, slots, state.background,
-                              written=record)
+                              written=record, events=logged)
+
+
+def _present_first(present: jax.Array, count: int, *columns: tuple[jax.Array, Any]) -> list[jax.Array]:
+    """Each ``(values, fill)`` in ``columns`` as [B, count]: the present rows first (a stable sort, so the others keep
+    their order), the first ``count`` kept, and the rest padded with ``fill``, so the width is fixed whatever the number
+    present."""
+
+    order = jnp.argsort(~jnp.asarray(present, jnp.bool_), axis=1, stable=True)[:, :count]
+    return [jnp.pad(jnp.take_along_axis(values, order, axis=1), ((0, 0), (0, count - order.shape[1])),
+                    constant_values=fill) for values, fill in columns]
+
+
+def _observed(observation: Any, perceived: Perceived, affect: feeling.AffectState, tables: Any,
+              capacities: Mapping[str, int], outcomes: jax.Array, outcome_verbs: jax.Array) -> events.Observed:
+    """What the event log reads this tick (``state/events.py``, section 21.1), all of it legal: my health, position,
+    movement and attack; the damage the affect rules credited to an entity; the entities I perceive; my inventory,
+    with each item's consumable flag when the registry is given (``tables``); and the request outcomes the runtime
+    reports."""
+
+    batch = outcomes.shape[0]
+    own = perceived.rows["self"][0][:, 0]  # the self token's features, float32[B, F]
+    moving = jnp.stack([own[:, _SELF[f"moving_{name}"]] for name in events.MOVES], axis=1)
+    if perceived.pose.position is None:  # no perception channel, so no position and no distance
+        position, has_position = jnp.zeros((batch, 3), jnp.float32), jnp.zeros((batch,), jnp.bool_)
+    else:
+        position, has_position = perceived.pose.position, jnp.ones((batch,), jnp.bool_)
+    entities, present = perceived.rows["entity"]
+    ids = jnp.where(present, perceived.entity_ids[:, :entities.shape[1]], -1)
+    distance = jnp.linalg.norm(entities[..., :3], axis=-1) * POSITION_SCALE_BLOCKS
+    entity_ids, entity_health, entity_distance = _present_first(
+        present, capacities["entity"], (ids, -1), (entities[..., _ENTITY["health_fraction"]], 0.0), (distance, 0.0))
+
+    channel = getattr(observation, "perception_v2", None)
+    slots = capacities["inventory_slot"]
+    held = jnp.zeros((batch, slots), jnp.bool_)
+    item_ids = jnp.zeros((batch, slots), jnp.int32)
+    counts = jnp.zeros((batch, slots), jnp.float32)
+    if channel is not None:
+        held = jnp.asarray(channel.inventory_mask, jnp.bool_)
+        item_ids = jnp.where(held, channel.inventory_i32[..., 2], 0)
+        fraction = channel.inventory_f32[..., INVENTORY_POLICY_FLOAT_FEATURES.index("quantity_log2_fraction")]
+        # The gym encodes log2(q + 1) / 31 (inventory.py), so 2 ** (31 f) - 1 recovers the quantity exactly.
+        counts = jnp.where(held, jnp.round(jnp.exp2(31.0 * fraction) - 1.0), 0.0)
+    consumable = jnp.zeros((batch, slots), jnp.bool_)
+    if tables is not None:
+        row, _ = lookup(tables.item_keys, tables.item_rows, item_ids)
+        consumable = held & (tables.item_features[row][..., ITEM_PROPERTIES.index("consumable")] > 0.5)
+    item_ids, item_counts, item_consumable = _present_first(held, slots, (item_ids, 0), (counts, 0.0),
+                                                            (consumable, False))
+    return events.Observed(
+        health=own[:, _SELF["health_fraction"]], position=position, has_position=has_position, moving=moving,
+        attack_executing=own[:, _SELF["attack_executing"]] > 0.5, attributed=affect.attributed,
+        entity_ids=entity_ids, entity_health=entity_health, entity_distance=entity_distance,
+        item_ids=item_ids, item_counts=item_counts, item_consumable=item_consumable,
+        outcomes=outcomes, outcome_verbs=outcome_verbs)
 
 
 _STORE_TYPES: Mapping[str, str] = {"geometry": "geometry", "entity": "entity", "block": "block_candidate"}
@@ -165,7 +246,8 @@ def load(path: str | Path, like: AgentState, *, maps: Mapping[str, Mapping[str, 
     must be merged into a new one by ``maps`` or listed in ``dropped``, both keyed by ``"variables"`` or a stored token
     type (``variables.transfer``). The written entries' fields migrate by name the same way, keyed by
     ``"written.entity"`` or ``"written.place"``. A part of the state the save lacks (added since, as the object latents,
-    the background summary on 2026-10-22, and the written entries on step 2 of section 19) takes ``like``'s value.
+    the background summary on 2026-10-22, the written entries on step 2 of section 19, and the event log on step 4 of
+    section 21, which a save from before it loads as an empty log) takes ``like``'s value.
     """
 
     maps, dropped = maps or {}, dropped or {}

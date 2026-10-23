@@ -78,6 +78,13 @@ VARIABLES: tuple[Variable, ...] = (
     Variable("coping", "inner", "emotion", "rule", True, 0.0, 1.0, 0.5),
     *_group("inner", "mood", "rule", ("mood_pleasure", "mood_arousal", "mood_dominance"),
             body=("mood_pleasure", "mood_arousal", "mood_dominance")),
+    # The activity counters (``state/events.py``, section 21.2): lifetime totals the event log adds to, as ``rule``
+    # variables, so they are named, saved and migrated like the rest. They are in ``self`` with the levels they will
+    # feed (16.6); the persona is the ``self`` variables set at birth (``state/persona.py`` ``TRAITS``), so a counter
+    # is never sampled as a trait. The body does not read them yet (step 7).
+    *_group("self", "activity counters", "rule", ("distance_walked", "distance_sprinted", "distance_swum",
+                                                   "distance_climbed", "damage_dealt", "damage_taken",
+                                                   "items_gained", "food_eaten"), low=0.0, high=1e9),
 )
 NAMES: tuple[str, ...] = tuple(variable.name for variable in VARIABLES)
 BY_NAME: Mapping[str, Variable] = {variable.name: variable for variable in VARIABLES}

@@ -30,8 +30,9 @@ import numpy as np
 
 from experimental.neural_agent.skill_agent.contract import variables
 
-TRAITS: tuple[str, ...] = variables.names("self")
-"""A persona's entries, in registry order."""
+TRAITS: tuple[str, ...] = tuple(name for name in variables.names("self") if variables.BY_NAME[name].source == "birth")
+"""A persona's entries: the ``self`` variables set at birth (section 15.6), in registry order. The ``self`` section
+also holds the activity counters (``rule``, section 21), which are not traits."""
 
 AXES: tuple[str, ...] = ("stability", "plasticity", "honesty", "reciprocity")
 """The latent axes of :func:`sample_personas`."""

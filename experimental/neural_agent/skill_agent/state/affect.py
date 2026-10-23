@@ -116,6 +116,7 @@ class AffectState(NamedTuple):
     entity_health: jax.Array  # float32[B, K]: its health fraction when last perceived
     last_seen: jax.Array  # int32[B, K]: the tick it was last perceived
     now: jax.Array  # int32[B]
+    attributed: jax.Array  # int32[B]: the entity id this tick's damage taken was credited to; -1 none
 
 
 def mood_baseline(persona: jax.Array) -> jax.Array:
@@ -140,7 +141,7 @@ def initial_affect(persona: jax.Array) -> AffectState:
                        jnp.full((batch,), -1.0, jnp.float32), jnp.full((batch, ENTITY_SLOTS), -1, jnp.int32),
                        jnp.zeros((batch, ENTITY_SLOTS, len(v3.FEELINGS)), jnp.float32),
                        jnp.zeros((batch, ENTITY_SLOTS), jnp.float32), jnp.zeros((batch, ENTITY_SLOTS), jnp.int32),
-                       jnp.zeros((batch,), jnp.int32))
+                       jnp.zeros((batch,), jnp.int32), jnp.full((batch,), -1, jnp.int32))
 
 
 def _lam(tau: jax.Array | float, dt: float) -> jax.Array:
@@ -283,9 +284,10 @@ def update(affect: AffectState, perceived: Perceived, persona: jax.Array, reset:
     weights = jnp.stack([fear, anger, jnp.maximum(valence, 0.0), jnp.maximum(-valence, 0.0)], axis=-1)
     pull = jnp.einsum("be,bek->bk", weights, _PAD[None] - affect.mood[:, None, :])
     mood = affect.mood + (mood_baseline(persona) - affect.mood) * (1.0 - _lam(TAU_MOOD, dt)) + MOOD_PULL * dt * pull
+    credited = jnp.where(attributed, jnp.take_along_axis(ids, attacker[:, None], axis=1)[:, 0], -1).astype(jnp.int32)
     return AffectState(fear, anger0, startle, valence, coping, jnp.clip(mood, -1.0, 1.0), health, table, feelings,
                        entity_health, affect.last_seen.at[rows_index, slot].set(
-                           jnp.where(entity_valid, now[:, None], affect.last_seen[rows_index, slot])), now)
+                           jnp.where(entity_valid, now[:, None], affect.last_seen[rows_index, slot])), now, credited)
 
 
 def anger(affect: AffectState) -> jax.Array:

@@ -562,8 +562,8 @@ approach. Missing:
 | 1b | DONE 2026-10-22: the body's path on v3: the generalist reads every token type; every entity row carries its id; the runtime ticks the state layer (`runtime/state_tick.py`); a request points at a perceived or remembered entity; request to action tested. The trainers stay on v1 until training resumes | 13 (this section) |
 | 1c | DONE 2026-10-22: the memory design: a parallel write; object files for entities and block candidates (one latent each, keyed by identity); a gist of 16 latent slots plus a cache of 32 remembered cells for the background; the tick a quarter to a third faster on real rows (18.4) | 18 |
 | 2 | Structured writes from the top two layers; the tags move onto them. DESIGNED and APPROVED 2026-10-22 (section 19, rulings in 19.7) | 10.4, 19 |
-| 3 | Fixed rules on game time: alarm and startle, sleep pressure and fatigue, hunger and the other drives; then lifecycle under normal death, and provenance. DESIGNED 2026-10-22 (section 20), waiting on the owner's yes | 10.5, 10.7, 10.8, 16.1, 16.2, 16.5, 20 |
-| 4 | The event log and its tokens; the activity counters and levels. DESIGNED and APPROVED 2026-10-22 (section 21) | 10.6, 11.1, 16.6, 21 |
+| 3 | Fixed rules on game time: alarm and startle, sleep pressure and fatigue, hunger and the other drives; then lifecycle under normal death, and provenance. DESIGNED and APPROVED 2026-10-22 (section 20; the drives wait for the clock, 20.5) | 10.5, 10.7, 10.8, 16.1, 16.2, 16.5, 20 |
+| 4 | The event log and its tokens; the activity counters and levels. DESIGNED and APPROVED 2026-10-22; BUILT (section 21.6; the event tokens wait for step 7) | 10.6, 11.1, 16.6, 21 |
 | 5 | The long-term spatial memory: places, routes, coordinates | 10.11, 16.4 |
 | 6 | Hearing: the sound registry, the hearing rule, heard entries in the stores, the orienting reflex (the token reads zero until S12) | 17 |
 | 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry (with it the status token's identity: which effect, its source entity, its damage cause, all in the observation and dropped today; `PERCEPTION.md` section 10.5), places, the proficiencies | 11.1 to 11.4, 11.6, 16.6, 17.8 |
@@ -992,6 +992,9 @@ The original model ordered them as stages. Later work found survey knowledge can
 - **How much a food satisfies** comes from the item registry, from the food's tier in its effect id (our estimate).
   The rise rate is also our estimate [E].
 - Other needs are added the same way, when needed.
+- **Deferred until a clock reaches the state layer** (RULED 2026-10-22, 20.5): hunger and sleep pressure are not
+  built yet. When they are, hunger also rises with activity, from the step 4 counters, as a game's exhaustion does
+  (20.6).
 
 ### 16.6 Levels (RULED: "there should be some leveling or skills that go up after doing X thing Y times")
 
@@ -1446,6 +1449,19 @@ re-audit after it.
 `decision` section) and how they reach the neural layer each tick is the middle layer's side. It goes to the
 coordinator once the write path is built.
 
+**The decision layer's side, ruled** (the owner, 2026-10-22, on the coordinator's three recommendations, as the
+coordinator reported them; built there against this interface, with no edit to `skill_agent`):
+1. a `writes` section of S_t, written by the decision layer's fast path, separate from `requests`: writes go to the
+   state layer, requests to the combiner;
+2. `remember` is written when a program step that targets an entity or a place starts (its value the goal's priority
+   mapped to [0, 1]), and ejected (written 0) when the program that wrote it ends, unless the LLM's goal asks to keep
+   it. This answers how "some action ejects it" (19.7, 1);
+3. on `full`, the decision layer ejects its lowest entry that no live program step refers to and retries the next
+   tick; if every entry is referenced, it asks the LLM.
+
+Each write's result returns on the `skills` status stream: applied, or refused with this layer's host reason or `full`
+(`AgentState.written.applied`).
+
 ### 19.8 Built (2026-10-22), and how it was checked
 
 What was built is 19.2 and 19.3 with the rulings of 19.7 (`state/written.py`; `contract/variables.py` `WRITERS`,
@@ -1480,7 +1496,7 @@ it from a written spec; it was reviewed and re-run here.
 - **Never evict, never fade.** The owner's ruling (19.7, 1), not a research finding: what the decision layer marks
   stays until the decision layer ejects it.
 
-## 20. Step 3: the fixed rules and the lifecycle (DESIGNED 2026-10-22, waiting on the owner's yes)
+## 20. Step 3: the fixed rules and the lifecycle (DESIGNED and APPROVED 2026-10-22, with the rulings of 20.5)
 
 The owner, 2026-10-22: "continue with other tasks in the background". This is step 3 of section 13 (10.5, 10.7 and
 10.8, with 16.1, 16.2 and 16.5). Nothing is built until the owner's yes.
@@ -1543,16 +1559,16 @@ game time, not ticks:
 - hunger rises at a rate [E] and falls when the agent eats (16.5).
 
 With no clock source the elapsed time is 0, and they hold still (16.1: off in simulator runs until S14). Drowsiness
-acting on the outputs is a regulator, future (19.7).
+acting on the outputs is a regulator, future (19.7). **Not built now** (RULED, 20.5 item 2: "wait for it, make a note
+of it"): the clock rules wait for a clock to reach the state layer (S14 in the simulator; the bridge's `time_of_day`
+live). The note for then: hunger also rises with activity, from the step 4 counters (20.6).
 
 ### 20.3 Files
 
 - `state/affect.py`: the startle rule; the darkness and cue inputs.
-- `state/drives.py` (new, if 20.5 item 2 is yes): sleep pressure and hunger, registered in `contract/variables.py`
-  (source `rule`; the body reads neither, 16.1).
+- `state/drives.py`: deferred with the clock (20.5 item 2).
 - `state/layer.py`: `step(..., respawn=)`.
-- Tests: the affect tests extended (each startle factor's direction); respawn; provenance; the drives with a
-  synthetic clock.
+- Tests: the affect tests extended (each startle factor's direction); respawn; provenance.
 
 ### 20.4 How it is verified
 
@@ -1563,16 +1579,18 @@ acting on the outputs is a regulator, future (19.7).
 3. **Respawn:** a synthetic death mid-episode resets exactly alarm, startle and the history.
 4. **Cost and the package gate,** as for every step.
 
-### 20.5 Decisions for the owner
+### 20.5 Decisions (RULED 2026-10-22)
 
 1. **Startle as 15.5 designed it** (fear potentiation, expectation, habituation, darkness), replacing today's "calm
    makes it stronger"? Recommended: yes. It follows the approved design and the literature, and today's proxy
-   contradicts potentiation.
+   contradicts potentiation. RULED: "sure".
 2. **Sleep pressure and hunger now,** with the elapsed game time as an input but no clock yet (so they hold still
    until a clock reaches the state layer)? Recommended: yes; they are small and tested with a synthetic clock. The
    alternative is to wait for S14. Added after the research (20.6): hunger also rises with activity, from the step 4
    counters (sprinting, swimming, jumping, hits), as a game's exhaustion does, so it moves in the simulator today.
-3. **`respawn` as its own input,** separate from `reset`? Recommended: yes; 16.2's lifecycle needs both.
+   RULED: "wait for it, make a note of it". Not built; noted in 20.2 and 16.5 for when a clock arrives.
+3. **`respawn` as its own input,** separate from `reset`? Recommended: yes; 16.2's lifecycle needs both. RULED:
+   "your choice"; taken: yes.
 
 ### 20.6 What grounds it (searched 2026-10-22, owner: "ensure that you are designing based on some sort of research or something else that grounds your design")
 
@@ -1702,6 +1720,34 @@ keeps what it needs, on its own terms.
   (Heathcote, Brown and Mewhort 2000).
 - **Not from research:** the ring of 32 and the 8 events the body reads are engineering choices, a token budget,
   sized like the other capacities and changeable without retraining (section 14).
+
+### 21.6 Built (2026-10-22), and how it was checked
+
+What was built is 21.2 with the rulings of 21.4; Haiku subagents wrote it from two written specs, and it was reviewed
+and re-run here.
+- `state/events.py`: the ring of 32 events with their observed or inferred mark, the detectors of 21.1 and the
+  counters. Fixed in review: a request's outcome is logged on any tick, the first included (the runtime reports it; it
+  is not a change between ticks).
+- `state/affect.py`: `AffectState.attributed`, the entity id the damage taken was credited to (today's attribution,
+  exposed rather than repeated).
+- `contract/variables.py`: the 8 counters as `rule` variables of the `self` section. `state/persona.py`: the persona
+  is now the `self` variables set at birth, so no counter is sampled as a trait (found in review: the first build put
+  the counters in `inner` to avoid that, which misfiled them as feelings).
+- `state/layer.py`: `step(..., outcomes=, outcome_verbs=)` (int32[B, 4] each, the combiner's active-request table;
+  zeros when not given); `_observed` reads the agent's own observation (an inventory count is `round(2 ** (31 f) - 1)`,
+  the inverse of the gym's `log2(q + 1) / 31`); the counters are published to the variables each tick.
+
+Checks:
+- **Nothing the body reads changes.** 30 Region ticks (gen 7, perception channel, 4 agents), with and without step 4:
+  the same SHA-256 over the same 1,530 token and store arrays. With step 4 the log runs (agent 0 walked 0.171 blocks
+  in those ticks; no event fired: random actions, no hit, no item change).
+- **Unit tests:** `test_sa_state_events.py` (each detector, the ring, reset, jit, and through `layer.step`: the counters
+  in the variables, a request outcome, save and load); the attribution in `test_sa_state_affect.py` A4b; the registry
+  test's trait list now the self variables set at birth.
+- **The package gate** on clean worktrees of 211dc21. Pass 1: before, 1,300 passed, 12 failed, 6 errors; with step 4,
+  1,315 passed (+15: the event tests and A4b, whose new assertion needs `attributed`), the other 17 names identical
+  (among them the six duel fingerprints the coordinator re-pinned per server line meanwhile). Pass 2 (0.5.7): the
+  same 30 names on both.
 
 ## Sources
 
