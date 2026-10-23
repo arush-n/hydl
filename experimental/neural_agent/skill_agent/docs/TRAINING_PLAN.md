@@ -410,7 +410,7 @@ Console replays of the mace fights: 20261020T062617Z-11750ee7 (scripted), 202610
 - A self-play league can cycle, or collapse onto one strategy (Balduzzi et al. 2019). The scripted styles stay in the
   pool as anchors, as AlphaStar kept its exploiters (Vinyals et al. 2019).
 
-## 8. Training on v3: the state layer and the trunk's memory (PROPOSED 2026-10-23; nothing runs before the owner's yes)
+## 8. Training on v3: the state layer and the trunk's memory (PROPOSED 2026-10-23; V0 APPROVED the same day, 8.4)
 
 `VIRTUAL_HUMAN.md` section 13: "Moving the trainers onto `runtime/state_tick.py` is the first task when training
 resumes." The encoder and the state layer are now built through step 9 (with the tick fix and S5), so this section says
@@ -446,6 +446,12 @@ tokens").
      decision; training unrolls the trunk over each, the first B decisions only rebuilding the memory (no loss), then
      the loss on the rest: R2D2's stored state with burn-in (Kapturowski et al. 2019; it stored 80-step sequences, with
      burn-in of 20 or 40). L and B are set in V0 from the tasks' horizons.
+     What the trunk carries is three things (`runtime/state_tick.tick`): the latent memory, the background summary,
+     and each remembered object's latent, held in the entity and block stores and read and written through each
+     token row's store slot. A new object's latent starts at zero (`state/memory.py`). So a sequence stores, at its
+     first decision, the memory, the background and the two stores' latents; and per decision the tokens, each
+     row's store slot and which slots took a new object. The unroll then repeats the rollout's reads and writes
+     exactly, with the trunk's current parameters; the state layer's rules have none and need no re-run.
    - **A skill's module on the frozen trunk** (the owner's 2026-10-19 ruling): the trunk does not change, so the memory
      is a fixed function of the history and the module needs no gradient through time. Its dataset stays per decision,
      as today; the trunk runs in the rollout and the module trains on its outputs.
@@ -471,10 +477,14 @@ tokens").
 |---|---|---|
 | V0 | No training. The v3 rollout on the flat world and the Region: decisions per second per core, the `AgentState` bytes per lane, the stored size of a decision (valid rows, float16) on each world; the sequence length from the tasks' horizons | the numbers, and a budget proposal from them |
 | V1 | The v3 reference: walk_to and look_at distilled into a fresh v3 trunk and generalist with memory (A2's task and evaluation), plus the same run without memory as the control | at least run C''s rates on A2's evaluation; the memory run not worse than its control |
-| V2 | The seven skills' modules re-trained on the frozen v3 trunk by their own strategies | each skill's own gate, against its v1 module |
+| V2 | The skills' modules re-trained on the frozen v3 trunk by their own strategies: walk_to and look_at have trainers today, the other five folders are plans | each skill's own gate, against its v1 module |
 | V3 | Stage L4 and L5 on v3 | section 7's gates |
 
-### 8.4 Decisions for the owner
+### 8.4 Decisions for the owner (RULED 2026-10-23: "continue", taken as the three recommendations)
+
+The ruling: V0 now (measurements, no training); V1, when it is asked for, trains the trunk with its memory from the
+start, with the memory-less control; the data's format follows V0's sizes. V1 itself is asked for with V0's numbers.
+
 
 1. **Start V0 now** (measurements only, no training)? Recommended: yes. It costs an afternoon of CPU and turns the
    open sizes above into numbers.
@@ -492,6 +502,55 @@ tokens").
   2025 (student-informed teachers); the recurrent-student setup of Lee et al. 2020 (recalled; its architecture not
   checked here).
 - Auxiliary tasks: Jaderberg et al. 2017 (UNREAL). Asymmetric actor-critic: Pinto et al. 2018.
+
+### 8.6 V0 measured (2026-10-23; no training)
+
+Two tools, both built by Haiku subagents from written specs and checked here: `bench/v3_rollout.py` (the rollout's
+speed, v1 against v3, and the state's size) and `bench/v3_data_size.py` (what a decision costs to store, and the
+horizons). Each ran plainly and under the gen-7 render.
+
+**What a decision costs to store** (valid rows only, float16, one mask byte a slot; 4 agents x 300 ticks a world, the
+duel 3 weapons x 300 ticks):
+
+| World | Channel | Bytes a decision: mean (p95, max) | Of dense float32 (168,684) | Largest share |
+|---|---|---|---|---|
+| Flat (the trainers' world) | no | 2,805 (2,840, 2,840) | 1.7% | the act token 40% |
+| Flat, render | yes | 3,026 (3,052, 3,052) | 1.8% | the act token 37% |
+| Region | no | 19,483 (22,392, 23,938) | 11.6% | geometry 85% |
+| Region, render | yes | 22,152 (25,004, 28,702) | 13.1% | geometry 81% |
+| Duel | no | 3,034 (3,380, 3,614) | 1.8% | the act token 37% |
+
+- **float16 costs nothing that matters:** the only values it moves by more than 1e-3 of their size are below 2^-14
+  (6.1e-5, essentially zero), 0.01 to 0.02% of the values; none overflows; in the normal range the error is at most
+  2^-11 (4.9e-4).
+- So A2's first run (123,398 decisions) is about 0.37 GB on the flat world and 2.7 GB on Region: the whole aggregate
+  fits, and no bounded buffer is needed (8.2 item 3).
+- **One lane's state** is about 99 KB (the spatial stores 53 KB, the written tables 14 KB, the places 12 KB, the
+  social records 11 KB): a sequence's stored starting state is a few decisions' worth.
+
+**The horizons:** walk_to's (`WalkToTasks.sample`, 4,096 draws) p50 162 ticks (5.4 s), p95 428 (14.3 s), max 480
+(16.0 s); look_at's 90 ticks (3.0 s).
+
+**The rollout's speed** (a decision tick on the trainers' flat world: the environment, then the path; p50 over 90
+ticks a row; two rounds, plainly and under the render; load 15 to 23 on 18 cores, so these are a shared machine's
+numbers): v1 takes about 10 ms a tick at batch 64, 15 to 17 at 128 and 25 to 30 at 256 (5,900 to 10,400 decisions a
+second); v3 takes 29 to 33, 50 to 55 and 92 to 95 ms (1,950 to 2,800 a second), 2.8 to 3.8 times v1. The v3 trunk is
+most of it (about 67 of the 92 ms at batch 256, taken as the tick less the state layer alone, so approximate; the state
+layer 12 to 15 ms): it has 335,616 parameters against v1's 131,200 and attends over 356 tokens. The environment's step
+is the same for both (2.3 to 4.9 ms).
+
+**What it sets for V1** (the owner's ruling, 8.4: the data's format follows V0):
+- **Collecting the data is cheap:** A2's 123,398 decisions take about a minute of rollout at v3's rate. V1's cost is
+  training the trunk through time.
+- **Storage:** valid rows in float16, the whole DAgger aggregate kept (0.37 GB at A2's scale on the flat world).
+- **Sequences:** L = 90 decisions (3 s: a whole look_at episode, about a third of a long walk), with a burn-in of
+  B = 30 (1 s) for a sequence that starts mid-episode; one that starts at an episode's start begins from the exact
+  initial state and needs none. R2D2 used 80 with 20 or 40.
+- **Training through time is not measured** (V0 trains nothing). Estimated (inferred: the trunk's forward cost a
+  decision at batch 256, a backward pass about twice the forward, and an unroll that is sequential over the 90
+  decisions): 1 to 2 s an Adam step on A2's 1,024 decisions (about 11 sequences), so 0.5 to 1 hour an iteration and 3
+  to 7 hours for A2's six iterations on this machine. So V1 starts with a timed smoke (one iteration, a few hundred
+  steps) before its full budget is asked for.
 
 ## References
 
