@@ -94,6 +94,7 @@ from ._common import (
     REQUEST_LIMIT,
     SECTION_NAMES,
     SECTION_WRITERS,
+    KNOWN_ENTITY_LIMIT,
     STATUS_HISTORY,
     WRITES_PER_AGENT_TICK,
 )
@@ -134,6 +135,8 @@ from .sections.writes import (
     WritesSection,
 )
 from .sections.skills import (
+    AgentEntities,
+    KnownEntity,
     SkillsSection,
 )
 from .views.jev import (
@@ -168,6 +171,9 @@ __all__ = [
     "SHARED_STATE_JSON_SCHEMA",
     "EXECUTIVE_SECTION_JSON_SCHEMA",
     "STATUS_HISTORY",
+    "KNOWN_ENTITY_LIMIT",
+    "AgentEntities",
+    "KnownEntity",
     "WRITES_PER_AGENT_TICK",
     "WriteRecord",
     "WriteStatus",

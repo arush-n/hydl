@@ -111,18 +111,24 @@ combiner writes statuses, items 8 and 9 change nothing in items 1 to 7. Ticks ar
        agent         b
        issued_tick   t;   expires_tick = t + host_cadence_ticks
        verb          the goal's skill id
-       args.entity   TARGET_ENTITY (0) when ``requests.ARGUMENT_SCHEMAS[verb]`` needs an entity, else absent
+       args.entity   the target's id (the target rule below) when ``requests.ARGUMENT_SCHEMAS[verb]`` needs an entity
+       and the lane has a target, else absent
        args.scalars  the goal's params named by the verb's contract ``param_names``
        mode          "interrupt" while an interrupt's goal is in force, else "parallel"
        priority      the interrupt's priority; else E_t's priority of the goal's slot; else 0 (no slot)
        urgency       min(1, clip(priority, 0, 1) + u_b);   confidence 1
        goal_slot, executive_version   the goal's payload;   program_step   k_b (len(steps) once finished)
 
+   The target: with a known-entity record of the lane in the skills section (``KnownEntity``, written by the skill layer
+   every tick), the target is the nearest visible alive hostile entity, else the most recently seen alive hostile one,
+   else none (no entity argument); the entities the request is validated against are the record's ids. Without a record
+   (no state binding) the target is TARGET_ENTITY (0), the belief's single target, as before.
    The request key (verb, interrupt or not, k_b, the payload's version, E_t's version, the companions) scopes a step:
    when it changes, the step's rejections, u_b and the withdrawal reset. Each request is checked with
    ``requests.validate`` against its verb's contract (``contracts=``; without them the check reports
-   verb_unknown) and the entities the belief knows: {TARGET_ENTITY} when ``ticks_since_target_seen`` is
-   known and below TICKS_SATURATION (the belief starts it saturated), else none. The world box and the
+   verb_unknown) and the entities the lane knows: the ids of its known-entity record (the target rule above), or without one
+   {TARGET_ENTITY} when ``ticks_since_target_seen`` is known and below TICKS_SATURATION (the belief starts it
+   saturated), else none. The world box and the
    action mask are the combiner's to check, so the executor passes the widest finite box and every scope.
    A request that fails is still sent, so the combiner rejects it and item 8 reacts; ``invalid_requests``
    counts it. The lanes' requests and every other agent's live requests are written as one ``requests``
@@ -240,6 +246,7 @@ from experimental.neural_agent.jev.remember import REMEMBER, RememberLedger, Wri
 from experimental.neural_agent.shared_state import (
     SECTION_WRITERS,
     WRITES_PER_AGENT_TICK,
+    KnownEntity,
     RequestsSection,
     SharedState,
     WriteRecord,
@@ -264,7 +271,8 @@ TICK_COLUMNS: tuple[int, ...] = (
     feature_index("ticks_since_damage"),
     feature_index("ticks_since_target_seen"),
 )
-#: The entity handle of the belief's single target, written as ``args.entity`` (module docstring, item 9).
+#: The entity handle of the belief's single target: the target when the lane has no known-entity record (module
+#: docstring, item 9; with a record the target is ``choose_target``'s).
 #: The belief (``belief/core.py``) follows one target per lane and publishes no handle, so a request names
 #: the target by its index among the belief's targets: 0. The lower layer registers the same convention
 #: (agreed between the two sessions, 2026-10-17).
@@ -664,6 +672,21 @@ class LaneInformationRequest(NamedTuple):
     program_step: int
     verb: str
     reason: str
+
+
+#: A known entity is a target candidate when its hostility is above this (``KnownEntity.hostile``).
+HOSTILE_ABOVE: float = 0.5
+
+
+def choose_target(known: Sequence[KnownEntity]) -> KnownEntity | None:
+    """The lane's target among its known entities (module docstring, item 9): the nearest visible alive hostile one,
+    else the most recently seen alive hostile one, else None. Ties go to the smaller id."""
+
+    hostile = [entity for entity in known if entity.alive and entity.hostile > HOSTILE_ABOVE]
+    visible = [entity for entity in hostile if entity.visible]
+    if visible:
+        return min(visible, key=lambda entity: (math.inf if entity.distance is None else entity.distance, entity.id))
+    return min(hostile, key=lambda entity: (entity.age_s, entity.id), default=None)
 
 
 class ProgramExecutor:
@@ -1215,6 +1238,7 @@ class ProgramExecutor:
         """
 
         priorities = np.asarray(arrays.priority, dtype=np.float64)
+        known_by_lane = {entities.agent: entities for entities in self.scratchpad.skills.known_entities}
         for lane in range(self._lanes):
             index, goal_slot, k = int(skill[lane]), int(slot[lane]), int(self._step[lane])
             verb = self._skill_ids[index]
@@ -1237,6 +1261,16 @@ class ProgramExecutor:
                 priority = float(priorities[lane, goal_slot]) if goal_slot >= 0 else 0.0
             mode = MODE_INTERRUPT if interrupt else MODE_PARALLEL
             urgency = min(1.0, min(max(priority, 0.0), 1.0) + float(self._urgency_boost[lane]))
+            # The target (module docstring, item 9): the lane's known-entity record when the state binding gave one.
+            entities = known_by_lane.get(lane)
+            if entities is None:
+                target = TARGET_ENTITY
+                seen = bool(known[lane, _SEEN]) and float(features[lane, _SEEN]) < TICKS_SATURATION
+                known_ids = (TARGET_ENTITY,) if seen else ()
+            else:
+                chosen = choose_target(entities.entities)
+                target = None if chosen is None else chosen.id
+                known_ids = tuple(entity.id for entity in entities.entities)
             # The goal's own request, then one per companion of its interrupt (module docstring, item 9).
             asks = [(verb, index, goal_slot, params[lane])]
             if beside:
@@ -1249,7 +1283,7 @@ class ProgramExecutor:
                 schema = ARGUMENT_SCHEMAS.get(ask_verb)
                 named = 0 if contract is None else len(contract.param_names)
                 target_entity, target_position = target_arguments(
-                    schema, features[lane], target_memory, lane, TARGET_ENTITY
+                    schema, features[lane], target_memory, lane, target
                 )
                 request = ActionRequest(
                     request_id=int(self._next_request[lane]),
@@ -1272,13 +1306,12 @@ class ProgramExecutor:
                 )
                 self._next_request[lane] += 1
                 self.requests_issued[lane] += 1
-                seen = bool(known[lane, _SEEN]) and float(features[lane, _SEEN]) < TICKS_SATURATION
                 reason = validate(
                     request,
                     contract,
                     tick=tick,
                     world_bounds=_ANY_WORLD,
-                    known_entities=(TARGET_ENTITY,) if seen else (),
+                    known_entities=known_ids,
                     legal_scopes=SCOPES,
                     done_ids=(),
                 )

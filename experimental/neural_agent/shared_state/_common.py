@@ -53,6 +53,9 @@ REQUEST_LIMIT: int = 16
 WRITES_PER_AGENT_TICK: int = 8
 """Writes of one agent at one tick (``WritesSection``). Equal to the skill layer's ``WRITE_SLOTS``
 (``skill_agent/state/written.py``); a test pins the two equal."""
+KNOWN_ENTITY_LIMIT: int = 16
+"""Known entities of one agent (``SkillsSection.known_entities``): the skill layer's entity store holds this many by
+default (``skill_agent/state/memory.py``, ENTITY_SLOTS)."""
 STATUS_HISTORY: int = 256
 """Default bound of ``SkillsSection.statuses`` (the module docstring gives the sizing)."""
 LLM_REJECTIONS: int = 5

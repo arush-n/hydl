@@ -25,10 +25,11 @@ import numpy as np
 
 from experimental.neural_agent.contracts import SkillOutcome
 from experimental.neural_agent.shared_state.document import SharedState
+from experimental.neural_agent.shared_state.sections.skills import AgentEntities, KnownEntity
 from experimental.neural_agent.shared_state.sections.writes import WriteStatus
 from experimental.neural_agent.skill_agent.state.written import Write
 
-from ._common import SECTION_WRITERS
+from ._common import KNOWN_ENTITY_LIMIT, SECTION_WRITERS
 
 FULL_REASON: str = "full"
 """The reason of a write the device refused: the table had no free entry for its key."""
@@ -70,8 +71,21 @@ def writes_for_tick(document: SharedState, tick: int, agents: int) -> list[list[
     ]
 
 
+def _store_skills(
+    document: SharedState, tick: int, statuses: Sequence[WriteStatus], known_entities: tuple[AgentEntities, ...] | None
+) -> int:
+    """Write the skills section at ``tick``: the statuses appended, and ``known_entities`` replaced when given."""
+
+    skills = document.skills
+    changes: dict[str, Any] = {"write_statuses": skills.write_statuses + tuple(statuses)}
+    if known_entities is not None:
+        changes["known_entities"] = known_entities
+    return document.write("skills", dataclasses.replace(skills, **changes), writer=SECTION_WRITERS["skills"], tick=tick)
+
+
 def record_write_results(
-    document: SharedState, tick: int, reasons: Sequence[Sequence[str | None]], applied: Any
+    document: SharedState, tick: int, reasons: Sequence[Sequence[str | None]], applied: Any,
+    known_entities: tuple[AgentEntities, ...] | None = None,
 ) -> int:
     """Record the status of each write of ``tick`` in the skills section; return the new document version.
 
@@ -82,6 +96,8 @@ def record_write_results(
             reason from ``written.lower``, or None when the host accepted it.
         applied: bool[B, W]: the device's ``Written.applied`` after ``written.apply``. An accepted write takes the
             next slot of its agent, so its flag is ``applied[agent, slot]``.
+        known_entities: The lanes' known entities of ``tick`` (``AgentEntities``, one per lane), written into the same
+            document version when given.
 
     Returns:
         The document version after the skills section is written.
@@ -117,9 +133,7 @@ def record_write_results(
                 statuses.append(
                     WriteStatus(agent=agent, write_id=record.id, tick=tick, kind="write_refused", reason=FULL_REASON)
                 )
-    skills = document.skills
-    updated = dataclasses.replace(skills, write_statuses=skills.write_statuses + tuple(statuses))
-    return document.write("skills", updated, writer=SECTION_WRITERS["skills"], tick=tick)
+    return _store_skills(document, tick, statuses, known_entities)
 
 
 OUTCOME_SLOTS: int = 4
@@ -212,6 +226,9 @@ class StateTickBinding:
         step_kwargs: The senses' inputs passed through to ``layer.step`` (tables, light, action_surface,
             block_reach_blocks).
         view: The last tick's ``StateView`` (None before the first tick).
+        own_position: ``own_position(transition)`` gives the agents' positions, float[B, 3]. When given, every tick writes
+            each lane's known entities (``known_entities``); None (the default) writes none.
+        tick_seconds: The tick's length in seconds, the producer's ``dt_seconds`` (0.045 by default).
     """
 
     trunk: Any
@@ -220,6 +237,8 @@ class StateTickBinding:
     verb_index: Mapping[str, int]
     step_kwargs: Mapping[str, Any] = dataclasses.field(default_factory=dict)
     view: Any = None
+    own_position: Callable[[Any], Any] | None = None
+    tick_seconds: float = 0.045
     # (agent, request_id) -> verb of every request seen live: a decision can drop a request from the requests section on
     # the tick its aborted status arrives, so the verb is remembered from the ticks it was live. Pruned once it ends.
     _verbs: dict[tuple[int, int], str] = dataclasses.field(default_factory=dict, repr=False)
@@ -227,7 +246,7 @@ class StateTickBinding:
     def on_tick(self, document: SharedState, tick: int, decided: bool, transition: Any) -> None:
         """Run one state tick for ``tick``; ``decided`` is True when the host decision model ran on this tick."""
 
-        from experimental.neural_agent.skill_agent.runtime.state_tick import step_lanes
+        from experimental.neural_agent.skill_agent.runtime.state_tick import known_entities, step_lanes
 
         agents = int(np.asarray(self.state.entity_ids).shape[0])
         lists = writes_for_tick(document, tick, agents) if decided else None
@@ -247,5 +266,16 @@ class StateTickBinding:
             self.trunk, self.state, observation, last_action=last_action, reset=reset, write_lists=lists,
             outcomes=outcomes, outcome_verbs=outcome_verbs, **step,
         )
+        known = None
+        if self.own_position is not None:
+            lanes = known_entities(self.state, own_position=self.own_position(transition), dt_seconds=self.tick_seconds)
+            known = tuple(
+                AgentEntities(
+                    agent=agent, tick=tick, entities=tuple(KnownEntity(**item) for item in lane[:KNOWN_ENTITY_LIMIT])
+                )
+                for agent, lane in enumerate(lanes)
+            )
         if lists is not None:
-            record_write_results(document, tick, reasons, self.state.written.applied)
+            record_write_results(document, tick, reasons, self.state.written.applied, known_entities=known)
+        elif known is not None:
+            _store_skills(document, tick, (), known)

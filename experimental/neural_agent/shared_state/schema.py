@@ -21,6 +21,7 @@ from experimental.neural_agent.contracts import (
 from experimental.neural_agent.executive.store import validate_against_schema
 
 from ._common import (
+    KNOWN_ENTITY_LIMIT,
     LATENT_PREFIX_WIDTH,
     SECTION_NAMES,
     _TEXT_FIELDS,
@@ -236,6 +237,28 @@ _WRITE_STATUS_SCHEMA = _object_schema(
         "reason": {"type": "string"},
     }
 )
+_KNOWN_ENTITY_SCHEMA = _object_schema(
+    {
+        "id": _count_schema(),
+        "visible": {"type": "boolean"},
+        "age_s": {"type": "number", "minimum": 0},
+        "position": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "number"}},
+        "distance": {"type": ["number", "null"], "minimum": 0},
+        "hostile": {"type": "number"},
+        "attitude": {"type": ["string", "null"]},
+        "health": {"type": "number"},
+        "alive": {"type": "boolean"},
+        "player": {"type": "boolean"},
+        "tagged": {"type": "number"},
+    }
+)
+_KNOWN_ENTITIES_SCHEMA = _object_schema(
+    {
+        "agent": _count_schema(),
+        "tick": _count_schema(),
+        "entities": {"type": "array", "maxItems": KNOWN_ENTITY_LIMIT, "items": _KNOWN_ENTITY_SCHEMA},
+    }
+)
 _SKILLS_SECTION_SCHEMA = _object_schema(
     {
         "active": {"type": "array", "items": {"type": "string", "minLength": 1}},
@@ -258,6 +281,7 @@ _SKILLS_SECTION_SCHEMA = _object_schema(
         "statuses": {"type": "array", "items": _STATUS_SCHEMA},
         "status_limit": _count_schema(1),
         "write_statuses": {"type": "array", "items": _WRITE_STATUS_SCHEMA},
+        "known_entities": {"type": "array", "items": _KNOWN_ENTITIES_SCHEMA},
     }
 )
 _EVENTS_SECTION_SCHEMA = _object_schema(
