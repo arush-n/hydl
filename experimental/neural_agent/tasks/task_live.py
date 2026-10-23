@@ -4,13 +4,23 @@ Nothing here opens a socket or launches a server. ``compile_live`` returns the r
 ``HytaleEnv.reset`` sends (``hytale_env.py`` reset_options), validated against the keys the bridge reads
 (``ClientHandler.handleReset``, ``EnvironmentOptions``); the test checks each emitted key against the Java source.
 
-Reward and termination on the live side call the same ``task_spec.reach_step`` and ``reach_done`` as the sim,
-fed the live observation's absolute ``position`` (``hytale_env.py`` ``_parse_observation``).
+Live mapping per objective (what the bridge accepts today, read from the Java):
 
-Pilot mapping (what the bridge accepts today, read from the Java):
-  backend=native, world=flat, npc_role, spawn_x/y/z, fidelity_fixture=default.
-  A spawn with world=flat and the default fixture passes ``NativeEnvironmentSession.createFidelityFixture``.
-  Not sent: a body yaw (no reset key exists, so ``ReachPlace``'s start yaw is not honoured live) and any opponent.
+* ``ReachPlace``, ``HoldArea``: backend=native, world=flat, npc_role, spawn_x/y/z, fidelity_fixture=default. A spawn
+  with world=flat and the default fixture passes ``NativeEnvironmentSession.createFidelityFixture``.
+* ``SurviveSeconds``: the same reset plus ``combat_target_active=true``, and env task ``kill_trork``, the only task
+  that spawns a combat target (``NativeEnvironmentSession`` line 3284). Which role it spawns is the matchup target,
+  Trork_Brawler. Inferred, not launched.
+* ``DefeatTarget(role)``: env task ``kill_trork``, fidelity ``native_duel``, ``combat_target_role=role``,
+  ``combat_target_active=true``, and NO spawn: a named fixture requires the default spawn (``NativeEnvironmentSession``
+  lines 6161-6167), so the body starts where the fixture puts it.
+* ``EvadeTurret``: no live fixture (gap L3). ``compile_live`` raises ``NotImplementedError`` and names the option.
+
+Reward on the live side: ``live_reach_step`` and ``live_hold_step`` call the sim's ``task_spec`` functions on the
+observation's absolute ``position`` (``hytale_env.py`` ``_parse_observation``). The combat objectives have no live
+reward yet, because their observation fields (health, target health) are not mapped here.
+
+Body yaw is not a reset key on the live side (gap L1), so the body starts at its role's heading.
 """
 
 from __future__ import annotations
@@ -22,11 +32,17 @@ from typing import Any, Mapping
 import numpy as np
 
 from experimental.neural_agent.tasks.task_spec import (
+    DefeatTarget,
+    EvadeTurret,
+    ReachPlaceRegion,
+    HoldArea,
+    SurviveSeconds,
     TaskSpec,
+    hold_step,
     planar_distance,
     reach_step,
     time_limit_ticks,
-    validate_pilot,
+    validate_spec,
 )
 
 # Every reset key this compiler can emit, each read by ClientHandler.handleReset (or the codec it calls).
@@ -38,11 +54,23 @@ LIVE_RESET_KEYS = (
     "spawn_y",
     "spawn_z",
     "fidelity_fixture",
+    "combat_target_role",
+    "combat_target_active",
+)
+LIVE_GAP_REGION = (
+    "ReachPlaceRegion has no live reset (gap L2). static_region rejects a spawn and needs a generated world "
+    "(NativeEnvironmentSession 6154-6157), and the bridge has no Region library reset. Closes with a bridge reset that "
+    "loads a Region library world and reports its spawn. Sim only until then."
+)
+LIVE_GAP_EVADE_TURRET = (
+    "EvadeTurret has no live fixture (gap L3). Closes with a turret-role combat target: a bridge fixture or option "
+    "that spawns Skeleton_Archer_Turret as the non-duel combat target, its validator line in EnvironmentOptions, and "
+    "a combat_target_role that accepts a turret. Sim only until then."
 )
 
 
 @dataclass(frozen=True, slots=True)
-class LiveReach:
+class LiveTask:
     """The dry-run result: the reset ``options`` and the env kwargs a launch would use. Nothing is launched."""
 
     options: dict[str, Any]
@@ -51,39 +79,46 @@ class LiveReach:
     notes: tuple[str, ...] = field(default_factory=tuple)
 
 
-def compile_live(spec: TaskSpec, *, ticks_per_step: int = 4) -> LiveReach:
-    """Build the bridge reset options for the pilot task. Raises ``NotImplementedError`` outside its scope."""
+LiveReach = LiveTask  # the pilot's name
 
-    validate_pilot(spec)
+
+def compile_live(spec: TaskSpec, *, ticks_per_step: int = 4) -> LiveTask:
+    """Build the bridge reset options for the spec. Raises ``NotImplementedError`` for a feature the bridge lacks."""
+
+    validate_spec(spec)
     if isinstance(ticks_per_step, bool) or not isinstance(ticks_per_step, int) or ticks_per_step < 1:
         raise ValueError("ticks_per_step must be a positive integer")
+    objective = spec.objectives[0]
+    if isinstance(objective, EvadeTurret):
+        raise NotImplementedError(LIVE_GAP_EVADE_TURRET)
+    if isinstance(objective, ReachPlaceRegion):
+        raise NotImplementedError(LIVE_GAP_REGION)
     body = spec.bodies[0]
     x, y, z = (float(v) for v in body.spawn)
-    options = {
-        "backend": "native",
-        "world": "flat",
-        "npc_role": body.role,
-        "spawn_x": x,
-        "spawn_y": y,
-        "spawn_z": z,
-        "fidelity_fixture": "default",
-    }
-    env_kwargs = {
-        "backend": "native",
-        "world": "flat",
-        "npc_role": body.role,
-        "spawn": (x, y, z),
-        "fidelity_fixture": "default",
-        "ticks_per_step": ticks_per_step,
-    }
+    options: dict[str, Any] = {"backend": "native", "world": "flat", "npc_role": body.role}
+    env_kwargs: dict[str, Any] = {"backend": "native", "world": "flat", "npc_role": body.role}
+    notes: list[str] = []
+    task = None
+    if isinstance(objective, DefeatTarget):
+        options.update(combat_target_role=objective.role, combat_target_active=True, fidelity_fixture="native_duel")
+        env_kwargs.update(combat_target_role=objective.role, fidelity_fixture="native_duel")
+        task = "kill_trork"
+        notes.append("native_duel rejects a spawn: the body starts where the fixture places it (no spawn sent)")
+    else:
+        options.update(spawn_x=x, spawn_y=y, spawn_z=z, fidelity_fixture="default")
+        env_kwargs.update(spawn=(x, y, z), fidelity_fixture="default")
+        if isinstance(objective, SurviveSeconds):
+            options["combat_target_active"] = True
+            task = "kill_trork"
+            notes.append("built-in Trork_Brawler: kill_trork spawns the matchup target (inferred, not launched)")
+    if task is not None:
+        env_kwargs["task"] = task
+    env_kwargs["ticks_per_step"] = ticks_per_step
     limit_ticks = time_limit_ticks(spec)
     steps = math.ceil(limit_ticks / ticks_per_step)
-    notes = (
-        "body yaw is not a reset key: the live body starts at the role's heading",
-        "no opponent: npc_role only; combat_target_role is not sent",
-        f"time limit {spec.time_limit_seconds} s = {limit_ticks} ticks = {steps} steps at ticks_per_step={ticks_per_step}",
-    )
-    return LiveReach(options=options, env_kwargs=env_kwargs, max_episode_steps=steps, notes=notes)
+    notes.append("body yaw is not a reset key: the live body starts at the role's heading (gap L1)")
+    notes.append(f"time limit {spec.time_limit_seconds} s = {limit_ticks} ticks = {steps} steps at ticks_per_step={ticks_per_step}")
+    return LiveTask(options=options, env_kwargs=env_kwargs, max_episode_steps=steps, notes=tuple(notes))
 
 
 def live_reach_step(prev_distance, observation: Mapping[str, Any], arrived_before, spec: TaskSpec):
@@ -98,4 +133,20 @@ def live_reach_step(prev_distance, observation: Mapping[str, Any], arrived_befor
     return float(np.asarray(reward).item()), bool(np.asarray(arrived_now).item()), distance
 
 
-__all__ = ["LIVE_RESET_KEYS", "LiveReach", "compile_live", "live_reach_step"]
+def live_hold_step(streak_before: int, observation: Mapping[str, Any], spec: TaskSpec):
+    """Live hold reward for one env step: ``task_spec.hold_step`` on the observation's position.
+
+    Returns ``(reward, streak_now)``. The goal span is ``HoldArea.seconds`` at the 30 Hz episode clock.
+    """
+
+    objective = spec.objectives[0]
+    if not isinstance(objective, HoldArea):
+        raise ValueError("live_hold_step needs a HoldArea spec")
+    position = np.asarray(observation["position"], dtype=np.float64)
+    inside = bool(planar_distance(position, objective.center) <= objective.radius)
+    goal = int(round(objective.seconds * 30))
+    reward, streak = hold_step(np.asarray(streak_before), np.asarray(inside), goal, spec)
+    return float(np.asarray(reward).item()), int(np.asarray(streak).item())
+
+
+__all__ = ["LIVE_GAP_EVADE_TURRET", "LIVE_RESET_KEYS", "LiveReach", "LiveTask", "compile_live", "live_hold_step", "live_reach_step"]
