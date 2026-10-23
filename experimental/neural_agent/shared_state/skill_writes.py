@@ -19,7 +19,7 @@ statuses in the skills section (``done`` with its ``SkillOutcome``, or ``aborted
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
 
@@ -184,3 +184,62 @@ def outcomes_for_tick(
             outcomes[agent, column] = code
             outcome_verbs[agent, column] = int(verb_index[verb])
     return outcomes, outcome_verbs
+
+
+@dataclasses.dataclass
+class StateTickBinding:
+    """The skill layer's state tick, bound to a session (``session.run_session(state_binding=)``, task #136).
+
+    The session calls :meth:`on_tick` every tick, after the decision and the combiner's statuses of that tick are in
+    S_t. On a tick the host decided, the decision's writes go in (:func:`writes_for_tick`); every tick, the requests that
+    ended (:func:`outcomes_for_tick`). The device side is the skill layer's
+    ``skill_agent.runtime.state_tick.step_lanes``; after a tick with writes, their results are recorded
+    (:func:`record_write_results`).
+
+    Attributes:
+        trunk: The skill layer's trunk.
+        state: The agents' state (``skill_agent.state.layer.AgentState``); replaced every tick.
+        observe: ``observe(transition) -> (observation, last_action, reset, respawn)``: what the trunk reads this tick,
+            int32[B, 21] factors sent last tick, bool[B] new episode, bool[B] respawned (None for none). Supplied by
+            the caller: only the skill layer knows its observation.
+        verb_index: Maps a verb (skill id) to the index the event log records (the skill layer's vocabulary).
+        step_kwargs: The senses' inputs passed through to ``layer.step`` (tables, light, action_surface,
+            block_reach_blocks).
+        view: The last tick's ``StateView`` (None before the first tick).
+    """
+
+    trunk: Any
+    state: Any
+    observe: Callable[[Any], tuple[Any, Any, Any, Any]]
+    verb_index: Mapping[str, int]
+    step_kwargs: Mapping[str, Any] = dataclasses.field(default_factory=dict)
+    view: Any = None
+    # (agent, request_id) -> verb of every request seen live: a decision can drop a request from the requests section on
+    # the tick its aborted status arrives, so the verb is remembered from the ticks it was live. Pruned once it ends.
+    _verbs: dict[tuple[int, int], str] = dataclasses.field(default_factory=dict, repr=False)
+
+    def on_tick(self, document: SharedState, tick: int, decided: bool, transition: Any) -> None:
+        """Run one state tick for ``tick``; ``decided`` is True when the host decision model ran on this tick."""
+
+        from experimental.neural_agent.skill_agent.runtime.state_tick import step_lanes
+
+        agents = int(np.asarray(self.state.entity_ids).shape[0])
+        lists = writes_for_tick(document, tick, agents) if decided else None
+        if lists is not None and not any(lists):
+            lists = None  # no write this decision: entries persist, nothing to send or record
+        for request in document.requests.live:
+            self._verbs[(int(request.agent), int(request.request_id))] = request.verb
+        outcomes, outcome_verbs = outcomes_for_tick(document, tick, agents, self.verb_index, verbs=self._verbs)
+        for status in document.skills.statuses:
+            if status.tick == tick and status.kind in ("done", "aborted"):
+                self._verbs.pop((int(status.agent), int(status.request_id)), None)
+        observation, last_action, reset, respawn = self.observe(transition)
+        step = dict(self.step_kwargs)
+        if respawn is not None:
+            step["respawn"] = respawn
+        self.view, self.state, reasons = step_lanes(
+            self.trunk, self.state, observation, last_action=last_action, reset=reset, write_lists=lists,
+            outcomes=outcomes, outcome_verbs=outcome_verbs, **step,
+        )
+        if lists is not None:
+            record_write_results(document, tick, reasons, self.state.written.applied)

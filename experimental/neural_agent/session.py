@@ -259,6 +259,7 @@ def run_session(
     report_sink: ReportSink | None = None,
     shared_state: SharedState | None = None,
     record_fn: Callable[[HierarchicalLoopTransition], Any] = default_record,
+    state_binding: Any = None,
 ) -> SessionResult:
     """Run the stack for ``config.steps`` ticks with the executive in the loop.
 
@@ -285,10 +286,17 @@ def run_session(
     ``carry.actor_state`` with the same PyTree structure (2026-10-19): the session
     writes it into the carried state, so the next tick sees it. A different
     structure raises ValueError.
+
+    ``state_binding`` (optional, default None: the session is unchanged) runs the skill layer's state tick every tick,
+    last, after the decision and ``on_tick`` (``shared_state.skill_writes.StateTickBinding``, task #136): its
+    ``on_tick(shared_state, clock_tick, decided, transition)`` takes the decision's writes on a tick the host decided
+    and the requests that ended on every tick. It requires ``shared_state``.
     """
 
     if executive is not None and executive_writer is None:
         raise ValueError("executive_writer is required when an executive is given")
+    if state_binding is not None and shared_state is None:
+        raise ValueError("state_binding requires shared_state (it reads the writes and the statuses there)")
     if not isinstance(initial_state, HierarchicalCoreState):
         raise TypeError("initial_state must be a HierarchicalCoreState")
     ids = tuple(str(s) for s in skill_ids)
@@ -336,6 +344,7 @@ def run_session(
         step = transition.hierarchy_step
         new_state = hierarchy_state
         changed = False
+        decided = False
 
         # 2. goal switches -> reports. A lane whose goal was not yet valid
         # adopts its first goal; that is not a switch and produces no report.
@@ -397,6 +406,7 @@ def run_session(
                 due = bool(np.asarray(step.goal_runtime.active_events).any())
             if due:
                 host_decisions += 1
+                decided = True
                 if binds_tick:
                     host_decider.current_tick = clock_tick
                 started = time.perf_counter()
@@ -478,6 +488,10 @@ def run_session(
                     raise ValueError("on_tick changed the actor_state structure")
                 new_state = new_state._replace(carry=new_state.carry._replace(actor_state=actor_state))
                 changed = True
+
+        # 7. the skill layer's state tick (opt-in), last: the decision's writes and this tick's statuses are in S_t
+        if state_binding is not None:
+            state_binding.on_tick(shared_state, clock_tick, decided, transition)
 
         return new_state if changed else None
 
