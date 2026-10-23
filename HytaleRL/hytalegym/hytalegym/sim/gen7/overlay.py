@@ -916,6 +916,12 @@ HOOKS = (
          "The table triple (10.5, 14, 82) replaces the 0.5.7 triple (16, 42, 123) on the gen-7 render only; the applied "
          "integers follow from the kernel's half-up rule (mechanics/runtime/kernel.py:320-322), which this hook does not "
          "touch; durability stays with weapon_durability (row 8d); non-crossbow rows pass through"),
+    Hook("shortbow_scalar_variant", PROFILE_JAX, "_scalar_variant_profile",
+         f"{_MECHANICS}.shortbow_variant_damage:construct", "shortbow_scalar_variant", "active", "6a",
+         "Shortbow scalar variants (12 non-Iron rows) against the 0.7.2 item rows: Strength_0..3 damage per tier, "
+         "for example Adamantite 9, 14, 18, 25 -> 1, 3, 6, 10; file-sourced, not measured live",
+         "Strength_0..4 and Signature_Volley damage of the 12 non-Iron shortbow rows; the Iron row keeps its Redirect; "
+         "launch speeds are shared configs and unchanged; durability stays with weapon_durability (row 8d)"),
     Hook("guard_cancel_window_roots", PROFILE_JAX, "_ability",
          f"{_MECHANICS}.guard_window:ability_root_window", "guard_cancel_window", "active", "5d", _GUARD,
          "stamps each Sword, Mace, Battleaxe and Daggers Primary attack root that 0.7.2 declares InterruptedBy "

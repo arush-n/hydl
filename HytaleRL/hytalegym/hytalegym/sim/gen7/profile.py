@@ -42,6 +42,7 @@ PROFILE = SimProfile(
         npc_jump_arc="physics_math",
         dagger_swing_damage="gen7_table",
         crossbow_scalar_variant="gen7_table",
+        shortbow_scalar_variant="gen7_table",
         guard_cancel_window="attack_root",
         native_binding_types="item_interactions",
         bench_crafting="recipe_bench",

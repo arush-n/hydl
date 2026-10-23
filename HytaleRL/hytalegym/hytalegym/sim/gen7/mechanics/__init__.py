@@ -29,6 +29,7 @@ CONSTRUCT_MODULES = {
     "npc_jump_arc": "npc_jump_arc",
     "dagger_swing_damage": "dagger_damage",
     "crossbow_scalar_variant": "crossbow_variant",
+    "shortbow_scalar_variant": "shortbow_variant_damage",
     "guard_cancel_window": "guard_window",
     "native_binding_types": "native_bindings",
     "bench_crafting": "bench_crafting",

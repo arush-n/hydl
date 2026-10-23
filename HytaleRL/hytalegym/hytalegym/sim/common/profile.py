@@ -78,6 +78,10 @@ class Constructs:
     # of the shared weapon_variants module, HEAD) or "gen7_table" (the 0.7.2 item rows). Owner: sim/gen7/mechanics/
     # crossbow_variant.py (fidelity section (ag)).
     crossbow_scalar_variant: str = "shared_rows"
+    # Damage tuple (Strength_0..4, Signature_Volley) of every scalar Shortbow variant: "shared_rows" (the 0.5.7 tuples of
+    # the shared weapon_variants module, HEAD) or "gen7_table" (the 0.7.2 item rows). Owner: sim/gen7/mechanics/
+    # shortbow_variant_damage.py (fidelity row 6a).
+    shortbow_scalar_variant: str = "shared_rows"
     # Guard raised during a melee attack: "guard_root" (the guard root's Interrupting [Primary] cancels the attack at
     # any time, 0.5.x) or "attack_root" (0.7.2: the attack root's InterruptedBy [Secondary] cancels it only while
     # the root's RunTime runs). Owner: sim/gen7/mechanics/guard_window.py (row 5d).
