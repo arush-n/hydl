@@ -2497,3 +2497,16 @@ Other findings:
 - **Runes.** A rune is cast from the held item's section (`AbilityCastUtil.castAbility`). Only the player systems attach the `AbilitySlots` and `RuneBag` containers. Inferred: an NPC body cannot cast a rune.
 - **Ranged "no damage" in the weapon matrix.** These were a harness spawn bug (the target sat at y = 65). With the spawn fixed, the crossbow deals 10 at 8 blocks.
 - **Trace ticks.** The trace's tick field advances about 50 per environment step, while info reports `world_paused_between_steps`. Per-step `delta_seconds` timings stand.
+
+## (av) The two NPC ranged attacks in the sim, signature energy per hit, staff stamina, two probes parked (2026-10-23; jar `1F874DFC`; commits 397f986, c60d124, 947277b)
+
+| Row | Evidence | Result | Status |
+|---|---|---|---|
+| (no row) Trork_Shaman rubble | gen-7 duel through `skill_agent/runtime/gen7.py`, profile `trork_shaman_rubble` with `tasks/shaman_controller.py` | Throws come 4.23 to 4.73 s apart on the template's attack sequence: aim 3 s, then a seeded 1 to 2 s pause. Every hit is 16. A stone takes 0.4 s to fly 12 blocks. Live gaps were 2.7 to 10 s; live damage 16. | MODELLED (cadence inside the live range) |
+| (no row) Skeleton_Archer_Turret bow | the same, profile `skeleton_archer_turret_bow` with `tasks/turret_controller.py` | Over 11 shots the gaps are 1.53 to 1.97 s (live 1.57 and 2.03), every hit 16. The NPC's legacy arrow offsets are not applied (the player arrow's launch transform is reused). | MODELLED |
+| 8c signature energy | `vortexstrike_cost.json` run 5 (fill mode, two seeds, passive Trork, Kweebec body) | Every Swing_Left hit gives exactly +1.0 energy out of a bar of 20, the last 1-damage hit included. The sim's on_hit is (RESOURCE_SIGNATURE_ENERGY, 1) (hytale_0_5_7.py:2076). | MATCH (Swing_Left) |
+| 8c Vortexstrike cast | runs 2 to 5 | The `native_duel` override fills the bar, but there the ability head's only legal choice is 0 (no slot). A target dies before the bar fills: the 61-HP Trork after 7 hits, and the tankiest Trork is the Chieftain at 124 HP. | NOT REACHABLE live with our bodies; the cost (100 percent of the bar) stays file-sourced |
+| 7c staff stamina | Assets.zip; render harness | A staff cast costs 5 stamina once (`Staff_Cast_Summon_Charged.json`, no gate). The render took 10 (the doubled native path) and takes 5 after 947277b. The ice staff's authored chain needs `Ingredient_Ice_Essence`, which the sim does not model, so its values are recorded and not applied. | FILE-SOURCED |
+| 5a hit interrupt, long run | role files | No hostile pairing exists for our bodies. `Skeleton_Fighter.json` is a Variant of Template_Intelligent with no AttitudeGroup, so it ignores every NPC. Goblin_Scrapper is hostile only to Spiders and Skeleton, and the only roles carrying AttitudeGroup Skeleton are Skeleton_Elite and its phase-2 template, neither on the learner body list. The first eligible hit was measured earlier against a passive target. | PARKED |
+
+The two profiles are added on the gen-7 render only, through overlay patches, so gen 5 is unchanged. A profile needs a real weapon family: with family 0, loadout validation sets `ARSENAL_FAILURE_INVALID_LOADOUT` and the actor-first view sees no target. Gates: `tests/sim` went 504, 508, 519 passed across the three commits.
