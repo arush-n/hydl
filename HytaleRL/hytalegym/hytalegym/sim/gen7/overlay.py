@@ -169,9 +169,8 @@ _SWORD_KNOCKBACK = (
     "0.5.10) and the test_jax_native_combat_compare.py sword tests recalibrated to 0.7.2"
 )
 _A1 = (
-    "VelocityType unchanged: the asset authors Add, the engine applies _melee's default FORCE_SET "
-    "(A1; gen 5 keeps Set through calibration_057.json); the knockback differential decides the "
-    "gen-7 model before this row changes"
+    "force values from the 0.7.2 table; VelocityType Add on Left (sword_swing_left_velocity_add) and Right (inside "
+    "sword_swing_right_knockback), Set on Down and Thrust; gen 5 keeps Set through calibration_057.json"
 )
 _GUARD = (
     "tests/fidelity/combat/defense/test_native_guard_attack_cancel.py on the live 0.7.2 bridge: Guard raised while "
@@ -307,13 +306,19 @@ PATCHES = (
     Patch("sword_swing_right_knockback", PROFILE_JAX,
           "                force=(0, 1, -1, 7),\n                on_hit=(RESOURCE_SIGNATURE_ENERGY, 1),\n"
           "                horizontal_selector=_SWORD_SWING_RIGHT_SELECTOR,\n",
-          "                force=(0, 0.2, -1, 5.0),\n                on_hit=(RESOURCE_SIGNATURE_ENERGY, 1),\n"
+          "                force=(0, 0.2, -1, 5.0),\n                force_mode=FORCE_ADD,\n"
+          "                on_hit=(RESOURCE_SIGNATURE_ENERGY, 1),\n"
           "                horizontal_selector=_SWORD_SWING_RIGHT_SELECTOR,\n",
-          "5b", _SWORD_KNOCKBACK, "Weapon_Sword_Primary_Swing_Right_Damage: Force 7 -> 5.0, Dir Y 1 -> 0.2. " + _A1),
+          "5b", _SWORD_KNOCKBACK, "Weapon_Sword_Primary_Swing_Right_Damage: Force 7 -> 5.0, Dir Y 1 -> 0.2, VelocityType Set -> Add. " + _A1),
     Patch("sword_swing_down_knockback", PROFILE_JAX,
           "                force=(0, 1, -2, 12),\n",
           "                force=(0, 0.2, -2, 10.8),\n",
           "5b", _SWORD_KNOCKBACK, "Weapon_Sword_Primary_Swing_Down_Damage: Force 12 -> 10.8, Dir Y 1 -> 0.2"),
+    Patch("sword_swing_left_velocity_add", PROFILE_JAX,
+          "                force=push,\n                on_hit=(RESOURCE_SIGNATURE_ENERGY, 1),\n",
+          "                force=push,\n                force_mode=FORCE_ADD,\n                on_hit=(RESOURCE_SIGNATURE_ENERGY, 1),\n",
+          "5b", _SWORD_KNOCKBACK, "Weapon_Sword_Primary_Swing_Left_Damage: VelocityType Set -> Add (the 0.7.2 table authors Add; "
+          "the engine's FORCE_ADD adds the force to the target's velocity). Down and Thrust stay Set"),
     Patch("iron_daggers_swing_damage", PROFILE_JAX,
           "    damage: tuple[float, ...] = (4, 4, 8, 12, 25, 31, 37),\n",
           "    damage: tuple[float, ...] = (6, 6, 8, 12, 25, 31, 37),\n",

@@ -219,6 +219,10 @@ def test_gen7_overlay_applies_its_patches_and_step_clock(gen7):
     profile = (out / "combat/arsenal/profiles/hytale_0_5_7.py").read_text()
     assert "    push = (0.0, 0.2, -1.0, 4.3)\n" in profile
     assert "force=(0, 0.2, -1, 5.0)," in profile and "force=(0, 0.2, -2, 10.8)," in profile
+    # VelocityType (0.7.2 table): Add on Left and Right, Set (the _melee default) on Down and Thrust. Pinned 2026-10-23.
+    assert "                force=push,\n                force_mode=FORCE_ADD,\n" in profile
+    assert "                force=(0, 0.2, -1, 5.0),\n                force_mode=FORCE_ADD,\n" in profile
+    assert "                force=(0, 0.2, -2, 10.8),\n                on_hit=" in profile
     assert profile.count("_guard(guard_stamina_value, interrupting_type_mask=0),") == 4
     assert "0.05 + 0.03333333333333333," in profile and "1.0 / 30.0" not in profile
     types_text = (out / "combat/types.py").read_text()
