@@ -31,6 +31,8 @@ SECTIONS: tuple[str, ...] = ("body", "inner", "world", "self", "social")
 SOURCES: tuple[str, ...] = ("birth", "rule", "written")
 """Set once when the agent is made (the LLM's persona record); computed by a fixed rule of the state layer; written by
 the decision layer or the LLM (step 2)."""
+WRITERS: tuple[str, ...] = ("decision", "llm")
+"""The layers that write (section 3: the top two), indexed in the state by position."""
 
 
 @dataclass(frozen=True)
@@ -43,6 +45,7 @@ class Variable:
     low: float = -1.0
     high: float = 1.0
     default: float = 0.0
+    writer: str | None = None  # the one layer that writes it; None for ``birth`` and ``rule``
 
 
 def _group(section: str, group: str, source: str, names: Sequence[str], *, body: Sequence[str] = (),
@@ -80,8 +83,23 @@ NAMES: tuple[str, ...] = tuple(variable.name for variable in VARIABLES)
 BY_NAME: Mapping[str, Variable] = {variable.name: variable for variable in VARIABLES}
 DEFAULTS: np.ndarray = np.asarray([variable.default for variable in VARIABLES], np.float32)
 
+ENTITY_ENTRIES: tuple[Variable, ...] = (
+    Variable("remember", "world", "tags", "written", False, 0.0, 1.0, 0.0, writer="decision"),
+)
+PLACE_ENTRIES: tuple[Variable, ...] = (
+    Variable("remember", "world", "tags", "written", False, 0.0, 1.0, 0.0, writer="decision"),
+)
+"""The fields of the entries about an entity and about a place (``docs/VIRTUAL_HUMAN.md`` section 19). ``remember`` is
+the priority the decision layer marks a thing with, which the stores pin and the body reads as ``tagged``; later steps
+append fields by name."""
+
 assert len(BY_NAME) == len(VARIABLES), "variable names must be unique"
 assert all(v.section in SECTIONS and v.source in SOURCES and v.low <= v.default <= v.high for v in VARIABLES)
+assert all(v.writer is None for v in VARIABLES if v.source in ("birth", "rule"))
+assert all(v.writer in WRITERS for v in VARIABLES if v.source == "written")
+for _entries in (ENTITY_ENTRIES, PLACE_ENTRIES):
+    assert len({v.name for v in _entries}) == len(_entries), "entry field names must be unique"
+    assert all(v.source == "written" and v.writer in WRITERS and v.low <= v.default <= v.high for v in _entries)
 
 
 def names(section: str | None = None, *, body_reads: bool | None = None) -> tuple[str, ...]:
@@ -156,5 +174,5 @@ def remap(values: Any, old: Sequence[str], new: Sequence[str], maps: Mapping[str
     return np.where(forward.any(axis=1), moved, fill).astype(np.float32)
 
 
-__all__ = ["BY_NAME", "DEFAULTS", "NAMES", "SECTIONS", "SOURCES", "VARIABLES", "Variable", "fingerprint", "names",
-           "remap", "transfer"]
+__all__ = ["BY_NAME", "DEFAULTS", "ENTITY_ENTRIES", "NAMES", "PLACE_ENTRIES", "SECTIONS", "SOURCES", "VARIABLES",
+           "Variable", "WRITERS", "fingerprint", "names", "remap", "transfer"]

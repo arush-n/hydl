@@ -255,8 +255,12 @@ def update(memory: SpatialMemory, perceived: Perceived, tags: Tags | None = None
             block.valid[:, :, None] & jnp.all(jnp.abs(block.world[:, :, None, :] - tags.world[:, None, :, :])
                                               < SAME_CELL_BLOCKS, axis=-1), axis=1)
         placeholder = jnp.zeros(tags.priority.shape + (block.rows.shape[-1],), jnp.float32)
-        block = upsert(block, placeholder, unseen, tags.world, jnp.full(unseen.shape, -1, jnp.int32),
-                       jnp.ones(unseen.shape, jnp.float32), now, False)
+        # Only when some tagged place is unseen: with none, the write leaves the store as it was, and skipping it saves
+        # about a quarter of the update at batch 64 (docs/VIRTUAL_HUMAN.md 19.8).
+        block = jax.lax.cond(jnp.any(unseen), lambda b: upsert(b, placeholder, unseen, tags.world,
+                                                                jnp.full(unseen.shape, -1, jnp.int32),
+                                                                jnp.ones(unseen.shape, jnp.float32), now, False),
+                             lambda b: b, block)
         stores["block"] = block._replace(tag=_tagged(block, tags, False))
     return SpatialMemory(now, stores["geometry"], stores["entity"], stores["block"])
 

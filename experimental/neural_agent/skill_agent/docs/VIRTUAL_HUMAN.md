@@ -561,7 +561,7 @@ approach. Missing:
 | 1 | DONE 2026-10-21, 61fc40e: the variable registry (`contract/variables.py`: 24 self and 8 inner variables, agent-side only), queries and state migration by name (`state/registry.py`), trunk migration by feature name (`model/migrate.py`), the layout and its fingerprint saved with every trunk and state; the trait list (15.6) and the persona token's shape (15.1, 10 body-read traits), moved here from step 7. Gate: no new failure by name; 8 new tests | 10.1, 10.2, 14, 15.1, 15.6 |
 | 1b | DONE 2026-10-22: the body's path on v3: the generalist reads every token type; every entity row carries its id; the runtime ticks the state layer (`runtime/state_tick.py`); a request points at a perceived or remembered entity; request to action tested. The trainers stay on v1 until training resumes | 13 (this section) |
 | 1c | DONE 2026-10-22: the memory design: a parallel write; object files for entities and block candidates (one latent each, keyed by identity); a gist of 16 latent slots plus a cache of 32 remembered cells for the background; the tick a quarter to a third faster on real rows (18.4) | 18 |
-| 2 | Structured writes from the top two layers; the tags move onto them | 10.4 |
+| 2 | Structured writes from the top two layers; the tags move onto them. DESIGNED and APPROVED 2026-10-22 (section 19, rulings in 19.7) | 10.4, 19 |
 | 3 | Fixed rules on game time: alarm and startle, sleep pressure and fatigue, hunger and the other drives; then lifecycle under normal death, and provenance | 10.5, 10.7, 10.8, 16.1, 16.2, 16.5 |
 | 4 | The event log and its tokens; the activity counters and levels | 10.6, 11.1, 16.6 |
 | 5 | The long-term spatial memory: places, routes, coordinates | 10.11, 16.4 |
@@ -901,6 +901,10 @@ The owner's answers to eight questions, and the designs that follow from them. G
   - the time of day, sleep pressure and the wake condition are for the decision layer and the LLM;
   - the body reads none of them now, beyond the `sleeping` movement state its self token already has;
   - their effect on the body (slower reactions, lapses) arrives later as a regulator. This is the rule of 15.1.
+- **Drowsiness forces sleep** (RULED 2026-10-22, when the wake condition was offered as step 2's first written
+  scalar: "it is not needed, the idea is that it has some scalar affect on the outputs based on some drowsiness ... to
+  force sleep"). Sleep pressure acts on the outputs as a scalar that forces sleep: a regulator (section 4), future.
+  The wake condition is not declared now (19.7).
 - **The clock reaches the agent through S14.** The live environment already reads `time_of_day` from the bridge
   (`hytalegym/envs/hytale_env.py`, lines 274 and 1031); the gen-7 gym does not publish it.
 - **The simulator has no game clock and no bed sleep** (the coordinator, 2026-10-21; checked here). `sleeping` is
@@ -1308,6 +1312,171 @@ The write alone, old and new loaded in one process on the same rows (scratch `wr
   terrain outside the captured core.
 - "During fast throughput areas it is slower" was a design concern, not an observation (owner, 2026-10-22: "just a
   design concern"). It is met: every shape is fixed, so a busy place does not change the cost (18.1, corrected).
+
+## 19. Structured writes from the top two layers (step 2; DESIGNED and APPROVED 2026-10-22 with the rulings of 19.7)
+
+The owner, 2026-10-22: "ok start working on those keep it in scope and organized". This is the design of 10.4, step 2
+of section 13. The owner answered its three decisions the same day (19.7).
+
+### 19.1 What exists
+
+- **The variable registry** (`contract/variables.py`) declares 32 scalars per agent. Each has a source: `birth` (the
+  persona) or `rule` (the affect rules). `written` is a declared source with no variable yet.
+- **The tags.** `state/layer.py` `step(..., tags=)` takes `memory.Tags` every tick: an entity id or a world position,
+  with a priority.
+  - `state/memory.py` pins a tagged thing in the stores and turns an unseen tagged place into a placeholder row.
+  - The body reads the priority as the `tagged` column.
+  - Only the tests pass tags. No layer emits them yet: the `remember` verb is described, not in the catalogue.
+- **No write path.** Nothing above the neural layer can change the agent's state.
+
+### 19.2 The design
+
+**A write** is one typed record from the decision layer or the LLM:
+- `writer`: `decision` or `llm`;
+- `name`: a declared written field;
+- `value`: a number in the field's declared range;
+- a key, when the field is about someone or somewhere: an entity id, or a world position (absolute world coordinates,
+  as requests carry them, `experimental/neural_agent/docs/MIDDLE_LAYER.md` section 5).
+
+**Where written values live.** Three places, all fixed-size arrays in the agent's state:
+- **per-agent scalars:** the registry's variables with source `written`, in `AgentState.variables`, read through
+  `state/registry.py` like every variable. Built with the first written scalar: step 2 declares none (19.7, 2);
+- **entries about an entity:** up to 16 per agent, keyed by entity id;
+- **entries about a place:** up to 16 per agent, keyed by world position. Two positions within 0.25 block on every
+  axis are the same place (the stores' rule).
+
+Each entry's fields are declared by name in the registry (rule 3 of section 14). Later steps add fields without new
+code: the relationship of 15.3 (step 9) on the entity entries, a place's label (11.6, step 5) on the place entries.
+
+**Checked against the registry.** Each written field declares its range and its one writer (section 3: two writers
+never disagree). A write is checked on the host before it enters the tick. It is refused, with a reason that goes back
+to the writer (as the combiner refuses a bad request), when:
+- the name is unknown;
+- the writer is not the field's writer;
+- the value is out of range (refused, not clipped);
+- the key is missing or of the wrong kind.
+
+**Applied between ticks.**
+- At the start of each tick, before the stores update, the tick's writes are applied in order. They come in a fixed
+  number of slots per agent, padded.
+- A later write to the same field wins.
+- A new key takes a free entry. When none is free, the write is refused ("full") and nothing is evicted: an entry stays
+  until it is ejected (19.7, 1). The refusal goes back to the writer like the others.
+- **Ejecting** an entry is a write: its fields back to their defaults (for `remember`, 0) frees it.
+
+**Stamped.** Each entry keeps who last wrote it and when: the tick for now, game time once the clock is published
+(S14). This is the start of provenance (10.8, step 3). A stamp per field comes when an entry has fields from two
+writers (step 9).
+
+**Fading.** Designed here, built with the first field that fades. A written value fades toward its default,
+`v <- d + (v - d) exp(-dt / tau)`, with `tau` declared per field in game time and `dt` the elapsed game time (16.1).
+Step 2 declares no fading field, so nothing fades yet.
+
+**At a new episode** the written state starts empty, like the stores. What survives a death is the lifecycle's
+question (10.7, step 3).
+
+**Reading.**
+- Scalars by name (`registry.get`).
+- Entries by key: about an entity id, or at a position.
+- Words and typed facts for the top layers are step 8.
+
+### 19.3 The tags move onto it
+
+- **A `remember` field on both entry tables:** the priority, in [0, 1], written by the decision layer, the layer that
+  marks importance today (`state/memory.py` docstring).
+- **Derived each tick.** The state layer derives `memory.Tags` from the live `remember` entries and passes them to the
+  stores as now.
+  - `state/memory.py` is unchanged.
+  - `layer.step` loses its `tags` argument (only the tests pass it) and takes `writes`.
+- **No fade** (RULED, 19.7, 1). `remember` lasts until the decision layer ejects it, as a tag lasts today until its
+  request ends. So the move changes no behaviour; check 1 of 19.6 tests it bit for bit.
+- **The range [0, 1].** Today's priorities are unbounded (two tests use 2.0). The body reads the value as a token
+  column, so a bounded range is better.
+
+### 19.4 The body
+
+Step 2 adds no token column:
+- the body keeps reading `remember` through the stores' `tagged` column;
+- a written scalar reaches the body only if it is declared `body_reads`, and none is in step 2.
+
+So the token layout does not change, and step 2 does not collide with the geometry capacity change to 96 or the
+re-audit after it.
+
+### 19.5 Files
+
+- `contract/variables.py`: a written field declares its writer (`Variable.writer`; none for `birth` and `rule`). The
+  entry fields are declared as two lists, `ENTITY_ENTRIES` and `PLACE_ENTRIES`, saved by name with every state.
+- `state/written.py` (new): the write record, the host check, the device arrays, applying writes, the derived tags,
+  the reads.
+- `state/layer.py`: `AgentState.written`; `step(..., writes=)`. Save and load carry the entries and migrate their
+  fields by name.
+- `runtime/state_tick.py`: passes the writes through.
+- Tests: `test_sa_state_written.py`; the two tag tests of `test_sa_state_memory.py` rewritten as writes.
+- Docs: `state/README.md`, this section, section 13's row, the ledger.
+
+### 19.6 How it is verified
+
+1. **The move is exact.** The same tags given the old way and as writes give bit-identical tokens and stores over 30
+   ticks on the Region world (gen 7, perception channel). The old path runs from the commit before, and each run
+   reports the module file it imported.
+2. **Refusals.** Each one has its reason (unknown name, wrong writer, out of range, missing key) and applies nothing.
+3. **Order, capacity and ejecting.** A later write wins. A write about a 17th entity is refused as full and changes
+   nothing. Writing `remember` 0 ejects the entry and frees it.
+4. **Save and load.** Entries round-trip; a save from before step 2 loads with no entries.
+5. **Cost.** The state layer's tick with and without writes, at batch 8 and 64.
+6. **The package gate**, both passes: no new failure by name.
+
+### 19.7 Decisions (RULED 2026-10-22)
+
+1. **`remember` does not fade.** RULED: "the decision layer should be in charge of that and relevant stuff should stay
+   in memory until it is manually ejected or some action ejects it".
+   - This lane's reading: the state layer never drops an entry on its own (no fade, no eviction when full).
+   - The decision layer ejects it, by choice or when one of its actions ends, with a write.
+2. **No written scalar now.** RULED: "sure but it is not needed, the idea is that it has some scalar affect on the
+   outputs based on some drowsiness ... to force sleep". So the wake condition is not declared. Drowsiness (sleep
+   pressure, 16.1) is to act on the outputs as a scalar that forces sleep: a regulator (section 4), future. The scalar
+   write path is built with the first written scalar.
+3. **One writer per field.** RULED: "sure we will ssee later". The decision layer writes `remember`. The LLM's wishes
+   reach it through its goals, which the decision layer reads (`MIDDLE_LAYER.md` section 3). The LLM gets fields of its
+   own when they come; step 9 decides the relationship's split.
+
+**Outside this lane.** Where writes come from in the shared scratchpad S_t (`MIDDLE_LAYER.md`: a new section, or the
+`decision` section) and how they reach the neural layer each tick is the middle layer's side. It goes to the
+coordinator once the write path is built.
+
+### 19.8 Built (2026-10-22), and how it was checked
+
+What was built is 19.2 and 19.3 with the rulings of 19.7 (`state/written.py`; `contract/variables.py` `WRITERS`,
+`Variable.writer`, `ENTITY_ENTRIES`, `PLACE_ENTRIES`; `state/layer.py` `step(..., writes=)`). A Haiku subagent wrote
+it from a written spec; it was reviewed and re-run here.
+
+- **The move is exact** (19.6, 1). The same two tags (one entity, one place) given the old way, `layer.step(tags=)` at
+  43f1115, and as writes once on the first tick: 30 ticks on the Region world (gen 7 with the perception channel, 4
+  agents, one engine render for both): 1,530 token and store arrays, all bit-identical. With no tags and no writes,
+  the old and new trees give the same SHA-256 over the same 1,530 arrays (67 stored rows at the end). Each run printed
+  the `layer.py` it imported.
+- **Unit tests:** `test_sa_state_written.py`, 23 (every refusal, order, the full table, ejecting, reset, the derived
+  tags, save and load with a save from before step 2); `test_sa_state_memory.py`'s two tag tests rewritten as writes.
+- **The package gate** on clean worktrees of 43f1115. Pass 1: before, 1,284 passed, 5 failed, 6 errors, 37 skipped;
+  with step 2, 1,307 passed (+23, the new tests), the same 11 failure and error names. Pass 2 (0.5.7,
+  `stand_in_pursuit`): 19 failed and 11 errors on both, the same 30 names.
+- **Cost, and one fix.** The derived tags are passed every tick, so the stores' placeholder write for unseen tagged
+  places ran every tick, where the old path skipped it when no tags were given. Measured in one process at batch 64 on
+  Region rows: applying the writes 0.05 ms, deriving the tags 0.04 ms, the stores' update 0.83 ms against 0.61 to
+  0.65 ms. That write now runs only when some tagged place is unseen (`state/memory.py`, a `lax.cond` on a scalar over
+  the batch); with none, the write left the store unchanged, so skipping it changes no result. Re-checked after the
+  fix: the same digests as above, with tags and without; the state and tandem tests, 81 passed.
+
+### 19.9 What grounds it
+
+- **The blackboard.** Layers that share one structured state, each writing only its own part, is the blackboard
+  architecture (Hayes-Roth 1985; Nii 1986; recalled), and the shared scratchpad's one-writer rule
+  (`MIDDLE_LAYER.md` section 2). Each written field here has one writer for the same reason: two writers never
+  disagree within a tick (section 3).
+- **Refuse, never clip.** A write outside its range is refused with a reason, as a database refuses a row that breaks
+  a constraint, so the writer learns its mistake instead of having its value silently changed.
+- **Never evict, never fade.** The owner's ruling (19.7, 1), not a research finding: what the decision layer marks
+  stays until the decision layer ejects it.
 
 ## Sources
 

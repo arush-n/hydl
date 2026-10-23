@@ -48,7 +48,7 @@ class StateView(NamedTuple):
 
 def tick(trunk: Trunk, state: layer.AgentState, observation: Any, *, last_action: jax.Array,
          reset: jax.Array | None = None, **step: Any) -> tuple[StateView, layer.AgentState]:
-    """One tick for B agents: ``layer.step`` (``step`` takes its keyword arguments: ``tags``, ``capacities`` and the
+    """One tick for B agents: ``layer.step`` (``step`` takes its keyword arguments: ``writes``, ``capacities`` and the
     senses' inputs), then the trunk on its tokens. A lane that ``reset`` starts its latent memory and its background
     summary from the trunk's initial slots (its stores, object latents included, start empty in ``layer.step``)."""
 

@@ -11,10 +11,11 @@ stores it). One tick, :func:`step`:
 1. the action history takes the action the agent sent last tick;
 2. the senses read this tick's perceived rows;
 3. the emotional state appraises them, with the persona's gains, and is published to the variables;
-4. the stores take them, and the middle layer's live tags;
-5. the stores give back what is remembered but not perceived;
-6. every entity token, perceived or remembered, gets the agent's feelings toward it (``feel_*``);
-7. everything is packed into the ``skill_tokens_v3`` token sets the trunk reads, with the persona and affect
+4. the top layers' writes are applied (``state/written.py``), and the live ``remember`` entries become the stores' tags;
+5. the stores take them;
+6. the stores give back what is remembered but not perceived;
+7. every entity token, perceived or remembered, gets the agent's feelings toward it (``feel_*``);
+8. everything is packed into the ``skill_tokens_v3`` token sets the trunk reads, with the persona and affect
    tokens, whose columns are the body-read variables (``tokens_v3.PERSONA_FEATURES``, ``AFFECT_FEATURES``).
 
 :func:`save` and :func:`load` write and read a state as one ``.npz`` (memory "stored as well", owner 2026-10-20 night),
@@ -37,6 +38,7 @@ from experimental.neural_agent.skill_agent.contract import variables
 from experimental.neural_agent.skill_agent.state import registry
 from experimental.neural_agent.skill_agent.state import affect as feeling
 from experimental.neural_agent.skill_agent.state import memory as stores
+from experimental.neural_agent.skill_agent.state import written
 from experimental.neural_agent.skill_agent.state.action_history import (
     ActionHistory,
     act_features,
@@ -58,6 +60,7 @@ class AgentState(NamedTuple):
     entity_ids: jax.Array | None = None  # int32[B, E]: the id of each entity token row last tick, -1 for padding
     object_slots: dict | None = None  # per important type: int32[B, N], each token row's store slot (-1 for none)
     background: jax.Array | None = None  # float32[B, K, W]: the trunk's last ``EncoderOutput.background``
+    written: written.Written | None = None  # the top layers' written entries (state/written.py)
 
 
 def initial_state(batch: int, latent: jax.Array | None = None, persona: jax.Array | None = None,
@@ -75,11 +78,11 @@ def initial_state(batch: int, latent: jax.Array | None = None, persona: jax.Arra
     values = registry.put(values, v3.AFFECT_FEATURES, feeling.affect_features(affect))
     slots = {name: jnp.full((batch, capacities[name]), -1, jnp.int32) for name in ("entity", "block_candidate")}
     return AgentState(initial_history(batch), stores.initial_memory(batch, latent_width=object_width), latent, values,
-                      affect, slots["entity"], slots, background)
+                      affect, slots["entity"], slots, background, written=written.initial_written(batch))
 
 
 def step(observation: Any, state: AgentState, *, last_action: jax.Array,
-             reset: jax.Array | None = None, tags: stores.Tags | None = None,
+             reset: jax.Array | None = None, writes: written.Writes | None = None,
              capacities: Mapping[str, int] = v3.CAPACITIES_V3, **adapter: Any
              ) -> tuple[dict[str, tuple[jax.Array, jax.Array]], AgentState]:
     """One tick (module docstring): the token sets and the next state.
@@ -90,7 +93,7 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
         last_action: int32[B, 21], the gen-7 action the agent sent last tick.
         reset: bool[B], lanes that start a new episode this tick (their history, stores and emotional state start
             over, the persona stays; the trunk's latent memory is reset by its caller).
-        tags: The middle layer's live tags, or None.
+        writes: This tick's writes from the top layers (``written.lower``), or None.
         capacities: Slots per type.
         **adapter: Passed to ``adapter_v3.perceive_rows`` (``body_yaw_degrees``, ``tables``, ``action_surface``,
             ``block_reach_blocks``, ``light``, ``view_half_angle_degrees``).
@@ -100,7 +103,8 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
     perceived = perceive_rows(observation, inventory_capacity=capacities["inventory_slot"], **adapter)
     affect = feeling.update(state.affect, perceived, registry.take(state.variables, TRAITS), reset)
     values = registry.put(state.variables, v3.AFFECT_FEATURES, feeling.affect_features(affect))
-    memory = stores.update(state.memory, perceived, tags, reset)
+    record = written.apply(state.written, writes, reset)
+    memory = stores.update(state.memory, perceived, written.tags(record), reset)
     remembered = stores.read(memory, perceived.pose)
     rows = dict(perceived.rows)
     rows["act"] = (act_features(history), jnp.ones(history.last_choice.shape, jnp.bool_))
@@ -121,15 +125,24 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
     tokens = pack(rows, batch, capacities)
     ids = fit_ids(entity_ids, valid, capacities["entity"])  # aligned with tokens["entity"], perceived and remembered
     slots = stores.object_slots(memory, tokens, ids, perceived.pose)
-    return tokens, AgentState(history, memory, state.latent, values, affect, ids, slots, state.background)
+    return tokens, AgentState(history, memory, state.latent, values, affect, ids, slots, state.background,
+                              written=record)
 
 
 _STORE_TYPES: Mapping[str, str] = {"geometry": "geometry", "entity": "entity", "block": "block_candidate"}
 """Each store of ``SpatialMemory`` and the token type of its rows."""
+_ENTRY_VALUES: Mapping[str, tuple[str, tuple[variables.Variable, ...]]] = {
+    ".written.entity.values": ("written.entity", variables.ENTITY_ENTRIES),
+    ".written.place.values": ("written.place", variables.PLACE_ENTRIES),
+}
+"""Each written entry table's stored fields (``written.py``): its layout name and its declared fields."""
 
 
 def _layout() -> dict[str, list[str]]:
-    return {name: list(cls.FEATURES) for name, cls in v3.TOKEN_TYPES_V3.items()}
+    layout = {name: list(cls.FEATURES) for name, cls in v3.TOKEN_TYPES_V3.items()}
+    layout["written.entity"] = [field.name for field in variables.ENTITY_ENTRIES]
+    layout["written.place"] = [field.name for field in variables.PLACE_ENTRIES]
+    return layout
 
 
 def save(path: str | Path, state: AgentState) -> None:
@@ -150,8 +163,9 @@ def load(path: str | Path, like: AgentState, *, maps: Mapping[str, Mapping[str, 
     A save made under another variable list or token layout is migrated by name (``docs/VIRTUAL_HUMAN.md`` section 14):
     a variable it lacks takes its default, and a stored row's new column reads 0. A variable or column that is gone
     must be merged into a new one by ``maps`` or listed in ``dropped``, both keyed by ``"variables"`` or a stored token
-    type (``variables.transfer``). A part of the state the save lacks (added since, as the object latents and the
-    background summary on 2026-10-22) takes ``like``'s value.
+    type (``variables.transfer``). The written entries' fields migrate by name the same way, keyed by
+    ``"written.entity"`` or ``"written.place"``. A part of the state the save lacks (added since, as the object latents,
+    the background summary on 2026-10-22, and the written entries on step 2 of section 19) takes ``like``'s value.
     """
 
     maps, dropped = maps or {}, dropped or {}
@@ -171,6 +185,11 @@ def load(path: str | Path, like: AgentState, *, maps: Mapping[str, Mapping[str, 
             value = stored[name]
             if name == ".variables":
                 value = registry.migrate(value, names, maps.get("variables"), dropped.get("variables", ()))
+            if name in _ENTRY_VALUES:  # a written entry's fields, migrated by name as a stored row's columns are
+                table, fields = _ENTRY_VALUES[name]
+                today = tuple(field.name for field in fields)
+                value = variables.remap(value, layout.get(table, today), today, maps.get(table), dropped.get(table, ()),
+                                        fill=[field.default for field in fields])
             parts = name.split(".")
             if len(parts) == 4 and parts[1] == "memory" and parts[3] == "rows":
                 kind = _STORE_TYPES[parts[2]]

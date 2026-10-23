@@ -10,7 +10,8 @@ layer and it directly affects the body layer").
   but we track locally to modify some output or just to keep track of"). They are declared once in
   `../contract/variables.py` and read and written by name through `registry.py`. Today they are the persona (its self
   section) and the emotional state the affect rules publish (its inner section, a proposal, `affect.py`). Feelings
-  toward others will be written by the decision layer or the LLM (step 2), not built yet.
+  toward others will be written by the decision layer or the LLM through the structured writes (`written.py`, step 2,
+  built 2026-10-22); today the only written field is `remember`, the decision layer's mark on an entity or a place.
 
 The body reads the state as `skill_tokens_v3` tokens (the schema is `../contract/tokens_v3.py`) through its trunk
 (`../model/encoder.py`), selectively or whole. The `persona` and `affect` tokens' columns are the body-read variables,
@@ -22,12 +23,13 @@ folder and rename it properly and add documentation"). The content registry and 
 
 | Module | Lines | What it holds |
 |---|---:|---|
-| `layer.py` | 185 | One tick of the state layer. `AgentState`: the action history, the stores, the variables (float32[B, V]), the affect rules' working state, and the trunk's latent memory, which the trunk call fills and this module only carries. `initial_state`; `step(observation, state, last_action, reset, tags, ...)`, which updates the state from the senses and returns the body's token sets, and keeps each entity token row's id (`entity_ids`, perceived or remembered) so a request can point at it, and each important row's store slot (`object_slots`), and carries the trunk's background summary (`background`) beside its latent memory (2026-10-22); `save` and `load` (one `.npz`, with the variables' names and the token layout, so a save migrates by name; `../docs/VIRTUAL_HUMAN.md` section 14). |
+| `layer.py` | 204 | One tick of the state layer. `AgentState`: the action history, the stores, the variables (float32[B, V]), the affect rules' working state, the trunk's latent memory, which the trunk call fills and this module only carries, and the written entries (`written`, step 2). `initial_state`; `step(observation, state, last_action, reset, writes, ...)`, which updates the state from the senses and returns the body's token sets, and keeps each entity token row's id (`entity_ids`, perceived or remembered) so a request can point at it, and each important row's store slot (`object_slots`), and carries the trunk's background summary (`background`) beside its latent memory (2026-10-22); `save` and `load` (one `.npz`, with the variables' names and the token layout, so a save migrates by name, the written entries' fields included; `../docs/VIRTUAL_HUMAN.md` section 14). |
+| `written.py` | 297 | The top two layers' structured writes (`../docs/VIRTUAL_HUMAN.md` section 19, step 2, 2026-10-22). A `Write` (writer, field, value, and an entity id or a world position as its key) is checked on the host by `lower` against the registry's declared fields (`../contract/variables.py` `ENTITY_ENTRIES`, `PLACE_ENTRIES`) and refused with a reason (unknown field, wrong writer, out of range, bad key, two keys, too many writes this tick). `apply` runs at the start of each tick: up to 8 writes per agent in order (a later write wins) into 16 entity entries and 16 place entries, each stamped with its writer and tick. An entry never fades and is never evicted (the owner's ruling, 19.7): a write to a full table is refused (`Written.applied`), and writing every field back to its default ejects it. `tags` gives the live `remember` entries to the stores as their tags; `entity_entry` and `place_entry` read an entry by key. |
 | `registry.py` | 60 | The variables, by name: `get`, `take`, `section` and `put` on the array, `defaults`, and `migrate` (a save made under another variable list: a new variable takes its default; a gone one must be merged by a map or dropped by name). |
 | `senses.py` | 584 | Stateless: the legal observation, plus the actor's legal views (block and recipe candidates, light rows), as this tick's rows of every type. One builder per type: self, kit, status, entity, projectile, hazard, geometry, block candidate, inventory, recipe. It also holds `pack` and `legal_tokens_v3` (one tick without memory). It applies the view sector where the gym does not, and reads nothing privileged. |
 | `frames.py` | 75 | Space, defined once. `where` is every spatial token's block: position in the body frame, log distance, bearing in the body and head frames, elevation against the head's pitch. `world_to_body` and `body_to_world` are the gym's frame. |
 | `action_history.py` | 72 | What the body last did: for each gen-7 action head, the last choice, whether it changed, and how many ticks it has been held (the `act` tokens). In neuroscience terms, an efference copy. |
-| `memory.py` | 322 | What the body remembers of where things are. The spatial map holds geometry cells, kept by recency (32 nearby cells since 2026-10-22, the background's cache beside the trunk's summary slots). The salient store holds entities by id and blocks by cell, kept by tag, then salience, then recency, each with its object latent (`docs/VIRTUAL_HUMAN.md` section 18: kept while the slot holds the same thing, zero for a new one). Both are anchored to the world by the agent's position, and written in one parallel pass a tick (2026-10-22: 7 to 13 times faster than the serial write, equal to it slot for slot when there is room; when candidates compete, the most salient win and pinned or refreshed slots stay). `object_slots` maps each important token row to its slot. Entity velocity and facing, and cell edges, are stored in world axes and turned into the current body frame on reading. Tags come from the middle layer. |
+| `memory.py` | 322 | What the body remembers of where things are. The spatial map holds geometry cells, kept by recency (32 nearby cells since 2026-10-22, the background's cache beside the trunk's summary slots). The salient store holds entities by id and blocks by cell, kept by tag, then salience, then recency, each with its object latent (`docs/VIRTUAL_HUMAN.md` section 18: kept while the slot holds the same thing, zero for a new one). Both are anchored to the world by the agent's position, and written in one parallel pass a tick (2026-10-22: 7 to 13 times faster than the serial write, equal to it slot for slot when there is room; when candidates compete, the most salient win and pinned or refreshed slots stay). `object_slots` maps each important token row to its slot. Entity velocity and facing, and cell edges, are stored in world axes and turned into the current body frame on reading. Its tags are the decision layer's `remember` entries (`written.py`). |
 | `persona.py` | 120 | Identity: the registry's self section (`TRAITS`), 15.6's 23 traits and the motor signature's bias, each in [-1, 1] (APPROVED, `../docs/VIRTUAL_HUMAN.md` section 15.6). `sample_personas` draws correlated populations; `big_five` is a derived narrative view. The body reads 10 of them (15.1). |
 | `affect.py` | 312 | A proposal for the emotion variables: hand-coded rules for fear, anger, startle, valence, coping, a three-axis mood, and feelings toward up to 16 entities. Their constants are estimates. To reshape under the rulings: feelings toward others become written by the top two layers, and a fast reflex response stays a fixed rule (open question 1). |
 
@@ -35,10 +37,11 @@ folder and rename it properly and add documentation"). The content registry and 
 1. the action history takes last tick's action;
 2. the senses read this tick's rows;
 3. the affect rules appraise them, and publish the emotional state to the variables;
-4. the stores take them, with the middle layer's live tags;
-5. the stores give back what is remembered but not perceived;
-6. each entity token gets the feelings toward it;
-7. everything is packed into the token sets, with the persona and affect tokens (read from the variables).
+4. the top layers' writes are applied, and the live `remember` entries become the stores' tags;
+5. the stores take this tick's rows;
+6. the stores give back what is remembered but not perceived;
+7. each entity token gets the feelings toward it;
+8. everything is packed into the token sets, with the persona and affect tokens (read from the variables).
 
 **Cost.** The full tick plus the trunk with conditioning measured 5.27 ms p95 for 8 agents, against a 15 ms gate
 (`../docs/VIRTUAL_HUMAN.md` section 7).
@@ -46,7 +49,10 @@ folder and rename it properly and add documentation"). The content registry and 
 **Gates:**
 - `test_sa_tokens_v3.py`: frames, schema, the trunk, latent memory, conditioning.
 - `test_sa_state_senses.py`: decoding and legality, E5 and E6.
-- `test_sa_state_memory.py`: the stores, the tick, and the persona and feelings on the tokens.
+- `test_sa_state_memory.py`: the stores, the tick, and the persona and feelings on the tokens; a remembered place and
+  a remembered entity given as writes.
+- `test_sa_state_written.py`: the writes: every refusal, order, the full table, ejecting, reset, the derived tags,
+  and save and load (a save from before step 2 loads with no entries).
 - `test_sa_state_affect.py`: the emotion rules, A1 to A7 and A4b (a hit landing as the attacker enters recovery).
 - `test_sa_state_memory_write.py`: the parallel write against the serial one it replaced, and its rules when
   candidates compete. `test_sa_object_slots.py`: object latents follow their thing's identity through the tick.
