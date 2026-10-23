@@ -399,6 +399,14 @@ of 66376d7 (the coordinator's 04c3b18 and 8d641b2), 4 agents x 300 ticks, report
   `HytaleRL/hytalegym/tools/worldgen/README.md`, "World geometry tokens"); this run's agents never met one.
   Traversal edges now fill (`edge_k_kind` non-zero in up to 65% of rows).
 
+**Block candidates on 0.7.2** (2026-10-22, after the coordinator's 6f180b6: `load_region(library=
+"region-library-pilot-v2-072")` binds the captured block identity; `bench/encoding_audit.py run region --library`).
+Same run setup as the re-audit above: 5,715 block-candidate rows, about 5 per agent-tick; the affordance bits
+(breakable, soft, drops) and the gather bits carry information. The block's registry columns (its properties,
+description and the tool fit) stay 0: the candidate surface publishes no block type id (`policy/candidates/
+blocks.py`: "identity cannot enter"). Asked of the coordinator as the other half of S5 (the block type's semantic
+id per candidate; a player sees what block it looks at).
+
 **What arrives, everywhere it is published.** The body's motion, movement states, head and heading, health,
 stamina and the other resources, defense, attack state; the held item with its registry properties and description;
 the kit; another entity's place, motion, facing, health and attack phases; projectiles; terrain cells with clearance,

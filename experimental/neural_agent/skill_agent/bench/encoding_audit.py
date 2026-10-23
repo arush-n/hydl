@@ -180,14 +180,17 @@ def duel_steps(ticks: int, batch: int) -> Iterator[Step]:
                 state, factors, chase(opponent, opponent_mask), jax.random.split(jax.random.key(tick), batch))
 
 
-def region_steps(ticks: int, batch: int) -> Iterator[Step]:
-    """The Region loader's default world and spawn pair, the target active; with the channel when it is on."""
+def region_steps(ticks: int, batch: int, library: str | None = None) -> Iterator[Step]:
+    """The Region loader's default world and spawn pair, the target active; with the channel when it is on. ``library``
+    names a Region library (``worlds.region.load_region``): ``region-library-pilot-v2-072`` carries the 0.7.2 block
+    identity (6f180b6), so block candidates exist; the default library has none."""
 
     from experimental.neural_agent.skill_agent.state.senses import Light
     from hytalegym.jax.combat.observation.v3.policy.layout import neutral_arsenal_policy_action_factors
     from worlds.region import region_scene
 
-    scene = region_scene(weapons=("iron_sword",) * batch, target_active=True)
+    chosen = {"library": library} if library else {}
+    scene = region_scene(weapons=("iron_sword",) * batch, target_active=True, **chosen)
     tables = registry_tables()
     reset, step, pick = jax.jit(scene.environment.reset), jax.jit(scene.environment.step), jax.jit(random_legal)
     state, policy, _ = reset(jax.random.split(jax.random.key(7), scene.batch))
@@ -255,13 +258,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     one.add_argument("--out", type=Path, required=True)
     one.add_argument("--ticks", type=int, default=300)
     one.add_argument("--batch", type=int)
+    one.add_argument("--library", help="region only: the Region library to load (worlds.region.load_region)")
     both = commands.add_parser("compare", help="line up reports: LABEL=PATH ...")
     both.add_argument("reports", nargs="+")
     options = parser.parse_args(argv)
     if options.command == "run":
         steps, batch = SCENARIOS[options.scenario]
         batch = options.batch or batch
-        report = run(steps(options.ticks, batch), batch).report()
+        if options.library and options.scenario != "region":
+            parser.error("--library applies to the region scenario only")
+        extra = {"library": options.library} if options.library else {}
+        report = run(steps(options.ticks, batch, **extra), batch).report()
         options.out.write_text(json.dumps(report, indent=1))
         runs = {options.scenario: report}
     else:
