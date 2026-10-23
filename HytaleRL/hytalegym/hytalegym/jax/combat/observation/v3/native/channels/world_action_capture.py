@@ -59,6 +59,7 @@ from hytalegym.jax.crafting.contract import (
 )
 from hytalegym.jax.world import (
     ACTOR_RECIPE_CANDIDATE_CAPACITY,
+    BLOCK_PLACEMENT_FACE_OFFSETS,
     ActorBlockActionCandidates,
     produce_actor_recipe_candidates_from_legal_mask,
 )
@@ -96,6 +97,13 @@ NATIVE_POLICY_WORLD_ACTION_CAPTURE_VERSION = 2
 NATIVE_POLICY_WORLD_ACTION_CAPTURE_TYPE = "policy_world_action_capture"
 
 BridgeRequest = Callable[[dict[str, object]], Mapping[str, Any]]
+
+# Protocol face value f (1..6) places at clicked + offset[f - 1]
+# (jax/world/interactions/blocks/candidates.py, BLOCK_PLACEMENT_FACE_VALUES).
+_PLACE_FACE_OFFSETS = tuple(
+    tuple(int(value) for value in row)
+    for row in np.asarray(BLOCK_PLACEMENT_FACE_OFFSETS)
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,6 +146,7 @@ class NativePolicyWorldActionCaptureAdapter(NativePolicyWorldActionAdapter):
         actor_slot: int = 0,
         expected_actor_identity: str | None = None,
         initial_request_id: int = 0,
+        rotation_zero_place: bool = False,
     ) -> None:
         if packed_recipes is not None and not isinstance(
             packed_recipes,
@@ -156,6 +165,7 @@ class NativePolicyWorldActionCaptureAdapter(NativePolicyWorldActionAdapter):
         self._bridge_request_key: tuple[object, object] | None = None
         self._packed_recipes = packed_recipes
         self._recipe_encoder_params = recipe_encoder_params
+        self._rotation_zero_place = bool(rotation_zero_place)
         self._last_surface_inventory: Mapping[str, object] | None = None
         if (
             isinstance(actor_slot, bool)
@@ -280,6 +290,7 @@ class NativePolicyWorldActionCaptureAdapter(NativePolicyWorldActionAdapter):
             expected_actor_identity=expected_actor,
             packed_recipes=self._packed_recipes,
             recipe_encoder_params=self._recipe_encoder_params,
+            rotation_zero_place=self._rotation_zero_place,
         )
         self._last_surface_inventory = decoded.identity.inventory
         return decoded.surface
@@ -307,6 +318,7 @@ class NativePolicyWorldActionCaptureAdapter(NativePolicyWorldActionAdapter):
             info=info,
             packed_recipes=self._packed_recipes,
             expected_action=action,
+            rotation_zero_place=self._rotation_zero_place,
         )
 
 
@@ -396,6 +408,7 @@ def decode_native_policy_world_action_surface(
     expected_actor_identity: str | None = None,
     packed_recipes: PackedRecipeTable | None = None,
     recipe_encoder_params: RecipeCandidateEncoderParams | None = None,
+    rotation_zero_place: bool = False,
 ) -> _DecodedSurface:
     """Decode an atomic observe capture into actor and privileged halves."""
 
@@ -415,6 +428,7 @@ def decode_native_policy_world_action_surface(
         _mapping(value, "blocks"),
         camera=camera,
         inventory=identity.inventory,
+        rotation_zero_place=rotation_zero_place,
     )
     recipes, recipe_encoding, recipe_bindings, context = _recipe_surface(
         _mapping(value, "recipes"),
@@ -475,6 +489,7 @@ def decode_native_policy_world_action_commit(
     info: Mapping[str, Any],
     packed_recipes: PackedRecipeTable | None = None,
     expected_action: LearnerArsenalAction | None = None,
+    rotation_zero_place: bool = False,
 ) -> NativePolicyActionCommitEvidence:
     """Decode fresh commit evidence or one typed stale-generation rejection."""
 
@@ -561,6 +576,7 @@ def decode_native_policy_world_action_commit(
         _mapping(value, "blocks"),
         camera=camera,
         inventory=identity.inventory,
+        rotation_zero_place=rotation_zero_place,
     )
     _recipes, _encoding, _recipe_bindings, context = _recipe_surface(
         _mapping(value, "recipes"),
@@ -953,6 +969,7 @@ def _block_surface(
     *,
     camera: Mapping[str, object],
     inventory: Mapping[str, object],
+    rotation_zero_place: bool = False,
 ):
     capacity = ARSENAL_POLICY_DEFAULT_BLOCK_CANDIDATE_CAPACITY
     available = _boolean(value, "available")
@@ -1050,7 +1067,20 @@ def _block_surface(
             expected_verb="place_block",
             expected_interaction_type=1,
             semantics=semantics,
+            rotation_zero_place=rotation_zero_place,
         )
+        if secondary is not None:
+            # The native destination is the clicked cell moved by the face
+            # offset; a binding for any other cell is a different placement.
+            face_offset = _PLACE_FACE_OFFSETS[secondary.block_face - 1]
+            destination = tuple(
+                int(cell) + int(step)
+                for cell, step in zip(visible_cell, face_offset, strict=True)
+            )
+            if tuple(secondary.target) != destination:
+                raise ValueError(
+                    "Place target differs from the clicked cell and face"
+                )
         if primary is not None:
             if primary.target != action_cell:
                 raise ValueError(
@@ -1177,6 +1207,7 @@ def _optional_block_binding(
     expected_verb: str,
     expected_interaction_type: int,
     semantics: NativeMutableBlockRow,
+    rotation_zero_place: bool = False,
 ) -> NativeBlockCommitBinding | None:
     if raw is None:
         return None
@@ -1216,15 +1247,21 @@ def _optional_block_binding(
         raise ValueError("v1 Break source must be the native hotbar")
     rotation_applicable = _boolean(value, "rotation_applicable")
     rotation = _int_vector(value, "rotation", 3)
-    if expected_verb == "place_block" and not rotation_applicable:
-        # The current policy deliberately represents the native rotation-zero
-        # placement subset.  It still requires an exact adjacent empty cell
-        # and the matching Region placed-geometry identity before opening.
+    if expected_verb == "place_block" and not (
+        rotation_zero_place and rotation_applicable and not any(rotation)
+    ):
+        # Closed by default.  The rotation-zero subset (an explicit rotation
+        # of (0, 0, 0)) opens only behind the rotation_zero_place flag, which
+        # the live proof gates; every other Place stays closed.
         return None
-    if expected_verb == "place_block":
-        # Capture v1 does not yet carry that destination/geometry join.  Do not
-        # turn a server-provided rotation into a structurally valid Place row.
-        return None
+    if expected_verb == "place_block" and expected_block_id != "Empty":
+        raise ValueError("Place destination must be an exact empty cell")
+    if expected_verb == "place_block" and not _string(
+        value,
+        "source_block_id",
+        allow_empty=True,
+    ):
+        raise ValueError("Place binding lacks its held block identity")
     binding_semantic_sha256 = _string(
         value,
         "binding_semantic_sha256",
