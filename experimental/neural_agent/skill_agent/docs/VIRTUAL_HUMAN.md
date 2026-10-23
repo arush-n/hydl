@@ -568,7 +568,7 @@ approach. Missing:
 | 6 | Hearing: the sound registry, the hearing rule, heard entries in the stores, the orienting reflex (the token reads zero until S12) | 17 |
 | 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry (with it the status token's identity: which effect, its source entity, its damage cause, all in the observation and dropped today; `PERCEPTION.md` section 10.5), places, the proficiencies. First part DESIGNED and APPROVED 2026-10-22; BUILT (section 24.7: status identity, places, events) | 11.1 to 11.4, 11.6, 16.6, 17.8, 24 |
 | 8 | The formatted views (typed facts, words) and the recording. DESIGNED and APPROVED 2026-10-22; BUILT (section 25.6: the facts, the words, the recording) | 10.3, 10.9, 25 |
-| 9 | The social section (approved, 15.3) | 12, 15.3 |
+| 9 | The social section (approved, 15.3). DESIGNED and APPROVED 2026-10-22 (section 26, with the rulings of 26.5) | 12, 15.3, 26 |
 | W | World interaction: breaking, placing, using, picking up, and the commands (crafting, tools, items); the perception of break progress and items on the ground. DESIGNED and APPROVED 2026-10-22 (section 23); the perception follows the simulator's asks, the skills train when training resumes | 23 |
 
 Every step is measured first with 2 agents, then scaled up (16.3).
@@ -2272,6 +2272,163 @@ Checks (`test_sa_state_views.py`, 3 tests, on the duel through `layer.step`):
   the state can be rebuilt by replaying them; snapshots taken periodically spare a replay from the start (Fowler,
   about 2005; through secondary write-ups). The recording is that pattern.
 
+## 26. Step 9: the social section (DESIGNED and APPROVED 2026-10-22, with the rulings of 26.5)
+
+The owner, 2026-10-22: "anything you can do in the background". This is step 9 of section 13: the social section
+approved as a design in 15.3 (sizes and parts in 12.1 to 12.5), mapped onto the state as it is built today.
+
+### 26.1 What exists
+
+- **Written entries** (`state/written.py`, step 2): 16 entries per agent about entities, keyed by the perceived id,
+  each with its writer and tick. One field is declared (`remember`, `contract/variables.py` `ENTITY_ENTRIES`). An entry
+  never fades and is never evicted; the decision layer ejects it (19.7).
+- **The write path from above** (the coordinator's `shared_state/sections/writes.py` and `skill_writes.py`): the
+  section has one writer, the decision layer (`WRITE_WRITER = "decision"`); the field's name, writer and range are
+  checked by `written.lower`, so a field declared in `variables.ENTITY_ENTRIES` is writable with no change to the
+  section. The LLM has no write path of its own.
+- **Feelings by rule** (`state/affect.py`): hostility, fear, trust and anger toward up to 16 entities, moved by harm and
+  threat each tick and read by the body as `feel_*` on each entity token. Section 8 item 1 settled that feelings toward
+  others are written by the top two layers; these rule-made ones were left as they were (state README: "to reshape").
+- **Interactions the agent can register** (`state/events.py`, step 4): damage taken and dealt with the other party
+  (inferred until S11), items gained and lost (no other party: nothing publishes a transfer), request outcomes.
+- **Identity:** every entity row carries its perceived id; the stores, the written entries and the decision layer
+  (#140, owner ruling 2026-10-22) all name an entity by it.
+- **Not published by the simulator** (checked 2026-10-22 by search of `HytaleRL/hytalegym`): visible names, speech
+  events, item transfers between entities, each entity's activity. These are the four social asks of section 12,
+  sent on 2026-10-21.
+
+### 26.2 The design
+
+A record per known individual has two parts: what the top layers **write** (the relationship) and what rules
+**compute** from the senses and the event log (the interaction facts), as 15.3 says ("interaction facts and
+reputation are computed from events, not written").
+
+**The relationship, written by the decision layer** (15.3's list; writer ruled in 26.5 item 2). New fields of
+`variables.ENTITY_ENTRIES`, each with `writer="decision"`, so they travel the existing write path:
+
+| Field | Range | Meaning |
+|---|---|---|
+| `closeness` | 0 to 1 | Humanoid Agents' 0 to 30 scaled by 1/30: below 1/6 distant, 1/6 to 1/3 rather close, 1/3 to 1/2 close, above 1/2 very close |
+| `ability`, `benevolence`, `integrity` | -1 to 1 | the three parts of trustworthiness (Mayer, Davis and Schoorman 1995); 0 unknown |
+| `hostility`, `fear`, `anger` | 0 to 1 | the lasting feelings toward them |
+| `friend`, `family`, `leader`, `follower`, `rival`, `trader` | 0 or 1 | the roles, as flags (a relative can also be a trade partner) |
+| `ingroup` | 0 or 1 | I count them as one of my group |
+| `owe_them`, `they_owe` | 0 to 10 | favours owed each way (reciprocity, 15.6's traits, acts on them in the decision layer) |
+
+- The written entries go from 16 to **150** per agent (Dunbar's outer layer, 15.3). The rule of 19.7 holds: nothing
+  written fades or is evicted; a write about a 151st individual is refused as full until the decision layer ejects one.
+- **Promises with deadlines and reputation wait** (26.5 item 4).
+
+**The interaction facts, computed** (`state/social.py`, new). One record per individual perceived, up to 150 per
+agent, updated each tick after the event log:
+- **met:** the first and the last tick seen, and where last seen (world position);
+- **meetings:** how many separate meetings (a new one starts when it is perceived after `MEETING_GAP` [E] = 60 s
+  unseen), and the seconds it has been in view;
+- **fights:** hits taken from it and dealt to it (counts and amounts), each inferred until S11 (the event log's mark);
+  and who struck first in the current meeting (unknown, me, them);
+- **the last interaction:** its tick and kind.
+- Helping, trading and talking get their counts when the simulator publishes transfers and speech (12.3, 12.4).
+
+When the table is full, the newcomer replaces the record seen longest ago among those with no written entry: the
+outer layers turn over fastest, and a new tie displaces an old one (Sutcliffe et al. 2012; MacCarron, Kaski and Dunbar,
+as cited in search results), and the time since the last contact is the strongest single sign of a weak tie (26.6). A
+record with a written entry is never replaced (19.7); if all 150 have one, the newcomer is not recorded and a counter
+says so. Like the places (22.5), the table survives a respawn and save and load, and restarts at an episode boundary,
+where the perceived ids restart too.
+
+**What the body reads** (15.3's list), as columns on the entity token, filled by the perceived id from the written
+entry: `rel_known` (a written entry exists, so a 0 is not mistaken for "neutral"), `rel_closeness`, the three trust
+parts, the three written feelings, the six role flags, `rel_ingroup`, and `space_target`, the personal-space distance
+it should keep (16 columns, 158 to 174):
+- `space_target` is a rule, not written. Hall's zones by closeness band: distant or unknown, social far (2.85 blocks,
+  the midpoint of 2.1 to 3.6 m); rather close, social near (1.65); close, personal far (0.98); very close, personal
+  near (0.6). Hostility or fear, written or by rule, pushes it toward public distance: `d = d_zone + (5.6 - d_zone) h`,
+  `h` the largest of the four. Scaled by 7.6 (the public zone's far edge). Every constant [E].
+- The fast feelings by rule (`feel_*`) stay beside the written ones, marked as provisional (26.5 item 1): the
+  `affect.py` docstring and the state README say so, and the views label them "by rule" apart from the written
+  feelings, so either can be dropped later by name.
+- The interaction facts are not given to the body (15.3 lists none); they go to the views.
+
+**What the top layers read** (step 8's `state/views.py`): `facts` gains `people`, one item per record (the written
+relationship with its writer and tick, and the interaction facts); `words` renders each in a sentence ("12: close;
+friend; able, kind; met 3 times, last 40 s ago 8 blocks north; fought twice, they struck first") and chooses within
+the budget by recency, importance (closeness, fights) and relevance (in view now), as 25.4 ruled. The recording's
+stream adds "met" (a new record) and "forgot" (a replaced one).
+
+### 26.3 Files
+
+- `contract/variables.py`: the 16 relationship fields of `ENTITY_ENTRIES` (17 with `remember`).
+- `state/written.py`: `ENTITY_ENTRY_SLOTS` 16 to 150; `load` pads a save made with 16.
+- `state/social.py` (new): the interaction facts, the replacement rule, `space_target`.
+- `state/layer.py`: the facts update after the event log; the entity rows get the social columns.
+- `contract/tokens_v3.py`: the 16 entity columns.
+- `state/views.py`, `state/recording.py` (step 8): the people, the met and forgot changes.
+- Tests: `test_sa_social.py` (below); the width pin.
+- Docs: this section built, the state and contract READMEs, the ledger.
+
+### 26.4 How it is verified
+
+- **The write path:** each new field accepted from its writer, refused from the other, refused out of range; a 151st
+  individual refused as full; ejecting frees the entry; a save with 16 entries loads into 150.
+- **The facts:** first and last seen; a meeting counted after a 60 s gap and not before; hits each way and who struck
+  first, from a scripted fight; a full table replaces the record seen longest ago, never one with a written entry;
+  respawn, save and load keep it; an episode boundary clears it.
+- **The body's columns:** a perceived entity with a written entry reads its fields; one without reads `rel_known` 0;
+  `space_target` follows its bands and grows with hostility.
+- **No change elsewhere:** every column the entity token had keeps its values on the Region world (compared by name,
+  as step 7 did); the two-pass gate shows no new failure by name.
+- **Cost:** the whole tick at batch 1, 8 and 64, old against new, within E8's 15 ms.
+- **The audit** (`bench/encoding_audit.py --library`): the new columns carry information once a decision-layer stand-in
+  writes a relationship.
+
+### 26.5 Decisions (RULED 2026-10-22)
+
+1. **The feelings by rule, beside the written ones?** Recommended: keep both. The rule's `feel_*` move within a tick
+   of a hit, which the body needs before any layer above can write; the written feelings are the lasting judgment.
+   The alternative, the written ones only (section 8 item 1 read strictly), leaves the body blind to who just hurt it
+   until the decision layer writes. RULED: "sure but keep it marked for now": both, with the rule-made ones marked
+   provisional (26.2).
+2. **Who writes the relationship?** Recommended: the decision layer, for every field. It is the semantic memory (the
+   owner's ruling, 2026-10-21) and it owns the only write path today; the LLM's view of someone reaches the record
+   through it. The alternative, the LLM writing closeness, trust and feelings itself (emotions lean to the LLM; Humanoid
+   Agents has the LLM judge closeness after each conversation), needs a write path from the LLM, which is the
+   coordinator's to build. RULED: "yes decision layer".
+3. **Identity by the perceived id?** Recommended: yes, for now, as the stores and the decision layer already do (#140).
+   It tells two identical NPCs apart after they leave view, which a player could not (12.1); the gap is recorded here
+   until the simulator publishes visible names, after which a named entity is matched by name. The alternative,
+   records only for players and named NPCs, leaves the table empty in today's NPC worlds. RULED: "sure".
+4. **What waits?** Recommended: promises with deadlines wait for the game clock, as the drives do (20.5); reputation
+   waits for told knowledge, which needs speech events (12.4); helping, trading and talking wait for their events.
+   Favours owed are built now as counts. RULED: "sure".
+
+### 26.6 What grounds it (searched 2026-10-22; depth of reading stated)
+
+- **Sizes.** Group sizes form a discrete hierarchy with a ratio of about 3 (3 to 5, 9 to 15, 30 to 45, ..., to about
+  150; Zhou, Sornette, Hill and Dunbar 2005, abstract). Each layer about three times the last, with intimacy and contact
+  frequency falling outward (Sutcliffe, Dunbar, Binder and Arrow 2012, abstract). Outer layers change faster, and a new
+  friend usually displaces an older one (MacCarron, Kaski and Dunbar, as cited in search results; not read).
+- **Closeness.** Humanoid Agents keeps a closeness of 0 to 30 per relationship (below 5 distant, 5 to 9 rather close,
+  10 to 14 close, 15 and above very close), starting at 5; after a conversation each agent's LLM judges whether it
+  enjoyed it, and closeness moves by one either way; it does not decay; it is put into the prompt as words ("feeling
+  close to") (Wang, Chiu and Chiu 2023, arXiv:2310.05418; the paper's text read).
+- **Trust.** Trustworthiness as ability, benevolence and integrity, with the trustor's propensity separate (Mayer,
+  Davis and Schoorman 1995, Academy of Management Review 20, 709-734); the four each add to trust independently in a
+  meta-analysis (Colquitt, Scott and LePine 2007). Both through summaries, not read.
+- **Tie strength.** A tie's strength combines time, emotional intensity, intimacy and reciprocal services (Granovetter
+  1973, through summaries). In Facebook data, days since the last communication was reported as the single most
+  predictive variable (Gilbert and Karahalios 2009, as cited by later papers; the paper not read). Hence recency as the
+  replacement order, and time in view and reciprocity (favours) among the facts.
+- **A relationship as a history of interactions.** A relationship is a series of interactions between the same two
+  individuals over time (Hinde 1976 and 1979, through secondary sources), which is why the facts are counted per
+  individual from the event log.
+- **Personal space.** Hall's zones: intimate to about 0.45 m, personal 0.45 to 1.2 m, social 1.2 to 3.6 m, public
+  beyond (Hall 1966, through secondary sources, which differ slightly; American norms). Avatars in Second Life keep
+  the same norms: interpersonal distance, gender differences, and gaze avoidance at closer distance (Yee, Bailenson et
+  al. 2007, abstract), so the zones carry into a game.
+- **Reputation versus direct trust.** Reputation aggregates what others report; direct trust comes from one's own
+  encounters (Sabater and Sierra 2005, Artificial Intelligence Review 24, 33-60, through a secondary report). Only the
+  direct part has inputs today.
+
 ## Sources
 
 - Steel, P. (2007). The nature of procrastination. Psychological Bulletin 133(1), 65-94.
@@ -2380,3 +2537,16 @@ Checks (`test_sa_state_views.py`, 3 tests, on the duel through `layer.step`):
 - Section 25.5, searched 2026-10-22: a Voyager-style fine-tuning dataset's prompt fields
   (https://huggingface.co/datasets/baptistecolle/voyager-fine-tuning); Park, J. S., et al. (2023), Generative Agents,
   arXiv:2304.03442 (the retrieval function, quoted); Fowler, M., Event Sourcing (about 2005; secondary write-ups).
+- Section 26.6, searched 2026-10-22: Zhou, W.-X., Sornette, D., Hill, R. A., and Dunbar, R. I. M. (2005), Discrete
+  hierarchical organization of social group sizes, Proc. R. Soc. B 272, 439-444 (abstract); Sutcliffe, A., Dunbar, R.,
+  Binder, J., and Arrow, H. (2012), Relationships and the social brain, British Journal of Psychology 103(2), 149-168
+  (abstract); Wang, Z., Chiu, Y. Y., and Chiu, Y. C. (2023), Humanoid Agents, arXiv:2310.05418 (read); Mayer, R. C.,
+  Davis, J. H., and Schoorman, F. D. (1995), An integrative model of organizational trust, Academy of Management
+  Review 20, 709-734 (summaries); Colquitt, J. A., Scott, B. A., and LePine, J. A. (2007), the trust meta-analysis
+  (as cited); Granovetter, M. S. (1973), The strength of weak ties, American Journal of Sociology 78(6), 1360-1380
+  (summaries); Gilbert, E., and Karahalios, K. (2009), Predicting tie strength with social media, CHI (as cited);
+  Hinde, R. A. (1976), On describing relationships, Journal of Child Psychology and Psychiatry (secondary sources);
+  Hall, E. T. (1966), The Hidden Dimension (secondary sources); Yee, N., Bailenson, J. N., et al. (2007), The
+  unbearable likeness of being digital, CyberPsychology and Behavior 10(1), 115-121 (abstract); Sabater, J., and
+  Sierra, C. (2005), Review on computational trust and reputation models, Artificial Intelligence Review 24, 33-60
+  (secondary report).
