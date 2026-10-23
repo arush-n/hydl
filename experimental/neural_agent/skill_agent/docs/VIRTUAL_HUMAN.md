@@ -566,7 +566,7 @@ approach. Missing:
 | 4 | The event log and its tokens; the activity counters and levels. DESIGNED and APPROVED 2026-10-22; BUILT (section 21.6; the event tokens wait for step 7) | 10.6, 11.1, 16.6, 21 |
 | 5 | The long-term spatial memory: places, routes, coordinates. DESIGNED and APPROVED 2026-10-22; BUILT (section 22.7; the place tokens are step 7, section 24) | 10.11, 16.4, 22 |
 | 6 | Hearing: the sound registry, the hearing rule, heard entries in the stores, the orienting reflex (the token reads zero until S12) | 17 |
-| 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry (with it the status token's identity: which effect, its source entity, its damage cause, all in the observation and dropped today; `PERCEPTION.md` section 10.5), places, the proficiencies. First part DESIGNED 2026-10-22 (section 24: status identity, places, events), waiting on the owner's yes | 11.1 to 11.4, 11.6, 16.6, 17.8, 24 |
+| 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry (with it the status token's identity: which effect, its source entity, its damage cause, all in the observation and dropped today; `PERCEPTION.md` section 10.5), places, the proficiencies. First part DESIGNED and APPROVED 2026-10-22 (section 24: status identity, places, events) | 11.1 to 11.4, 11.6, 16.6, 17.8, 24 |
 | 8 | The formatted views (typed facts, words) and the recording | 10.3, 10.9 |
 | 9 | The social section (approved, 15.3) | 12, 15.3 |
 | W | World interaction: breaking, placing, using, picking up, and the commands (crafting, tools, items); the perception of break progress and items on the ground. DESIGNED and APPROVED 2026-10-22 (section 23); the perception follows the simulator's asks, the skills train when training resumes | 23 |
@@ -2053,7 +2053,7 @@ shelter, cook a meal, from these skills and commands.
 - **The game's facts**: tool power and quality per gather type, bench recipes and the item mechanics are from the
   catalogue's survey of the 0.7.2 archive (2026-10-17).
 
-## 24. Step 7, first part: the tokens for what is built (DESIGNED 2026-10-22, waiting on the owner's yes)
+## 24. Step 7, first part: the tokens for what is built (DESIGNED and APPROVED 2026-10-22, 24.5)
 
 The owner, 2026-10-22: "continue". Step 7 of section 13 is the encoder's new tokens. This first part takes the ones
 whose data exists now (steps 4 and 5 and the status-effect registry); the rest waits for its source. Nothing is built
@@ -2107,7 +2107,7 @@ committed, against E8's gate (`PERCEPTION.md` 10.2).
 3. **The trunk runs on them** (the tandem test) and the cost stays within E8's gate.
 4. **The package gate**, both passes.
 
-### 24.5 Decisions for the owner
+### 24.5 Decisions (RULED 2026-10-22: "continue", taken as the three recommendations)
 
 1. **Build this part now**, leaving sound, the trimmed emotion token and the proficiencies for their steps?
    Recommended: yes.
@@ -2115,6 +2115,8 @@ committed, against E8's gate (`PERCEPTION.md` 10.2).
 3. **Where the built effects table lives.** Recommended: in the private folder, beside the content registry
    (`agent_skills/training_runs/perception/`), built once from the game's archive (it is derived from the game's
    assets, so it stays out of the repository). The alternative is rebuilding it each run (about a minute).
+   Built there 2026-10-22: `agent_skills/training_runs/perception/effects_072` (260 effects, tables SHA-256 66163d97...,
+   the same as the first build; ignored by git).
 
 ### 24.6 What grounds it
 
