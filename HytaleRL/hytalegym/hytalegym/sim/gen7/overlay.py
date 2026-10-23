@@ -115,6 +115,54 @@ def _hold(constant: str) -> Redirect:
     )
 
 
+_MELEE_TIMING = (
+    "0.7.2 battleaxe Swing_Down_Left melee event time (weapons/interaction:Weapon_Battleaxe_Primary_Swing_Down_Left"
+    "#document.RunTime, the Simple of the Replace -> Selector chain; the gen-5 _melee() literal 0.4 in the shared "
+    "battleaxe loop) (file-sourced). differential: live melee timing, jar 1F874DFC (FIDELITY-0.7.2.md (aq), "
+    "tests/fidelity/combat/gen7_probes/melee_timing): hit 0.557 s live, 0.600 s before and 0.533 s after this row "
+    "(mechanics_072.md, 'Melee timing against live')"
+)
+
+
+def _melee_timing(attack: str, symbol: str, expression: str, template: str, source: str = _MELEE_TIMING) -> Redirect:
+    return Redirect(
+        f"melee_timing:{attack}", PROFILE_JAX, symbol, "weapons", f"interaction:{attack}", "document.RunTime",
+        cast="float", status="active", fidelity_row="5f", source=source,
+        expression=expression, template=template,
+    )
+
+
+# The battleaxe loop's 0.4 event is shared by Down_Left, Down_Right and Down. Only Down_Left takes the 0.7.2 0.348:
+# Down_Right moved away from live when it did (mechanics_072.md), and Swing_Down keeps 0.4 on 0.7.2 too.
+# The dagger pair is kept together (coordinator ruling 2026-10-23): neither row alone moves the render's hit, both
+# together move all four dagger hits 9 -> 8 steps (0.267 -> 0.233 s), toward live 0.215-0.235 s, finish unchanged.
+_DAGGER_TIMING = (
+    "0.7.2 dagger primary event time (weapons/interaction:Weapon_Daggers_Primary_Swing_Left#document.RunTime, Simple "
+    "0.066; the gen-5 _melee() literal 0.069 in _iron_daggers) and primary selector RunTime (weapons/interaction:"
+    "Weapon_Daggers_Primary_Stab_Left_Selector#document.RunTime, 0.066; the gen-5 _DAGGER_PRIMARY_STAB_SELECTOR 0.069) "
+    "(file-sourced). differential: live melee timing, jar 1F874DFC (FIDELITY-0.7.2.md (aq)): hits 0.226 / 0.215 / 0.235 "
+    "/ 0.228 s (Swing_Left / Swing_Right / Stab_Left / Stab_Right), finish 0.301 / 0.295 / 0.313 / 0.308 s; the render "
+    "before 0.267 s hit, 0.300 s finish; after 0.233 s hit, 0.300 s finish (mechanics_072.md, 'Melee timing against live')"
+)
+_MELEE_ROWS = (
+    _melee_timing(
+        "Weapon_Daggers_Primary_Swing_Left", "_iron_daggers",
+        "_melee(\n                0.069,\n                damage,",
+        "_melee(\n                {value},\n                damage,",
+        source=_DAGGER_TIMING,
+    ),
+    _melee_timing(
+        "Weapon_Daggers_Primary_Stab_Left_Selector", "_DAGGER_PRIMARY_STAB_SELECTOR",
+        "runtime_seconds=0.069,", "runtime_seconds={value},", source=_DAGGER_TIMING,
+    ),
+    _melee_timing(
+        "Weapon_Battleaxe_Primary_Swing_Down_Left", "_iron_battleaxe",
+        "_melee(\n                0.4,\n                damage,",
+        "_melee(\n                {value} if name == \"Down_Left\" else 0.4,\n                damage,",
+    ),
+)
+
+
 CONTENT_VALUES = (
     _sword_runtime("_SWORD_SWING_LEFT_SELECTOR", "Weapon_Sword_Primary_Swing_Left_Selector", "0.05"),
     _sword_runtime("_SWORD_SWING_RIGHT_SELECTOR", "Weapon_Sword_Primary_Swing_Right_Selector", "0.05"),
@@ -160,6 +208,7 @@ CONTENT_VALUES = (
         fidelity_row="5f", source=_THRUST_TIMING, expression="hold_speed_multiplier=0.8,",
         template="hold_speed_multiplier={value},",
     ),
+    *_MELEE_ROWS,
 )
 _VALUE_IDS = frozenset(row.id for row in CONTENT_VALUES)
 CONTENT_TODO = tuple(r for r in CONTENT_ROWS if r.row not in LOCOMOTION_ADAPTERS and r.id not in _VALUE_IDS)

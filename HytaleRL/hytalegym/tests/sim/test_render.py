@@ -245,7 +245,7 @@ def test_gen7_content_values_render_the_072_table_values(gen7):
     out, manifest = gen7
     applied = {item["id"]: item for item in manifest["applied"]}
     pending = {item["id"] for item in manifest["pending"] if item["kind"] == "redirect"}
-    assert len(CONTENT_VALUES) == 16 and not {r.id for r in CONTENT_VALUES} & pending
+    assert len(CONTENT_VALUES) == 19 and not {r.id for r in CONTENT_VALUES} & pending
     assert all(applied[r.id]["kind"] == "redirect" and applied[r.id]["fidelity_row"] == r.fidelity_row
                for r in CONTENT_VALUES)
     assert {r.fidelity_row for r in CONTENT_VALUES} == {"5f", "6a", "6c"}
@@ -261,6 +261,9 @@ def test_gen7_content_values_render_the_072_table_values(gen7):
     assert values["melee_hold_constants:_SWORD_THRUST_HOLD_SECONDS"] == 0.739
     assert values["melee_hold_constants:_DOWNSTRIKE_HOLD_SECONDS"] == 0.746
     assert values["melee_hold_constants:_MACE_CHARGED_HOLD_SECONDS"] == 1.841
+    assert values["melee_timing:Weapon_Daggers_Primary_Swing_Left"] == 0.066
+    assert values["melee_timing:Weapon_Daggers_Primary_Stab_Left_Selector"] == 0.066
+    assert values["melee_timing:Weapon_Battleaxe_Primary_Swing_Down_Left"] == 0.348
     assert values["sword_thrust_timing:dash"] == 0.043
     assert values["sword_thrust_timing:stab"] == 0.043
     assert values["melee_hold_constants:sword_thrust_hold_speed_multiplier"] == 0.75
@@ -283,6 +286,8 @@ def test_gen7_content_values_render_the_072_table_values(gen7):
         "_SWORD_THRUST_HOLD_SECONDS = 0.739\n",
         "_DOWNSTRIKE_HOLD_SECONDS = 0.746\n",
         "_MACE_CHARGED_HOLD_SECONDS = 1.841\n",
+        "    runtime_seconds=0.066,\n",
+        "                0.348 if name == \"Down_Left\" else 0.4,\n",
         "    damage: tuple[float, ...] = (1.0, 2.0, 4.0, 7.0, 19.0, 14.0),\n",
         "            (12.0, 22.0, 35.0, 50.0, 85.0),\n",
         "    damage: tuple[float, ...] = (10, 13, 78),\n",

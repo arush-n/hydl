@@ -13,10 +13,10 @@ health reads lower, "finish" the first step the attack's slot reads -1):
     Weapon_Sword_Primary_Swing_Left         1.5       8              9              14
     Weapon_Sword_Primary_Swing_Right        1.5       8              9              14
     Weapon_Sword_Primary_Swing_Down         1.0       18             19             26
-    Weapon_Daggers_Primary_Swing_Left       1.5       8              9              10
-    Weapon_Daggers_Primary_Swing_Right      1.5       8              9              10
-    Weapon_Daggers_Primary_Stab_Left        1.5       8              9              10
-    Weapon_Daggers_Primary_Stab_Right       1.5       8              9              10
+    Weapon_Daggers_Primary_Swing_Left       1.5       7              8              10
+    Weapon_Daggers_Primary_Swing_Right      1.5       7              8              10
+    Weapon_Daggers_Primary_Stab_Left        1.5       7              8              10
+    Weapon_Daggers_Primary_Stab_Right       1.5       7              8              10
     Weapon_Mace_Primary_Swing_Left          1.5       23             24             37
     Weapon_Mace_Primary_Swing_Right         1.5       23             24             37
     Weapon_Mace_Primary_Swing_Up_Left       1.5       23             24             37
@@ -85,15 +85,15 @@ EXPECTED = {
     "Weapon_Sword_Primary_Swing_Left": (8, 9, 14),
     "Weapon_Sword_Primary_Swing_Right": (8, 9, 14),
     "Weapon_Sword_Primary_Swing_Down": (18, 19, 26),
-    "Weapon_Daggers_Primary_Swing_Left": (8, 9, 10),
-    "Weapon_Daggers_Primary_Swing_Right": (8, 9, 10),
-    "Weapon_Daggers_Primary_Stab_Left": (8, 9, 10),
-    "Weapon_Daggers_Primary_Stab_Right": (8, 9, 10),
+    "Weapon_Daggers_Primary_Swing_Left": (7, 8, 10),  # 0.7.2 dagger event and selector 0.066 (2026-10-23 pair)
+    "Weapon_Daggers_Primary_Swing_Right": (7, 8, 10),  # 0.7.2 dagger event and selector 0.066 (2026-10-23 pair)
+    "Weapon_Daggers_Primary_Stab_Left": (7, 8, 10),  # 0.7.2 dagger event and selector 0.066 (2026-10-23 pair)
+    "Weapon_Daggers_Primary_Stab_Right": (7, 8, 10),  # 0.7.2 dagger event and selector 0.066 (2026-10-23 pair)
     "Weapon_Mace_Primary_Swing_Left": (23, 24, 37),
     "Weapon_Mace_Primary_Swing_Right": (23, 24, 37),
     "Weapon_Mace_Primary_Swing_Up_Left": (23, 24, 37),
     "Weapon_Battleaxe_Primary_Swing_Down": (18, 19, 34),
-    "Weapon_Battleaxe_Primary_Swing_Down_Left": (18, 19, 34),
+    "Weapon_Battleaxe_Primary_Swing_Down_Left": (16, 17, 34),  # 0.7.2 event 0.348 (overlay row melee_timing, 2026-10-23)
     "Weapon_Battleaxe_Primary_Swing_Down_Right": (18, 19, 34),
 }
 

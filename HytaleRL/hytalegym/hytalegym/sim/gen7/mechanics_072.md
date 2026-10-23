@@ -198,9 +198,10 @@ hit = first step the health reads lower; finish = first step the slot reads -1):
 | iron sword Swing_Left | 1.5 | 8 | 9 | 14 | measured; live 9 and 14 |
 | iron sword Swing_Right | 1.5 | 8 | 9 | 14 | measured |
 | iron sword Swing_Down | 1.0 | 18 | 19 | 26 | measured |
-| iron daggers Swing_Left, Swing_Right, Stab_Left, Stab_Right | 1.5 | 8 | 9 | 10 | measured; the shift by mechanism (not live) |
+| iron daggers Swing_Left, Swing_Right, Stab_Left, Stab_Right | 1.5 | 7 | 8 | 10 | measured on the pair render (2026-10-23: 0.7.2 event and selector 0.066); before the pair 8 / 9 / 10 |
 | iron mace Swing_Left, Swing_Right, Swing_Up_Left | 1.5 | 23 | 24 | 37 | measured; the shift by mechanism (not live) |
-| iron battleaxe Swing_Down, Swing_Down_Left, Swing_Down_Right | 1.5 | 18 | 19 | 34 | measured; the shift by mechanism (not live) |
+| iron battleaxe Swing_Down, Swing_Down_Right | 1.5 | 18 | 19 | 34 | measured; the shift by mechanism (not live) |
+| iron battleaxe Swing_Down_Left (0.7.2 event 0.348, 2026-10-23) | 1.5 | 16 | 17 | 34 | measured on the new render (test pinned 2026-10-23); live hit 0.557 s, see 'Melee timing against live' |
 
 **Routing (measured).** A thrust request (slot 3) runs the listed Swing_Left (slot 0) on both renders: the Primary root releases into
 slot 0 on a short press; a 30-step hold on slot 0 runs Swing_Left repeatedly (hits on steps 8, 22, 36) and never the thrust (committed render, probe6). The charged mace request (slot 3) runs
@@ -211,6 +212,28 @@ the listed mace Swing_Left the same way. The vortex, the battleaxe whirlwind and
 **Not matched or not measured.** The ledger's bronze-dagger 17 -> 18 (row 5f) is a 0.5.7-pinned run; this scenario does not reproduce it
 (stock iron daggers 7, render 8). The live selection-count tick (8) and health tick (9) differ by one; the render shows both on one step.
 The mace, battleaxe and dagger shifts are by mechanism only.
+
+## Melee timing against live (row 5f, 2026-10-23; lane `lane_timing_rows`)
+
+Live: jar 1F874DFC, FIDELITY-0.7.2.md (aq). Render seconds = (step - 1) / 30 with the replace-hop construct on (HEAD steps 9/14, 19/26, 9/10, 24/37, 19/34). Each 0.7.2 event time was tried as its own redirect and kept only if it moved the render closer to live on hit and finish (or moved one closer and left the other within -0.033..+0.037 s). Measurement: `sim_melee.py` on a fresh gen-7 render per variant.
+
+| attack | live hit / finish (s) | render before hit / finish (s) | 0.7.2 row tried | render after hit / finish (s) | verdict |
+|---|---|---|---|---|---|
+| iron sword Swing_Left | 0.302 / 0.482 | 0.267 / 0.433 | event Simple RunTime 0.111 (gen 5 0.117) | 0.267 / 0.433 | not applied, against live (no change; hit -0.035 stays out) |
+| iron sword Swing_Right | 0.289 / 0.475 | 0.267 / 0.433 | event 0.111 (gen 5 0.117) | 0.267 / 0.433 | not applied, against live (no change) |
+| iron sword Swing_Down | 0.569 / 0.781 | 0.600 / 0.833 | event 0.361 (gen 5 0.433) | 0.533 / 0.833 | not applied, against live (hit moves past live: +0.031 to -0.036) |
+| iron daggers, kept as a PAIR (event 0.069 -> 0.066 and primary selector 0.069 -> 0.066; coordinator ruling 2026-10-23) | hit / finish live: Swing_Left 0.226 / 0.301, Swing_Right 0.215 / 0.295, Stab_Left 0.235 / 0.313, Stab_Right 0.228 / 0.308 | before 0.267 / 0.300 (all four) | pair only: 0.233 / 0.300 (all four); each row alone: no change | kept as a pair: neither row alone moves the hit, together all four hits move 9 -> 8 steps, closer to live on each (|diff| 0.041-0.052 -> 0.002-0.018 s), finish unchanged |
+| iron mace Swing_Left (event 0.536, gen 5 0.6) | 0.785 / 1.215 | 0.767 / 1.200 | event alone | 0.700 / 1.200 | not applied, against live (hit moves 0.085 s early) |
+| iron mace Swing_Right, Swing_Up_Left | 0.791 / 1.241; 0.772 / 1.205 | 0.767 / 1.200 | event alone (same literal) | 0.700 / 1.200 | not applied, against live |
+| iron mace normal selectors (0.089, gen 5 0.1) | as above | as above | each selector alone | no change | not applied, against live (no change) |
+| iron battleaxe Swing_Down_Left (event 0.348, gen 5 0.4) | 0.557 / 1.081 | 0.600 / 1.100 | event, Down_Left only (`name == "Down_Left"` template) | 0.533 / 1.100 | applied (hit closer, from +0.043 to -0.024; finish within band before and after) |
+| iron battleaxe Swing_Down_Left selector (0.13, gen 5 0.15) | as above | as above | selector alone | no change | not applied, against live (no change) |
+| iron battleaxe Swing_Down_Right (event 0.348) | 0.573 / 1.048 | 0.600 / 1.100 | event applied to Down_Right with the shared loop | 0.533 / 1.100 | not applied, against live (hit from +0.027 in band to -0.040 out of band); Down_Right keeps 0.4 |
+| iron battleaxe Swing_Down_Right selector (0.13) | as above | as above | selector alone | no change | not applied, against live (no change) |
+
+Applied: the dagger pair (`melee_timing:Weapon_Daggers_Primary_Swing_Left` event 0.066 and `melee_timing:Weapon_Daggers_Primary_Stab_Left_Selector` 0.066, kept together) and `melee_timing:Weapon_Battleaxe_Primary_Swing_Down_Left` (battleaxe loop literal 0.4 -> 0.348 for Down_Left only; `overlay.py` `_MELEE_ROWS`). Swing_Down keeps 0.4.
+
+Pending a live receipt (no live measurement; not applied): battleaxe Downstrike selector and its 0.083 pad, battleaxe Whirlwind spin and end selectors and events, Vortexstrike (sword spin and stab), Razorstrike lunge/slash/sweep (daggers), mace charged (Swing_*_Charged events and selectors), the sword Fast rows.
 
 ## Candidate rows from the offline design pass (2026-10-18; lane stubs_69; `mechanics/DESIGNS-072.md`)
 
