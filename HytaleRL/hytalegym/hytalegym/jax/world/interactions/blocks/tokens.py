@@ -123,6 +123,9 @@ class ActorBlockActionCandidates(NamedTuple):
     gather_type_index: Array
     required_tool_quality: Array
     provenance: Array
+    # Block-view columns, bound only by producers that hold the data.
+    break_progress: Array | None = None
+    block_type_id: Array | None = None
 
 
 class ActorBlockActionParameters(NamedTuple):

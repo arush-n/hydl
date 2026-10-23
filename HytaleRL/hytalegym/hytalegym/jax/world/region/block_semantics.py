@@ -21,6 +21,7 @@ from hytalegym.jax.world.mutable_blocks import (
 )
 from hytalegym.jax.world.region.atlas import lookup_region_blocks
 from hytalegym.jax.world.region.types import RegionAtlas, RegionCellSelection
+from hytalegym.worldgen.block_actions import block_type_ids_by_asset_key
 from hytalegym.worldgen.region import (
     CAPTURE_CHUNK_COUNT,
     CAPTURE_CHUNKS_PER_AXIS,
@@ -61,6 +62,7 @@ class RegionBlockSemanticAtlas(NamedTuple):
     gather_type_index: Array
     required_tool_quality: Array
     rotation_index: Array
+    block_type_id: Array
 
 
 class RegionBlockSemanticSelection(NamedTuple):
@@ -74,6 +76,7 @@ class RegionBlockSemanticSelection(NamedTuple):
     gather_type_index: Array
     required_tool_quality: Array
     rotation_index: Array
+    block_type_id: Array
 
 
 class RegionBlockActionQueryResult(NamedTuple):
@@ -85,6 +88,7 @@ class RegionBlockActionQueryResult(NamedTuple):
     direct_filler: Array
     diagnostics: Array
     query: MutableBlockQueryResult
+    block_type_id: Array
 
 
 def region_block_semantic_atlas_without_evidence(
@@ -144,6 +148,7 @@ def region_block_semantic_atlas_without_evidence(
         jnp.zeros((region_capacity, capacity), dtype=jnp.uint16),
         jnp.zeros((region_capacity, capacity), dtype=jnp.uint8),
         jnp.zeros((region_capacity, capacity), dtype=jnp.int16),
+        jnp.zeros((region_capacity, capacity), dtype=jnp.int32),
         jnp.zeros((region_capacity, capacity), dtype=jnp.int32),
     )
 
@@ -219,6 +224,8 @@ def region_block_semantic_atlas_from_snapshots(
     gather = np.zeros((region_capacity, capacity), dtype=np.uint8)
     quality = np.zeros((region_capacity, capacity), dtype=np.int16)
     rotation = np.zeros((region_capacity, capacity), dtype=np.int32)
+    block_type = np.zeros((region_capacity, capacity), dtype=np.int32)
+    type_ids = block_type_ids_by_asset_key()
 
     for index, (semantic, source) in enumerate(zip(semantics, physical)):
         source_digest = source.semantic_digest()
@@ -249,6 +256,7 @@ def region_block_semantic_atlas_from_snapshots(
             gather[index, slot] = entry.gather_type_index
             quality[index, slot] = entry.required_tool_quality
             rotation[index, slot] = entry.rotation_index
+            block_type[index, slot] = type_ids.get(tuple(entry.asset_key), 0)
 
     return RegionBlockSemanticAtlas(
         *(
@@ -265,6 +273,7 @@ def region_block_semantic_atlas_from_snapshots(
                 gather,
                 quality,
                 rotation,
+                block_type,
             )
         )
     )
@@ -423,6 +432,11 @@ def query_region_block_action_target(
         direct_filler=available & direct_filler,
         diagnostics=diagnostics,
         query=query,
+        block_type_id=jnp.where(
+            available,
+            selected_semantics.block_type_id,
+            jnp.zeros_like(selected_semantics.block_type_id),
+        ),
     )
 
 
@@ -442,7 +456,7 @@ def estimated_region_block_semantic_atlas_bytes(
         + section_cells * 2
         + 4
     )
-    entry_bytes = BLOCK_SEMANTIC_KEY_WORDS * 4 * 2 + 1 + 2 + 1 + 2 + 4
+    entry_bytes = BLOCK_SEMANTIC_KEY_WORDS * 4 * 2 + 1 + 2 + 1 + 2 + 4 + 4
     return topology + regions * palette * entry_bytes
 
 
@@ -574,6 +588,7 @@ def _lookup_aligned_semantics(
             semantic_atlas.required_tool_quality
         ),
         rotation_index=entry(semantic_atlas.rotation_index),
+        block_type_id=entry(semantic_atlas.block_type_id),
     )
 
 

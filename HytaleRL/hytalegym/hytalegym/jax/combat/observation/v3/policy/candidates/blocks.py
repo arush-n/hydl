@@ -69,6 +69,9 @@ class BlockActionCandidatePolicyView(NamedTuple):
     available: Array
     candidate_f32: Array
     candidate_mask: Array
+    # Beside the flat row, never in it: per-slot block evidence for the skill layer.
+    break_progress: Array | None = None
+    block_type_id: Array | None = None
 
 
 class BlockActionCandidateSelection(NamedTuple):
@@ -133,6 +136,8 @@ def empty_block_action_candidate_policy_view(
             (batch, candidate_capacity),
             dtype=jnp.bool_,
         ),
+        break_progress=jnp.zeros((batch, candidate_capacity), dtype=jnp.float32),
+        block_type_id=jnp.zeros((batch, candidate_capacity), dtype=jnp.int32),
     )
 
 
@@ -218,6 +223,12 @@ def encode_block_action_candidate_policy_view(
             jnp.float32(0.0),
         ),
         candidate_mask=candidate_mask,
+        break_progress=_candidate_column(
+            source.break_progress, candidate_mask, actor_index, jnp.float32
+        ),
+        block_type_id=_candidate_column(
+            source.block_type_id, candidate_mask, actor_index, jnp.int32
+        ),
     )
 
 
@@ -328,6 +339,8 @@ def mask_block_action_candidate_policy_view(
             jnp.float32(0.0),
         ),
         candidate_mask=candidate_mask,
+        break_progress=_masked_column(view.break_progress, candidate_mask),
+        block_type_id=_masked_column(view.block_type_id, candidate_mask),
     )
 
 
@@ -494,6 +507,17 @@ def _validate_candidate_source(
         raise ValueError(
             "source.provenance must match source.candidate_mask"
         )
+    for name, dtype in (
+        ("break_progress", jnp.float32),
+        ("block_type_id", jnp.int32),
+    ):
+        values = getattr(source, name)
+        if values is None:
+            continue
+        if values.shape != candidate_shape:
+            raise ValueError(f"source.{name} must match source.candidate_mask")
+        if jnp.asarray(values).dtype != jnp.dtype(dtype):
+            raise TypeError(f"source.{name} must have dtype {jnp.dtype(dtype)}")
     expected_dtypes = (
         ("available", source.available, jnp.bool_),
         ("capacity_exceeded", source.capacity_exceeded, jnp.bool_),
@@ -505,6 +529,25 @@ def _validate_candidate_source(
     for name, value, dtype in expected_dtypes:
         if jnp.asarray(value).dtype != jnp.dtype(dtype):
             raise TypeError(f"source.{name} must have dtype {jnp.dtype(dtype)}")
+
+
+def _candidate_column(
+    values: Array | None,
+    candidate_mask: Array,
+    actor_index: int,
+    dtype: object,
+) -> Array:
+    """One actor's optional per-slot column; an unbound column reads as zero."""
+
+    if values is None:
+        return jnp.zeros(candidate_mask.shape, dtype=dtype)
+    return jnp.where(candidate_mask, values[:, actor_index], jnp.zeros((), dtype=dtype))
+
+
+def _masked_column(values: Array | None, candidate_mask: Array) -> Array | None:
+    if values is None:
+        return None
+    return jnp.where(candidate_mask, values, jnp.zeros_like(values))
 
 
 def _affordance_features(

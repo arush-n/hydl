@@ -241,6 +241,12 @@ def produce_region_runtime_camera_block_action_candidates(
         + jnp.float32(0.5)
         - body
     )
+    block_progress = jnp.where(
+        first(current.block_health_valid),
+        jnp.float32(1.0) - first(current.block_health),
+        jnp.float32(0.0),
+    )
+    block_type = first(immutable.block_type_id)
     return ActorBlockActionCandidates(
         available=row_available,
         capacity_exceeded=jnp.zeros_like(row_available),
@@ -255,6 +261,8 @@ def produce_region_runtime_camera_block_action_candidates(
             first(current.geometry.required_tool_quality)
         ),
         provenance=publish(first(current.provenance)),
+        break_progress=publish(block_progress),
+        block_type_id=publish(block_type),
     )
 
 

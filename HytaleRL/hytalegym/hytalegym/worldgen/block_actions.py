@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+import functools
 import hashlib
 import json
 import struct
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from hytalegym.worldgen.block_affordances import gather_type_index
@@ -132,6 +134,31 @@ def block_asset_key(asset_id: str) -> tuple[int, ...]:
         _BLOCK_SEMANTIC_KEY_FORMAT,
         hashlib.sha256(_asset_id(asset_id).encode("utf-8")).digest(),
     )
+
+
+_BLOCK_TABLE_PATH = (
+    Path(__file__).resolve().parents[1] / "sim" / "gen7" / "data" / "blocks.json"
+)
+
+
+@functools.cache
+def block_type_ids_by_asset_key() -> dict[tuple[int, ...], int]:
+    """Semantic IDs of the 0.7.2 block table, keyed by ``block_asset_key``.
+
+    The bridge publishes SHA-256 of a block's asset ID as its palette key
+    (``NativeKeys.mutableBlockAssetKey``), so a hit names the exact ID. A key
+    outside the table is unknown and publishes semantic ID 0.
+    """
+
+    from hytalegym.jax.combat.contracts.semantic import semantic_id
+
+    rows = json.loads(_BLOCK_TABLE_PATH.read_text(encoding="utf-8"))["rows"]
+    table: dict[tuple[int, ...], int] = {}
+    for key in rows:
+        if key.startswith("block:"):
+            asset_id = key[len("block:"):]
+            table[block_asset_key(asset_id)] = semantic_id(asset_id)
+    return table
 
 
 def resolve_local_held_item_tool(
@@ -716,6 +743,7 @@ __all__ = [
     "block_action_contract",
     "block_action_contract_sha256",
     "block_asset_key",
+    "block_type_ids_by_asset_key",
     "block_semantic_key",
     "resolve_default_gather_spec",
     "resolve_local_block_action_semantics",

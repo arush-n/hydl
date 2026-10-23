@@ -28,6 +28,7 @@ from typing import Any, Callable, Mapping, Sequence
 import jax.numpy as jnp
 import numpy as np
 
+from hytalegym.jax.combat.contracts.semantic import semantic_id
 from hytalegym.jax.combat.inventory import parse_native_inventory_frame
 from hytalegym.jax.combat.observation.v3.policy import (
     ARSENAL_POLICY_DEFAULT_BLOCK_CANDIDATE_CAPACITY,
@@ -983,6 +984,8 @@ def _block_surface(
     tags = np.zeros((capacity,), dtype=np.uint16)
     gather = np.zeros((capacity,), dtype=np.uint8)
     quality = np.zeros((capacity,), dtype=np.int16)
+    progress = np.zeros((capacity,), dtype=np.float32)
+    block_type = np.zeros((capacity,), dtype=np.int32)
     bindings: list[NativeBlockCandidateBinding | None] = [None] * capacity
     primary_count = 0
     secondary_count = 0
@@ -1096,6 +1099,16 @@ def _block_surface(
         tags[slot] = semantics.affordance_tags
         gather[slot] = semantics.gather_type_index
         quality[slot] = semantics.required_tool_quality
+        progress[slot] = (
+            1.0 - semantics.block_health
+            if semantics.block_present and semantics.block_health_valid
+            else 0.0
+        )
+        block_type[slot] = (
+            semantic_id(semantics.block_asset_id)
+            if semantics.block_asset_id
+            else 0
+        )
         bindings[slot] = NativeBlockCandidateBinding(primary, secondary)
         primary_count += int(primary is not None)
         secondary_count += int(secondary is not None)
@@ -1144,6 +1157,8 @@ def _block_surface(
             gather_type_index=jnp.asarray(gather[None, None]),
             required_tool_quality=jnp.asarray(quality[None, None]),
             provenance=jnp.zeros((1, 1, capacity), dtype=jnp.uint32),
+            break_progress=jnp.asarray(progress[None, None]),
+            block_type_id=jnp.asarray(block_type[None, None]),
         )
         policy = encode_block_action_candidate_policy_view(
             source,
