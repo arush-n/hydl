@@ -125,6 +125,8 @@ def record_write_results(
 OUTCOME_SLOTS: int = 4
 """Columns of the outcome arrays: the combiner's active-request table, 4 per agent."""
 OUTCOME_NONE, OUTCOME_DONE, OUTCOME_FAILED, OUTCOME_ABORTED = 0, 1, 2, 3
+UNMAPPED_VERB: int = -1
+"""``outcome_verbs`` for an ended request whose verb is not in ``verb_index`` (0 is a real verb, ``walk_to``)."""
 _DONE_CODES = {
     SkillOutcome.COMPLETED: OUTCOME_DONE,
     SkillOutcome.FAILED: OUTCOME_FAILED,
@@ -144,13 +146,16 @@ def outcomes_for_tick(
 
     A column per ended request of the agent, in request-id order: 1 done (``done`` with ``COMPLETED``), 2 failed
     (``done`` with ``FAILED`` or ``TIMEOUT``), 3 aborted (``aborted``, or ``done`` with ``INTERRUPTED``); 0 where nothing
-    ended. ``outcome_verbs`` holds the ended request's verb index beside it (0 where nothing ended).
+    ended. ``outcome_verbs`` holds the ended request's verb index beside it (0 where nothing ended, -1 for a verb
+    outside ``verb_index``).
 
     Args:
         document: The S_t document; its skills section holds the statuses.
         tick: The tick whose ended requests to report.
         agents: The number of agents B.
-        verb_index: Maps a verb (a skill id) to the index the state tick logs (the skill layer's vocabulary).
+        verb_index: Maps a verb (a skill id) to the index the state tick logs: the skill layer's neural-module vocabulary,
+            ``{name: VERBS.index(name)}`` with ``skill_agent.neural_skills.spec.VERBS`` (append-only). A verb outside
+            it is logged as ``UNMAPPED_VERB`` (-1).
         verbs: Optional mapping ``(agent, request_id) -> verb`` for requests no longer in the requests section; by
             default the verb is read from ``document.requests.live``.
 
@@ -175,6 +180,7 @@ def outcomes_for_tick(
         if verb is None:
             raise ValueError(f"request {status.request_id} of agent {status.agent} ended at tick {tick}, verb unknown")
         ended[status.agent].append((status.request_id, code, verb))
+    index = dict(verb_index)
     outcomes = np.zeros((agents, OUTCOME_SLOTS), dtype=np.int32)
     outcome_verbs = np.zeros((agents, OUTCOME_SLOTS), dtype=np.int32)
     for agent, rows in enumerate(ended):
@@ -182,7 +188,7 @@ def outcomes_for_tick(
             raise ValueError(f"agent {agent} ended {len(rows)} requests at tick {tick}; the table has {OUTCOME_SLOTS}")
         for column, (_, code, verb) in enumerate(sorted(rows)):
             outcomes[agent, column] = code
-            outcome_verbs[agent, column] = int(verb_index[verb])
+            outcome_verbs[agent, column] = int(index.get(verb, UNMAPPED_VERB))
     return outcomes, outcome_verbs
 
 
