@@ -198,3 +198,53 @@ coordinates in requests. Owner decision still needed: the go for steps 2 onwards
 `SYSTEM_ONE.md` §8 (J-S1, the scratchpad §8.10, the generator §8.11, the rulings §8.12, the failure and
 the split §8.13), §9 (J-S2, programs §9.9, the request stream §9.10); `FORMULAS.md` M1-M13;
 `LEDGER.md` for every number above; ADR-001 (local) for the decisions and the evidence rows.
+
+## 11. Relationship writes (step 9's decision-layer side; DESIGNED and APPROVED 2026-10-23)
+
+The skill layer's step 9 (`skill_agent/docs/VIRTUAL_HUMAN.md` §26) adds 16 relationship fields to each agent's written
+entity entries (§26.2: `closeness`, `ability`, `benevolence`, `integrity`, `hostility`, `fear`, `anger`, six role
+flags, `ingroup`, `owe_them`, `they_owe`), up to 150 individuals, keyed by the perceived id. The owner ruled that the
+decision layer writes every field (§26.5 item 2). This section is how it decides what to write. Built after the skill layer's step 9 lands; its rules read §26.2's interaction facts.
+
+**Inputs that exist today** (each named in S_t or the skill layer's state):
+- `skills.known_entities` per agent (#140, fc2b129): id, visible, age, distance, hostile, attitude, health, alive.
+- The skill layer's interaction facts (§26.2, `state/social.py`, being built): meetings and time in view, hits taken
+  and dealt per individual (inferred until the simulator publishes the attacker, S11), who struck first.
+- Request outcomes (skills section statuses) and the executive's goals (what the LLM asked for, and about whom).
+- Missing, so their fields wait (§26.5 item 4): speech, item transfers, visible names and each entity's activity.
+  `family`, `leader`, `follower`, `trader`, `owe_them` and `they_owe` have no input yet. They are written only when the
+  executive (LLM) names one through a goal (below), never by rule.
+
+**The rule set** (in `jev/relations.py`, new). It runs at each host decision per agent over the individuals with new
+facts since the last decision. Every write goes through the existing `writes` section (≤ 8 per agent per tick; the
+largest changes first; a change under 0.05 is not written). Constants marked [E] are starting values, to be fitted.
+- **Fights** (per hit taken from them, `d` = damage / my maximum health): `hostility += 0.5 d` and `anger += 0.8 d`
+  when they struck first in the meeting (blame: harm another caused, the appraisal account of anger); `fear += d`
+  scaled by how badly I am losing (their damage per second over mine) [E]. A hit I dealt first raises `hostility` by
+  0.2 d (rivalry), not anger. `ability` moves toward their measured hit rate on me, scaled to [-1, 1] [E].
+- **Peace** (time in view with no harm either way, per meeting): `closeness += 1/30` per meeting that lasted over 60 s
+  without a hit, following Humanoid Agents' ±1 on a 0-30 scale per interaction (§26.6). `benevolence += 0.05` when
+  they could have struck (in reach and facing me, the bodies' reports) and did not [E].
+- **Decay** (written by the decision layer; written values never fade on their own, §19.7): `anger` halves every 60 s
+  out of contact, `fear` every 120 s out of view, `hostility` every 30 min [E]. `closeness`, trust parts and roles do
+  not decay; Humanoid Agents' closeness does not.
+- **Role flags by rule:** `rival` after 3 meetings with fights; `friend` when closeness > 1/2 and hostility < 0.1;
+  `ingroup` from the scenario's team, when it publishes one. Cleared by the same rules in reverse.
+- **The LLM's say:** an executive goal may carry a relationship directive ("treat 12 as a friend", "trust 7 less").
+  The decision layer writes it, and the rules do not overwrite a directed field for that goal's lifetime. The LLM has
+  no write path of its own (§26.5 item 2).
+- **Full table:** a 151st individual is refused "full"; the decision layer ejects the record with the lowest closeness,
+  no role flag and the oldest last contact, then retries. This is the eject-and-retry rule of #135.
+
+**Grounding:** the fields, scales and turnover come from §26.6 (Humanoid Agents' closeness steps; Mayer, Davis and
+Schoorman's trust parts; Dunbar's layers). The blame-to-anger and threat-to-fear split follows appraisal theory
+(Lazarus 1991; Ortony, Clore and Collins 1988), from memory and not re-read here. The rates are engineering choices,
+marked [E].
+
+**Verification:** unit tests per rule; a scripted duel where the opponent strikes first, so hostility and anger rise
+and anger halves after 60 s apart; a peaceful co-presence run where closeness rises by 1/30 per qualifying meeting;
+a directive that holds against the rules; a 151st individual causing one ejection and a retry.
+
+**Decisions (RULED 2026-10-23):** (1) the rates and half-lives above, as starting values marked [E]: "use these";
+(2) `ability` and `benevolence` move by rule now, `integrity` waits: "yes, by rule now"; (3) role flags `rival` and
+`friend` by rule, any role by LLM directive, and a directive holds against the rules: "by rule + LLM".
