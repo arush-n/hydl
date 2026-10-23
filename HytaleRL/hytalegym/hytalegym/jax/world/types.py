@@ -57,6 +57,12 @@ class GeometryState(NamedTuple):
     # Added in geometry v5. ``None`` keeps legacy hand-built fixtures
     # constructible; exact body sensing treats a missing leaf as unavailable.
     fluid_fill_height: Array | None = None
+    # Opt-in block identity grid, int32 [B, CELL_COUNT] in the cell_mask layout:
+    # entry cell_index(dx, dy, dz) is the semantic id of the block at
+    # origin + (dx, dy, dz). ``None`` leaves every existing producer unchanged.
+    # Air and unknown cells read 0. It is valid only for static geometry; a
+    # caller that mutates blocks must drop or rebuild it.
+    block_type_id: Array | None = None
 
     @property
     def collision_boxes(self) -> Array:
@@ -153,6 +159,15 @@ def _fixed_capacity(
             f"{name}={capacity} cannot hold {required} required entries"
         )
     return capacity
+
+
+def _block_type_row(value: Any, index: int) -> np.ndarray:
+    row = np.asarray(value, dtype=np.int32)
+    if row.shape != (CELL_COUNT,):
+        raise ValueError(f"geometry frame {index} has an invalid block-type shape")
+    if np.any(row < 0):
+        raise ValueError(f"geometry frame {index} has a negative block-type id")
+    return row
 
 
 def geometry_state_from_numpy(
@@ -377,6 +392,18 @@ def geometry_state_from_numpy(
             dtype=dtype,
         )
 
+    identity_rows = [
+        None
+        if "block_type_id" not in frame
+        else _block_type_row(frame["block_type_id"], index)
+        for index, frame in enumerate(source)
+    ]
+    if any(row is not None for row in identity_rows) and any(
+        row is None for row in identity_rows
+    ):
+        raise ValueError(
+            "block_type_id must be present on every geometry frame or none"
+        )
     shape_index_rows = []
     full_cube_rows = []
     exception_cell_rows = []
@@ -497,6 +524,11 @@ def geometry_state_from_numpy(
         fluid_fill_height=jnp.asarray(
             np.stack(fluid_fill_rows),
             dtype=jnp.float32,
+        ),
+        block_type_id=(
+            None
+            if identity_rows[0] is None
+            else jnp.asarray(np.stack(identity_rows), dtype=jnp.int32)
         ),
     )
     if state.cell_mask.shape[1:] != (CELL_COUNT,):

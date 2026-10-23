@@ -13,7 +13,7 @@ from typing import NamedTuple
 import jax.numpy as jnp
 import numpy as np
 
-from hytalegym.geometry.contract import CELL_COUNT, MAX_DETAIL_BOXES
+from hytalegym.geometry.contract import CELL_COUNT, CELL_RADIUS, MAX_DETAIL_BOXES
 from hytalegym.jax.world.perception.los import (
     GeometryProvider,
 )
@@ -86,6 +86,8 @@ WORLD_TOKEN_DIAGNOSTIC_LOS_UNAVAILABLE = jnp.uint32(1 << 4)
 WORLD_TOKEN_DIAGNOSTIC_OUTPUT_CAPACITY = jnp.uint32(1 << 5)
 
 _EPSILON = jnp.float32(1.0e-6)
+# Same feet epsilon as the Region rule (region/traversal.py _SURFACE_FEET_EPSILON).
+_SURFACE_FEET_EPSILON = 1.0e-3
 _WORLDGEN_ARTIFACT_ROOT = (
     Path(__file__).resolve().parents[5] / "artifacts" / "worldgen"
 )
@@ -461,7 +463,7 @@ def produce_actor_world_geometry_tokens(
         )
         return jnp.where(gate, values, jnp.asarray(fill, dtype=values.dtype))
 
-    return WorldGeometryTokenObservation(
+    observation = WorldGeometryTokenObservation(
         available=row_available,
         capacity_exceeded=capacity_exceeded,
         diagnostics=diagnostics,
@@ -484,6 +486,55 @@ def produce_actor_world_geometry_tokens(
         collision_box_mask=masked(selected.payload.collision_box_mask),
         collision_boxes_relative=masked(selected.payload.collision_boxes_relative),
     )
+    if not isinstance(world, GeometryState) or world.block_type_id is None:
+        return observation
+    return observation._replace(
+        block_type_id=_dense_block_type_ids(world, safe_positions, observation)
+    )
+
+
+def _dense_block_type_ids(
+    world: GeometryState,
+    actor_position: Array,
+    tokens: WorldGeometryTokenObservation,
+) -> Array:
+    """Block id per token row from the dense identity grid.
+
+    Collision-exception rows and grid surface rows describe the grid cell at
+    ``source_index`` (the flat index of their offset). Traversal-surface rows
+    stand on the support cell (floor x, ceil(y - 1e-3) - 1, floor z) of actor +
+    relative_position; it reads 0 outside the 9x9x9 window. Padding rows read 0.
+    """
+
+    mask = tokens.token_mask
+    batch, actors, capacity = mask.shape
+    exception = mask & (tokens.token_kind == WORLD_TOKEN_KIND_COLLISION_EXCEPTION)
+    surface = mask & (tokens.token_kind == WORLD_TOKEN_KIND_TRAVERSAL_SURFACE)
+    world_position = actor_position[:, :, None, :] + tokens.relative_position
+    support = jnp.stack(
+        (
+            jnp.floor(world_position[..., 0]),
+            jnp.ceil(world_position[..., 1] - _SURFACE_FEET_EPSILON) - 1,
+            jnp.floor(world_position[..., 2]),
+        ),
+        axis=3,
+    ).astype(jnp.int32)
+    local = support - world.origin[:, None, None, :] + CELL_RADIUS
+    inside = jnp.all((local >= 0) & (local < _SIDE), axis=3)
+    support_index = jnp.clip(
+        (local[..., 0] * _SIDE + local[..., 1]) * _SIDE + local[..., 2],
+        0,
+        CELL_COUNT - 1,
+    )
+    exception_index = jnp.clip(tokens.source_index, 0, CELL_COUNT - 1)
+    index = jnp.where(exception, exception_index, support_index)
+    grid = jnp.broadcast_to(
+        world.block_type_id[:, None, :],
+        (batch, actors, CELL_COUNT),
+    )
+    ids = jnp.take_along_axis(grid, index, axis=2)
+    identified = exception | (surface & inside)
+    return jnp.where(identified, ids, 0).astype(jnp.int32)
 
 
 def _actor_parameter(
