@@ -90,15 +90,32 @@ NAMES: tuple[str, ...] = tuple(variable.name for variable in VARIABLES)
 BY_NAME: Mapping[str, Variable] = {variable.name: variable for variable in VARIABLES}
 DEFAULTS: np.ndarray = np.asarray([variable.default for variable in VARIABLES], np.float32)
 
+def _relation(names: Sequence[str], low: float, high: float) -> tuple[Variable, ...]:
+    return tuple(Variable(name, "world", "relationship", "written", False, low, high, 0.0, writer="decision")
+                 for name in names)
+
+
 ENTITY_ENTRIES: tuple[Variable, ...] = (
     Variable("remember", "world", "tags", "written", False, 0.0, 1.0, 0.0, writer="decision"),
+    *_relation(("closeness",), 0.0, 1.0),
+    *_relation(("ability", "benevolence", "integrity"), -1.0, 1.0),
+    *_relation(("hostility", "fear", "anger"), 0.0, 1.0),
+    *_relation(("friend", "family", "leader", "follower", "rival", "trader"), 0.0, 1.0),
+    *_relation(("ingroup",), 0.0, 1.0),
+    *_relation(("owe_them", "they_owe"), 0.0, 10.0),
 )
+"""The fields of an entry about an entity (``docs/VIRTUAL_HUMAN.md`` section 26, step 9): ``remember``, then the
+relationship the decision layer writes (ruling 26.5 item 2: the only writer of the relationship, the LLM has no write
+path to it). Closeness in [0, 1] (Humanoid Agents' 0 to 30, scaled); the three parts of trustworthiness, ability,
+benevolence and integrity, in [-1, 1] (Mayer, Davis and Schoorman 1995; 0 unknown); the lasting hostility, fear and
+anger in [0, 1]; the roles as flags; ingroup as a flag; and the favours owed each way, in [0, 10] (reciprocity, 15.6).
+The rule-made feelings toward an entity are kept beside these (``state/affect.py``, provisional, 26.5 item 1)."""
 PLACE_ENTRIES: tuple[Variable, ...] = (
     Variable("remember", "world", "tags", "written", False, 0.0, 1.0, 0.0, writer="decision"),
 )
-"""The fields of the entries about an entity and about a place (``docs/VIRTUAL_HUMAN.md`` section 19). ``remember`` is
-the priority the decision layer marks a thing with, which the stores pin and the body reads as ``tagged``; later steps
-append fields by name."""
+"""The fields of the entries about a place (``docs/VIRTUAL_HUMAN.md`` section 19). ``remember`` is the priority the
+decision layer marks a thing with, which the stores pin and the body reads as ``tagged``; later steps append fields by
+name."""
 
 assert len(BY_NAME) == len(VARIABLES), "variable names must be unique"
 assert all(v.section in SECTIONS and v.source in SOURCES and v.low <= v.default <= v.high for v in VARIABLES)

@@ -568,7 +568,7 @@ approach. Missing:
 | 6 | Hearing: the sound registry, the hearing rule, heard entries in the stores, the orienting reflex (the token reads zero until S12). DESIGNED and APPROVED 2026-10-23 for today's inputs (section 28); the sound registry BUILT (28.7); the rest when positional sounds are published (S12) | 17, 28 |
 | 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry (with it the status token's identity: which effect, its source entity, its damage cause, all in the observation and dropped today; `PERCEPTION.md` section 10.5), places, the proficiencies. First part DESIGNED and APPROVED 2026-10-22; BUILT (section 24.7: status identity, places, events) | 11.1 to 11.4, 11.6, 16.6, 17.8, 24 |
 | 8 | The formatted views (typed facts, words) and the recording. DESIGNED and APPROVED 2026-10-22; BUILT (section 25.6: the facts, the words, the recording) | 10.3, 10.9, 25 |
-| 9 | The social section (approved, 15.3). DESIGNED and APPROVED 2026-10-22 (section 26, with the rulings of 26.5) | 12, 15.3, 26 |
+| 9 | The social section (approved, 15.3). DESIGNED and APPROVED 2026-10-22 (section 26, with the rulings of 26.5); BUILT 2026-10-23 (section 26.7: the relationship the decision layer writes, the interaction facts, `spared`, personal space, the people in the views and the recording) | 12, 15.3, 26 |
 | T | The world's tick length: every state-layer constant in seconds, one tick length per world (found by the coordinator, 2026-10-23). DESIGNED and APPROVED 2026-10-23 (section 27); built after step 9 | 27 |
 | W | World interaction: breaking, placing, using, picking up, and the commands (crafting, tools, items); the perception of break progress and items on the ground. DESIGNED and APPROVED 2026-10-22 (section 23); the perception follows the simulator's asks, the skills train when training resumes | 23 |
 
@@ -2442,6 +2442,48 @@ stream adds "met" (a new record) and "forgot" (a replaced one).
 - **Reputation versus direct trust.** Reputation aggregates what others report; direct trust comes from one's own
   encounters (Sabater and Sierra 2005, Artificial Intelligence Review 24, 33-60, through a secondary report). Only the
   direct part has inputs today.
+
+### 26.7 Built (2026-10-23), and how it was checked
+
+What was built is 26.2 with the rulings of 26.5. A Haiku subagent wrote it in its own worktree from a written spec, and
+`spared` as a follow-up; it was reviewed and re-checked here.
+- `contract/variables.py`: the 16 relationship fields of `ENTITY_ENTRIES` (writer `decision`; the ranges of 26.2).
+- `state/written.py`: 150 entity entries; `entity_entry` reads one id per agent or one per entity row.
+- `state/social.py` (new): the interaction facts, the replacement rule, `spared`, `space_target`.
+- `state/layer.py`: the facts after the event log; each entity row's relationship columns; the chances from the
+  perceived rows (in reach, alive, facing me); a save made with fewer written entries loads into the first slots.
+- `contract/tokens_v3.py`: `RELATION_FEATURES` after the `feel_*` columns; the entity token 158 -> 174 columns.
+- `state/affect.py`: the feelings by rule marked provisional (26.5 item 1).
+- `state/views.py`: `facts(...)["people"]` (the written relationship with its writer and age, the facts, `spared`, the
+  rule's feelings marked provisional, position, distance and bearing; ages by the `dt_seconds` the caller gives);
+  `words` names each person in a sentence and ranks people with the other items.
+- `state/recording.py`: the stream's `met` and `forgot` lines.
+
+Choices made in the build, kept: a hit on the tick a chance opens counts as a chance taken; bearing is in the body frame
+and needs the body's yaw, as the places' does.
+
+Checks:
+- **No change to what existed:** every token column and stored column the old tree produces (1,655 fingerprints over
+  200 Region ticks and 60 duel ticks) is identical in the new tree; only the 32 new columns (16 on the entity token, the
+  same 16 in the entity store) are added. The probe repeats run to run (1,655 of 1,655).
+- **The new columns:** a stand-in decision layer's relationship about the Trork reads back on every one of its 776
+  rows (closeness 0.6, friend 1); its personal space is 2.1 blocks from the written hostility 0.3 and grows to about 4.7
+  as the rule's hostility rises with the Trork's hits.
+- **Facing, checked against the simulator's own motion:** the chance formula reads an entity as facing me from its
+  relative yaw. A chaser 2 blocks ahead and 3 to either side, yawed as the formula says "facing me", walks toward the
+  agent in the duel (it closes by more than half a block in 12 ticks, the test's bar); yawed 90 degrees off, or
+  mirrored, it does not close. So the convention is the game's, not only the formula's (`test_sa_social.py`, 4 chance
+  and 4 walk cases).
+- **Unit tests:** `test_sa_social.py`, 63 (the written path and its 150 entries; sightings, meetings, fights, who
+  struck first, the replacement rule; `spared`, including a hit on the opening tick; the body's columns, the views and
+  the recording through `layer.step`; respawn, reset, save and load, and a 16-entry save); with the state tests beside
+  it, 175 passed.
+- **The gate** (the package's two passes, against the baseline taken at 6acadad): pass 1, 5 failed and 6 errors, the
+  same 11 names as the baseline, and 1,466 passed against 1,403 (the 63 new); pass 2 (`stand_in_pursuit` on
+  0.5.7), 19 failed and 11 errors, the same 30 names. No test fails that did not fail before.
+- **Cost:** not timed yet. The machine's load stayed between 49 and 68 on 18 cores through the build (other
+  sessions' tests and lanes), which would make a timing say more about them than about step 9. It is timed on a
+  quiet machine and recorded here, as 24.7 and 25.6 were.
 
 ## 27. The world's tick length (DESIGNED and APPROVED 2026-10-23, with the ruling of 27.5)
 

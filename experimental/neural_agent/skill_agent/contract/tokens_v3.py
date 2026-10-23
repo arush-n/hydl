@@ -98,6 +98,14 @@ AFFECT_FEATURES: tuple[str, ...] = variables.names("inner", body_reads=True)
 control over the threat, in [0, 1]."""
 FEELINGS: tuple[str, ...] = ("hostility", "fear", "trust", "anger")
 """The agent's feelings toward one known entity (``state/affect.py``), on that entity's token as ``feel_*``."""
+RELATION_FEATURES: tuple[str, ...] = (
+    "rel_known", "rel_closeness", "rel_ability", "rel_benevolence", "rel_integrity", "rel_hostility", "rel_fear",
+    "rel_anger", "role_friend", "role_family", "role_leader", "role_follower", "role_rival", "role_trader",
+    "rel_ingroup", "space_target")
+"""The relationship the decision layer wrote about an entity (``state/written.py``, ``docs/VIRTUAL_HUMAN.md`` section
+26), on its token: ``rel_known`` 1 when an entry is held (so a 0 is not read as neutral), its closeness, the three
+parts of trustworthiness, the three written feelings, the six role flags and ingroup; and ``space_target``, the
+personal-space distance it should keep, over ``SPACE_SCALE_BLOCKS`` (``state/social.py``, a rule, not written)."""
 EFFECT_FEATURES: tuple[str, ...] = (
     "debuff", "infinite", "duration_log10", "overlap_overwrite", "overlap_extend", "overlap_ignore",
     "damage_over_time", "modifies_stats", "modifies_damage_taken", "modifies_damage_dealt", "speed_multiplier",
@@ -170,13 +178,15 @@ class StatusTokenV3:
 class EntityTokenV3:
     """A creature or person, perceived this tick or remembered: where it is, its motion, its facing (relative to my
     body, and toward me), its health and attack (phase, progress, which attack), whether the engine marks it hostile
-    to me, what it is (kind, attitude toward me, player: seams until role ids are published, S2), what it holds (S4) and
-    its description."""
+    to me, what it is (kind, attitude toward me, player: seams until role ids are published, S2), what it holds (S4),
+    my feelings toward it (``feel_*``, by rule and provisional), the relationship the decision layer wrote about it
+    (``RELATION_FEATURES``, section 26) and its description."""
 
     FEATURES = (*WHERE_FEATURES, "v_forward", "v_right", "v_up", "yaw_sin", "yaw_cos", "facing_error",
                 "head_facing_error", "visible", *MEMORY_FEATURES, "health_fraction", "alive",
                 *(f"phase_{phase}" for phase in ATTACK_PHASES), "attack_progress", "attack_index",
-                *(f"attitude_{attitude}" for attitude in ATTITUDES), "player", "known", "hostile", *(f"feel_{name}" for name in FEELINGS),
+                *(f"attitude_{attitude}" for attitude in ATTITUDES), "player", "known", "hostile",
+                *(f"feel_{name}" for name in FEELINGS), *RELATION_FEATURES,
                 *(f"kind_{name}" for name in CREATURE_PROPERTIES), *(f"held_kind_{kind}" for kind in HELD_KINDS),
                 *(f"held_item_{name}" for name in ITEM_PROPERTIES_V3), *_DESCRIPTION, *_RESERVE, "marked")
 
@@ -309,7 +319,8 @@ assert all(len(set(cls.FEATURES)) == len(cls.FEATURES) for cls in TOKEN_TYPES_V3
 __all__ = ["ABILITY_SLOTS", "AFFECT_FEATURES", "AFFORDANCES", "CAPACITIES_V3", "DESCRIPTION_WIDTH", "EFFECT_FEATURES",
            "EVENT_KINDS", "FEELINGS", "GATHER_BITS", "GEOMETRY_BOXES", "GEOMETRY_BOX_FIELDS", "GEOMETRY_EDGES",
            "GEOMETRY_EDGE_FIELDS", "GEOMETRY_FLAGS", "HOLD_THRESHOLDS", "ITEM_PROPERTIES_V3", "MEMORY_FEATURES",
-           "PERSONA_FEATURES", "PLACE_KINDS", "RECIPE_WIDTH", "REMEMBERED_GEOMETRY_CELLS", "RESERVE_WIDTH", "RESOURCES",
+           "PERSONA_FEATURES", "PLACE_KINDS", "RECIPE_WIDTH", "REMEMBERED_GEOMETRY_CELLS", "RELATION_FEATURES",
+           "RESERVE_WIDTH", "RESOURCES",
            "STATUS_FIELDS", "STATUS_FLAGS", "TOKEN_SCHEMA_V3", "TOKEN_TYPES_V3", "TRUNK_TYPE_NAMES_V3",
            "WHERE_FEATURES", "ActTokenV3", "AffectTokenV3", "BlockCandidateTokenV3", "EntityTokenV3", "EventTokenV3",
            "GeometryTokenV3", "HazardTokenV3", "InventorySlotTokenV3", "KitTokenV3", "PersonaTokenV3", "PlaceTokenV3",

@@ -68,6 +68,11 @@ Big Five view. Feelings toward entity j decay with their own constants::
 
 Every time constant and gain is an estimate (marked [E] in ``docs/VIRTUAL_HUMAN.md``) to be certified by the step
 and monotonicity tests, then fitted to behaviour.
+
+**Provisional** (section 26.5 item 1, ruled 2026-10-22: "sure but keep it marked for now"). These feelings toward an
+entity are kept beside the relationship the decision layer writes about it (``state/written.py``: closeness, the trust
+parts, the written hostility, fear and anger, the roles), so either can be dropped by name later. The ``feel_*``
+columns are the rule's; the ``rel_*`` and ``role_*`` columns are the written ones (``tokens_v3.RELATION_FEATURES``).
 """
 
 from __future__ import annotations

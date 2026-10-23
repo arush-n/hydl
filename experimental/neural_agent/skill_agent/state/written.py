@@ -36,7 +36,8 @@ import numpy as np
 from experimental.neural_agent.skill_agent.contract import variables
 from experimental.neural_agent.skill_agent.state import memory
 
-ENTITY_ENTRY_SLOTS: int = 16
+ENTITY_ENTRY_SLOTS: int = 150
+"""The entries about entities per agent: Dunbar's outer layer (section 26.2, 15.3); a capacity, not an estimate."""
 PLACE_ENTRY_SLOTS: int = 16
 WRITE_SLOTS: int = 8
 """Writes per agent per tick. A passing write beyond these is refused as "too many writes this tick"."""
@@ -277,11 +278,23 @@ def _read(entries: Entries, match: jax.Array, defaults: np.ndarray) -> tuple[jax
 
 
 def entity_entry(written: Written, ids: jax.Array) -> tuple[jax.Array, jax.Array]:
-    """The entry about each agent's entity ``ids`` int32[B]: its fields float32[B, C] and whether one is held
-    (bool[B])."""
+    """The entry about entities: ``ids`` int32[B], one per agent, gives its fields float32[B, C] and whether one is held
+    (bool[B]); ``ids`` int32[B, E], one per entity row (section 26.2, the body's columns), gives float32[B, E, C] and
+    bool[B, E]. An entity holds one entry, so its slot is found by its key; the defaults where none is held. The match is
+    [B, E, K] and the fields are gathered from it, not summed over it, so a row costs no more than a slot."""
 
     entries = written.entity
-    return _read(entries, entries.valid & (entries.key_id == ids[:, None]), _ENTITY_DEFAULTS)
+    per_agent = ids.ndim == 1
+    keys = ids[:, None] if per_agent else ids
+    match = entries.valid[:, None, :] & (entries.key_id[:, None, :] == keys[..., None])
+    found = jnp.any(match, axis=2)
+    slot = jnp.argmax(match, axis=2)
+    width = entries.values.shape[-1]
+    values = jnp.take_along_axis(entries.values, jnp.broadcast_to(slot[..., None], keys.shape + (width,)), axis=1)
+    values = jnp.where(found[..., None], values, jnp.asarray(_ENTITY_DEFAULTS))
+    if per_agent:
+        return values[:, 0], found[:, 0]
+    return values, found
 
 
 def place_entry(written: Written, positions: jax.Array) -> tuple[jax.Array, jax.Array]:

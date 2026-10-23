@@ -17,11 +17,15 @@ stores it). One tick, :func:`step`:
 5. the top layers' writes are applied (``state/written.py``), and the live ``remember`` entries become the stores' tags;
 6. the stores take them, and the long-term places take this tick's events, marks and fear (``state/places.py``,
    section 22);
-7. the stores give back what is remembered but not perceived;
-8. every entity token, perceived or remembered, gets the agent's feelings toward it (``feel_*``);
-9. everything is packed into the ``skill_tokens_v3`` token sets the trunk reads, with the persona and affect
-   tokens, whose columns are the body-read variables (``tokens_v3.PERSONA_FEATURES``, ``AFFECT_FEATURES``), and the
-   place and event tokens, read from the places and the event log the steps above updated (sections 22, 21 and 24).
+7. the people the agent perceives get their interaction facts: met, meetings, fights and the last interaction
+   (``state/social.py``, section 26);
+8. the stores give back what is remembered but not perceived;
+9. every entity token, perceived or remembered, gets the agent's feelings toward it (``feel_*``, provisional by rule,
+   26.5), and the relationship the decision layer wrote about it, with its personal-space distance (``rel_*``,
+   ``role_*``, ``space_target``; section 26);
+10. everything is packed into the ``skill_tokens_v3`` token sets the trunk reads, with the persona and affect
+    tokens, whose columns are the body-read variables (``tokens_v3.PERSONA_FEATURES``, ``AFFECT_FEATURES``), and the
+    place and event tokens, read from the places and the event log the steps above updated (sections 22, 21 and 24).
 
 :func:`save` and :func:`load` write and read a state as one ``.npz`` (memory "stored as well", owner 2026-10-20 night),
 with the variables' names and the token layout, so a save migrates by name to a later registry or schema
@@ -48,6 +52,7 @@ from experimental.neural_agent.skill_agent.state import affect as feeling
 from experimental.neural_agent.skill_agent.state import events
 from experimental.neural_agent.skill_agent.state import memory as stores
 from experimental.neural_agent.skill_agent.state import places
+from experimental.neural_agent.skill_agent.state import social
 from experimental.neural_agent.skill_agent.state import written
 from experimental.neural_agent.skill_agent.state.action_history import (
     ActionHistory,
@@ -90,6 +95,7 @@ class AgentState(NamedTuple):
     written: written.Written | None = None  # the top layers' written entries (state/written.py)
     events: events.EventState | None = None  # the event log and the counters (state/events.py)
     places: places.PlaceState | None = None  # the long-term spatial memory (state/places.py, section 22)
+    social: social.SocialState | None = None  # the people's interaction facts (state/social.py, section 26)
 
 
 def initial_state(batch: int, latent: jax.Array | None = None, persona: jax.Array | None = None,
@@ -110,7 +116,7 @@ def initial_state(batch: int, latent: jax.Array | None = None, persona: jax.Arra
                       affect, slots["entity"], slots, background, written=written.initial_written(batch),
                       events=events.initial_events(batch, entities=capacities["entity"],
                                                    slots=capacities["inventory_slot"], outcomes=events.OUTCOME_SLOTS),
-                      places=places.initial_places(batch))
+                      places=places.initial_places(batch), social=social.initial_social(batch))
 
 
 def _restarts(reset: jax.Array | None, respawn: jax.Array | None) -> jax.Array | None:
@@ -202,6 +208,49 @@ def _event_rows(logged: events.EventState, pose: Pose, entity_ids: jax.Array, ca
     return jnp.where(recent.valid[..., None], rows, 0.0), recent.valid
 
 
+_RELATION_FIELDS: Mapping[str, str] = {
+    "rel_closeness": "closeness", "rel_ability": "ability", "rel_benevolence": "benevolence",
+    "rel_integrity": "integrity", "rel_hostility": "hostility", "rel_fear": "fear", "rel_anger": "anger",
+    "role_friend": "friend", "role_family": "family", "role_leader": "leader", "role_follower": "follower",
+    "role_rival": "rival", "role_trader": "trader", "rel_ingroup": "ingroup"}
+"""Each relationship column of the entity token (``tokens_v3.RELATION_FEATURES``) and the entry's field it reads."""
+_ENTRY_FIELDS: Mapping[str, int] = {field.name: index for index, field in enumerate(variables.ENTITY_ENTRIES)}
+
+
+def _relations(record: written.Written, ids: jax.Array, valid: jax.Array, feelings: jax.Array) -> jax.Array:
+    """float32[B, E, len(RELATION_FEATURES)]: each entity row's relationship (section 26.2). ``rel_known`` is 1 when the
+    decision layer holds an entry about its id (the defaults otherwise), and ``space_target`` is the personal-space
+    distance over ``social.SPACE_SCALE_BLOCKS``, from the written closeness and the larger of the written and the rule's
+    hostility and fear (``feelings`` float32[B, E, 4], ``tokens_v3.FEELINGS``). Zeros on padding rows."""
+
+    fields, held = written.entity_entry(record, jnp.where(valid, ids, -1))
+
+    def field(name: str) -> jax.Array:
+        return fields[..., _ENTRY_FIELDS[name]]
+
+    hostility = jnp.maximum(field("hostility"), feelings[..., v3.FEELINGS.index("hostility")])
+    fear = jnp.maximum(field("fear"), feelings[..., v3.FEELINGS.index("fear")])
+    space = social.space_target(field("closeness"), hostility, fear) / social.SPACE_SCALE_BLOCKS
+    columns = [held.astype(jnp.float32) if name == "rel_known" else space if name == "space_target"
+               else field(_RELATION_FIELDS[name]) for name in v3.RELATION_FEATURES]
+    return jnp.where(valid[..., None], jnp.stack(columns, axis=-1), 0.0)
+
+
+def _chances(rows: jax.Array, present: jax.Array) -> jax.Array:
+    """bool[B, N]: the perceived entity rows with a chance to strike me that I see (``state/social.py``, ``spared``):
+    alive, in reach (horizontally, ``SPARE_REACH_BLOCKS``) and facing me within ``SPARE_FACING_DEGREES``. The first two
+    columns are its place ahead and to the right, in units of ``POSITION_SCALE_BLOCKS``, and ``yaw_sin``, ``yaw_cos``
+    are its yaw minus mine, so its facing in my body frame is ``(cos rel, -sin rel)``."""
+
+    place = rows[..., :2] * jnp.float32(POSITION_SCALE_BLOCKS)
+    rel = jnp.arctan2(rows[..., _ENTITY["yaw_sin"]], rows[..., _ENTITY["yaw_cos"]])
+    facing = jnp.stack((jnp.cos(rel), -jnp.sin(rel)), axis=-1)
+    distance = jnp.linalg.norm(place, axis=-1)
+    toward_me = jnp.sum(facing * -place, axis=-1)  # the facing's dot product with the direction from it to me
+    faces = toward_me >= distance * math.cos(math.radians(social.SPARE_FACING_DEGREES))
+    return present & (rows[..., _ENTITY["alive"]] > 0.5) & (distance <= social.SPARE_REACH_BLOCKS) & faces
+
+
 def step(observation: Any, state: AgentState, *, last_action: jax.Array,
              reset: jax.Array | None = None, respawn: jax.Array | None = None, writes: written.Writes | None = None,
              capacities: Mapping[str, int] = v3.CAPACITIES_V3, outcomes: jax.Array | None = None,
@@ -250,6 +299,12 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
         find=_logged(logged.log, logged.now, "item_gained"), respawned=observed.respawned,
         marks_world=record.place.world,
         marks_live=record.place.valid & (record.place.values[..., _PLACE_REMEMBER] > 0), reset=reset)
+    entity_rows, present = perceived.rows["entity"]  # this tick's perceived entities, before the remembered ones
+    seen_ids = jnp.where(present, perceived.entity_ids[:, :entity_rows.shape[1]], -1)
+    seen_world = None if perceived.pose.position is None else stores._world_of(entity_rows, perceived.pose)
+    written_ids = jnp.where(record.entity.valid, record.entity.key_id, -1)
+    seen_chance = _chances(entity_rows, present)
+    socialed = social.update(state.social, seen_ids, seen_world, seen_chance, logged, written_ids, reset)
     remembered = stores.read(memory, perceived.pose)
     rows = dict(perceived.rows)
     rows["act"] = (act_features(history), jnp.ones(history.last_choice.shape, jnp.bool_))
@@ -261,7 +316,10 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
     features, valid = rows["entity"]
     feel = v3.EntityTokenV3.FEATURES.index(f"feel_{v3.FEELINGS[0]}")
     feelings = jnp.where(valid[..., None], feeling.feelings_for(affect, jnp.where(valid, entity_ids, -1)), 0.0)
-    rows["entity"] = (features.at[..., feel:feel + len(v3.FEELINGS)].set(feelings), valid)
+    relation = v3.EntityTokenV3.FEATURES.index(v3.RELATION_FEATURES[0])
+    relations = _relations(record, entity_ids, valid, feelings)
+    rows["entity"] = (features.at[..., feel:feel + len(v3.FEELINGS)].set(feelings)
+                      .at[..., relation:relation + len(v3.RELATION_FEATURES)].set(relations), valid)
     batch = observation.base.self_f32.shape[0]
     one = jnp.ones((batch, 1), jnp.bool_)
     if perceived.pose.position is not None:  # the long-term places need a position (22.1)
@@ -274,7 +332,7 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
     ids = fit_ids(entity_ids, valid, capacities["entity"])  # aligned with tokens["entity"], perceived and remembered
     slots = stores.object_slots(memory, tokens, ids, perceived.pose)
     return tokens, AgentState(history, memory, state.latent, values, affect, ids, slots, state.background,
-                              written=record, events=logged, places=placed)
+                              written=record, events=logged, places=placed, social=socialed)
 
 
 def _present_first(present: jax.Array, count: int, *columns: tuple[jax.Array, Any]) -> list[jax.Array]:
@@ -361,18 +419,28 @@ def save(path: str | Path, state: AgentState) -> None:
              __fingerprint__=np.asarray([variables.fingerprint(list(variables.NAMES)), variables.fingerprint(layout)]))
 
 
+def _first_slots(saved: np.ndarray, template: jax.Array) -> np.ndarray:
+    """``template`` with its first slots (axis 1) replaced by ``saved``: a written table saved with fewer slots fills
+    the first of them, and the rest keep the state's own values."""
+
+    filled = np.array(template)
+    filled[:, :saved.shape[1]] = saved
+    return filled
+
+
 def load(path: str | Path, like: AgentState, *, maps: Mapping[str, Mapping[str, Mapping[str, float]]] | None = None,
          dropped: Mapping[str, Sequence[str]] | None = None) -> AgentState:
     """Read a state written by :func:`save`, shaped as ``like`` (a state of the same batch and capacities).
 
     A save made under another variable list or token layout is migrated by name (``docs/VIRTUAL_HUMAN.md`` section 14):
-    a variable it lacks takes its default, and a stored row's new column reads 0. A variable or column that is gone
-    must be merged into a new one by ``maps`` or listed in ``dropped``, both keyed by ``"variables"`` or a stored token
-    type (``variables.transfer``). The written entries' fields migrate by name the same way, keyed by
-    ``"written.entity"`` or ``"written.place"``. A part of the state the save lacks (added since, as the object latents,
-    the background summary on 2026-10-22, the written entries on step 2 of section 19, and the event log on step 4 of
-    section 21, which a save from before it loads as an empty log, and the places on step 5 of section 22, which load
-    with none) takes ``like``'s value.
+    a variable it lacks takes its default, and a stored row's new column reads 0. A variable or column that is gone must
+    be merged into a new one by ``maps`` or listed in ``dropped``, both keyed by ``"variables"`` or a stored token type
+    (``variables.transfer``). The written entries' fields migrate by name the same way, keyed by ``"written.entity"`` or
+    ``"written.place"``. A written table saved with fewer slots than ``like``'s fills its first slots and keeps
+    ``like``'s values in the rest (step 9: 16 entity entries, now 150). A part of the state the save lacks (added since,
+    as the object latents, the background summary on 2026-10-22, the written entries on step 2 of section 19, and the
+    event log on step 4 of section 21, which a save from before it loads as an empty log, and the places on step 5 of
+    section 22, which load with none) takes ``like``'s value.
     """
 
     maps, dropped = maps or {}, dropped or {}
@@ -397,6 +465,8 @@ def load(path: str | Path, like: AgentState, *, maps: Mapping[str, Mapping[str, 
                 today = tuple(field.name for field in fields)
                 value = variables.remap(value, layout.get(table, today), today, maps.get(table), dropped.get(table, ()),
                                         fill=[field.default for field in fields])
+            if name.startswith((".written.entity.", ".written.place.")) and value.shape[1] < np.shape(template)[1]:
+                value = _first_slots(value, template)  # a table saved with fewer slots (16 entity entries, step 9: 150)
             parts = name.split(".")
             if len(parts) == 4 and parts[1] == "memory" and parts[3] == "rows":
                 kind = _STORE_TYPES[parts[2]]

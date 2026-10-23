@@ -4,13 +4,14 @@ sourcing keeps an application's state, as snapshots plus the events between them
 :class:`Recorder` writes, in one folder per run, ``snapshots/tick_{tick:08d}.npz`` with :func:`state.layer.save` every
 ``every`` ticks and at the end of an episode (``final``), the whole state. Between two calls it appends to
 ``stream.jsonl`` one JSON line per change: each new event of the log, each written entry that appeared, changed or was
-freed, and each place that formed or was evicted. The overhead is fixed: a snapshot now and then, and lines only when
-something happens.
+freed, each place that formed or was evicted, and each person met (a record formed) or forgotten (a record was replaced
+or cleared; section 26, ``state/social.py``). A social line is ``{"type": "social", "kind": "met" | "forgot", "id", "tick",
+"lane"}``. The overhead is fixed: a snapshot now and then, and lines only when something happens.
 
 :func:`read` gives the state at a tick: the latest snapshot at or before it, and the stream's lines after that snapshot
 up to the tick. The whole state is exact at the snapshots. Between them the stream gives the recorded parts (the events,
-the written entries and the places), since rebuilding everything would need the raw observations, which are not
-recorded. Deterministic replay of the world and the body stays the host's (25.2).
+the written entries, the places and the people), since rebuilding everything would need the raw observations, which are
+not recorded. Deterministic replay of the world and the body stays the host's (25.2).
 """
 
 from __future__ import annotations
@@ -31,15 +32,18 @@ _TABLES: tuple[tuple[str, tuple[variables.Variable, ...]], ...] = (
 
 
 def _arrays(state: layer.AgentState) -> dict[str, np.ndarray]:
-    """The arrays the detectors compare, on the host: the log's clock, the place store's slots, and each written table's
-    slots (its key, its fields, the tick of its last write and its writer)."""
+    """The arrays the detectors compare, on the host: the log's clock, the place store's slots, each written table's
+    slots (its key, its fields, the tick of its last write and its writer), and the people's records (key, first tick,
+    valid)."""
 
-    store = state.places.places
+    store, records = state.places.places, state.social.records
     arrays = {
         "clock": np.asarray(state.events.now),
         "store_valid": np.asarray(store.valid), "store_first": np.asarray(store.first),
         "store_world": np.asarray(store.world), "store_kinds": np.asarray(store.kinds),
         "store_strength": np.asarray(store.strength),
+        "social_valid": np.asarray(records.valid), "social_key": np.asarray(records.key_id),
+        "social_first": np.asarray(records.first),
     }
     for name, entries in (("entity", state.written.entity), ("place", state.written.place)):
         prefix = f"written_{name}"
@@ -123,6 +127,24 @@ def _place_lines(tick: int, previous: dict[str, np.ndarray], current: dict[str, 
     return lines
 
 
+def _social_lines(tick: int, previous: dict[str, np.ndarray], current: dict[str, np.ndarray]) -> list[dict[str, Any]]:
+    """The people met (a record formed) and forgotten (a record was replaced or cleared) since the last call, found as
+    the places are: a slot whose key or first tick moved holds another person now. A lane whose clock went back began a
+    new episode, so each of its records is forgotten, and a record formed again in the same slot is met again."""
+
+    restarted = (current["clock"] < previous["clock"])[:, None]
+    changed = ((current["social_key"] != previous["social_key"])
+               | (current["social_first"] != previous["social_first"]) | restarted)
+    formed = current["social_valid"] & (~previous["social_valid"] | changed)
+    forgotten = previous["social_valid"] & (~current["social_valid"] | changed)
+    lines = []
+    for source, mask, kind in ((previous, forgotten, "forgot"), (current, formed, "met")):
+        for lane, slot in zip(*np.nonzero(mask)):
+            lines.append({"tick": tick, "lane": int(lane), "type": "social", "kind": kind,
+                          "id": int(source["social_key"][lane, slot])})
+    return lines
+
+
 class Recorder:
     """The recording of one run in ``folder``: a snapshot every ``every`` ticks, and the stream of changes between
     calls. Call :meth:`record` with each tick's state (each tick, or at the decisions), with ``final=True`` at an
@@ -143,7 +165,7 @@ class Recorder:
         current = _arrays(state)
         previous = _empty(current) if self._previous is None else self._previous
         lines = (_event_lines(state, tick, previous, current) + _entry_lines(tick, previous, current)
-                 + _place_lines(tick, previous, current))
+                 + _place_lines(tick, previous, current) + _social_lines(tick, previous, current))
         if lines:
             with self.stream.open("a") as handle:
                 handle.write("".join(json.dumps(line) + "\n" for line in lines))
