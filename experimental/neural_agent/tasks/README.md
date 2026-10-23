@@ -9,6 +9,7 @@ The one task every middle-layer instance is measured on: pursue, evade when dama
 | `composition.py` | 421 | `CompositionTask`: the executive state it runs under (pursuit always, evader with the `on_damage` constraint label, `EVADER_PRIORITY` above `PURSUIT_PRIORITY`), the per-episode verdict `classify` (composed, composed_loose, pursue_only, failed), the tick budget. |
 | `arenas.py` | 510 | Arena selection for the runs: one builder, four arenas (`combat_open_flat` is the standard; `combat_cover` is the pillar arena below). |
 | `flat_arena.py` | 688 | The flat two-actor pursuit arena, one decision at a time. |
+| `shaman_controller.py` | 148 | Opt-in scripted Trork_Shaman for the duel's entity 1 (2026-10-23): holds the role's ranged band [10, 15] blocks, faces entity 0 and throws the gen-7 profile `trork_shaman_rubble` (16-damage stone); cadence from the role's attack sequence, aim 3 s then a seeded 1-2 s pause (`Component_Instruction_Attack_Sequence_Temp_Ranged.json`), or `idle`. Measured on the gen-7 render: throws 4.2-4.7 s apart (live 2.7-10 s), every hit 16. Gate: `test_na_shaman_controller.py`. |
 
 Gates: `test_na_tasks.py`, `test_na_arenas.py`.
 

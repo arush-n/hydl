@@ -336,6 +336,50 @@ _AUGMENT = (
     "grants; the 50 tagged recipes are enumerated from the 0.7.2 archive; the defaults leave every other recipe bit-identical",
 )
 
+# Trork_Shaman's only attack (FIDELITY-0.7.2.md, "Trork_Shaman, traced"): NPC_Rubble_Throw, the RangedAttack of
+# Template_Trork_Mage. Asset values: Simple wind-up RunTime 0.2 s, then LaunchProjectile NPC_Rubble_Stone (RunTime 0.217 s,
+# so the root runs 0.417 s). Stone (Server/Projectiles/NPCs/NPC_Rubble_Stone.json): Damage 16, MuzzleVelocity 30,
+# TerminalVelocity 30, Gravity 20, TimeToLive 5, Bounciness 0.5, DeadTime 0; hitbox half-extent 0.15
+# (Server/Models/Projectiles/Items/Rubble/Rubble_Stone.json). Its offsets (HorizontalCenterShot 0.1, DepthShot 1, no
+# vertical shot) match Spear_Iron.json, so PROJECTILE_ROCK takes the spear's audited launch transform. No cooldown Family: the Shaman's held item is Weapon_Staff_Crystal_Fire_Trork (a fire staff);
+# FAMILY_NONE (0) with equipped=True trips validation.py invalid_entity (weapon_family <= 0), so FAMILY_FLAME_STAFF.
+_TRORK_SHAMAN_BUILDER = '''def _trork_shaman_rubble() -> dict:
+    return _weapon(
+        "NPC_Rubble_Throw",
+        FAMILY_FLAME_STAFF,
+        [
+            _ability(
+                "NPC_Rubble_Throw",
+                0.417,
+                _projectile(
+                    0.2,
+                    kind=PROJECTILE_ROCK,
+                    damage_class=DAMAGE_CLASS_UNKNOWN,
+                    damage=16,
+                    cause=DAMAGE_PROJECTILE,
+                    speed=30,
+                    gravity=20,
+                    terminal=30,
+                    half_extent=0.15,
+                    lifetime=5,
+                    bounciness=0.5,
+                    dead_time=0.0,
+                ),
+            )
+        ],
+        0,
+        {},
+    )
+
+
+'''
+_TRORK_SHAMAN_NOTE = (
+    "Trork_Shaman's rubble throw (asset values in the comment above the builder); tests/sim/test_trork_shaman_rubble.py pins "
+    "the rendered profile and the gen-5 absence; the duel measurement is in the lane report"
+)
+_TRORK_SHAMAN_ROW = "Shaman"
+_TRORK_SHAMAN_DIFF = "tests/sim/test_trork_shaman_rubble.py (profile pins); the duel measurement (lane report, 2026-10-23)"
+
 PATCHES = (
     # Row 11x, augment tags (construct crafting_augment_tags): the grant bits ride the context and the assets; the gate is a hook.
     Patch("augment_context_field", "crafting/types.py",
@@ -869,6 +913,40 @@ PATCHES = (
           "    entity_role_semantic_ids: object = None\n",
           "PV2", "tests/sim/test_perception_v2.py",
           "the config field the perception channel reads (PERCEPTION_V2.md section 6 seam, not a FIDELITY-0.7.2.md row); None keeps the config pytree (gen 5, and gen 7 with the switch off)"),
+    Patch("trork_shaman_rubble_builder", PROFILE_JAX,
+          "def _kunai() -> dict:\n",
+          _TRORK_SHAMAN_BUILDER + "def _kunai() -> dict:\n",
+          _TRORK_SHAMAN_ROW, _TRORK_SHAMAN_DIFF, _TRORK_SHAMAN_NOTE),
+    Patch("trork_shaman_rubble_registry", PROFILE_JAX,
+          '    "kunai": _kunai,\n',
+          '    "kunai": _kunai,\n    "trork_shaman_rubble": _trork_shaman_rubble,\n',
+          _TRORK_SHAMAN_ROW, _TRORK_SHAMAN_DIFF, _TRORK_SHAMAN_NOTE),
+    Patch("trork_shaman_rubble_profile_name", PROFILE_JAX,
+          "    + DEPLOYABLE_PROFILE_NAMES\n)\nSPEAR_PROFILE_NAMES",
+          '    + DEPLOYABLE_PROFILE_NAMES\n    + ("trork_shaman_rubble",)\n)\nSPEAR_PROFILE_NAMES',
+          _TRORK_SHAMAN_ROW, _TRORK_SHAMAN_DIFF, _TRORK_SHAMAN_NOTE),
+    Patch("trork_shaman_rubble_launch", PROFILE_JAX,
+          "    PROJECTILE_ICE_BOLT: _ZERO_PROJECTILE_LAUNCH,\n",
+          "    PROJECTILE_ICE_BOLT: _ZERO_PROJECTILE_LAUNCH,\n"
+          "    # Trork_Shaman's NPC_Rubble_Stone: the spear's legacy ballistic offset (Spear_Iron.json: HorizontalCenterShot 0.1,\n"
+          "    # DepthShot 1, no vertical shot).\n"
+          "    PROJECTILE_ROCK: _ProjectileLaunchTransform((0.1, 0.0, -1.0), 0.0, 0.0, True, False),\n",
+          _TRORK_SHAMAN_ROW, _TRORK_SHAMAN_DIFF, _TRORK_SHAMAN_NOTE),
+    # Kind 15 is new: the stone is not an ice bolt, and the kind is packed into the projectile scene (scene.py), so a
+    # reused id would label the rock as the ice bolt. Four sites carry the kind: the constant, its validation bound,
+    # the authored-name map, and the launch table above.
+    Patch("trork_shaman_rubble_kind", "combat/arsenal/schema/contract.py",
+          "PROJECTILE_DEPLOYABLE = 14\n",
+          "PROJECTILE_DEPLOYABLE = 14\nPROJECTILE_ROCK = 15\n",
+          _TRORK_SHAMAN_ROW, _TRORK_SHAMAN_DIFF, _TRORK_SHAMAN_NOTE),
+    Patch("trork_shaman_rubble_kind_bound", "combat/arsenal/schema/validation.py",
+          "(i32[..., EI_PROJECTILE_KIND] > PROJECTILE_DEPLOYABLE)",
+          "(i32[..., EI_PROJECTILE_KIND] > PROJECTILE_ROCK)",
+          _TRORK_SHAMAN_ROW, _TRORK_SHAMAN_DIFF, _TRORK_SHAMAN_NOTE),
+    Patch("trork_shaman_rubble_kind_name", "combat/arsenal/schema/spec.py",
+          '"deployable_terminal": PROJECTILE_DEPLOYABLE,\n',
+          '"deployable_terminal": PROJECTILE_DEPLOYABLE,\n                "rock": PROJECTILE_ROCK,\n',
+          _TRORK_SHAMAN_ROW, _TRORK_SHAMAN_DIFF, _TRORK_SHAMAN_NOTE),
 
 )
 
