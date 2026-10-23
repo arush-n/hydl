@@ -569,6 +569,7 @@ approach. Missing:
 | 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry (with it the status token's identity: which effect, its source entity, its damage cause, all in the observation and dropped today; `PERCEPTION.md` section 10.5), places, the proficiencies. First part DESIGNED and APPROVED 2026-10-22; BUILT (section 24.7: status identity, places, events) | 11.1 to 11.4, 11.6, 16.6, 17.8, 24 |
 | 8 | The formatted views (typed facts, words) and the recording. DESIGNED and APPROVED 2026-10-22; BUILT (section 25.6: the facts, the words, the recording) | 10.3, 10.9, 25 |
 | 9 | The social section (approved, 15.3). DESIGNED and APPROVED 2026-10-22 (section 26, with the rulings of 26.5) | 12, 15.3, 26 |
+| T | The world's tick length: every state-layer constant in seconds, one tick length per world (found by the coordinator, 2026-10-23). DESIGNED and APPROVED 2026-10-23 (section 27); built after step 9 | 27 |
 | W | World interaction: breaking, placing, using, picking up, and the commands (crafting, tools, items); the perception of break progress and items on the ground. DESIGNED and APPROVED 2026-10-22 (section 23); the perception follows the simulator's asks, the skills train when training resumes | 23 |
 
 Every step is measured first with 2 agents, then scaled up (16.3).
@@ -2326,7 +2327,12 @@ agent, updated each tick after the event log:
   unseen), and the seconds it has been in view;
 - **fights:** hits taken from it and dealt to it (counts and amounts), each inferred until S11 (the event log's mark);
   and who struck first in the current meeting (unknown, me, them);
-- **the last interaction:** its tick and kind.
+- **the last interaction:** its tick and kind;
+- **chances not taken** (`spared`; added 2026-10-23, 26.5 item 5): a chance is a stretch of ticks when it was
+  perceived, alive, within 3.75 blocks of me (the reach `affect.py` assumes for an attacker) and facing me (within 45
+  degrees [E]); it counts when the stretch ends with no hit from it. It is the decision layer's input for benevolence
+  ("could have struck, did not"; `../../docs/MIDDLE_LAYER.md` section 11), counted every tick here because the
+  decision layer reads at its own cadence.
 - Helping, trading and talking get their counts when the simulator publishes transfers and speech (12.3, 12.4).
 
 When the table is full, the newcomer replaces the record seen longest ago among those with no written entry: the
@@ -2400,6 +2406,10 @@ stream adds "met" (a new record) and "forgot" (a replaced one).
 4. **What waits?** Recommended: promises with deadlines wait for the game clock, as the drives do (20.5); reputation
    waits for told knowledge, which needs speech events (12.4); helping, trading and talking wait for their events.
    Favours owed are built now as counts. RULED: "sure".
+5. **Count the chances to strike that someone did not take** (`spared`, asked by the coordinator on 2026-10-23 for the
+   decision layer's benevolence rule, `../../docs/MIDDLE_LAYER.md` section 11)? Recommended: yes, as an interaction
+   fact counted every tick; without it benevolence moves only by the LLM's directives. RULED 2026-10-23: "continue",
+   taken as the recommendation.
 
 ### 26.6 What grounds it (searched 2026-10-22; depth of reading stated)
 
@@ -2425,9 +2435,86 @@ stream adds "met" (a new record) and "forgot" (a replaced one).
   beyond (Hall 1966, through secondary sources, which differ slightly; American norms). Avatars in Second Life keep
   the same norms: interpersonal distance, gender differences, and gaze avoidance at closer distance (Yee, Bailenson et
   al. 2007, abstract), so the zones carry into a game.
+- **Chances not taken.** Benevolence is the trustor's belief that the trustee wants to do good to it (Mayer, Davis and
+  Schoorman 1995, above); passing up a chance to harm is the act a body can observe that bears on it. The reach and the
+  facing cone are the same ones the emotion rules use for a threat, so a chance is exactly a moment the agent would have
+  appraised as threatened.
 - **Reputation versus direct trust.** Reputation aggregates what others report; direct trust comes from one's own
   encounters (Sabater and Sierra 2005, Artificial Intelligence Review 24, 33-60, through a secondary report). Only the
   direct part has inputs today.
+
+## 27. The world's tick length (DESIGNED and APPROVED 2026-10-23, with the ruling of 27.5)
+
+Found by the coordinator on 2026-10-23, while designing the decision layer's relationship writes
+(`../../docs/MIDDLE_LAYER.md` section 11): the state layer takes every tick as 0.045 s, the gen-5 simulator's tick. The gen-7
+simulator and the duel step 1/30 s (`contract/surface.py` `TICK_SECONDS_BY_LAYOUT`, the owner's 30 Hz ruling of
+2026-10-17), and gen 7 has been the default line since 2026-10-21. Live ticks are not fixed: they averaged 0.037 s in
+the coordinator's window of 2026-10-22 night (their FIDELITY section (aq), the per-tick `delta_seconds`; task #137).
+
+### 27.1 What is wrong, and by how much
+
+Every rule stated in seconds counts ticks of 0.045 s. On gen 7, whose ticks are 1/30 s, the fades and emotions decay
+1.35 times too fast in seconds, and a window stated in seconds lasts 0.74 of its length. Found by reading the code
+(2026-10-23); the size follows from the tick lengths, and no run has measured it.
+
+| Where | Today | Stated as | On gen 7 today |
+|---|---|---|---|
+| `affect.DT_SECONDS` (every emotion's time constant; `update(dt=)` exists, `layer.step` never passes it) | 0.045 | the tick | decays 1.35x fast |
+| `affect.PREPULSE_MIN_TICKS`, `PREPULSE_MAX_TICKS` | 1, 11 | 30 to 500 ms | 33 to 367 ms |
+| `places.DT_SECONDS` (the place and route fades) | 0.045 | the tick | fade 1.35x fast |
+| `places.STAY_TICKS` | 222 | 10 s | 7.4 s |
+| `events.DEALT_WINDOW_TICKS` | 4 | 0.18 s | 0.13 s |
+| `memory.HORIZON_TICKS` (recency against salience; the age scale) | 1800 | 81 s | 60 s |
+| `layer.EVENT_AGE_HORIZON_TICKS` | 1800 | 81 s | 60 s |
+| `layer.PLACE_SINCE_HORIZON_TICKS` | 1,000,000 | 12.5 h | 9.3 h |
+| `action_history.HELD_HORIZON_TICKS` | 90 | 4.05 s | 3 s |
+| `social` meeting gap (step 9) | via `affect.DT_SECONDS` | 60 s | 44 s |
+| `views.facts`, `state_tick.known_entities` | `dt_seconds=0.045` default | the tick | ages 1.35x long |
+
+### 27.2 The design
+
+- **Every constant is stated in seconds,** and named so (`STAY_SECONDS = 10`, `DEALT_WINDOW_SECONDS = 0.18`,
+  `PREPULSE_MIN_SECONDS = 0.03`, `PREPULSE_MAX_SECONDS = 0.5`, `HORIZON_SECONDS = 81`, `HELD_HORIZON_SECONDS = 4.05`,
+  `MEETING_GAP_SECONDS = 60`, ...).
+- **The state layer takes the world's tick length once,** as a static `tick_seconds` keyword of `layer.step` and
+  `runtime/state_tick.tick`, passed down to every rule (the initial state holds nothing that depends on it). Windows become ticks at trace time: a lower
+  bound rounds up, an upper bound rounds down, a duration rounds to nearest (at 0.045 s every one gives today's tick
+  count, so gen 5 is unchanged); fades use `exp(-tick_seconds / tau)`.
+- **Where the value comes from:** `contract.surface.tick_seconds(layout)`, which the runtime already uses (1/30 s on
+  gen 7, 0.045 s on gen 5). Live passes the session's measured mean tick (`engine_mean_delta_seconds`). The default is
+  gen 7's, the default line; a gen-5 caller passes 0.045.
+- **The views** (`views.facts`, `known_entities`) keep their `dt_seconds` argument, with the gen-7 default.
+- **Not now:** a per-tick `dt` input, exact under live's jitter. It would move every stored stamp (events, places,
+  stores, written entries, social records) from ticks to seconds. Live's mean is what the fades see, and a window
+  shifts by at most a tick, so it waits until live measurements show the jitter matters (27.5).
+
+### 27.3 Files
+
+`state/affect.py`, `state/places.py`, `state/events.py`, `state/memory.py`, `state/action_history.py`, `state/layer.py`,
+`state/social.py`, `state/views.py`, `runtime/state_tick.py`; the tests that build a gen-5 state pass 0.045; a new test.
+
+### 27.4 How it is verified
+
+- **Gen 5 unchanged:** token and store digests equal, old against new, with `tick_seconds=0.045`, on the duel and the
+  Region world.
+- **Gen 7 right in seconds:** a test that each fade and window takes its stated seconds at 1/30 s (fear's decay over
+  one time constant, a stay forming after 10 s, the prepulse window).
+- **The gate:** no new failure by name; a gen-5 test that shifts is passed 0.045, and each such change is listed.
+
+### 27.5 Decisions (RULED 2026-10-23)
+
+1. **One tick length per world, every constant in seconds** (recommended), or **a per-tick `dt`** (exact under live
+   jitter; every stored stamp moves to seconds)? RULED: "continue", taken as the recommendation: one per world now,
+   the per-tick input if live jitter is shown to matter.
+
+### 27.6 What grounds it
+
+- Exponential smoothing written as `exp(-dt / tau)` is exact for any step length, which is what lets the same time
+  constants hold on worlds that tick at different rates; a fixed-step simulation keeps its rules in ticks only when
+  the step never changes (the fixed-timestep practice of game loops; Fiedler, "Fix Your Timestep!", 2004, recalled,
+  not re-checked).
+- The tick lengths are the project's own measurements: `contract/surface.py` (1/30 s, the owner's 30 Hz ruling) and
+  the coordinator's live window (0.037 s mean, FIDELITY (aq)).
 
 ## Sources
 
@@ -2550,3 +2637,5 @@ stream adds "met" (a new record) and "forgot" (a replaced one).
   unbearable likeness of being digital, CyberPsychology and Behavior 10(1), 115-121 (abstract); Sabater, J., and
   Sierra, C. (2005), Review on computational trust and reputation models, Artificial Intelligence Review 24, 33-60
   (secondary report).
+- Section 27.6: Fiedler, G. (2004), Fix Your Timestep! (gafferongames.com; recalled, not re-checked); the tick lengths
+  from `contract/surface.py` and the coordinator's FIDELITY section (aq).
