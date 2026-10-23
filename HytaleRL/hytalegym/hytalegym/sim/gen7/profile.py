@@ -30,6 +30,7 @@ PROFILE = SimProfile(
         hit_interrupt=True,
         mana_pool=True,
         rune_casting=True,
+        magic_costs=True,
         hookshot=True,
         climbing=True,
         doors="world_v0_5",

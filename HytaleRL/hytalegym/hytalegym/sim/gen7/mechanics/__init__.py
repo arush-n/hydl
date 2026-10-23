@@ -17,6 +17,7 @@ CONSTRUCT_MODULES = {
     "hit_interrupt": "hit_interrupt",
     "mana_pool": "mana_pool",
     "rune_casting": "mana",
+    "magic_costs": "magic_costs",
     "hookshot": "hookshot",
     "dodge_action_head": "dodge",
     "line_of_sight": "line_of_sight",
