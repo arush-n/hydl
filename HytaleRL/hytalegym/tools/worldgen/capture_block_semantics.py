@@ -3,12 +3,17 @@
 
 Task #130 item 5: the 0.7.2 Region library has no block-semantics sidecar, so block candidates are empty on 0.7.2
 Regions. The stored Region NPZs keep a physical palette only, so the sidecar must be captured live
-(README section "Block-semantic sidecar"). This is the live step, one seed per fresh bridge launch:
+(README section "Block-semantic sidecar"). Two callers share capture_sidecar, the block pass with its save, reload and
+receipt:
 
-1. reset the native env on the seed (the same env as examples/capture_native_region.py);
-2. capture_projected_native_region_block_semantics: one live physical pass, checked against the stored Region NPZ
-   (only non-damaging fluid drift may differ), then 250 block-identity sections;
-3. save the sidecar, reload it, and check that the reloaded semantic digest equals the captured one.
+- In the run (new captures): examples/capture_native_region.py calls capture_sidecar on the env that has just captured
+  and saved the physical Region, so the Region and its identity come from one live run. recapture_region.py passes
+  --block-semantics-output for it.
+- Backfill (this script, for a stored Region NPZ that has no sidecar): one seed per fresh bridge launch:
+  1. reset the native env on the seed (the same env as examples/capture_native_region.py);
+  2. capture_projected_native_region_block_semantics: one live physical pass, checked against the stored Region NPZ
+     (only non-damaging fluid drift may differ), then 250 block-identity sections;
+  3. save the sidecar, reload it, and check that the reloaded semantic digest equals the captured one.
 
 The output goes to --output (a stage folder, never the shared library); nothing is promoted or bound. Run it as the
 launcher's --then command:
@@ -24,12 +29,54 @@ import hashlib
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 from hytalegym.envs.hytale_env import HytaleEnv
 from hytalegym.worldgen.native_lease import acquire_native_evidence_lease
 from hytalegym.worldgen.region import capture_projected_native_region_block_semantics, current_native_evidence_jar_sha256
 from hytalegym.worldgen.region.block_semantics import NativeRegionBlockSemanticSnapshot
 from hytalegym.worldgen.region.snapshot import NativeRegionSnapshot
+
+
+def capture_sidecar(
+    transport: Any,
+    physical: NativeRegionSnapshot,
+    *,
+    seed: int,
+    region_npz: Path,
+    evidence_bridge_sha256: str,
+    output: Path,
+    progress: Any = None,
+) -> dict[str, Any]:
+    """Run the projected block pass, save the sidecar, reload it and write its receipt beside it.
+
+    The caller holds the native evidence lease and has the env on `seed`. Returns the receipt; the caller decides
+    the exit code. Shared by the in-run capture and by main below.
+    """
+
+    capture = capture_projected_native_region_block_semantics(
+        transport,
+        physical,
+        evidence_bridge_sha256=evidence_bridge_sha256,
+        progress=progress,
+    )
+    captured = capture.snapshot.semantic_sha256()
+    destination = capture.snapshot.save(output)
+    reloaded = NativeRegionBlockSemanticSnapshot.load(destination).semantic_sha256()
+    receipt = {
+        "seed": seed,
+        "output": str(destination),
+        "file_sha256": hashlib.sha256(destination.read_bytes()).hexdigest(),
+        "semantic_sha256": captured,
+        "reloaded_semantic_sha256": reloaded,
+        "reload_matches": reloaded == captured,
+        "region_npz": str(region_npz),
+        "region_semantic_sha256": physical.semantic_digest(),
+        "evidence_bridge_sha256": evidence_bridge_sha256,
+        "physical_comparison": repr(capture.physical_comparison)[:2000],
+    }
+    destination.with_suffix(".receipt.json").write_text(json.dumps(receipt, indent=2))
+    return receipt
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -54,27 +101,17 @@ def main(argv: list[str] | None = None) -> int:
                         fidelity_fixture="static_region")
         try:
             env.reset(seed=args.seed)
-            capture = capture_projected_native_region_block_semantics(
-                env, physical, evidence_bridge_sha256=evidence, progress=_progress)
+            receipt = capture_sidecar(
+                env,
+                physical,
+                seed=args.seed,
+                region_npz=args.region_npz,
+                evidence_bridge_sha256=evidence,
+                output=args.output,
+                progress=_progress,
+            )
         finally:
             env.close()
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    captured = capture.snapshot.semantic_sha256()
-    destination = capture.snapshot.save(args.output)
-    reloaded = NativeRegionBlockSemanticSnapshot.load(destination).semantic_sha256()
-    receipt = {
-        "seed": args.seed,
-        "output": str(destination),
-        "file_sha256": hashlib.sha256(destination.read_bytes()).hexdigest(),
-        "semantic_sha256": captured,
-        "reloaded_semantic_sha256": reloaded,
-        "reload_matches": reloaded == captured,
-        "region_npz": str(args.region_npz),
-        "region_semantic_sha256": physical.semantic_digest(),
-        "evidence_bridge_sha256": evidence,
-        "physical_comparison": repr(capture.physical_comparison)[:2000],
-    }
-    destination.with_suffix(".receipt.json").write_text(json.dumps(receipt, indent=2))
     print(json.dumps({k: receipt[k] for k in ("seed", "semantic_sha256", "reload_matches", "file_sha256")}))
     return 0 if receipt["reload_matches"] else 1
 

@@ -4,14 +4,19 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
+import sys
 from pathlib import Path
 
 from hytalegym.envs.hytale_env import HytaleEnv
 from hytalegym.worldgen.native_lease import acquire_native_evidence_lease
 from hytalegym.worldgen.region import (
+    NativeRegionSnapshot,
     capture_native_region,
     current_native_evidence_jar_sha256,
 )
+
+BLOCK_TOOL_NAME = "hytalerl_capture_block_semantics"
 
 
 def main() -> None:
@@ -29,6 +34,14 @@ def main() -> None:
         "--output",
         type=Path,
         default=Path("artifacts/worldgen/region_0.5.7_seed_570057.npz"),
+    )
+    parser.add_argument(
+        "--block-semantics-output",
+        type=Path,
+        help=(
+            "also capture the block-semantic sidecar on this env, right after the physical NPZ "
+            "is saved; omit for a physical-only capture"
+        ),
     )
     args = parser.parse_args()
 
@@ -58,6 +71,7 @@ def _run(
         combat_target_active=False,
         fidelity_fixture="static_region",
     )
+    block = None
     try:
         env.reset(seed=args.seed)
         snapshot = capture_native_region(
@@ -68,6 +82,18 @@ def _run(
             progress=_progress,
         )
         destination = snapshot.save(args.output)
+        if args.block_semantics_output is not None:
+            # The block pass reads the NPZ just written, not the in-memory capture.
+            physical = NativeRegionSnapshot.load(destination)
+            block = _block_tool().capture_sidecar(
+                env,
+                physical,
+                seed=args.seed,
+                region_npz=destination,
+                evidence_bridge_sha256=evidence_hash,
+                output=args.block_semantics_output,
+                progress=_block_progress,
+            )
     finally:
         env.close()
 
@@ -78,11 +104,45 @@ def _run(
     print("cell_palette_size:", snapshot.cell_palette.size)
     print("shape_palette_size:", snapshot.shape_palette.size)
     print("native_evidence_jar_sha256:", evidence_hash)
+    if block is not None:
+        print(
+            "block_semantics:",
+            block["output"],
+            "semantic_sha256:",
+            block["semantic_sha256"],
+            "reload_matches:",
+            block["reload_matches"],
+        )
+        if not block["reload_matches"]:
+            raise SystemExit("block-semantic sidecar reload differs from the captured digest")
 
 
 def _progress(done: int, total: int, _task: object) -> None:
     if done == 1 or done == total or done % 25 == 0:
         print(f"captured {done}/{total} sections")
+
+
+def _block_progress(done: int, total: int, _task: object) -> None:
+    if done == 1 or done == total or done % 50 == 0:
+        print(f"block_semantics captured {done}/{total} sections", flush=True)
+
+
+def _block_tool():
+    """The block pass is shared with tools/worldgen/capture_block_semantics.py; load that file once by path."""
+
+    if BLOCK_TOOL_NAME not in sys.modules:
+        path = (
+            Path(__file__).resolve().parents[1]
+            / "hytalegym"
+            / "tools"
+            / "worldgen"
+            / "capture_block_semantics.py"
+        )
+        spec = importlib.util.spec_from_file_location(BLOCK_TOOL_NAME, path)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[BLOCK_TOOL_NAME] = module
+        spec.loader.exec_module(module)
+    return sys.modules[BLOCK_TOOL_NAME]
 
 
 def _native_evidence_hash(

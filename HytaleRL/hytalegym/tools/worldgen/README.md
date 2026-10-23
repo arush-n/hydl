@@ -33,6 +33,12 @@ Run from any directory with the repo venv. Replace `<run root>` with a new scrat
 
         $PY $TOOL --version 0.7.2 --seed 570057 --bridge-port 5556 --game-port 25574 --run-root <run root> --skip-capture --fluid-only-cap 6
 
+4. Physical only, on purpose. `--physical-only` skips the block-semantic sidecar. The receipt records the opt-out (`block_semantics.opt_out`), and `publish-library` refuses that seed.
+
+        $PY $TOOL --version 0.7.2 --seed <seed> --bridge-port 5556 --game-port 25574 --run-root <run root> --fluid-only-cap 6 --physical-only
+
+Items 1 and 2 write the block-semantic sidecar in the same run as the NPZ. Item 3 writes none, and neither does a `--skip-capture` run. Use the backfill in the block-semantic section for those.
+
 `--preflight-only` checks the pin, the ports, the paths, and a given contract's seed and bridge, then exits before any launch. A run without `--skip-capture` refuses an existing NPZ, so a contract run on an existing capture needs `--skip-capture`. `--reference` adds a read-only per-section and per-cell diff against an NPZ. It is measurement only.
 
 ## What each scope certifies
@@ -58,10 +64,11 @@ The cap is an observed bound, not a statistical one. A later run can exceed 6, a
 ## What the tool writes
 
 - `artifacts/worldgen/region_<version>_seed_<seed>.npz`. A run without `--skip-capture` refuses to overwrite it.
+- `artifacts/worldgen/region_<version>_seed_<seed>.block-semantics.npz` and `.receipt.json` beside it, written in the capture run. Not written with `--physical-only`, and not by a `--skip-capture` run. A run refuses to overwrite it.
 - Under `<run root>`: `capture.launcher.log` and `compare.launcher.log`, the launch directories, `compare-difference-report.json` (on a mismatch), `native_region_seed_projection_contract.json` (from `--fluid-only-cap`), `offline-diff.json` (with `--reference`) and `receipt.json`.
 - The compare takes the native evidence lease for the bridge port (`hytalegym/hytalegym/worldgen/native_lease.py`). Its files live under `HytaleRL/.codex-local/`.
 
-`receipt.json` records the capture (`skipped`, `passed`, `semantic_sha256`, `file_sha256_on_disk`) and the compare: `scope` (`exact_semantic_sha256` or `seed_projection_contract`), the contract's path and file sha256 when one is used, the launcher exit and the pass marker. The top-level `passed` is capture and compare together. In a `--skip-capture` run, `capture.passed` is `null`, because no capture ran.
+`receipt.json` records the capture (`skipped`, `passed`, `semantic_sha256`, `file_sha256_on_disk`) and the compare: `scope` (`exact_semantic_sha256` or `seed_projection_contract`), the contract's path and file sha256 when one is used, the launcher exit and the pass marker. The top-level `passed` is capture and compare together. In a `--skip-capture` run, `capture.passed` is `null`, because no capture ran. The receipt also has `identity_complete` (true only when a sidecar's receipt says its reload matched, for this seed, and the file is unchanged) and `block_semantics` (`opt_out`, `passed`, `sidecar`).
 
 ## Swap steps (owner's; the tool does none of these)
 
@@ -492,16 +499,25 @@ Lane region-072 (task #130 item 5). Diagnosis and plan only. Nothing was produce
 1. Preconditions. The bridge jar pinned in `hytalegym/server_versions/v0_7.py` (`bridge_jar_sha256`; `6DFD8682...` on 2026-10-22). The 0.7.2 Region NPZs are the physical base: `artifacts/worldgen/region_0.7.2_seed_<seed>.npz`. Ports per "Before you run it" above. The bridge must expose `region_block_semantics` (`hytale-plugin-0.7.2/.../network/ClientHandler.java:197`, present).
 2. Per seed. Start the 0.7.2 bridge the same way the recapture does. Load the NPZ with `NativeRegionSnapshot.load`. Call `capture_projected_native_region_block_semantics(transport, snapshot, evidence_bridge_sha256=<the pinned jar>)`. Use the projected form. The exact form (`capture_native_region_block_semantics`) requires the live physical digest to equal the NPZ digest, which fails on fluid drift (see "Why the exact scope is unreliable" above). The projected form accepts a live pass whose seed projection matches, or whose differences are at most four dry-physical cells (`_block_semantic_physical_alignment`, `block_semantics.py:649`). The 0.7.2 compare table records matching seed projections for all 20 seeds (inferred that the check passes on each).
 3. Save each sidecar with `save`, reload it with `load`, and verify `semantic_sha256()` against the saved value before any publish.
-4. Publish once, into a new folder under a run root (never the shared artifacts without the owner's yes): `create_region_block_semantic_library(root, [sidecar paths], region_library_0_7_2)`. It pairs one sidecar per Region by `source_region_semantic_sha256`. For the 0.7.2 library the pairing key is the NPZ's complete digest (library `9DCA3C71...`, `artifact.semantic_sha256`).
+4. Publish once, into a new folder under a run root (`publish-library` now does this, with the Region manifest) (never the shared artifacts without the owner's yes): `create_region_block_semantic_library(root, [sidecar paths], region_library_0_7_2)`. It pairs one sidecar per Region by `source_region_semantic_sha256`. For the 0.7.2 library the pairing key is the NPZ's complete digest (library `9DCA3C71...`, `artifact.semantic_sha256`).
 5. Validate. `RegionBlockSemanticLibrary.load(manifest, region_library_0_7_2)`, then a `region_action_runtime_from_artifact_libraries` build with `block_semantic_manifest_path` pointing at the new manifest. Check that a block cell from a known sidecar has `block_present` true.
 6. Cost (inferred from the 0.7.2 recapture timings). 251 wire calls per seed (one physical pass plus 250 sections). About 1.3 to 2.3 minutes per seed, so roughly 30 to 50 minutes for 20 seeds with three bridges in parallel.
 7. Decisions for the owner. Which digest identifies the 0.7.2 library (the same question as the open item in "Open question before step 2"). Where the manifest is bound: `worlds/region.py` binds only `region-library-v3-288`. Promotion, which writes shared state.
 
 Not done by this lane: no server, no bridge, no capture, no artifact, no promotion. The live step is the coordinator's to schedule.
 
-### Capture tool and stage (2026-10-22)
+### Capture in the run, backfill and publish (2026-10-22)
 
-`capture_block_semantics.py` (this folder) is the live step for one seed: reset the native env on the seed, `capture_projected_native_region_block_semantics` against the stored Region NPZ, save, reload and check the semantic digest, and write a receipt beside the sidecar. It refuses a jar other than the pin and never overwrites. The owner's ruling (2026-10-22) is capture to a stage only: `HytaleRL/artifacts/worldgen/stage/block-semantics-072-20261022/` (`run.sh SEED ...` launches one fresh bridge per seed on 5556/25574 after the load is below 6; `sidecars/`, `logs/`). Smoke, seed 1044320000 on bridge 6DFD8682: 250 of 250 sections, the reloaded digest equals the captured one (1c9d5d23...), the live physical pass agreed with the stored Region. Promotion into the library and the binding in `worlds/region.py` wait for the owner.
+Both routes use `capture_sidecar` in `capture_block_semantics.py`, so the block pass, the save, the reload and the receipt are one piece of code.
+
+- In the run (new captures). `examples/capture_native_region.py` takes `--block-semantics-output`. After the physical NPZ is saved, it runs the block pass on the same env, against the NPZ it reads back. `recapture_region.py` passes this flag unless `--physical-only` is given. A seed is complete only when its sidecar's receipt says the reload matched and the file is unchanged. If the block pass fails, the capture fails, the compare does not run, and the physical NPZ stays on disk.
+- Backfill (captures that have no sidecar). `capture_block_semantics.py` runs the same block pass on a stored NPZ, one fresh bridge per seed. The owner's ruling (2026-10-22) is capture to a stage only: `HytaleRL/artifacts/worldgen/stage/block-semantics-072-20261022/` (`run.sh SEED ...` launches one fresh bridge per seed on 5556/25574 after the load is below 6; `sidecars/`, `logs/`). Smoke, seed 1044320000 on bridge 6DFD8682: 250 of 250 sections, the reloaded digest equals the captured one (1c9d5d23...), the live physical pass agreed with the stored Region.
+
+
+- Publish. `recapture_region.py publish-library --version 0.7.2 --seed S [--seed S ...] --library-root <new folder>` followed by either `--inherit-split-from <0.5.7 manifest.json>` or `--heldout-count N --split-salt-sha256 H`. It writes the Region library manifest and the block-semantics manifest in one step. It copies each NPZ to `<root>/artifacts/seed_<seed>.npz` and each sidecar to `<root>/block-semantics-v1/sidecars/`. It refuses, and writes nothing, if any seed lacks its NPZ or a complete sidecar. If the block manifest fails, it removes the Region manifest too. Inheriting the split needs the new folder to sit beside the 0.5.7 folder (`create_region_artifact_library` checks this).
+- Why the sidecar sits beside the NPZ: the publisher needs sidecars under its own root and NPZs under the library root, so it copies both. Beside the NPZ, each identity stays next to its physical Region until that copy is made.
+- Publishing writes only the new folder. Promotion into `region-library-pilot-v2-072/` and the binding in `worlds/region.py` still wait for the owner.
+- Tests: `hytalegym/tests/worldgen/test_recapture_block_identity.py` (offline; the `tests/**` tree is git-ignored, so this file is local only).
 
 ## World geometry tokens: why the collision box fields (`box_*`) read 0, 2026-10-22
 

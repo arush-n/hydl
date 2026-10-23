@@ -5,8 +5,11 @@ Gate sequence, each step on its own fresh bridge launch (one launch per
 scenario, BRIDGE-PORTING.md section 7):
 
 1. capture: examples/capture_native_region.py writes one staged NPZ under
-   artifacts/worldgen and must report 500/500 sections. An existing output
-   is never overwritten; --skip-capture reuses it and runs only the compare.
+   artifacts/worldgen and must report 500/500 sections. In the same run, on
+   the same env, it writes the block-semantic sidecar beside the NPZ and its
+   receipt. A seed is complete only with both. --physical-only skips the
+   sidecar and is recorded in the receipt. An existing output is never
+   overwritten; --skip-capture reuses the NPZ and runs only the compare.
 2. compare: tests/fidelity/native_region_capture_compare.py on a fresh server.
    The default scope is exact: the capture's semantic digest is passed as
    --expected-semantic-sha256, so a fresh process must reproduce the capture.
@@ -18,6 +21,11 @@ scenario, BRIDGE-PORTING.md section 7):
 
 Logs, the launch reports and receipt.json go under --run-root. Nothing is
 swapped, promoted or pinned: see tools/worldgen/README.md.
+
+Subcommand `publish-library` needs no bridge. It writes a new Region library
+folder and its block-semantic manifest in one step, from captured seeds. It
+refuses, and writes nothing, unless every seed has its NPZ and a complete
+sidecar. See `publish-library --help`.
 
 Run it with the repo venv from any directory, for example:
   /Users/arush/hydl/.venv/bin/python /Users/arush/hydl/HytaleRL/hytalegym/tools/worldgen/recapture_region.py --version 0.7.2 --seed 570057 --bridge-port 5556 --game-port 25574 --run-root <new empty scratch dir> --reference /Users/arush/hydl/HytaleRL/artifacts/worldgen/native-region-light-v1/seed-570057/region.npz
@@ -33,6 +41,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import socket
 import subprocess
 import sys
@@ -52,6 +61,7 @@ PROGRESS_DONE = f"captured {SECTIONS * PASSES}/{SECTIONS * PASSES} sections"
 DIGEST_LINE = re.compile(r"^semantic_sha256: ([0-9a-f]{64})$", re.MULTILINE)
 FILE_LINE = re.compile(r"^file_sha256: ([0-9a-f]{64})$", re.MULTILINE)
 COMPARE_PASS = "NATIVE_REGION_CAPTURE_DIFFERENTIAL_PASS"
+SIDECAR_SUFFIX = ".block-semantics.npz"
 
 
 def _sha256(path: Path) -> str:
@@ -60,6 +70,27 @@ def _sha256(path: Path) -> str:
         for block in iter(lambda: source.read(1 << 20), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _sidecar_path(folder: Path, version: str, seed: int) -> Path:
+    return folder / f"region_{version}_seed_{seed}{SIDECAR_SUFFIX}"
+
+
+def _sidecar_complete(sidecar: Path, seed: int) -> bool:
+    """A sidecar counts only with a receipt that says its reload matched, for this seed, and the file is unchanged."""
+
+    receipt_path = sidecar.with_suffix(".receipt.json")
+    if not sidecar.is_file() or not receipt_path.is_file():
+        return False
+    try:
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except ValueError:
+        return False
+    return (
+        receipt.get("reload_matches") is True
+        and receipt.get("seed") == seed
+        and receipt.get("file_sha256") == _sha256(sidecar)
+    )
 
 
 def _port_free(port: int, kind: int) -> bool:
@@ -262,7 +293,103 @@ def offline_diff(candidate: Path, reference: Path, difference_limit: int) -> dic
     return result
 
 
+def publish_library(argv: list[str]) -> int:
+    """Publish a Region library and its block-semantic manifest from captured seeds, all or nothing."""
+
+    from hytalegym.worldgen.region import (
+        create_region_artifact_library,
+        create_region_block_semantic_library,
+    )
+
+    parser = argparse.ArgumentParser(
+        prog="recapture_region.py publish-library",
+        description="Publish one Region library and its block-semantic manifest from captured seeds, all or nothing.",
+    )
+    parser.add_argument("--version", required=True, help="server release line of the captured NPZs (0.7.2)")
+    parser.add_argument("--seed", type=int, action="append", required=True, help="repeat for each seed")
+    parser.add_argument(
+        "--library-root",
+        type=Path,
+        required=True,
+        help="new or empty folder; gets manifest.json, artifacts/ and block-semantics-v1/",
+    )
+    parser.add_argument("--artifacts-dir", type=Path, default=ARTIFACTS, help="where the captured NPZs and sidecars are")
+    parser.add_argument(
+        "--inherit-split-from",
+        type=Path,
+        help="manifest.json of the library whose held-out split the seeds inherit (the 0.5.7 pilot)",
+    )
+    parser.add_argument("--heldout-count", type=int, help="new sha256_rank_v1 split: held-out count")
+    parser.add_argument("--split-salt-sha256", help="new sha256_rank_v1 split: salt")
+    args = parser.parse_args(argv)
+    if len(set(args.seed)) != len(args.seed):
+        parser.error("--seed values must be distinct")
+    split_given = args.heldout_count is not None or args.split_salt_sha256 is not None
+    if (args.inherit_split_from is not None) == split_given:
+        parser.error("pass --inherit-split-from, or --heldout-count with --split-salt-sha256")
+    if args.inherit_split_from is None and (args.heldout_count is None or args.split_salt_sha256 is None):
+        parser.error("--heldout-count and --split-salt-sha256 go together")
+    root = args.library_root.resolve()
+    if root.exists() and any(root.iterdir()):
+        parser.error(f"library root must be new or empty: {root}")
+
+    seeds = sorted(args.seed)
+    sources: dict[int, tuple[Path, Path]] = {}
+    incomplete: list[str] = []
+    for seed in seeds:
+        npz = args.artifacts_dir / f"region_{args.version}_seed_{seed}.npz"
+        sidecar = _sidecar_path(args.artifacts_dir, args.version, seed)
+        if not npz.is_file():
+            incomplete.append(f"seed {seed}: no NPZ at {npz}")
+        elif not _sidecar_complete(sidecar, seed):
+            incomplete.append(f"seed {seed}: no complete block-semantic sidecar at {sidecar}")
+        else:
+            sources[seed] = (npz, sidecar)
+    if incomplete:
+        for line in incomplete:
+            print(f"incomplete: {line}")
+        print("refusing to publish: nothing was written; capture or backfill the seeds above first")
+        return 1
+
+    region_dir = root / "artifacts"
+    block_root = root / "block-semantics-v1"
+    sidecar_dir = block_root / "sidecars"
+    region_dir.mkdir(parents=True, exist_ok=True)
+    sidecar_dir.mkdir(parents=True, exist_ok=True)
+    region_paths: list[Path] = []
+    sidecar_paths: list[Path] = []
+    for seed in seeds:
+        npz, sidecar = sources[seed]
+        staged_npz = region_dir / f"seed_{seed}.npz"
+        staged_sidecar = sidecar_dir / f"seed_{seed}{SIDECAR_SUFFIX}"
+        shutil.copy2(npz, staged_npz)
+        shutil.copy2(sidecar, staged_sidecar)
+        shutil.copy2(sidecar.with_suffix(".receipt.json"), staged_sidecar.with_suffix(".receipt.json"))
+        region_paths.append(staged_npz)
+        sidecar_paths.append(staged_sidecar)
+
+    split = (
+        {"inherit_split_from": args.inherit_split_from}
+        if args.inherit_split_from is not None
+        else {"heldout_count": args.heldout_count, "split_salt_sha256": args.split_salt_sha256}
+    )
+    try:
+        region = create_region_artifact_library(root, region_paths, **split)
+        block = create_region_block_semantic_library(block_root, sidecar_paths, region)
+    except Exception as error:  # fail closed: a Region library without identity is never left behind
+        for manifest in (root / "manifest.json", block_root / "manifest.json"):
+            manifest.unlink(missing_ok=True)
+        print(f"publish failed, manifests removed: {type(error).__name__}: {error}")
+        return 1
+    print(f"region library: {root / 'manifest.json'} semantic {region.semantic_sha256} artifacts {len(region.entries)}")
+    print(f"block semantics: {block_root / 'manifest.json'} semantic {block.semantic_sha256}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
+    raw = sys.argv[1:] if argv is None else list(argv)
+    if raw[:1] == ["publish-library"]:
+        return publish_library(raw[1:])
     parser = argparse.ArgumentParser(description=__doc__.strip().splitlines()[0])
     parser.add_argument("--version", required=True, help="server release line with a bridge pin (0.7.2)")
     parser.add_argument("--seed", type=int, default=570057)
@@ -313,7 +440,15 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument("--core-min-chunk-z", type=int)
-    args = parser.parse_args(argv)
+    parser.add_argument(
+        "--physical-only",
+        action="store_true",
+        help=(
+            "deliberate physical-only capture: no block-semantic sidecar. The receipt records the opt-out, "
+            "and publish-library refuses the seed"
+        ),
+    )
+    args = parser.parse_args(raw)
     if args.seed_projection_contract is not None and args.fluid_only_cap is not None:
         parser.error("--seed-projection-contract and --fluid-only-cap are alternatives")
     if args.fluid_only_cap is not None and args.fluid_only_cap < 0:
@@ -341,11 +476,14 @@ def main(argv: list[str] | None = None) -> int:
         if not _port_free(port, kind):
             parser.error(f"{label} port {port} is busy")
     output = ARTIFACTS / f"region_{args.version}_seed_{args.seed}.npz"
+    sidecar = _sidecar_path(ARTIFACTS, args.version, args.seed)
     if args.skip_capture:
         if not output.is_file():
             parser.error(f"--skip-capture needs an existing NPZ: {output}")
     elif output.exists():
         parser.error(f"refusing to overwrite {output}")
+    elif not args.physical_only and sidecar.exists():
+        parser.error(f"refusing to overwrite {sidecar}")
     run_root = args.run_root.resolve()
     if run_root.exists() and any(run_root.iterdir()):
         parser.error(f"run-root must be new or empty: {run_root}")
@@ -393,6 +531,14 @@ def main(argv: list[str] | None = None) -> int:
             "--core-min-chunk-z",
             str(args.core_min_chunk_z),
         ]
+    if not args.physical_only:
+        capture_then += ["--block-semantics-output", str(sidecar)]
+    if args.skip_capture:
+        print("block semantics: no pass with --skip-capture; backfill with capture_block_semantics.py")
+    elif args.physical_only:
+        print("block semantics: opt-out (--physical-only), no sidecar")
+    else:
+        print(f"block semantics: sidecar {sidecar}")
     if args.preflight_only:
         if not args.skip_capture:
             print("capture command: " + shlex.join(capture_then))
@@ -422,6 +568,14 @@ def main(argv: list[str] | None = None) -> int:
             "file_sha256_on_disk": file_sha,
             "log": None,
         }
+        receipt["identity_complete"] = _sidecar_complete(sidecar, args.seed)
+        receipt["block_semantics"] = {
+            "opt_out": None,
+            "skipped": True,
+            "passed": None,
+            "reason": "--skip-capture reuses the NPZ; backfill with capture_block_semantics.py",
+            "sidecar": str(sidecar) if sidecar.is_file() else None,
+        }
         print(f"capture: SKIPPED, reusing {output} (file_sha256 {file_sha})")
     else:
         code, report, text = _run_launch(
@@ -435,7 +589,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         digest_match = DIGEST_LINE.search(text)
         file_match = FILE_LINE.search(text)
-        capture_ok = (
+        physical_ok = (
             code == 0
             and PROGRESS_DONE in text
             and digest_match is not None
@@ -443,6 +597,8 @@ def main(argv: list[str] | None = None) -> int:
             and report is not None
             and report.get("then_exit_code") == 0
         )
+        identity_complete = not args.physical_only and _sidecar_complete(sidecar, args.seed)
+        capture_ok = physical_ok and (args.physical_only or identity_complete)
         semantic_sha = digest_match.group(1) if digest_match else None
         receipt["capture"] = {
             "launcher_exit": code,
@@ -454,7 +610,22 @@ def main(argv: list[str] | None = None) -> int:
             "launch_report": report,
             "log": str(run_root / "capture.launcher.log"),
         }
+        receipt["identity_complete"] = identity_complete
+        receipt["block_semantics"] = (
+            {"opt_out": "--physical-only", "passed": None, "sidecar": None}
+            if args.physical_only
+            else {
+                "opt_out": None,
+                "passed": identity_complete,
+                "sidecar": str(sidecar),
+                "receipt": str(sidecar.with_suffix(".receipt.json")),
+            }
+        )
         print(f"capture: {'PASS' if capture_ok else 'FAIL'} ({PROGRESS_DONE if PROGRESS_DONE in text else 'no 500/500 line'})")
+        if args.physical_only:
+            print("block semantics: opt-out (--physical-only), no sidecar")
+        else:
+            print(f"block semantics: {'PASS' if identity_complete else 'FAIL'} {sidecar}")
 
     compare_ok = False
     if capture_ok and semantic_sha is not None:
