@@ -564,7 +564,7 @@ approach. Missing:
 | 2 | Structured writes from the top two layers; the tags move onto them. DESIGNED and APPROVED 2026-10-22 (section 19, rulings in 19.7) | 10.4, 19 |
 | 3 | Fixed rules on game time: alarm and startle, sleep pressure and fatigue, hunger and the other drives; then lifecycle under normal death, and provenance. DESIGNED and APPROVED 2026-10-22; BUILT: startle, respawn, provenance (section 20.7); the drives wait for the clock (20.5) | 10.5, 10.7, 10.8, 16.1, 16.2, 16.5, 20 |
 | 4 | The event log and its tokens; the activity counters and levels. DESIGNED and APPROVED 2026-10-22; BUILT (section 21.6; the event tokens wait for step 7) | 10.6, 11.1, 16.6, 21 |
-| 5 | The long-term spatial memory: places, routes, coordinates | 10.11, 16.4 |
+| 5 | The long-term spatial memory: places, routes, coordinates. DESIGNED 2026-10-22 (section 22), waiting on the owner's yes | 10.11, 16.4, 22 |
 | 6 | Hearing: the sound registry, the hearing rule, heard entries in the stores, the orienting reflex (the token reads zero until S12) | 17 |
 | 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry (with it the status token's identity: which effect, its source entity, its damage cause, all in the observation and dropped today; `PERCEPTION.md` section 10.5), places, the proficiencies | 11.1 to 11.4, 11.6, 16.6, 17.8 |
 | 8 | The formatted views (typed facts, words) and the recording | 10.3, 10.9 |
@@ -1781,6 +1781,125 @@ Checks:
   (among them the six duel fingerprints the coordinator re-pinned per server line meanwhile). Pass 2 (0.5.7): the
   same 30 names on both.
 
+## 22. Step 5: the long-term spatial memory (DESIGNED 2026-10-22, waiting on the owner's yes)
+
+The owner, 2026-10-22: "yes continue". This is step 5 of section 13 (10.11, 16.4), turned from 16.4's sketch into a
+design that fits what steps 2 to 4 built. Nothing is built until the owner's yes.
+
+### 22.1 What exists
+
+- **The short-term stores** (`state/memory.py`): 32 nearby terrain cells (by recency), 16 entities and 32 block
+  candidates, anchored to the world by the agent's position. They restart at an episode boundary.
+- **The decision layer's place marks** (`state/written.py`, step 2): up to 16 per agent. The decision layer ejects
+  each when the program that wrote it ends (19.7, as the coordinator reported the owner's ruling).
+- **The event log** (`state/events.py`, step 4): hits taken and dealt, item gains and losses, eating and request
+  outcomes, each with where it happened.
+- **The respawn input** (step 3): the moment of a normal death. No `death` event is logged yet (16.2 asks for one).
+- **The agent's position** comes only with a perception channel: the gen-7 single-actor path, or the agent's own pose
+  attached by the host (`runtime/state_tick.host_inputs`). Live, the native path carries none yet (`PERCEPTION.md`
+  10.5, the coordinator's asks), so this memory has nothing to anchor to live until it does.
+
+### 22.2 The design
+
+**Places.** A store of up to 128 places per agent [engineering]. Each has:
+- its position (world, blocks) and its kind: `stay` (the agent stayed there), `danger` (it was hurt there), `death`
+  (it died there), `find` (it gained an item there), `marked` (the decision layer marked it, step 2);
+- its strength, in [0, 1];
+- its first and last visit (ticks; game time once there is a clock) and its visit count.
+
+Two positions within 4 blocks [E] are the same place: a new event there refreshes the place instead of making a new one
+(a place has an extent; a kind already held is kept, the stronger kind's strength wins).
+
+**What makes a place (consolidation).** Each tick, from what the state layer already has:
+- **a stay:** the agent stayed within 3 blocks [E] for 10 s [E]. This is stay-point detection, the standard way to
+  find significant places in a movement trace (22.6), scaled down from a city to a game;
+- **a danger:** a `damage_taken` event. Its strength is `0.5 + 0.5 alarm` [E]: an emotionally arousing event is
+  consolidated more strongly (22.6);
+- **a death:** a respawn. The place is the last position before it, and a `death` event is logged too (16.2). A
+  game's precedent: the player's last death location is tracked and pointed to (22.6);
+- **a find:** an `item_gained` event;
+- **a mark:** a live `remember` place entry. The place outlives the mark: when the program ends and the mark is
+  ejected, the place stays in long-term memory, as a marked place.
+
+**Routes.** Up to 256 per agent [engineering]: from one place to another, with the best and the last travel time, how
+often travelled, and when last. The state layer keeps the place the agent last left and the tick it left; on arriving
+at another place it records the route between them.
+
+**Strength over time.**
+- **Revisits restore:** being within a place's extent sets its strength to at least 0.8 [E] and counts a visit.
+- **Fading:** a place the agent formed itself fades with the time since its last visit,
+  `s <- s exp(-dt / TAU_PLACE)` [E], and a route fades more slowly than a place (22.6: landmark knowledge decays,
+  route knowledge holds better, and revisiting prevents the decline).
+- **Marked places never fade,** and are never evicted, as the decision layer's marks (19.7).
+- **When the store is full,** the weakest unmarked place gives way, with its routes. If every place is marked, a new
+  place is not stored and the eviction count goes up (for the event log).
+
+**Lifecycle** (16.2). Places and routes survive a death and are saved with the agent (save and load already carry
+every part of the state). At an episode boundary they restart, since a simulator episode is a new world (22.5
+item 3).
+
+**Reading.**
+- **On every read:** each place's displacement in the body frame, its distance and bearing (the `where` block), as the
+  stores do.
+- **The body** (step 7): the few relevant places as `place` tokens, chosen by nearness, strength and marks (11.6).
+- **The decision layer and the LLM** (step 8): the graph, and the best known route between two places, a shortest path
+  over the routes, computed on the host off the tick.
+- **Meanings** ("home", "ours", "dangerous") stay the decision layer's labels (section 5). Names in words come with the
+  LLM's own written fields (19.7 item 3).
+
+### 22.3 Files
+
+- `state/places.py` (new): the places, the routes, consolidation, fading and reading.
+- `state/events.py`: a `death` event kind, logged on respawn.
+- `state/layer.py`: the store in `AgentState`, updated each tick after the event log and the writes.
+- Tests: each consolidation rule on synthetic observations; merging; fading and revisits; eviction with marked places
+  kept; a route recorded between two places; respawn keeps the store and logs the death; save and load; and, on the
+  Region world, places forming as the agent wanders.
+
+### 22.4 How it is verified
+
+1. **Nothing the body reads changes** until step 7 adds the tokens: the same tokens and stores with and without it, by
+   digest, on the Region world.
+2. **Each rule in isolation**, as listed in 22.3.
+3. **Cost** at batch 8 and 64, and **the package gate**, both passes.
+
+### 22.5 Decisions for the owner
+
+1. **Fading and giving way.** Recommended: places the agent formed itself fade with time since the last visit and the
+   weakest gives way when the store is full; places the decision layer marked never fade and are never evicted (your
+   step 2 ruling). The alternative is that nothing fades and a full store refuses new places.
+2. **Names.** Recommended: kinds only now; names in words come with the LLM's written fields (step 8 or 9). The
+   alternative is a name field now.
+3. **A new episode.** Recommended: the places restart at an episode boundary (a simulator episode is a new world), and
+   are kept across a respawn and across save and load. The alternative is to keep them across episodes in the same
+   world, which needs the runtime to say when the world is the same.
+
+### 22.6 What grounds it (searched 2026-10-22; depth of reading stated)
+
+- **Places and routes as one map.** Rats learn a map of a maze, not only response chains, and take novel routes when
+  the familiar one is blocked (Tolman 1948, Psychological Review 55(4), 189-208; through summaries). The hippocampus as
+  that map, with place cells (O'Keefe and Nadel 1978, The Hippocampus as a Cognitive Map; through secondary accounts).
+  With 16.4's landmark, route and survey knowledge (Siegel and White 1975; Montello 1998) and robotics' topological maps
+  (Kuipers 2000), this is why the store holds places and the routes between them, and why the shortest path is
+  computed over the routes.
+- **Significant places from a trace.** Stay-point detection: consecutive positions within a radius for a minimum time
+  make a stay point, reported once the person leaves it (Li, Zheng, Xie, Chen, Liu and Ma 2008, "Mining user
+  similarity based on location history", SIGSPATIAL, doi 10.1145/1463434.1463477; through the trackintel
+  documentation and papers that cite it). Typical thresholds are 200 m and 20 to 30 minutes for city GPS, 100 m and
+  5 minutes in trackintel's defaults; 3 blocks and 10 s here is that rule scaled to a game [E].
+- **Why events make places.** Emotionally arousing experiences are consolidated more strongly, through the amygdala
+  (McGaugh 2004, Annual Review of Neuroscience 27, 1-28; abstract and secondary accounts). So a danger place's strength
+  follows the alarm at the time.
+- **Where I died.** Minecraft's recovery compass points to where the player last died (game guides). A death place
+  is a game's convention as well as 16.2's ruling.
+- **Fading and revisits.** In a virtual environment, route and survey knowledge held steady for people retested at
+  intervals and declined for those tested once more (HAL hal-01440576, "Differentiated forgetting rates of spatial
+  knowledge in humans in the absence of repeated testing"; abstract). In a two-year real-world study, landmark knowledge
+  decreased while route knowledge was unaffected (Bournemouth, "Long-term landmark and route memory retention"; abstract).
+  So places fade, routes fade more slowly, and a revisit restores a place.
+- **Not from research:** the capacities (128 places, 256 routes), the merge radius and the strength constants are
+  engineering choices or estimates [E], changeable without retraining (section 14).
+
 ## Sources
 
 - Steel, P. (2007). The nature of procrastination. Psychological Bulletin 133(1), 65-94.
@@ -1870,3 +1989,13 @@ Checks:
   through a registry listing (https://azalea.matdoes.dev/azalea_registry/builtin/enum.CustomStat.html); UESP wiki,
   Skyrim "Leveling" and skill experience (https://content1.uesp.net/wiki/Skyrim:Adept). Atkinson, R. C., and
   Shiffrin, R. M. (1968), the multi-store model (recalled).
+- Section 22.6, searched 2026-10-22: Tolman (1948), Cognitive maps in rats and men, Psychological Review 55(4),
+  189-208 (doi 10.1037/h0061626; summaries). O'Keefe, J., and Nadel, L. (1978), The Hippocampus as a Cognitive
+  Map, Clarendon Press (secondary accounts). Li, Q., Zheng, Y., Xie, X., Chen, Y., Liu, W., and Ma, W.-Y. (2008),
+  Mining user similarity based on location history, ACM SIGSPATIAL, doi 10.1145/1463434.1463477 (through trackintel's
+  documentation, https://trackintel.readthedocs.io). McGaugh, J. L. (2004), The amygdala modulates the consolidation
+  of memories of emotionally arousing experiences, Annual Review of Neuroscience 27, 1-28 (abstract). Minecraft's
+  recovery compass (game guides, e.g. https://pcgamer.com/minecraft-recovery-compass). "Differentiated forgetting
+  rates of spatial knowledge in humans in the absence of repeated testing", https://hal.archives-ouvertes.fr/hal-01440576
+  (abstract). "Long-Term Landmark and Route Memory Retention Acquired in a Real-World Map-Aided Navigation Task",
+  Bournemouth University (abstract).
