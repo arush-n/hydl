@@ -41,6 +41,7 @@ CONSTRUCT_MODULES = {
     "landing_walk_resume": "landing_walk",
     "npc_jump_carry": "npc_jump_carry",
     "auto_step_up": "auto_step_up",
+    "swimming": "npc_fluid_walk",
     "crafting_bench_tier": "bench_tiers",
     "crafting_memories": "crafting_memories",
     "crafting_time": "timed_crafting",

@@ -52,7 +52,9 @@ class Constructs:
     # Door model. "world_v0_5": today's World door semantics (doors source
     # audit); a 0.7.2 model is added only if its differential differs.
     doors: str = "world_v0_5"
-    # Swimming model. "fluidfx_v0_5": today's FluidFX movement medium.
+    # Swimming model. "fluidfx_v0_5": today's FluidFX movement medium (gen 5: the in-fluid fall is capped at
+    # max_sink_speed_fluid). "npc_walk_072": the 0.7.2 Walk NPC has no fluid cap (the in-fluid fall is the dry cap).
+    # Owner: sim/gen7/mechanics/npc_fluid_walk.py.
     swimming: str = "fluidfx_v0_5"
     # Glider items (gliding movement state). Owner: gliding.py (on demand).
     gliding: bool = False

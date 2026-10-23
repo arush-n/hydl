@@ -34,7 +34,9 @@ PROFILE = SimProfile(
         hookshot=True,
         climbing=True,
         doors="world_v0_5",
-        swimming="fluidfx_v0_5",
+        # Water for the npc_walk body (row 10c): the in-fluid fall has no sink cap, as the 0.7.2 Walk controller reads none.
+        # Owner: sim/gen7/mechanics/npc_fluid_walk.py. The player model keeps no fluid-cap change.
+        swimming="npc_walk_072",
         gliding=True,
         riding=True,
         npc_velocity_model="role_set_velocity",

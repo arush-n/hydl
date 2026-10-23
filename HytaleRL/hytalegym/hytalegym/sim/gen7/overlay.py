@@ -1088,6 +1088,15 @@ HOOKS = (
          "the switch-off render equals the committed render leaf by leaf",
          note="max_climb_height from the agent walk (1.3, 0.5.7 ruleset; the 0.7.2 learner role carries none, INFERRED); the "
          "construct returns the original function when the switch is off"),
+    # Row 10c, water for the npc_walk body (lane_swim, 2026-10-23). Listed before npc_jump_arc_fall_speed: the renderer applies
+    # the last-listed hook first, and npc_jump_arc reads original.__globals__ without unwrapping, so it must see the base function.
+    # Not differential-gated: no 0.7.2 water fixture exists.
+    Hook("npc_fluid_walk", "combat/runtime/agent.py", "_tick_agent_geometry_motion",
+         f"{_MECHANICS}.npc_fluid_walk:construct", "swimming", "active", "10c",
+         "tests/sim/test_npc_fluid_walk.py: an npc_walk body in a pool falls at the dry cap (the in-fluid sink cap of 4.0 is gone); "
+         "the player model and the switch-off render are unchanged",
+         note="0.7.2 MotionControllerWalk reads no fluid vertical cap (javap: computeMove dead store; computeNewFallSpeed has no "
+         "fluid branch); the dry cap is the sim's own value (INFERRED for 0.7.2); horizontal FluidFX 0.6 and oxygen are unchanged"),
     Hook("npc_jump_arc_fall_speed", "combat/runtime/agent.py", "_tick_agent_geometry_motion",
          f"{_MECHANICS}.npc_jump_arc:fall_speed_integration", "npc_jump_arc", "active", "1c", _JUMP_ARC,
          "npc_walk jump rows of the legacy branch after the impulse: v_k = v_(k-1) - 32 (1 - |(v_(k-1) - v_jump) "
