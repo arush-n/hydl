@@ -949,6 +949,24 @@ that trunk reads (14.2).
 
 **Measurement** starts at 2 agents and scales up. The 5.27 ms p95 today is for 8 agents in one batch.
 
+**Measured, one model per agent (2026-10-23; `bench/agent_models.py`).** The whole tick (the state layer and the trunk
+with its memory) on the gen-7 Region render, in five layouts: one shared trunk for a batch of N; N trunks with their own
+weights stacked in one program (`vmap`, each agent a batch of 1); N trunks called one after another from one process; N
+processes, each one agent; the same with each process held to one thread. Checked first: own weights give different
+outputs, each equal to that agent's trunk run alone; N copies of one trunk stacked equal the shared batch. The machine
+was shared (load 5 to 199 across the three rounds, from other projects), so absolute times are not comparable across
+rounds. Two results held in every round:
+- **Own weights in one program cost 6 to 24% more than one shared trunk** (at 2, 8 and 16 agents): separate models
+  are affordable when they run together.
+- **Separate models called one after another cost 2 to 5.5 times as much** at 8 and 16 agents, growing with N: one host
+  serving its agents in turn does not scale.
+
+The least-loaded round's medians per tick: 1 agent, 1.6 to 1.7 ms in every layout but the single-thread process
+(5.9 ms); 8 agents, 7.5 shared, 8.1 own weights in one program, 15.9 one after another, about 6 ms per agent as 8
+processes (one thread or not); 16 agents, 10.0, 10.8 and 26.6. So at 16 agents the stacked layout stays inside the 15 ms
+gate (BUILD.md, E8) and the sequential one does not. The parameters: 335,616 a trunk (1.3 MB), 21.5 MB for 16. A quiet
+re-run is one command (the module's docstring) when the machine is free.
+
 ### 16.4 Long-term spatial memory (RULED: "there should be something in long term memory, furthermore coordinates and other relative information should be tracked")
 
 **Research.** People know an environment in three kinds (Siegel and White 1975):
