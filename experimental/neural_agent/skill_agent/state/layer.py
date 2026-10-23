@@ -47,6 +47,7 @@ from experimental.neural_agent.skill_agent.contract import tokens_v3 as v3
 from experimental.neural_agent.skill_agent.contract import variables
 from experimental.neural_agent.skill_agent.contract.surface import ITEM_PROPERTIES
 from experimental.neural_agent.skill_agent.perception.adapter import lookup
+from experimental.neural_agent.skill_agent.state import clock
 from experimental.neural_agent.skill_agent.state import registry
 from experimental.neural_agent.skill_agent.state import affect as feeling
 from experimental.neural_agent.skill_agent.state import events
@@ -143,10 +144,10 @@ PLACE_PULL_BLOCKS: float = 16.0
 ``strength / (1 + distance / PLACE_PULL_BLOCKS)`` after the marked ones (section 24)."""
 PLACE_VISITS_HORIZON: float = 1000.0
 """A place's visits are log-scaled to [0, 1] over this many visits [E]."""
-PLACE_SINCE_HORIZON_TICKS: float = 1_000_000.0
-"""The time since a place's last visit is log-scaled to [0, 1] over this many ticks [E] (section 22)."""
-EVENT_AGE_HORIZON_TICKS: float = 1800.0
-"""An event's age is log-scaled to [0, 1] over this many ticks [E]: 81 s at 0.045 s a tick."""
+PLACE_SINCE_HORIZON_SECONDS: float = 45000.0
+"""The time since a place's last visit is log-scaled to [0, 1] over this many seconds [E] (section 22): 12.5 h."""
+EVENT_AGE_HORIZON_SECONDS: float = 81.0
+"""An event's age is log-scaled to [0, 1] over this many seconds [E]: 81 s (1800 ticks at 0.045 s a tick)."""
 
 
 def _take(values: jax.Array, order: jax.Array) -> jax.Array:
@@ -155,7 +156,8 @@ def _take(values: jax.Array, order: jax.Array) -> jax.Array:
     return jnp.take_along_axis(values, order.reshape(order.shape + (1,) * (values.ndim - 2)), axis=1)
 
 
-def _place_rows(placed: places.PlaceState, pose: Pose, capacity: int) -> tuple[jax.Array, jax.Array]:
+def _place_rows(placed: places.PlaceState, pose: Pose, capacity: int, tick_seconds: float
+                ) -> tuple[jax.Array, jax.Array]:
     """The places the body reads (section 24): the marked ones first, then by ``strength / (1 + distance /
     PLACE_PULL_BLOCKS)``, the first ``capacity`` kept. Each has its ``where`` block from me, its kinds, its strength,
     its visits and time since its last visit (log-scaled), and whether I am inside it. Needs ``pose.position``."""
@@ -171,14 +173,15 @@ def _place_rows(placed: places.PlaceState, pose: Pose, capacity: int) -> tuple[j
         "place_stay": _take(store.kinds, order),
         "strength": _take(store.strength, order),
         "visits_log": jnp.minimum(jnp.log1p(_take(store.visits, order)) / math.log1p(PLACE_VISITS_HORIZON), 1.0),
-        "since_visit_log": jnp.minimum(jnp.log1p(since) / math.log1p(PLACE_SINCE_HORIZON_TICKS), 1.0),
+        "since_visit_log": jnp.minimum(jnp.log1p(since) / math.log1p(float(clock.about(PLACE_SINCE_HORIZON_SECONDS,
+                                                                                       tick_seconds))), 1.0),
         "inside": order == placed.inside[:, None],
     }, "place")
     chosen = _take(valid, order)
     return jnp.where(chosen[..., None], rows, 0.0), chosen
 
 
-def _event_rows(logged: events.EventState, pose: Pose, entity_ids: jax.Array, capacity: int
+def _event_rows(logged: events.EventState, pose: Pose, entity_ids: jax.Array, capacity: int, tick_seconds: float
                 ) -> tuple[jax.Array, jax.Array]:
     """The last ``capacity`` events, oldest first (section 24): kind, age, amount, inferred or observed, whether the
     other party is a known entity now (one of this tick's ``entity_ids``), and where it happened: its ``where`` block
@@ -199,7 +202,8 @@ def _event_rows(logged: events.EventState, pose: Pose, entity_ids: jax.Array, ca
     rows = _put(_zeros(batch, capacity, "event"), {
         "forward": block,
         "event_damage_taken": jax.nn.one_hot(recent.kind, len(events.EVENT_KINDS)),
-        "age_log": jnp.minimum(jnp.log1p(age) / math.log1p(EVENT_AGE_HORIZON_TICKS), 1.0),
+        "age_log": jnp.minimum(jnp.log1p(age) / math.log1p(float(clock.about(EVENT_AGE_HORIZON_SECONDS, tick_seconds))),
+                               1.0),
         "amount": jnp.clip(recent.amount, -1.0, 1.0),
         "inferred": recent.inferred,
         "other_known": other_known,
@@ -254,7 +258,8 @@ def _chances(rows: jax.Array, present: jax.Array) -> jax.Array:
 def step(observation: Any, state: AgentState, *, last_action: jax.Array,
              reset: jax.Array | None = None, respawn: jax.Array | None = None, writes: written.Writes | None = None,
              capacities: Mapping[str, int] = v3.CAPACITIES_V3, outcomes: jax.Array | None = None,
-             outcome_verbs: jax.Array | None = None, **adapter: Any
+             outcome_verbs: jax.Array | None = None, tick_seconds: float = clock.DEFAULT_TICK_SECONDS,
+             **adapter: Any
              ) -> tuple[dict[str, tuple[jax.Array, jax.Array]], AgentState]:
     """One tick (module docstring): the token sets and the next state.
 
@@ -273,6 +278,9 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
             3 aborted), or zeros when None.
         outcome_verbs: int32[B, OUTCOME_SLOTS], each request's verb id in ``neural_skills/spec.py`` ``VERBS`` (the
             modules' append-only vocabulary; -1 for a verb outside it), or zeros when None.
+        tick_seconds: The world's tick length in seconds (section 27, the state layer's one clock): gen 7's 1/30 s by
+            default; a gen-5 world passes ``clock.GEN5_TICK_SECONDS``, and live its measured mean. Every rule's window
+            and fade is in seconds and is turned into ticks from it.
         **adapter: Passed to ``senses.perceive_rows``: ``body_yaw_degrees``, ``tables`` (the content registry),
             ``action_surface``, ``block_reach_blocks``, ``light``, ``view_half_angle_degrees``, and ``effects`` (the
             status-effect registry's tables, ``perception/effects.effect_tables``; None reads the effect columns as
@@ -281,7 +289,8 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
 
     history = update_history(state.history, last_action, _restarts(reset, respawn))
     perceived = perceive_rows(observation, inventory_capacity=capacities["inventory_slot"], **adapter)
-    affect = feeling.update(state.affect, perceived, registry.take(state.variables, TRAITS), reset, respawn=respawn)
+    affect = feeling.update(state.affect, perceived, registry.take(state.variables, TRAITS), reset, respawn=respawn,
+                            tick_seconds=tick_seconds)
     values = registry.put(state.variables, v3.AFFECT_FEATURES, feeling.affect_features(affect))
     if outcomes is None:
         outcomes = jnp.zeros((observation.base.self_f32.shape[0], events.OUTCOME_SLOTS), jnp.int32)
@@ -289,25 +298,27 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
         outcome_verbs = jnp.zeros_like(outcomes)
     observed = _observed(observation, perceived, affect, adapter.get("tables"), capacities, outcomes, outcome_verbs,
                          respawn)
-    logged = events.update(state.events, observed, reset)
+    logged = events.update(state.events, observed, reset, tick_seconds=tick_seconds)
     values = registry.put(values, events.COUNTERS, logged.counters)
     record = written.apply(state.written, writes, reset)
-    memory = stores.update(state.memory, perceived, written.tags(record), reset)
+    memory = stores.update(state.memory, perceived, written.tags(record), reset, tick_seconds=tick_seconds)
     placed = places.update(
         state.places, position=observed.position, has_position=observed.has_position,
         danger=_logged(logged.log, logged.now, "damage_taken"), alarm=affect.fear,
         find=_logged(logged.log, logged.now, "item_gained"), respawned=observed.respawned,
         marks_world=record.place.world,
-        marks_live=record.place.valid & (record.place.values[..., _PLACE_REMEMBER] > 0), reset=reset)
+        marks_live=record.place.valid & (record.place.values[..., _PLACE_REMEMBER] > 0), reset=reset,
+        tick_seconds=tick_seconds)
     entity_rows, present = perceived.rows["entity"]  # this tick's perceived entities, before the remembered ones
     seen_ids = jnp.where(present, perceived.entity_ids[:, :entity_rows.shape[1]], -1)
     seen_world = None if perceived.pose.position is None else stores._world_of(entity_rows, perceived.pose)
     written_ids = jnp.where(record.entity.valid, record.entity.key_id, -1)
     seen_chance = _chances(entity_rows, present)
-    socialed = social.update(state.social, seen_ids, seen_world, seen_chance, logged, written_ids, reset)
-    remembered = stores.read(memory, perceived.pose)
+    socialed = social.update(state.social, seen_ids, seen_world, seen_chance, logged, written_ids, reset,
+                             tick_seconds=tick_seconds)
+    remembered = stores.read(memory, perceived.pose, tick_seconds=tick_seconds)
     rows = dict(perceived.rows)
-    rows["act"] = (act_features(history), jnp.ones(history.last_choice.shape, jnp.bool_))
+    rows["act"] = (act_features(history, tick_seconds), jnp.ones(history.last_choice.shape, jnp.bool_))
     entity_ids = perceived.entity_ids[:, :rows["entity"][0].shape[1]]
     if remembered is not None:
         for name in ("entity", "geometry", "block_candidate"):
@@ -323,8 +334,8 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
     batch = observation.base.self_f32.shape[0]
     one = jnp.ones((batch, 1), jnp.bool_)
     if perceived.pose.position is not None:  # the long-term places need a position (22.1)
-        rows["place"] = _place_rows(placed, perceived.pose, capacities["place"])
-    rows["event"] = _event_rows(logged, perceived.pose, entity_ids, capacities["event"])
+        rows["place"] = _place_rows(placed, perceived.pose, capacities["place"], tick_seconds)
+    rows["event"] = _event_rows(logged, perceived.pose, entity_ids, capacities["event"], tick_seconds)
     for name in ("persona", "affect"):  # the body-read variables, the token's ``marked`` 0
         columns = registry.take(values, v3.TOKEN_TYPES_V3[name].FEATURES[:-1])
         rows[name] = (jnp.pad(columns, ((0, 0), (0, 1)))[:, None, :], one)

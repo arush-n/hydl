@@ -22,7 +22,7 @@ are:
 - **damage taken** (inferred when attributed): ``drop = h_last - h`` where ``h_last >= 0`` and ``drop > 0``. The amount
   is ``drop`` and the other party is the entity the caller attributes (-1 if none).
 - **damage dealt** (inferred): for each entity perceived now and last tick, with ``drop = e_last - e > 0``, when my
-  attack was executing within the last ``DEALT_WINDOW_TICKS`` [E] (``now - last_attack <= 4``, 0.18 s) and the entity
+  attack was executing within the last ``DEALT_WINDOW_SECONDS`` [E] (0.18 s) and the entity
   is within ``THREAT_REACH_BLOCKS`` (the reach ``affect.py`` assumes for an attacker, an estimate there). The attack is
   stamped before this rule reads it, so a hit on the same tick counts.
 - **items** (observed; per item id, the counts summed over the slots holding it): a gain ``total_now - total_last > 0``
@@ -44,7 +44,7 @@ inventory slot's gain, each last-tick slot's loss, each request slot), and ``cou
 candidate with rank ``r`` (its place among the valid ones) goes to slot ``(next + r) % EVENT_SLOTS``, and only the last
 ``EVENT_SLOTS`` of them are kept when more arrive in one tick; then ``next`` advances by ``count``.
 
-Estimated constants are marked [E]: ``DEALT_WINDOW_TICKS`` and ``TELEPORT_BLOCKS``. ``EVENT_SLOTS`` is a capacity, a
+Estimated constants are marked [E]: ``DEALT_WINDOW_SECONDS`` and ``TELEPORT_BLOCKS``. ``EVENT_SLOTS`` is a capacity, a
 token budget sized like the other capacities and changeable without retraining (21.5), not an estimate.
 
 **Grounding** (21.5): the log is a short store that the memories read from, as in the multi-store model (Atkinson and
@@ -61,6 +61,7 @@ from typing import NamedTuple
 import jax
 import jax.numpy as jnp
 
+from experimental.neural_agent.skill_agent.state import clock
 from experimental.neural_agent.skill_agent.state.affect import THREAT_REACH_BLOCKS
 
 EVENT_SLOTS: int = 32
@@ -74,9 +75,8 @@ MOVES: tuple[str, ...] = ("walking", "running", "sprinting", "swimming", "in_flu
 OUTCOME_SLOTS: int = 4
 """The request outcomes per agent per tick: the combiner's active-request table holds 4 (``experimental/neural_agent/
 docs/MIDDLE_LAYER.md`` section 5)."""
-DEALT_WINDOW_TICKS: int = 4
-"""An opponent's health drop counts as my hit when my attack was executing within this many ticks [E]: 0.18 s at
-0.045 s a tick."""
+DEALT_WINDOW_SECONDS: float = 0.18
+"""An opponent's health drop counts as my hit when my attack was executing within this many seconds [E]."""
 TELEPORT_BLOCKS: float = 2.0
 """A position change larger than this in one tick is not movement (a respawn or a teleport) [E]."""
 _NEVER: int = -1_000_000
@@ -209,7 +209,8 @@ def _block(valid, kind, other, amount, detail, world, inferred):
             jnp.broadcast_to(jnp.asarray(inferred, jnp.bool_), shape))
 
 
-def update(state: EventState, observed: Observed, reset: jax.Array | None = None) -> EventState:
+def update(state: EventState, observed: Observed, reset: jax.Array | None = None,
+           tick_seconds: float = clock.DEFAULT_TICK_SECONDS) -> EventState:
     """The state after this tick (module docstring). Lanes where ``reset`` bool[B] is True start from
     :func:`initial_events` first; then the detectors run on ``state.last`` against ``observed``, their events enter the
     ring, the counters add, and ``observed`` becomes ``last``."""
@@ -235,7 +236,7 @@ def update(state: EventState, observed: Observed, reset: jax.Array | None = None
     same = (ids[:, :, None] == last.entity_ids[:, None, :]) & (ids[:, :, None] >= 0)
     dealt_drop = jnp.take_along_axis(last.entity_health, jnp.argmax(same, axis=2), axis=1) - observed.entity_health
     dealt = (seen[:, None] & jnp.any(same, axis=2) & (dealt_drop > 0.0)
-             & ((now - last_attack)[:, None] <= DEALT_WINDOW_TICKS)
+             & ((now - last_attack)[:, None] <= clock.about(DEALT_WINDOW_SECONDS, tick_seconds))
              & (observed.entity_distance <= THREAT_REACH_BLOCKS))
     dealt_amount = jnp.where(dealt, dealt_drop, 0.0)
 
@@ -325,5 +326,5 @@ def recent(state: EventState, count: int) -> Recent:
                   log.detail[rows, slots], log.world[rows, slots], log.inferred[rows, slots], kind >= 0)
 
 
-__all__ = ["COUNTERS", "DEALT_WINDOW_TICKS", "EVENT_KINDS", "EVENT_SLOTS", "EventLog", "EventState", "MOVES",
+__all__ = ["COUNTERS", "DEALT_WINDOW_SECONDS", "EVENT_KINDS", "EVENT_SLOTS", "EventLog", "EventState", "MOVES",
            "OUTCOME_SLOTS", "Observed", "Recent", "TELEPORT_BLOCKS", "initial_events", "recent", "update"]

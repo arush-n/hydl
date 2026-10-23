@@ -32,7 +32,7 @@ and the persona's gain ``g_S = exp(negative_emotionality / 2)``. Its impulse is 
 - ``P = 1 + fear``: fear-potentiated startle, so a threat the agent has been watching raises its startle through alarm
   (20.6; Grillon et al. 1991). ``fear`` is last tick's;
 - ``E = 1 - PREPULSE_INHIBITION cue``: expectation, prepulse inhibition (about 65% in healthy people, 20.6). ``cue``
-  is 1 when the last warning onset came ``PREPULSE_MIN_TICKS`` to ``PREPULSE_MAX_TICKS`` ticks (30 to 500 ms) ago. A
+  is 1 when the last warning onset came ``PREPULSE_MIN_SECONDS`` to ``PREPULSE_MAX_SECONDS`` (30 to 500 ms) ago. A
   warning is a visible hostile in its windup within ``THREAT_REACH_BLOCKS``, or a hostile projectile on course; its
   onset is the first tick it shows. A threat seen for longer does not inhibit: it raises alarm, which potentiates;
 - ``H = 1 / (1 + n)``: habituation to repeats, ``n`` the recent impulses, recovering with ``TAU_HABITUATION`` [E] (20.6:
@@ -84,6 +84,7 @@ import jax.numpy as jnp
 
 from experimental.neural_agent.skill_agent.contract import tokens_v3 as v3
 from experimental.neural_agent.skill_agent.contract.surface import ATTACK_PHASES
+from experimental.neural_agent.skill_agent.state import clock
 from experimental.neural_agent.skill_agent.state.senses import (
     APPROACH_DISTANCE_BLOCKS,
     APPROACH_HORIZON_SECONDS,
@@ -92,8 +93,6 @@ from experimental.neural_agent.skill_agent.state.senses import (
 from experimental.neural_agent.skill_agent.state.frames import POSITION_SCALE_BLOCKS
 from experimental.neural_agent.skill_agent.state.persona import big_five, trait
 
-DT_SECONDS: float = 0.045
-"""One gen-7 simulator tick."""
 TAU_FEAR_RISE, TAU_FEAR_DECAY = 0.3, 6.0
 TAU_ANGER, TAU_STARTLE, TAU_VALENCE, TAU_COPING, TAU_MOOD = 12.0, 1.2, 8.0, 2.0, 180.0
 TAU_HOSTILITY, TAU_FEAR_MEMORY, TAU_TRUST = 600.0, 900.0, 1800.0
@@ -103,8 +102,8 @@ DAMAGE_GAIN: float = 4.0
 """Impulse per unit of my maximum health lost (a hit taking 10% gives an impulse of 0.4) [E]."""
 PREPULSE_INHIBITION: float = 0.65
 """How much a warning lowers a startle that comes 30 to 500 ms after it (20.6: about 65% in healthy people)."""
-PREPULSE_MIN_TICKS, PREPULSE_MAX_TICKS = 1, 11
-"""That window in ticks: 30 to 500 ms at 0.045 s a tick (20.6; leads of 2 to 4.5 s facilitate instead)."""
+PREPULSE_MIN_SECONDS, PREPULSE_MAX_SECONDS = 0.03, 0.5
+"""That window in seconds: 30 to 500 ms (20.6; leads of 2 to 4.5 s facilitate instead)."""
 TAU_HABITUATION: float = 120.0
 """Seconds for a startle's habituation to recover [E] (20.6: no source gives the recovery time in humans)."""
 NO_WARNING_TICKS: int = 1_000_000
@@ -239,11 +238,12 @@ def _darkness(perceived: Perceived) -> jax.Array:
 
 
 def update(affect: AffectState, perceived: Perceived, persona: jax.Array, reset: jax.Array | None = None,
-           dt: float = DT_SECONDS, respawn: jax.Array | None = None) -> AffectState:
+           tick_seconds: float = clock.DEFAULT_TICK_SECONDS, respawn: jax.Array | None = None) -> AffectState:
     """The emotional state after this tick's perception (module docstring). Lanes where ``reset`` bool[B] is True start
     from :func:`initial_affect` first. Lanes where ``respawn`` bool[B] is True (16.2) start their alarm and startle
-    over at the start of the tick, and keep everything else."""
+    over at the start of the tick, and keep everything else. ``tick_seconds``: the world's tick (section 27)."""
 
+    dt = tick_seconds
     if reset is not None:
         fresh = initial_affect(persona)
         affect = jax.tree_util.tree_map(
@@ -318,7 +318,8 @@ def update(affect: AffectState, perceived: Perceived, persona: jax.Array, reset:
                       & (distance <= THREAT_REACH_BLOCKS), axis=1)
     warning = warning | jnp.any(projectile_valid & on_course & (projectiles[..., _P["hostile"]] > 0), axis=1)
     since = jnp.minimum(affect.since_warning + 1, NO_WARNING_TICKS)  # ticks since the last onset, this tick included
-    cue = (since >= PREPULSE_MIN_TICKS) & (since <= PREPULSE_MAX_TICKS)
+    cue = ((since >= clock.at_least(PREPULSE_MIN_SECONDS, tick_seconds))
+           & (since <= clock.at_most(PREPULSE_MAX_SECONDS, tick_seconds)))
     since_warning = jnp.where(warning & ~affect.warned, 0, since)
     # The startle (15.5; module docstring): the damage now, times fear potentiation, expectation (prepulse inhibition),
     # habituation, the unseen doubling and darkness. The calm no longer raises it.
@@ -386,5 +387,5 @@ def feelings_for(affect: AffectState, ids: jax.Array) -> jax.Array:
     return jnp.einsum("bnk,bkf->bnf", match.astype(jnp.float32), affect.feelings)
 
 
-__all__ = ["AffectState", "DT_SECONDS", "ENTITY_SLOTS", "affect_features", "anger", "feelings_for",
+__all__ = ["AffectState", "ENTITY_SLOTS", "affect_features", "anger", "feelings_for",
            "initial_affect", "mood_baseline", "update"]

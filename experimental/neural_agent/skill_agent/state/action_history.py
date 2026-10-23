@@ -16,12 +16,14 @@ import jax.numpy as jnp
 import numpy as np
 
 from experimental.neural_agent.skill_agent.contract.surface import head_layout
+from experimental.neural_agent.skill_agent.state import clock
 
 HEADS = tuple(head_layout("gen7"))
 HEAD_SIZES = np.asarray([head.size for head in HEADS], np.int32)
 HEAD_NEUTRAL = np.asarray([head.neutral for head in HEADS], np.int32)
-HELD_HORIZON_TICKS: int = 90
-"""``held_ticks`` saturates here (3 s at 30 Hz): log1p(ticks) / log1p(90), clipped to 1."""
+HELD_HORIZON_SECONDS: float = 4.05
+"""``held_ticks`` saturates here, in seconds (4.05 s, 90 ticks at 0.045 s): log1p(ticks) / log1p(horizon), clipped to
+1 (section 27)."""
 
 
 class ActionHistory(NamedTuple):
@@ -53,7 +55,7 @@ def update_history(history: ActionHistory, factors: jax.Array, reset: jax.Array 
     return ActionHistory(factors, changed, jnp.minimum(held, 1 << 20))
 
 
-def act_features(history: ActionHistory) -> jax.Array:
+def act_features(history: ActionHistory, tick_seconds: float = clock.DEFAULT_TICK_SECONDS) -> jax.Array:
     """The ``act`` token rows float32[B, 21, 26] (``contract/tokens_v3.ActTokenV3``): the head's one-hot, the choice
     as a fraction of its choices, neutral, changed, held ticks, marked 0."""
 
@@ -62,11 +64,12 @@ def act_features(history: ActionHistory) -> jax.Array:
     one_hot = jnp.broadcast_to(jnp.eye(heads, dtype=jnp.float32), (batch, heads, heads))
     fraction = history.last_choice / jnp.maximum(jnp.asarray(HEAD_SIZES) - 1, 1)
     neutral = history.last_choice == jnp.asarray(HEAD_NEUTRAL)
-    held = jnp.minimum(jnp.log1p(history.held_ticks.astype(jnp.float32)) / np.log1p(HELD_HORIZON_TICKS), 1.0)
+    held = jnp.minimum(jnp.log1p(history.held_ticks.astype(jnp.float32))
+                       / np.log1p(clock.about(HELD_HORIZON_SECONDS, tick_seconds)), 1.0)
     columns = jnp.stack((fraction.astype(jnp.float32), neutral.astype(jnp.float32),
                          history.changed.astype(jnp.float32), held, jnp.zeros_like(held)), axis=-1)
     return jnp.concatenate((one_hot, columns), axis=-1)
 
 
-__all__ = ["HEADS", "HEAD_NEUTRAL", "HEAD_SIZES", "HELD_HORIZON_TICKS", "ActionHistory", "act_features",
+__all__ = ["HEADS", "HEAD_NEUTRAL", "HEAD_SIZES", "HELD_HORIZON_SECONDS", "ActionHistory", "act_features",
            "initial_history", "update_history"]

@@ -34,14 +34,13 @@ import jax
 import jax.numpy as jnp
 
 from experimental.neural_agent.skill_agent.state import affect as feeling
-from experimental.neural_agent.skill_agent.state import events
+from experimental.neural_agent.skill_agent.state import clock, events
 
 SOCIAL_SLOTS: int = 150
 """The records per agent: Dunbar's outer layer (section 26.2, 15.3); a capacity, not an estimate."""
 MEETING_GAP_SECONDS: float = 60.0
-"""Unseen this long, and the next sighting is a new meeting [E] (section 26.2)."""
-GAP_TICKS: int = round(MEETING_GAP_SECONDS / feeling.DT_SECONDS)
-"""``MEETING_GAP_SECONDS`` in ticks: 1333 at 0.045 s a tick."""
+"""Unseen this long, and the next sighting is a new meeting [E] (section 26.2); turned into ticks by the world's tick
+(section 27)."""
 STARTED: tuple[str, ...] = ("me", "them", "both")
 """Who struck first in the current meeting: ``started`` holds -1 (no blow yet this meeting) or an index here."""
 CLOSENESS_EDGES: tuple[float, ...] = (1 / 6, 1 / 3, 1 / 2)
@@ -128,7 +127,8 @@ def lookup(state: SocialState, ids: jax.Array) -> jax.Array:
 
 
 def update(state: SocialState, seen_ids: jax.Array, seen_world: jax.Array | None, seen_chance: jax.Array,
-           logged: events.EventState, written_ids: jax.Array, reset: jax.Array | None = None) -> SocialState:
+           logged: events.EventState, written_ids: jax.Array, reset: jax.Array | None = None,
+           tick_seconds: float = clock.DEFAULT_TICK_SECONDS) -> SocialState:
     """The table after this tick (module docstring).
 
     A blow from it during a chance, on the tick the chance opens included, takes the chance: only an unhit one counts.
@@ -143,6 +143,7 @@ def update(state: SocialState, seen_ids: jax.Array, seen_world: jax.Array | None
             are the ring entries stamped with it.
         written_ids: int32[B, K], the keys of the live written entity entries (-1 padding): their records are kept.
         reset: bool[B], the lanes that start empty first (an episode boundary). A respawn changes nothing.
+        tick_seconds: The world's tick (section 27), which turns ``MEETING_GAP_SECONDS`` into ticks.
     """
 
     batch, slots = state.records.key_id.shape
@@ -155,7 +156,7 @@ def update(state: SocialState, seen_ids: jax.Array, seen_world: jax.Array | None
     # Sightings, in parallel: each record perceived this tick is matched by its id.
     match = _match(rec, seen_ids)  # bool[B, N, S]
     seen = jnp.any(match, axis=1)  # bool[B, S]
-    new_meeting = seen & (now - rec.last > GAP_TICKS)
+    new_meeting = seen & (now - rec.last > clock.about(MEETING_GAP_SECONDS, tick_seconds))
     if seen_world is None:
         world, world_known = rec.world, rec.world_known
     else:
@@ -244,6 +245,6 @@ def space_target(closeness: jax.Array, hostility: jax.Array, fear: jax.Array) ->
     return zone + (SPACE_PUBLIC_BLOCKS - zone) * h
 
 
-__all__ = ["CLOSENESS_EDGES", "GAP_TICKS", "MEETING_GAP_SECONDS", "Records", "SOCIAL_SLOTS", "SPACE_PUBLIC_BLOCKS",
+__all__ = ["CLOSENESS_EDGES", "MEETING_GAP_SECONDS", "Records", "SOCIAL_SLOTS", "SPACE_PUBLIC_BLOCKS",
            "SPACE_SCALE_BLOCKS", "SPACE_ZONES", "SPARE_FACING_DEGREES", "SPARE_REACH_BLOCKS", "STARTED", "SocialState",
            "initial_social", "lookup", "space_target", "update"]

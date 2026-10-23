@@ -35,7 +35,7 @@ from experimental.neural_agent.skill_agent.model.generalist import ARG_GROUPS, G
 from experimental.neural_agent.skill_agent.model.skill_module import SkillModule, Trunk, check_trunk, module_outputs
 from experimental.neural_agent.skill_agent.runtime.combiner import AgentContext, BodyStep
 from experimental.neural_agent.skill_agent.contract.tokens_v3 import CAPACITIES_V3, EntityTokenV3
-from experimental.neural_agent.skill_agent.state import layer
+from experimental.neural_agent.skill_agent.state import clock, layer
 from experimental.neural_agent.skill_agent.state.action_history import HEAD_NEUTRAL
 from experimental.neural_agent.skill_agent.state.written import Write, lower
 from experimental.neural_agent.skill_agent.training.blocks import HEAD_NAMES, HEAD_SIZES, HEAD_STARTS, NEUTRAL
@@ -51,12 +51,15 @@ class StateView(NamedTuple):
 
 
 def tick(trunk: Trunk, state: layer.AgentState, observation: Any, *, last_action: jax.Array,
-         reset: jax.Array | None = None, **step: Any) -> tuple[StateView, layer.AgentState]:
+         reset: jax.Array | None = None, tick_seconds: float = clock.DEFAULT_TICK_SECONDS, **step: Any
+         ) -> tuple[StateView, layer.AgentState]:
     """One tick for B agents: ``layer.step`` (``step`` takes its keyword arguments: ``writes``, ``capacities`` and the
     senses' inputs), then the trunk on its tokens. A lane that ``reset`` starts its latent memory and its background
-    summary from the trunk's initial slots (its stores, object latents included, start empty in ``layer.step``)."""
+    summary from the trunk's initial slots (its stores, object latents included, start empty in ``layer.step``).
+    ``tick_seconds`` is the world's tick (section 27): gen 7's by default, ``clock.GEN5_TICK_SECONDS`` on gen 5."""
 
-    tokens, state = layer.step(observation, state, last_action=last_action, reset=reset, **step)
+    tokens, state = layer.step(observation, state, last_action=last_action, reset=reset,
+                               tick_seconds=tick_seconds, **step)
     batch = state.entity_ids.shape[0]
     latent = _carried(state.latent, initial_memory(trunk.params, trunk.config, batch), reset)
     background = _carried(state.background, initial_background(trunk.params, trunk.config, batch), reset)
@@ -79,7 +82,7 @@ _ENTITY = {name: index for index, name in enumerate(EntityTokenV3.FEATURES)}
 _ATTITUDES = ("ignore", "hostile", "neutral", "friendly", "revered")
 
 
-def known_entities(state: layer.AgentState, own_position: Any = None, dt_seconds: float = 0.045
+def known_entities(state: layer.AgentState, own_position: Any = None, dt_seconds: float = clock.DEFAULT_TICK_SECONDS
                    ) -> list[list[dict[str, Any]]]:
     """Each lane's known entities, for the shared scratchpad (host side, at a decision; the owner's ruling of
     2026-10-22: the decision layer names entities by the ids this layer perceives). Read from the entity store

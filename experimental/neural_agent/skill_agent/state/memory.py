@@ -38,6 +38,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from experimental.neural_agent.skill_agent.contract import tokens_v3 as v3
+from experimental.neural_agent.skill_agent.state import clock
 from experimental.neural_agent.skill_agent.state.senses import (
     ENTITY_CENTRE_HEIGHT,
     Perceived,
@@ -54,8 +55,9 @@ from experimental.neural_agent.skill_agent.state.frames import (
 GEOMETRY_SLOTS: int = v3.REMEMBERED_GEOMETRY_CELLS
 ENTITY_SLOTS: int = 16
 BLOCK_SLOTS: int = v3.CAPACITIES_V3["block_candidate"] - 16
-HORIZON_TICKS: int = 1800
-"""``age`` saturates here (60 s at 30 Hz)."""
+HORIZON_SECONDS: float = 81.0
+"""``age``, and the recency that the salience score trades against, saturate here: 81 s, 1800 ticks at 0.045 s
+(section 27)."""
 SAME_CELL_BLOCKS: float = 0.25
 """Two positions closer than this on every axis are the same cell."""
 _PINNED, _FREE = 1e9, -1e9
@@ -132,7 +134,7 @@ def no_tags(batch: int, slots: int = 1) -> Tags:
                 jnp.zeros((batch, slots), jnp.bool_), jnp.zeros((batch, slots), jnp.float32))
 
 
-def _upsert(store: Store, rows, valid, world, key_id, salience, now, by_id: bool) -> Store:
+def _upsert(store: Store, rows, valid, world, key_id, salience, now, by_id: bool, horizon: int) -> Store:
     """Write N candidate rows into one agent's store (vmapped over agents) in one parallel pass (2026-10-22,
     ``docs/VIRTUAL_HUMAN.md`` section 18.4: the serial write's cost grew with the rows a tick can carry and the store's
     size, not with how many are seen; on real Region rows this one is 6 to 8 times faster).
@@ -158,7 +160,7 @@ def _upsert(store: Store, rows, valid, world, key_id, salience, now, by_id: bool
     fresh = live & ~known
     refreshed = jnp.any(same & known[:, None], axis=0)
     score = jnp.where(~store.valid, _FREE, jnp.where(store.tag > 0, _PINNED,
-                                                     store.salience * HORIZON_TICKS - (now - store.tick)))
+                                                     store.salience * horizon - (now - store.tick)))
     score = jnp.where(refreshed, _PINNED, score)
     slots = jnp.argsort(score, stable=True)  # the slots new candidates take, in order
     room = jnp.sum(score < _PINNED)
@@ -218,10 +220,11 @@ def _tagged(store: Store, tags: Tags, by_id: bool) -> jax.Array:
 
 
 def update(memory: SpatialMemory, perceived: Perceived, tags: Tags | None = None,
-           reset: jax.Array | None = None) -> SpatialMemory:
+           reset: jax.Array | None = None, tick_seconds: float = clock.DEFAULT_TICK_SECONDS) -> SpatialMemory:
     """The stores after this tick: lanes where ``reset`` bool[B] is True start empty; the clock advances; this tick's
     perceived geometry, entities and block candidates are written; the live tags are applied (an unseen tagged place
-    becomes a placeholder block row). Without the agent's position the stores are returned unchanged but the clock."""
+    becomes a placeholder block row). Without the agent's position the stores are returned unchanged but the clock.
+    ``tick_seconds`` is the world's tick (section 27), which sets the horizon in ticks."""
 
     batch = memory.now.shape[0]
     if reset is not None:
@@ -234,7 +237,8 @@ def update(memory: SpatialMemory, perceived: Perceived, tags: Tags | None = None
     pose = perceived.pose
     if pose.position is None:
         return memory._replace(now=now)
-    upsert = jax.vmap(_upsert, in_axes=(0, 0, 0, 0, 0, 0, 0, None))
+    horizon = clock.about(HORIZON_SECONDS, tick_seconds)
+    upsert = jax.vmap(_upsert, in_axes=(0, 0, 0, 0, 0, 0, 0, None, None))
     stores = {}
     for name, key in (("geometry", "geometry"), ("entity", "entity"), ("block", "block_candidate")):
         found = perceived.rows.get(key)
@@ -246,7 +250,7 @@ def update(memory: SpatialMemory, perceived: Perceived, tags: Tags | None = None
             salience = _salience(name, rows)
             world = _world_of(rows, pose)
             rows = _turn(rows, key, pose.body_yaw, to_world=True)
-            store = upsert(store, rows, valid, world, ids, salience, now, name == "entity")
+            store = upsert(store, rows, valid, world, ids, salience, now, name == "entity", horizon)
         stores[name] = store
     if tags is not None:
         stores["entity"] = stores["entity"]._replace(tag=_tagged(stores["entity"], tags, True))
@@ -259,7 +263,7 @@ def update(memory: SpatialMemory, perceived: Perceived, tags: Tags | None = None
         # about a quarter of the update at batch 64 (docs/VIRTUAL_HUMAN.md 19.8).
         block = jax.lax.cond(jnp.any(unseen), lambda b: upsert(b, placeholder, unseen, tags.world,
                                                                 jnp.full(unseen.shape, -1, jnp.int32),
-                                                                jnp.ones(unseen.shape, jnp.float32), now, False),
+                                                                jnp.ones(unseen.shape, jnp.float32), now, False, horizon),
                              lambda b: b, block)
         stores["block"] = block._replace(tag=_tagged(block, tags, False))
     return SpatialMemory(now, stores["geometry"], stores["entity"], stores["block"])
@@ -297,12 +301,13 @@ def object_slots(memory: SpatialMemory, tokens: dict, entity_ids: jax.Array, pos
     return out
 
 
-def read(memory: SpatialMemory, pose: Pose) -> Remembered | None:
+def read(memory: SpatialMemory, pose: Pose, tick_seconds: float = clock.DEFAULT_TICK_SECONDS) -> Remembered | None:
     """Every stored row not perceived this tick, in the current body frame (module docstring); None without the
-    agent's position."""
+    agent's position. ``tick_seconds``: the world's tick (section 27), which sets the age horizon in ticks."""
 
     if pose.position is None:
         return None
+    horizon = clock.about(HORIZON_SECONDS, tick_seconds)
     out = {}
     for name, key in (("entity", "entity"), ("geometry", "geometry"), ("block", "block_candidate")):
         store = getattr(memory, name)
@@ -310,7 +315,7 @@ def read(memory: SpatialMemory, pose: Pose) -> Remembered | None:
         rows = _turn(store.rows, key, pose.body_yaw, to_world=False)
         rows = rows.at[..., :len(v3.WHERE_FEATURES)].set(where_of(body, pose, _REFERENCE_HEIGHT[key]))
         columns = _COLUMNS[key]
-        age = jnp.minimum(jnp.log1p((memory.now[:, None] - store.tick).astype(jnp.float32)) / np.log1p(HORIZON_TICKS),
+        age = jnp.minimum(jnp.log1p((memory.now[:, None] - store.tick).astype(jnp.float32)) / np.log1p(horizon),
                           1.0)
         rows = rows.at[..., columns["remembered"]].set(1.0).at[..., columns["age"]].set(age)
         rows = rows.at[..., columns["tagged"]].set(store.tag)
@@ -321,6 +326,6 @@ def read(memory: SpatialMemory, pose: Pose) -> Remembered | None:
     return Remembered(out["entity"], out["geometry"], out["block_candidate"])
 
 
-__all__ = ["BLOCK_SLOTS", "ENTITY_SLOTS", "GEOMETRY_SLOTS", "HORIZON_TICKS", "SAME_CELL_BLOCKS", "SpatialMemory",
+__all__ = ["BLOCK_SLOTS", "ENTITY_SLOTS", "GEOMETRY_SLOTS", "HORIZON_SECONDS", "SAME_CELL_BLOCKS", "SpatialMemory",
            "object_slots",
            "Store", "Tags", "initial_memory", "no_tags", "read", "update"]

@@ -25,7 +25,7 @@ import numpy as np
 
 from experimental.neural_agent.skill_agent.contract import variables
 from experimental.neural_agent.skill_agent.state import affect as feeling
-from experimental.neural_agent.skill_agent.state import events, layer, registry, social, written
+from experimental.neural_agent.skill_agent.state import clock, events, layer, registry, social, written
 from experimental.neural_agent.skill_agent.state.frames import world_to_body
 from experimental.neural_agent.skill_agent.state.places import PLACE_KINDS
 
@@ -152,7 +152,7 @@ def _people(state: layer.AgentState, lane: int, here: Any, yaw: Any, clock: int,
 
 
 def facts(state: layer.AgentState, lane: int, *, own_position: Any = None, body_yaw_degrees: Any = None,
-          dt_seconds: float = 0.045) -> dict[str, Any]:
+          dt_seconds: float = clock.DEFAULT_TICK_SECONDS) -> dict[str, Any]:
     """One lane's state as facts (the module docstring), JSON-safe.
 
     Args:

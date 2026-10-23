@@ -569,7 +569,7 @@ approach. Missing:
 | 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry (with it the status token's identity: which effect, its source entity, its damage cause, all in the observation and dropped today; `PERCEPTION.md` section 10.5), places, the proficiencies. First part DESIGNED and APPROVED 2026-10-22; BUILT (section 24.7: status identity, places, events) | 11.1 to 11.4, 11.6, 16.6, 17.8, 24 |
 | 8 | The formatted views (typed facts, words) and the recording. DESIGNED and APPROVED 2026-10-22; BUILT (section 25.6: the facts, the words, the recording) | 10.3, 10.9, 25 |
 | 9 | The social section (approved, 15.3). DESIGNED and APPROVED 2026-10-22 (section 26, with the rulings of 26.5); BUILT 2026-10-23 (section 26.7: the relationship the decision layer writes, the interaction facts, `spared`, personal space, the people in the views and the recording) | 12, 15.3, 26 |
-| T | The world's tick length: every state-layer constant in seconds, one tick length per world (found by the coordinator, 2026-10-23). DESIGNED and APPROVED 2026-10-23 (section 27); built after step 9 | 27 |
+| T | The world's tick length: every state-layer constant in seconds, one tick length per world (found by the coordinator, 2026-10-23). DESIGNED and APPROVED 2026-10-23 (section 27); BUILT 2026-10-23 (section 27.7: `state/clock.py`, `tick_seconds` on `layer.step` and `state_tick.tick`; gen 5 unchanged column for column) | 27 |
 | W | World interaction: breaking, placing, using, picking up, and the commands (crafting, tools, items); the perception of break progress and items on the ground. DESIGNED and APPROVED 2026-10-22 (section 23); the perception follows the simulator's asks, the skills train when training resumes | 23 |
 
 Every step is measured first with 2 agents, then scaled up (16.3).
@@ -2519,9 +2519,10 @@ Every rule stated in seconds counts ticks of 0.045 s. On gen 7, whose ticks are 
   `PREPULSE_MIN_SECONDS = 0.03`, `PREPULSE_MAX_SECONDS = 0.5`, `HORIZON_SECONDS = 81`, `HELD_HORIZON_SECONDS = 4.05`,
   `MEETING_GAP_SECONDS = 60`, ...).
 - **The state layer takes the world's tick length once,** as a static `tick_seconds` keyword of `layer.step` and
-  `runtime/state_tick.tick`, passed down to every rule (the initial state holds nothing that depends on it). Windows become ticks at trace time: a lower
-  bound rounds up, an upper bound rounds down, a duration rounds to nearest (at 0.045 s every one gives today's tick
-  count, so gen 5 is unchanged); fades use `exp(-tick_seconds / tau)`.
+  `runtime/state_tick.tick`, passed down to every rule (the initial state holds nothing that depends on it).
+  Windows become ticks at trace time: a lower bound rounds up, an upper bound rounds down, a duration rounds to
+  nearest (at 0.045 s every one gives today's tick count, so gen 5 is unchanged); fades use
+  `exp(-tick_seconds / tau)`.
 - **Where the value comes from:** `contract.surface.tick_seconds(layout)`, which the runtime already uses (1/30 s on
   gen 7, 0.045 s on gen 5). Live passes the session's measured mean tick (`engine_mean_delta_seconds`). The default is
   gen 7's, the default line; a gen-5 caller passes 0.045.
@@ -2557,6 +2558,56 @@ Every rule stated in seconds counts ticks of 0.045 s. On gen 7, whose ticks are 
   not re-checked).
 - The tick lengths are the project's own measurements: `contract/surface.py` (1/30 s, the owner's 30 Hz ruling) and
   the coordinator's live window (0.037 s mean, FIDELITY (aq)).
+
+### 27.7 Built (2026-10-23), and how it was checked
+
+What was built is 27.2. A Haiku subagent wrote it in its own worktree from a written spec, before step 9 had landed;
+it was merged onto step 9 here (two conflicts, both step 9's lines kept with the tick length added), the meeting gap
+of `state/social.py` moved to the clock by hand, and the whole re-checked.
+- `state/clock.py` (new): `DEFAULT_TICK_SECONDS` (1/30 s) and `GEN5_TICK_SECONDS` (0.045 s) from
+  `contract.surface.tick_seconds`; `at_least` (a lower bound, rounded up, at least one tick), `at_most` (an upper bound,
+  rounded down), `about` (a duration, rounded to nearest), `fade` (`exp(-tick_seconds / tau)`).
+- In seconds now: `PREPULSE_MIN_SECONDS`, `PREPULSE_MAX_SECONDS` (`affect.py`, 0.03 and 0.5); `STAY_SECONDS`
+  (`places.py`, 10), the place and route fades; `DEALT_WINDOW_SECONDS` (`events.py`, 0.18); `HORIZON_SECONDS`
+  (`memory.py`, 81, the age and the recency the salience trades against); `HELD_HORIZON_SECONDS`
+  (`action_history.py`, 4.05); `EVENT_AGE_HORIZON_SECONDS` (81) and `PLACE_SINCE_HORIZON_SECONDS` (45,000)
+  (`layer.py`); the meeting gap (`social.py`, 60). `affect.DT_SECONDS` and `places.DT_SECONDS` are gone.
+- `layer.step(..., tick_seconds=)` and `runtime/state_tick.tick(..., tick_seconds=)`: a static float, gen 7's by
+  default, passed to every rule above; `views.facts` and `state_tick.known_entities` default `dt_seconds` to gen 7's.
+- Callers: the two bench wrappers (`bench/encoding_audit.py`, `bench/live_encoding.py`) run gen-7 worlds and keep the
+  default. One caller is the coordinator's (`shared_state/skill_writes.py`): its binding holds a `tick_seconds` (0.045
+  by default) that reaches `known_entities` but not `step_lanes`, so until it passes it on, a gen-5 host runs the
+  layer at gen 7's tick while reporting ages at gen 5's (found by the builder; the note to the coordinator is pending).
+- The rules' own functions (`places.update`, `events.update`, `memory.update` and `read`, `act_features`) also
+  default to gen 7's tick; `layer.step` always passes it. Making them required would fail loudly on a forgotten
+  caller; left as defaults for now, a follow-up if a direct caller appears.
+
+At 1/30 s the counts become: the prepulse window 1 to 15 ticks, a stay 300, the dealt window 5, the memory horizon
+2430, the held horizon 122, the place-since horizon 1,350,000, the meeting gap 1800.
+
+Checks:
+- **Gen 5 unchanged:** with `tick_seconds=0.045`, every one of the 1,713 token and state columns (the social and
+  written state included) is identical to e07ea65's over 200 Region ticks and 60 duel ticks (the column probe of
+  26.7, run old against new).
+- **What moves at 1/30 s,** on the same runs: only what counts time. The affect state and its tokens, the rule's
+  feelings (`feel_*`, and `space_target`, which reads the rule's hostility), `held_ticks` and the events' ages;
+  on Region also the stores' ages and the places' strength and time since a visit (30 of the 1,713 columns on
+  Region, 24 on the duel). Positions, ids, what the stores hold, the events and the social facts do not move.
+- **Gen 7 right in seconds** (`test_sa_state_clock.py`): fear left alone falls by 1/e in its 6 s time constant, 180
+  ticks at 1/30 s; a stay forms after 300 ticks (10 s); a warning cuts the startle of a hit 1 to 15 ticks later
+  (33 to 500 ms) and not 16 ticks later; the meeting gap is 1800 ticks (`test_sa_social.py`).
+- **Tests changed, and why:** the tests whose expected numbers were counted in gen-5 ticks pass
+  `clock.GEN5_TICK_SECONDS` and keep their numbers: `test_sa_state_affect.py` (its rules' tick counts),
+  `test_sa_state_memory.py` (the age horizon), `test_sa_state_places.py` (the stay and the fade),
+  `test_sa_tokens_step7.py` (an event's age), `test_sa_state_tick.py` and `test_sa_state_views.py` (ages read in
+  seconds; these two run the duel, whose tick is 1/30 s, and keep 0.045 only for their expected numbers);
+  `test_sa_state_memory_write.py` passes the horizon `_upsert` now takes; `test_sa_state_step3.py`'s `dt=600` is
+  `tick_seconds=600`. `test_sa_state_clock.py` (new) holds the conversions at both tick lengths and the gen-7 checks;
+  `test_sa_social.py` checks the meeting gap at both (1800 and 1333 ticks).
+- **The gate** (two passes, against the baseline taken at 6acadad): pass 1, 5 failed and 6 errors, the same 11
+  names, and 1,480 passed (step 9's 1,466, the 5 clock tests, the 2 meeting-gap cases and the sound registry's 7,
+  whose test this tree now carries); pass 2, 19 failed and 11 errors, the same 30 names. The builder's own run on
+  the tick change alone (before the merge, at 05fac28) gave the same failing names, 1,408 passed against 1,403.
 
 ## 28. Step 6: hearing, as far as today's inputs allow (DESIGNED and APPROVED 2026-10-23, with the ruling of 28.5)
 

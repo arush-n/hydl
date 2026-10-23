@@ -10,12 +10,12 @@ place to another, with its best and last travel time in ticks, how often it was 
 
 Each tick :func:`update` runs these steps for each agent, in this order (the module's rules, 22.2):
 
-1. **fading:** an unmarked place loses strength as ``s <- s exp(-DT / TAU_PLACE)``, a route as ``s <- s exp(-DT /
-   TAU_ROUTE)``. A mark never fades (19.7). Routes fade more slowly than places: landmark knowledge decays while route
+1. **fading:** an unmarked place loses strength as ``s <- s exp(-tick_seconds / TAU_PLACE)``, a route as ``s <- s
+   exp(-tick_seconds / TAU_ROUTE)``. A mark never fades (19.7). Routes fade more slowly than places: landmark knowledge decays while route
    knowledge holds better (22.6).
 2. **stays:** the anchor is the agent's position when it has none or has moved more than ``STAY_BLOCKS`` from it, and
    the clock starts there. A stay is made once the agent has stayed within ``STAY_BLOCKS`` of its anchor for
-   ``STAY_TICKS``: stay-point detection (22.6), scaled to a game.
+   ``STAY_SECONDS``: stay-point detection (22.6), scaled to a game.
 3. **revisits:** the place the agent is within (the nearest within ``MERGE_BLOCKS``) that existed before this tick, and
    that the agent was not inside last tick, restores its strength to at least ``REVISIT_STRENGTH`` and counts a visit.
    A place this tick forms is a first visit, not a revisit.
@@ -54,12 +54,13 @@ environments (the differentiated forgetting rates of HAL hal-01440576; Bournemou
 
 from __future__ import annotations
 
-import math
+import functools
 from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
 
+from experimental.neural_agent.skill_agent.state import clock
 from experimental.neural_agent.skill_agent.state.frames import world_to_body
 
 PLACE_SLOTS: int = 128
@@ -72,8 +73,8 @@ MERGE_BLOCKS: float = 4.0
 """Two positions within this many blocks are the same place [E] (22.2)."""
 STAY_BLOCKS: float = 3.0
 """A stay keeps the agent within this many blocks of its anchor [E] (22.6)."""
-STAY_TICKS: int = 222
-"""A stay lasts this many ticks: 10 s at 0.045 s a tick [E]."""
+STAY_SECONDS: float = 10.0
+"""How long a stay lasts, in seconds [E] (22.6: stay-point detection's dwell time, scaled to a game)."""
 STAY_STRENGTH: float = 0.5
 """The strength of a stay's place [E]."""
 FIND_STRENGTH: float = 0.6
@@ -84,11 +85,7 @@ TAU_PLACE_SECONDS: float = 1800.0
 """The fading time constant of an unmarked place, in seconds [E]."""
 TAU_ROUTE_SECONDS: float = 3600.0
 """The fading time constant of a route, in seconds [E]: routes fade more slowly than places (22.6)."""
-DT_SECONDS: float = 0.045
-"""One tick, in seconds."""
 _KIND = {name: index for index, name in enumerate(PLACE_KINDS)}
-_FADE_PLACE = math.exp(-DT_SECONDS / TAU_PLACE_SECONDS)
-_FADE_ROUTE = math.exp(-DT_SECONDS / TAU_ROUTE_SECONDS)
 _CANDIDATE_FIXED = 4
 """The candidates before the marks: the stay, the danger, the death and the find."""
 
@@ -176,21 +173,24 @@ def _nearest(world: jax.Array, valid: jax.Array, point: jax.Array) -> jax.Array:
 
 
 def _tick(state: PlaceState, position: jax.Array, has_position: jax.Array, danger: jax.Array, alarm: jax.Array,
-          find: jax.Array, respawned: jax.Array, marks_world: jax.Array, marks_live: jax.Array) -> PlaceState:
+          find: jax.Array, respawned: jax.Array, marks_world: jax.Array, marks_live: jax.Array, *,
+          tick_seconds: float) -> PlaceState:
     """One agent's tick, in the order of the module docstring (:func:`update` vmaps it over the batch)."""
 
     now = state.now + 1
     places, routes = state.places, state.routes
-    places = places._replace(strength=jnp.where(places.valid & ~places.marked, places.strength * _FADE_PLACE,
+    fade_place = clock.fade(TAU_PLACE_SECONDS, tick_seconds)
+    fade_route = clock.fade(TAU_ROUTE_SECONDS, tick_seconds)
+    places = places._replace(strength=jnp.where(places.valid & ~places.marked, places.strength * fade_place,
                                                 places.strength))
-    routes = routes._replace(strength=jnp.where(routes.valid, routes.strength * _FADE_ROUTE, routes.strength))
+    routes = routes._replace(strength=jnp.where(routes.valid, routes.strength * fade_route, routes.strength))
 
     moved = jnp.linalg.norm(position - state.stay_anchor) > STAY_BLOCKS
     reanchor = has_position & ((state.stay_since < 0) | moved)
     anchor = jnp.where(reanchor, position, state.stay_anchor)
     since = jnp.where(reanchor, now, state.stay_since)
     made = jnp.where(reanchor, False, state.stay_made)
-    stay = has_position & (now - since >= STAY_TICKS) & ~made
+    stay = has_position & (now - since >= clock.about(STAY_SECONDS, tick_seconds)) & ~made
     made = made | stay
 
     before = jnp.where(has_position, _nearest(places.world, places.valid, position), -1)
@@ -283,19 +283,20 @@ def _tick(state: PlaceState, position: jax.Array, has_position: jax.Array, dange
 
 def update(state: PlaceState, *, position: jax.Array, has_position: jax.Array, danger: jax.Array, alarm: jax.Array,
            find: jax.Array, respawned: jax.Array, marks_world: jax.Array, marks_live: jax.Array,
-           reset: jax.Array | None = None) -> PlaceState:
+           reset: jax.Array | None = None, tick_seconds: float = clock.DEFAULT_TICK_SECONDS) -> PlaceState:
     """The state after this tick (module docstring). Lanes where ``reset`` bool[B] is True start from
     :func:`initial_places` first. Every argument is B-leading: ``position`` float32[B, 3]; ``has_position`` bool[B];
     ``danger`` bool[B], a damage taken this tick; ``alarm`` float32[B], the affect rules' fear; ``find`` bool[B], an
     item gained this tick; ``respawned`` bool[B]; ``marks_world`` float32[B, M, 3] and ``marks_live`` bool[B, M], the
-    decision layer's live place marks."""
+    decision layer's live place marks. ``tick_seconds`` is the world's tick (section 27)."""
 
     batch = state.now.shape[0]
     if reset is not None:
         fresh = initial_places(batch)
         state = jax.tree_util.tree_map(
             lambda new, old: jnp.where(reset.reshape((batch,) + (1,) * (old.ndim - 1)), new, old), fresh, state)
-    return jax.vmap(_tick)(state, position, has_position, danger, alarm, find, respawned, marks_world, marks_live)
+    tick = functools.partial(_tick, tick_seconds=tick_seconds)
+    return jax.vmap(tick)(state, position, has_position, danger, alarm, find, respawned, marks_world, marks_live)
 
 
 def relative(state: PlaceState, position: jax.Array, body_yaw: jax.Array) -> tuple[jax.Array, jax.Array, jax.Array]:
@@ -310,6 +311,6 @@ def relative(state: PlaceState, position: jax.Array, body_yaw: jax.Array) -> tup
     return (jnp.where(valid[..., None], body, 0.0), jnp.where(valid, jnp.linalg.norm(offset, axis=-1), 0.0), valid)
 
 
-__all__ = ["DT_SECONDS", "FIND_STRENGTH", "MERGE_BLOCKS", "PLACE_KINDS", "PLACE_SLOTS", "REVISIT_STRENGTH",
-           "ROUTE_SLOTS", "STAY_BLOCKS", "STAY_STRENGTH", "STAY_TICKS", "TAU_PLACE_SECONDS", "TAU_ROUTE_SECONDS",
+__all__ = ["FIND_STRENGTH", "MERGE_BLOCKS", "PLACE_KINDS", "PLACE_SLOTS", "REVISIT_STRENGTH",
+           "ROUTE_SLOTS", "STAY_BLOCKS", "STAY_SECONDS", "STAY_STRENGTH", "TAU_PLACE_SECONDS", "TAU_ROUTE_SECONDS",
            "PlaceState", "Places", "Routes", "initial_places", "relative", "update"]
