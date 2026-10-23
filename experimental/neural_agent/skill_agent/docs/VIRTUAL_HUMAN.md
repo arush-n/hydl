@@ -1308,8 +1308,9 @@ The write alone, old and new loaded in one process on the same rows (scratch `wr
   (3,983 positions) median 50, p99 72, max 84; 32 of `region-library-v3-288`'s seeds (3,178) median 49, p99 72, max
   81. 44 keeps 38% of positions, 64 keeps 96.5%, 96 keeps all 7,161. The trunk a tick per agent: 1.02 ms at 44, 1.21
   at 96, 1.42 at 128 (batch 1). 128 would guard only terrain not yet sampled: re-run the census before a new kind of
-  world. The sim side is the coordinator's (not landed); then `contract/tokens_v3.py` and `state/memory.py` read the
-  capacity from the server profile. The overflow flag does not reach the skill layer: an overflowed row looks like
+  world. LANDED: the sim side in 04c3b18 (the coordinator, with bridge 1F874DFC); `contract/tokens_v3.py` takes the
+  gym's per-line `WORLD_GEOMETRY_TOKEN_CAPACITY` plus `REMEMBERED_GEOMETRY_CELLS` (32), so the geometry type holds 128
+  on 0.7.2 and 76 on 0.5.7 (340 and 288 tokens an agent). The overflow flag does not reach the skill layer: an overflowed row looks like
   terrain outside the captured core.
 - "During fast throughput areas it is slower" was a design concern, not an observation (owner, 2026-10-22: "just a
   design concern"). It is met: every shape is fixed, so a busy place does not change the cost (18.1, corrected).

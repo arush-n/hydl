@@ -92,7 +92,7 @@ _WHERE = len(v3.WHERE_FEATURES)
 
 
 class Light(NamedTuple):
-    """The light rows aligned with the observation's geometry tokens: float32[B, 44, 10] and their mask bool[B, 44]
+    """The light rows aligned with the observation's geometry tokens: float32[B, G, 10] and their mask bool[B, G]
     (the gym's ``ActorLightPolicyTokens``)."""
 
     token_f32: jax.Array
@@ -475,7 +475,7 @@ def _hazard_rows(base, pose: Pose) -> tuple[jax.Array, jax.Array]:
 
 def _geometry_rows(observation, light: Light | None, pose: Pose) -> tuple[jax.Array, jax.Array]:
     geometry = observation.world_geometry
-    f = geometry.token_f32  # [B, 44, 131]: kind, provenance, x, y, z (/4, world), clearance, flags, dynamic; edges; boxes
+    f = geometry.token_f32  # [B, G, 131]: kind, provenance, x, y, z (/4, world), clearance, flags, dynamic; edges; boxes
     scale = jnp.float32(WORLD_TOKEN_DEFAULT_MAXIMUM_DISTANCE)
     position = world_to_body(f[..., 2:5] * scale, pose.body_yaw[:, None])
     flags = jnp.round(f[..., 6] * 65535.0).astype(jnp.int32)

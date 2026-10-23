@@ -51,7 +51,7 @@ from experimental.neural_agent.skill_agent.state.frames import (
     world_to_body,
 )
 
-GEOMETRY_SLOTS: int = v3.CAPACITIES_V3["geometry"] - 44
+GEOMETRY_SLOTS: int = v3.REMEMBERED_GEOMETRY_CELLS
 ENTITY_SLOTS: int = 16
 BLOCK_SLOTS: int = v3.CAPACITIES_V3["block_candidate"] - 16
 HORIZON_TICKS: int = 1800

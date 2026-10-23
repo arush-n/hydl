@@ -33,6 +33,7 @@ from hytalegym.jax.combat.observation.v3.schema.contract import (
     RESOURCE_COUNT,
 )
 from hytalegym.jax.combat.observation.v3.tokens.light import ACTOR_LIGHT_POLICY_FEATURES
+from hytalegym.jax.combat.observation.v3.tokens.world import WORLD_GEOMETRY_TOKEN_CAPACITY
 
 TOKEN_SCHEMA_V3: str = "skill_tokens_v3"
 
@@ -248,15 +249,20 @@ TOKEN_TYPES_V3: Mapping[str, type] = {
 TRUNK_TYPE_NAMES_V3: tuple[str, ...] = tuple(TOKEN_TYPES_V3)
 """The token types the trunk reads under v3, in its sequence order."""
 
+REMEMBERED_GEOMETRY_CELLS: int = 32
+"""Remembered terrain cells beside this tick's: the background's cache of nearby cells (``docs/VIRTUAL_HUMAN.md``
+section 18; 84 until 2026-10-22)."""
+
 CAPACITIES_V3: Mapping[str, int] = {
     "self": 1, "act": len(ActTokenV3.HEADS), "kit": ABILITY_SLOTS, "status": 8, "entity": 16, "projectile": 16,
-    "hazard": 8, "geometry": 44 + 32, "block_candidate": 16 + 16, "inventory_slot": 76, "recipe": 16,
-    "persona": 1, "affect": 1,
+    "hazard": 8, "geometry": WORLD_GEOMETRY_TOKEN_CAPACITY + REMEMBERED_GEOMETRY_CELLS, "block_candidate": 16 + 16,
+    "inventory_slot": 76, "recipe": 16, "persona": 1, "affect": 1,
 }
-"""Default capacities. Geometry and block candidates hold this tick's (44 and 16, the gym's) plus remembered ones
-(32 and 16; the remembered terrain was 84 cells until 2026-10-22, when the background became a cache of nearby cells
-beside the trunk's summary slots, ``docs/VIRTUAL_HUMAN.md`` section 18); entities hold perceived and remembered
-together. A capacity is a configuration: the trunk's parameters never depend on it."""
+"""Default capacities. Geometry and block candidates hold this tick's plus remembered ones. This tick's geometry is the
+gym's world-geometry capacity for the server line (``WORLD_GEOMETRY_TOKEN_CAPACITY``: 96 on 0.7.2 since 04c3b18, from
+a 20-seed census, ``docs/VIRTUAL_HUMAN.md`` 18.4; 44 on 0.5.7), read at import like the gym's own; block candidates
+are 16. The remembered ones are ``REMEMBERED_GEOMETRY_CELLS`` and 16. Entities hold perceived and remembered together.
+A capacity is a configuration: the trunk's parameters never depend on it."""
 
 assert RESOURCE_COUNT == len(RESOURCES)
 assert all(cls.FEATURES[-1] == "marked" for cls in TOKEN_TYPES_V3.values())
@@ -265,7 +271,7 @@ assert all(len(set(cls.FEATURES)) == len(cls.FEATURES) for cls in TOKEN_TYPES_V3
 __all__ = ["ABILITY_SLOTS", "AFFECT_FEATURES", "AFFORDANCES", "CAPACITIES_V3", "DESCRIPTION_WIDTH", "FEELINGS",
            "GATHER_BITS", "GEOMETRY_BOXES", "GEOMETRY_BOX_FIELDS", "GEOMETRY_EDGES", "GEOMETRY_EDGE_FIELDS",
            "GEOMETRY_FLAGS", "HOLD_THRESHOLDS", "ITEM_PROPERTIES_V3", "MEMORY_FEATURES", "PERSONA_FEATURES",
-           "RECIPE_WIDTH", "RESERVE_WIDTH", "RESOURCES", "STATUS_FIELDS", "STATUS_FLAGS", "TOKEN_SCHEMA_V3",
-           "TOKEN_TYPES_V3", "TRUNK_TYPE_NAMES_V3", "WHERE_FEATURES", "ActTokenV3", "AffectTokenV3",
+           "RECIPE_WIDTH", "REMEMBERED_GEOMETRY_CELLS", "RESERVE_WIDTH", "RESOURCES", "STATUS_FIELDS", "STATUS_FLAGS",
+           "TOKEN_SCHEMA_V3", "TOKEN_TYPES_V3", "TRUNK_TYPE_NAMES_V3", "WHERE_FEATURES", "ActTokenV3", "AffectTokenV3",
            "BlockCandidateTokenV3", "EntityTokenV3", "GeometryTokenV3", "HazardTokenV3", "InventorySlotTokenV3",
            "KitTokenV3", "PersonaTokenV3", "ProjectileTokenV3", "RecipeTokenV3", "SelfTokenV3", "StatusTokenV3"]
