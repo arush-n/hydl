@@ -606,7 +606,9 @@ S15, ask 3).
 **Still on v1, by design:** the trained v1 bodies (`runtime/neural_pursuit.py`, the A2 C' network) and the skill
 trainers' token kernel (`training/blocks.py`, `training/skill_dagger.py`): no skill is trained on v3 yet. Moving the
 trainers onto `runtime/state_tick.py` is the first task when training resumes (owner, 2026-10-19: no training right
-now).
+now). How the move is made is designed in `TRAINING_PLAN.md` section 8 (PROPOSED 2026-10-23: the trunk's memory
+trained through time on stored sequences, the modules on the frozen trunk per decision, the data's size; V0, a
+measurement with no training, first).
 
 **The encoding tested** (2026-10-21, owner: "test the encoding in the sim and the real server"): the state layer's
 tick on simulator duels, a Region world and the live 0.7.2 server (`PERCEPTION.md` section 10.5; the tools are

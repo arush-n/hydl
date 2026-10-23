@@ -410,34 +410,125 @@ Console replays of the mace fights: 20261020T062617Z-11750ee7 (scripted), 202610
 - A self-play league can cycle, or collapse onto one strategy (Balduzzi et al. 2019). The scripted styles stay in the
   pool as anchors, as AlphaStar kept its exploiters (Vinyals et al. 2019).
 
+## 8. Training on v3: the state layer and the trunk's memory (PROPOSED 2026-10-23; nothing runs before the owner's yes)
+
+`VIRTUAL_HUMAN.md` section 13: "Moving the trainers onto `runtime/state_tick.py` is the first task when training
+resumes." The encoder and the state layer are now built through step 9 (with the tick fix and S5), so this section says
+how the move is made. It changes no plan above; it is the input side under all of them, and stage L4 too (its "v2
+tokens").
+
+### 8.1 What exists (checked 2026-10-23)
+
+- **The trainers read v1 tokens and no memory.** `training/blocks.py` `token_kernel` builds v1 `legal_tokens` at the
+  `bench_tick` capacities; `training/skill_dagger.py` `rollout` and `training/distill.py` step the flat world in a host
+  loop, record those tokens per decision into one aggregate dataset, and fit on it. Their trunk has
+  `memory_slots=0`: each decision stands alone.
+- **The v3 trunk is recurrent.** It carries 8 latent memory slots, a 16-slot background summary and an object latent
+  per entity and block, tick to tick (`VIRTUAL_HUMAN.md` 18), and the state layer carries the stores, the places, the
+  event log, the written entries and the social records per lane (`state/layer.AgentState`). `state_tick.step_lanes`
+  runs both for B lanes, with per-lane `reset` and `respawn`.
+- **v3 tokens are 27 times larger:** 42,171 floats a decision (165 KB) against v1's 1,545 (6 KB), at the default
+  capacities; geometry is 56% of it, the inventory 19%. A2's first run aggregated 123,398 samples: about 20 GB as v3
+  tokens, 0.7 GB as v1. Most slots should be empty on the flat training world (no blocks, little terrain, a
+  near-empty inventory; inferred, V0 measures it).
+- **A skill module reads every token's trunk embedding** (`apply_generalist` concatenates `encoder_output.tokens`): 356
+  x 64 floats and the context, so storing the trunk's outputs instead of the tokens saves only about half.
+- **The cost of a v3 tick is measured** (E8; section 16.3's per-agent run, in progress): a few milliseconds per lane.
+
+### 8.2 The design
+
+1. **The kernel.** `state_tick.step_lanes` replaces `token_kernel` and the trunk call in every rollout: the
+   `AgentState` joins the rollout's carry, an episode start is a `reset`, and `tick_seconds` is the world's (27.7).
+   Teachers and requests are unchanged; the student reads v3.
+2. **Two kinds of training, two kinds of data.**
+   - **The trunk** (once, as the A2 reference was): the memory must learn what to keep, so its gradients flow through
+     time. Rollouts are cut into sequences of L decisions within an episode, stored with the memory at their first
+     decision; training unrolls the trunk over each, the first B decisions only rebuilding the memory (no loss), then
+     the loss on the rest: R2D2's stored state with burn-in (Kapturowski et al. 2019; it stored 80-step sequences, with
+     burn-in of 20 or 40). L and B are set in V0 from the tasks' horizons.
+   - **A skill's module on the frozen trunk** (the owner's 2026-10-19 ruling): the trunk does not change, so the memory
+     is a fixed function of the history and the module needs no gradient through time. Its dataset stays per decision,
+     as today; the trunk runs in the rollout and the module trains on its outputs.
+3. **The data's size.** Tokens are stored as their valid rows only, in float16, per decision; the aggregate dataset of
+   DAgger becomes a bounded buffer when that does not fit (R2D2's replay, sized in memory, newest kept). V0 measures the
+   real size on each training world before anything is chosen.
+4. **The teacher sees more than the student.** On v1 both lived in the present; on v3 the student remembers, but a
+   privileged teacher can still ask for what the student cannot know (a target behind a wall it never saw). Known to
+   make plain DAgger fail (Warrington et al. 2021; Messikommer et al. 2025). Measured, not assumed: each skill's
+   teacher-student gap, split by whether the target was ever perceived.
+5. **The training hooks of `VIRTUAL_HUMAN.md` 11.8,** built with the trunk:
+   - an auxiliary head that predicts hidden entities' positions from the memory, supervised by the simulator during
+     training only (auxiliary tasks speed representation learning: Jaderberg et al. 2017);
+   - full-state tokens that only the critic reads in the RL stage, the actor staying legal (asymmetric actor-critic,
+     Pinto et al. 2018);
+   - input noise, latency and dropout randomisation (`PERCEPTION.md` N5).
+6. **One model per agent** (16.3): training shares one set of weights across lanes, an optimisation; each deployed
+   agent gets its own copy, and agents with different trunks need their own modules (14.5).
+
+### 8.3 The stages (each asked for in turn, as in section 0)
+
+| Stage | What | Gate |
+|---|---|---|
+| V0 | No training. The v3 rollout on the flat world and the Region: decisions per second per core, the `AgentState` bytes per lane, the stored size of a decision (valid rows, float16) on each world; the sequence length from the tasks' horizons | the numbers, and a budget proposal from them |
+| V1 | The v3 reference: walk_to and look_at distilled into a fresh v3 trunk and generalist with memory (A2's task and evaluation), plus the same run without memory as the control | at least run C''s rates on A2's evaluation; the memory run not worse than its control |
+| V2 | The seven skills' modules re-trained on the frozen v3 trunk by their own strategies | each skill's own gate, against its v1 module |
+| V3 | Stage L4 and L5 on v3 | section 7's gates |
+
+### 8.4 Decisions for the owner
+
+1. **Start V0 now** (measurements only, no training)? Recommended: yes. It costs an afternoon of CPU and turns the
+   open sizes above into numbers.
+2. **The trunk with memory from V1,** trained through time on stored sequences, with the memory-less run as its
+   control? Recommended: yes. The alternative, v3 without memory first, repeats what A2 already shows and leaves the
+   hard part for later.
+3. **Valid rows in float16, and a bounded buffer if needed,** instead of the full aggregate? Recommended: yes, decided
+   by V0's sizes; the alternative is to store the trunk's outputs, which saves only about half.
+
+### 8.5 What grounds it
+
+- The code as it stands (8.1, with file and function names) and the sizes computed from the token contracts.
+- Recurrent replay: Kapturowski et al. 2019 (R2D2), stored state and burn-in (read through secondary sources).
+- Privileged teachers and partially observed students: Warrington et al. 2021 (asymmetric DAgger), Messikommer et al.
+  2025 (student-informed teachers); the recurrent-student setup of Lee et al. 2020 (recalled; its architecture not
+  checked here).
+- Auxiliary tasks: Jaderberg et al. 2017 (UNREAL). Asymmetric actor-critic: Pinto et al. 2018.
+
 ## References
 
 - Agarwal, R., et al. (2021). Deep reinforcement learning at the edge of the statistical precipice. NeurIPS.
   arXiv:2108.13264.
-- Balduzzi, D., et al. (2019). Open-ended learning in symmetric zero-sum games. ICML.
-- Bansal, T., Pachocki, J., Sidor, S., Sutskever, I., Mordatch, I. (2018). Emergent complexity via multi-agent competition. ICLR.
-- Elo, A. E. (1978). The Rating of Chessplayers, Past and Present. Arco.
-- Peng, X. B., Ma, Z., Abbeel, P., Levine, S., Kanazawa, A. (2021). AMP: Adversarial motion priors for stylized physics-based character control. ACM TOG (SIGGRAPH).
-- Vinyals, O., et al. (2019). Grandmaster level in StarCraft II using multi-agent reinforcement learning. Nature 575.
 - Andrychowicz, M., et al. (2021). What matters for on-policy deep actor-critic methods? A large-scale study. ICLR.
   arXiv:2006.05990.
+- Balduzzi, D., et al. (2019). Open-ended learning in symmetric zero-sum games. ICML.
+- Bansal, T., Pachocki, J., Sidor, S., Sutskever, I., Mordatch, I. (2018). Emergent complexity via multi-agent competition. ICLR.
 - Chen, D., Zhou, B., Koltun, V., and Krähenbühl, P. (2019). Learning by cheating. CoRL. arXiv:1912.12294.
-- Engstrom, L., et al. (2020). Implementation matters in deep policy gradients: a case study on PPO and TRPO. ICLR.
-  arXiv:2005.12729.
-- Narvekar, S., et al. (2020). Curriculum learning for reinforcement learning domains: a framework and survey.
-  JMLR 21. arXiv:2003.04960.
-- Rajeswaran, A., et al. (2018). Learning complex dexterous manipulation with deep reinforcement learning and
-  demonstrations. RSS. arXiv:1709.10087.
 - Cho, K., et al. (2014). Learning phrase representations using RNN encoder-decoder for statistical machine
   translation (the GRU). arXiv:1406.1078.
+- Elo, A. E. (1978). The Rating of Chessplayers, Past and Present. Arco.
+- Engstrom, L., et al. (2020). Implementation matters in deep policy gradients: a case study on PPO and TRPO. ICLR.
+  arXiv:2005.12729.
 - Guo, C., Pleiss, G., Sun, Y., and Weinberger, K. Q. (2017). On calibration of modern neural networks. ICML.
   arXiv:1706.04599.
 - Henderson, P., et al. (2018). Deep reinforcement learning that matters. AAAI. arXiv:1709.06560.
+- Jaderberg, M., Mnih, V., Czarnecki, W. M., Schaul, T., Leibo, J. Z., Silver, D., Kavukcuoglu, K. (2017). Reinforcement
+  learning with unsupervised auxiliary tasks. ICLR. arXiv:1611.05397.
+- Kapturowski, S., Ostrovski, G., Quan, J., Munos, R., Dabney, W. (2019). Recurrent experience replay in distributed
+  reinforcement learning. ICLR.
 - Laskey, M., Lee, J., Fox, R., Dragan, A., and Goldberg, K. (2017). DART: noise injection for robust imitation
   learning. CoRL. arXiv:1703.09327.
 - Lee, J., et al. (2019). Set Transformer. ICML. arXiv:1810.00825.
+- Lee, J., Hwangbo, J., Wellhausen, L., Koltun, V., Hutter, M. (2020). Learning quadrupedal locomotion over challenging
+  terrain. Science Robotics 5(47). arXiv:2010.11251.
+- Messikommer, N., et al. (2025). Student-informed teacher training. ICLR. arXiv:2412.09149.
+- Narvekar, S., et al. (2020). Curriculum learning for reinforcement learning domains: a framework and survey.
+  JMLR 21. arXiv:2003.04960.
 - Ng, A. Y., Harada, D., and Russell, S. (1999). Policy invariance under reward transformations: theory and
   application to reward shaping. ICML, 278-287.
+- Peng, X. B., Ma, Z., Abbeel, P., Levine, S., Kanazawa, A. (2021). AMP: Adversarial motion priors for stylized physics-based character control. ACM TOG (SIGGRAPH).
+- Pinto, L., Andrychowicz, M., Welinder, P., Zaremba, W., Abbeel, P. (2018). Asymmetric actor critic for image-based
+  robot learning. RSS. arXiv:1710.06542.
+- Rajeswaran, A., et al. (2018). Learning complex dexterous manipulation with deep reinforcement learning and
+  demonstrations. RSS. arXiv:1709.10087.
 - Ross, S., Gordon, G., and Bagnell, D. (2011). A reduction of imitation learning and structured prediction to
   no-regret online learning (DAgger). AISTATS. arXiv:1011.0686.
 - Schulman, J., et al. (2016). High-dimensional continuous control using generalized advantage estimation. ICLR.
@@ -446,3 +537,6 @@ Console replays of the mace fights: 20261020T062617Z-11750ee7 (scripted), 202610
 - Sutton, R. S., Precup, D., and Singh, S. (1999). Between MDPs and semi-MDPs: a framework for temporal
   abstraction in reinforcement learning (options). Artificial Intelligence 112, 181-211.
   doi:10.1016/S0004-3702(99)00052-1.
+- Vinyals, O., et al. (2019). Grandmaster level in StarCraft II using multi-agent reinforcement learning. Nature 575.
+- Warrington, A., Lavington, J. W., Scibior, A., Schmidt, M., Wood, F. (2021). Robust asymmetric learning in POMDPs.
+  ICML. arXiv:2012.15566.
