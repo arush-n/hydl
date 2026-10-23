@@ -2437,3 +2437,23 @@ while the native tick ran long (task #137). In seconds, using each receipt's own
 The general point stands for every count-based row on 1F874DFC: a live tick averages about 0.037 s against the render's
 1/30 s (section (aq)), so counts run about 10 % low live for the same seconds. Whether the bridge can step the world at a
 fixed 1/30 s is task #137's question.
+
+## (as) Native tick length: where dt comes from (task #137; 2026-10-23; read-only code research, no new run)
+
+- The bridge does not set dt. Each agent step unpauses the world and waits for the requested engine ticks
+  (`NativeEnvironmentSession.advance`, about lines 6302-6340). The engine's ECS tick passes dt to the bridge's
+  `NativeTickCaptureSystem.tick(deltaTime)`, which sums it (`afterNativeTick`, about 2503-2566). `engine_mean_delta_seconds`
+  is that sum over the executed ticks (`session/info/EngineTimingInfo.java:33-38`).
+- dt is the engine ticking thread's measured time per tick: its 30 TPS limiter sleeps a tick that finishes early, so a
+  quiet tick reads exactly 1/30 s (`nativebackend/session/STATUS.md:24-27`: 0.03333 on a smoke run), and a tick that
+  overruns its 33 ms budget reports its real length. A mean of 0.037 s means ticks overran: host load plus per-tick work.
+  The repo cannot attribute the 0.0345 -> 0.037 step between jars. The 96-token capacity does no Java work
+  (`GeometryContract.RADIUS = 4` is fixed), so it is not the cause by itself (inferred).
+- No fixed-dt control exists: `native_tick_rate` sets the limiter (`world.setTps`) and `native_time_dilation` scales dt
+  at reset (`World.setTimeDilation`; semantics in the engine, unverified). Ticking manually off the engine thread is not
+  supported (`NativeWorldAccess.java:302` asserts the ticking thread).
+- Consequence for every count-based row: read live in seconds (the per-tick dt is in every probe's receipt), or measure on
+  a quiet machine where dt is 1/30 s. For deployment, a policy trained at 1/30 s sees longer ticks under load; giving it
+  the tick's dt is the skill layer's call (their tick-length change takes one per world; a per-tick dt is held back unless
+  live jitter is shown to matter). Calibrating `native_time_dilation` to (1/30) / measured dt is possible but scales every
+  system and is not recommended without a check.
