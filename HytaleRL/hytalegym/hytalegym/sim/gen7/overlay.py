@@ -852,6 +852,16 @@ HOOKS = (
          f"{_MECHANICS}.npc_jump_arc:capture_previous_delta", "npc_jump_arc", "active", "1c", _JUMP_ARC,
          "holds the previous microtick's duration (state.last_motion_delta_seconds, which _microtick overwrites "
          "before the agent moves) for the agent's motion; changes no state"),
+    # Row 1f, automatic step-up (lane_traversal, 2026-10-23). Listed before npc_jump_arc_fall_speed so it is outermost on
+    # _tick_agent_geometry_motion (hooks on one function: the first listed is outermost); the construct unwraps to read globals.
+    # Not differential-gated against the server: no 0.7.2 up-step fixture exists.
+    Hook("auto_step_up", "combat/runtime/agent.py", "_tick_agent_geometry_motion",
+         f"{_MECHANICS}.auto_step_up:construct", "auto_step_up", "active", "1f",
+         "tests/sim/test_auto_step_up.py: a grounded npc_walk move blocked by a one-block ledge lifts and settles on the ledge top "
+         "(the raised move, the settle and the accept mask); a two-block wall, a blocked headroom and a free move are unchanged; "
+         "the switch-off render equals the committed render leaf by leaf",
+         note="max_climb_height from the agent walk (1.3, 0.5.7 ruleset; the 0.7.2 learner role carries none, INFERRED); the "
+         "construct returns the original function when the switch is off"),
     Hook("npc_jump_arc_fall_speed", "combat/runtime/agent.py", "_tick_agent_geometry_motion",
          f"{_MECHANICS}.npc_jump_arc:fall_speed_integration", "npc_jump_arc", "active", "1c", _JUMP_ARC,
          "npc_walk jump rows of the legacy branch after the impulse: v_k = v_(k-1) - 32 (1 - |(v_(k-1) - v_jump) "

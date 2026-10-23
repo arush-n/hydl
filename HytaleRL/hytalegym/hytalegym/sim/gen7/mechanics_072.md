@@ -339,3 +339,12 @@ decay is the engine's, and no live receipt covers a hit in the air during a runn
 Tests: `tests/sim/test_jump_carry.py` (the live list on every tick, the second jump, the walk on L+5, the standing jump on L+3,
 a knockback during the carry, the switch off, gen 5 unchanged) and `tests/sim/test_landing_walk_knockback.py` (the running jump on L+5; the knockback L+2 and
 the walk-off L+1 unchanged).
+
+## Automatic step-up (row 1f, 2026-10-23; lane `lane_traversal`)
+
+`auto_step_up` (`mechanics/auto_step_up.py`, gen 7 True, gen 5 False). A grounded npc_walk move blocked by a ledge lifts by
+the agent walk's `max_climb_height` (1.3, the 0.5.7 ruleset value; the 0.7.2 learner role carries none, so 1.3 is inferred for
+0.7.2), moves the same horizontal distance, and settles on the ledge top when there is headroom and the settle lands
+0 < rise <= lift. Hook `_tick_agent_geometry_motion`, listed before `npc_jump_arc_fall_speed` (outermost; the construct unwraps
+to read the rendered globals). Unit tests: `tests/sim/test_auto_step_up.py`. Not differential-gated: no 0.7.2 up-step
+fixture exists (FIDELITY row 1d). Live check pending: a bridge probe walking into a one-block ledge.

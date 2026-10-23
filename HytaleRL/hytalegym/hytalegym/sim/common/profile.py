@@ -175,6 +175,9 @@ class Constructs:
     # carried move speed, undamped, and the landing is the landing_walk_resume hold) or True (gen 7: a running jump falls by the
     # engine's air drag each tick, slides on the ground and walks at full speed on L+5). Owner: sim/gen7/mechanics/npc_jump_carry.py.
     npc_jump_carry: bool = False
+    # Automatic step-up for the npc_walk body (row 1f, F1f): False (HEAD: a blocked horizontal move stops at the face) or True
+    # (gen 7: a grounded blocked move may lift by the walk's max climb height and settle on the ledge top). Owner: sim/gen7/mechanics/auto_step_up.py.
+    auto_step_up: bool = False
 
 
 @dataclass(frozen=True)

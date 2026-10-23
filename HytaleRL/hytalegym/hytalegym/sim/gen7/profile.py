@@ -55,6 +55,9 @@ PROFILE = SimProfile(
         # Jump carry (row 1c, owner ruling 2026-10-22): a running jump keeps its take-off velocity and walks on L+5; the
         # landing_walk_resume hold above then covers standing jumps only. Owner: sim/gen7/mechanics/npc_jump_carry.py.
         npc_jump_carry=True,
+        # Automatic step-up (row 1f, F1f): a grounded npc_walk move blocked by a ledge within the walk's max climb height lifts and
+        # settles on the ledge top. Owner: sim/gen7/mechanics/auto_step_up.py; the height is the agent walk's max_climb_height.
+        auto_step_up=True,
         crafting_bench_tier="placed_bench",
         crafting_memories="recorded_count",
         crafting_time="timed_job",
