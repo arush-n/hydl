@@ -9,9 +9,9 @@ that rolls off the ring is gone from the log, and the memories that need it keep
 (the owner's ruling, 2026-10-22).
 
 The **counters** are lifetime totals per activity: the distance walked, sprinted, swum and climbed (blocks), damage
-dealt and taken, items gained, and food eaten. They add up over the episode and survive a death (21.2). They will feed
-the levels of section 16.6, whose proficiency curve ``p = 1 - exp(-N / tau)`` needs a time constant per activity that
-is not set yet, so only the counts are kept here.
+dealt and taken, items gained, food eaten, and deaths. They add up over the episode and survive a death (21.2). They
+will feed the levels of section 16.6, whose proficiency curve ``p = 1 - exp(-N / tau)`` needs a time constant per
+activity that is not set yet, so only the counts are kept here.
 
 Every detector but the requests' compares ``state.last`` (last tick's observation) with ``observed`` (this tick's), and
 none of those fires on the first tick of an episode (``seen`` False), since there is no change to register. A request's
@@ -31,6 +31,8 @@ are:
   gives nothing.
 - **requests** (observed): outcome 1, 2 or 3 gives ``request_done``, ``request_failed`` or ``request_aborted``, with the
   request's verb as its detail.
+- **death** (observed): a respawn (the layer's ``respawn`` input, 16.2) gives ``death`` at my position before it,
+  ``last.position``, and counts one death. Like a request, it is logged on any tick, the first included.
 - **distance** (observed): a position change ``|d|`` above ``TELEPORT_BLOCKS`` [E] is a respawn or a teleport and
   counts nowhere. Otherwise, with ``h = |(dx, dz)|``, ``v = |dy|`` and ``full = |d|``: climbing adds ``v`` to the
   climbed distance; else swimming or in a fluid adds ``full`` to the swum; else running or sprinting adds ``h`` to the
@@ -64,9 +66,9 @@ from experimental.neural_agent.skill_agent.state.affect import THREAT_REACH_BLOC
 EVENT_SLOTS: int = 32
 """The ring's capacity per agent (21.2)."""
 EVENT_KINDS: tuple[str, ...] = ("damage_taken", "damage_dealt", "item_gained", "item_lost", "ate", "request_done",
-                                "request_failed", "request_aborted")
+                                "request_failed", "request_aborted", "death")
 COUNTERS: tuple[str, ...] = ("distance_walked", "distance_sprinted", "distance_swum", "distance_climbed",
-                             "damage_dealt", "damage_taken", "items_gained", "food_eaten")
+                             "damage_dealt", "damage_taken", "items_gained", "food_eaten", "deaths")
 MOVES: tuple[str, ...] = ("walking", "running", "sprinting", "swimming", "in_fluid", "climbing")
 """The columns of ``Observed.moving``: the self token's movement flags."""
 OUTCOME_SLOTS: int = 4
@@ -103,6 +105,7 @@ class Observed(NamedTuple):
     outcomes: jax.Array  # int32[B, R]: this tick's request outcomes; 0 none, 1 done, 2 failed, 3 aborted
     outcome_verbs: jax.Array  # int32[B, R]: each request's verb id in ``neural_skills/spec.py`` ``VERBS`` (the
     # modules' append-only vocabulary, the ids the body's requests use); -1 for a verb outside it
+    respawned: jax.Array | None = None  # bool[B]: the lane respawned this tick (16.2); None reads as no respawn
 
 
 class EventLog(NamedTuple):
@@ -171,6 +174,7 @@ def initial_events(batch: int, *, entities: int, slots: int, outcomes: int) -> E
         item_consumable=jnp.zeros((batch, slots), jnp.bool_),
         outcomes=jnp.zeros((batch, outcomes), jnp.int32),
         outcome_verbs=jnp.zeros((batch, outcomes), jnp.int32),
+        respawned=jnp.zeros((batch,), jnp.bool_),
     )
     return EventState(jnp.zeros((batch,), jnp.int32), empty, jnp.zeros((batch, len(COUNTERS)), jnp.float32), last,
                       jnp.zeros((batch,), jnp.bool_), jnp.full((batch,), _NEVER, jnp.int32))
@@ -211,6 +215,8 @@ def update(state: EventState, observed: Observed, reset: jax.Array | None = None
     ring, the counters add, and ``observed`` becomes ``last``."""
 
     batch = state.now.shape[0]
+    if observed.respawned is None:  # the default: no respawn reported this tick
+        observed = observed._replace(respawned=jnp.zeros((batch,), jnp.bool_))
     if reset is not None:
         fresh = initial_events(batch, entities=state.last.entity_ids.shape[1], slots=state.last.item_ids.shape[1],
                                outcomes=state.last.outcomes.shape[1])
@@ -269,6 +275,7 @@ def update(state: EventState, observed: Observed, reset: jax.Array | None = None
                old_consumable),
         _block(requested, _OUTCOME_KIND[jnp.clip(outcomes, 0, 3)], -1, 0.0, observed.outcome_verbs, here[:, None],
                False),
+        _block(observed.respawned[:, None], _KIND["death"], -1, 0.0, 0, last.position[:, None], False),
     ]
     valid, kind, other, amount, detail, world, inferred = (
         jnp.concatenate(column, axis=1) for column in zip(*blocks))
@@ -297,6 +304,7 @@ def update(state: EventState, observed: Observed, reset: jax.Array | None = None
         "damage_taken": taken_amount,
         "items_gained": jnp.sum(gain_amount, axis=1),
         "food_eaten": jnp.sum(eaten_amount, axis=1),
+        "deaths": observed.respawned.astype(jnp.float32),
     }
     counters = state.counters + jnp.stack([increments[name] for name in COUNTERS], axis=1)
     return EventState(now, ring, counters, observed, jnp.ones_like(seen), last_attack)

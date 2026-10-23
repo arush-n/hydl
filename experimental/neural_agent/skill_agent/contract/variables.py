@@ -84,7 +84,7 @@ VARIABLES: tuple[Variable, ...] = (
     # is never sampled as a trait. The body does not read them yet (step 7).
     *_group("self", "activity counters", "rule", ("distance_walked", "distance_sprinted", "distance_swum",
                                                    "distance_climbed", "damage_dealt", "damage_taken",
-                                                   "items_gained", "food_eaten"), low=0.0, high=1e9),
+                                                   "items_gained", "food_eaten", "deaths"), low=0.0, high=1e9),
 )
 NAMES: tuple[str, ...] = tuple(variable.name for variable in VARIABLES)
 BY_NAME: Mapping[str, Variable] = {variable.name: variable for variable in VARIABLES}

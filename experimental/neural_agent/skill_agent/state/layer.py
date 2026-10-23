@@ -15,7 +15,8 @@ stores it). One tick, :func:`step`:
 4. the event log registers this tick's changes (``state/events.py``, section 21), and its counters are published to the
    variables;
 5. the top layers' writes are applied (``state/written.py``), and the live ``remember`` entries become the stores' tags;
-6. the stores take them;
+6. the stores take them, and the long-term places take this tick's events, marks and fear (``state/places.py``,
+   section 22);
 7. the stores give back what is remembered but not perceived;
 8. every entity token, perceived or remembered, gets the agent's feelings toward it (``feel_*``);
 9. everything is packed into the ``skill_tokens_v3`` token sets the trunk reads, with the persona and affect
@@ -44,6 +45,7 @@ from experimental.neural_agent.skill_agent.state import registry
 from experimental.neural_agent.skill_agent.state import affect as feeling
 from experimental.neural_agent.skill_agent.state import events
 from experimental.neural_agent.skill_agent.state import memory as stores
+from experimental.neural_agent.skill_agent.state import places
 from experimental.neural_agent.skill_agent.state import written
 from experimental.neural_agent.skill_agent.state.action_history import (
     ActionHistory,
@@ -75,6 +77,7 @@ class AgentState(NamedTuple):
     background: jax.Array | None = None  # float32[B, K, W]: the trunk's last ``EncoderOutput.background``
     written: written.Written | None = None  # the top layers' written entries (state/written.py)
     events: events.EventState | None = None  # the event log and the counters (state/events.py)
+    places: places.PlaceState | None = None  # the long-term spatial memory (state/places.py, section 22)
 
 
 def initial_state(batch: int, latent: jax.Array | None = None, persona: jax.Array | None = None,
@@ -94,7 +97,8 @@ def initial_state(batch: int, latent: jax.Array | None = None, persona: jax.Arra
     return AgentState(initial_history(batch), stores.initial_memory(batch, latent_width=object_width), latent, values,
                       affect, slots["entity"], slots, background, written=written.initial_written(batch),
                       events=events.initial_events(batch, entities=capacities["entity"],
-                                                   slots=capacities["inventory_slot"], outcomes=events.OUTCOME_SLOTS))
+                                                   slots=capacities["inventory_slot"], outcomes=events.OUTCOME_SLOTS),
+                      places=places.initial_places(batch))
 
 
 def _restarts(reset: jax.Array | None, respawn: jax.Array | None) -> jax.Array | None:
@@ -104,6 +108,16 @@ def _restarts(reset: jax.Array | None, respawn: jax.Array | None) -> jax.Array |
     if respawn is None:
         return reset
     return respawn if reset is None else reset | respawn
+
+
+_PLACE_REMEMBER: int = [field.name for field in variables.PLACE_ENTRIES].index("remember")
+"""The column of a place entry's ``remember`` priority (``state/written.py``)."""
+
+
+def _logged(log: events.EventLog, now: jax.Array, kind: str) -> jax.Array:
+    """bool[B]: the log registered an event of ``kind`` this tick (the entries stamped ``now``)."""
+
+    return jnp.any((log.kind == events.EVENT_KINDS.index(kind)) & (log.tick == now[:, None]), axis=1)
 
 
 def step(observation: Any, state: AgentState, *, last_action: jax.Array,
@@ -140,11 +154,18 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
         outcomes = jnp.zeros((observation.base.self_f32.shape[0], events.OUTCOME_SLOTS), jnp.int32)
     if outcome_verbs is None:
         outcome_verbs = jnp.zeros_like(outcomes)
-    observed = _observed(observation, perceived, affect, adapter.get("tables"), capacities, outcomes, outcome_verbs)
+    observed = _observed(observation, perceived, affect, adapter.get("tables"), capacities, outcomes, outcome_verbs,
+                         respawn)
     logged = events.update(state.events, observed, reset)
     values = registry.put(values, events.COUNTERS, logged.counters)
     record = written.apply(state.written, writes, reset)
     memory = stores.update(state.memory, perceived, written.tags(record), reset)
+    placed = places.update(
+        state.places, position=observed.position, has_position=observed.has_position,
+        danger=_logged(logged.log, logged.now, "damage_taken"), alarm=affect.fear,
+        find=_logged(logged.log, logged.now, "item_gained"), respawned=observed.respawned,
+        marks_world=record.place.world,
+        marks_live=record.place.valid & (record.place.values[..., _PLACE_REMEMBER] > 0), reset=reset)
     remembered = stores.read(memory, perceived.pose)
     rows = dict(perceived.rows)
     rows["act"] = (act_features(history), jnp.ones(history.last_choice.shape, jnp.bool_))
@@ -166,7 +187,7 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
     ids = fit_ids(entity_ids, valid, capacities["entity"])  # aligned with tokens["entity"], perceived and remembered
     slots = stores.object_slots(memory, tokens, ids, perceived.pose)
     return tokens, AgentState(history, memory, state.latent, values, affect, ids, slots, state.background,
-                              written=record, events=logged)
+                              written=record, events=logged, places=placed)
 
 
 def _present_first(present: jax.Array, count: int, *columns: tuple[jax.Array, Any]) -> list[jax.Array]:
@@ -180,13 +201,15 @@ def _present_first(present: jax.Array, count: int, *columns: tuple[jax.Array, An
 
 
 def _observed(observation: Any, perceived: Perceived, affect: feeling.AffectState, tables: Any,
-              capacities: Mapping[str, int], outcomes: jax.Array, outcome_verbs: jax.Array) -> events.Observed:
+              capacities: Mapping[str, int], outcomes: jax.Array, outcome_verbs: jax.Array,
+              respawn: jax.Array | None) -> events.Observed:
     """What the event log reads this tick (``state/events.py``, section 21.1), all of it legal: my health, position,
     movement and attack; the damage the affect rules credited to an entity; the entities I perceive; my inventory,
-    with each item's consumable flag when the registry is given (``tables``); and the request outcomes the runtime
-    reports."""
+    with each item's consumable flag when the registry is given (``tables``); the request outcomes the runtime
+    reports; and whether I respawned (``respawn``, 16.2; False when None)."""
 
     batch = outcomes.shape[0]
+    respawned = jnp.zeros((batch,), jnp.bool_) if respawn is None else jnp.asarray(respawn, jnp.bool_)
     own = perceived.rows["self"][0][:, 0]  # the self token's features, float32[B, F]
     moving = jnp.stack([own[:, _SELF[f"moving_{name}"]] for name in events.MOVES], axis=1)
     if perceived.pose.position is None:  # no perception channel, so no position and no distance
@@ -221,7 +244,7 @@ def _observed(observation: Any, perceived: Perceived, affect: feeling.AffectStat
         attack_executing=own[:, _SELF["attack_executing"]] > 0.5, attributed=affect.attributed,
         entity_ids=entity_ids, entity_health=entity_health, entity_distance=entity_distance,
         item_ids=item_ids, item_counts=item_counts, item_consumable=item_consumable,
-        outcomes=outcomes, outcome_verbs=outcome_verbs)
+        outcomes=outcomes, outcome_verbs=outcome_verbs, respawned=respawned)
 
 
 _STORE_TYPES: Mapping[str, str] = {"geometry": "geometry", "entity": "entity", "block": "block_candidate"}
@@ -261,7 +284,8 @@ def load(path: str | Path, like: AgentState, *, maps: Mapping[str, Mapping[str, 
     type (``variables.transfer``). The written entries' fields migrate by name the same way, keyed by
     ``"written.entity"`` or ``"written.place"``. A part of the state the save lacks (added since, as the object latents,
     the background summary on 2026-10-22, the written entries on step 2 of section 19, and the event log on step 4 of
-    section 21, which a save from before it loads as an empty log) takes ``like``'s value.
+    section 21, which a save from before it loads as an empty log, and the places on step 5 of section 22, which load
+    with none) takes ``like``'s value.
     """
 
     maps, dropped = maps or {}, dropped or {}

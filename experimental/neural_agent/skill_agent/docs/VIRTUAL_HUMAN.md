@@ -564,7 +564,7 @@ approach. Missing:
 | 2 | Structured writes from the top two layers; the tags move onto them. DESIGNED and APPROVED 2026-10-22 (section 19, rulings in 19.7) | 10.4, 19 |
 | 3 | Fixed rules on game time: alarm and startle, sleep pressure and fatigue, hunger and the other drives; then lifecycle under normal death, and provenance. DESIGNED and APPROVED 2026-10-22; BUILT: startle, respawn, provenance (section 20.7); the drives wait for the clock (20.5) | 10.5, 10.7, 10.8, 16.1, 16.2, 16.5, 20 |
 | 4 | The event log and its tokens; the activity counters and levels. DESIGNED and APPROVED 2026-10-22; BUILT (section 21.6; the event tokens wait for step 7) | 10.6, 11.1, 16.6, 21 |
-| 5 | The long-term spatial memory: places, routes, coordinates. DESIGNED and APPROVED 2026-10-22 (section 22) | 10.11, 16.4, 22 |
+| 5 | The long-term spatial memory: places, routes, coordinates. DESIGNED and APPROVED 2026-10-22; BUILT (section 22.7; the place tokens are step 7, section 24) | 10.11, 16.4, 22 |
 | 6 | Hearing: the sound registry, the hearing rule, heard entries in the stores, the orienting reflex (the token reads zero until S12) | 17 |
 | 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry (with it the status token's identity: which effect, its source entity, its damage cause, all in the observation and dropped today; `PERCEPTION.md` section 10.5), places, the proficiencies. First part DESIGNED 2026-10-22 (section 24: status identity, places, events), waiting on the owner's yes | 11.1 to 11.4, 11.6, 16.6, 17.8, 24 |
 | 8 | The formatted views (typed facts, words) and the recording | 10.3, 10.9 |
@@ -1877,6 +1877,27 @@ item 3).
    are kept across a respawn and across save and load. The alternative is to keep them across episodes in the same
    world, which needs the runtime to say when the world is the same. RULED: "yes".
 
+### 22.7 Built (2026-10-22), and how it was checked
+
+What was built is 22.2 with the rulings of 22.5 (`state/places.py`; a `death` event and a `deaths` counter in
+`state/events.py` and `contract/variables.py`; the store in `state/layer.py`). A Haiku subagent wrote it in its own
+worktree from a written spec; it was reviewed and re-run here. Choices made in the build, kept: a revisit counts only
+for a place that existed before the tick (a place formed this tick is a first visit); leaving one place and arriving at
+another in the same tick records the route; a place's eviction clears the agent's `inside` and `departed` pointers to
+it; merging is by Euclidean distance. A respawn at a place already held adds the `death` kind to it (22.2's merge
+rule).
+
+Checks:
+- **Nothing the body reads changes.** 300 Region ticks (gen 7, perception channel, 4 agents), with and without step
+  5: the same SHA-256 over the same 15,300 token and store arrays. With step 5, places formed on the real terrain
+  (1 or 2 per agent: stays and danger places from the Trork's hits) and one agent recorded 2 routes.
+- **Unit tests:** `test_sa_state_places.py`, 16 (each way a place forms, merging, fading and revisits, routes,
+  eviction with marked places kept and the refusal when all are marked, reset, the body-frame read, jit, and through
+  `layer.step` a death place and save and load); 2 death tests in `test_sa_state_events.py`. The step 3 respawn test
+  now allows the one `death` event the respawn adds.
+- **The package gate** on clean worktrees of 9711c7e: pass 1, 1,356 -> 1,374 passed (+18), the same 11 names; pass 2
+  the same 30.
+
 ### 22.6 What grounds it (searched 2026-10-22; depth of reading stated)
 
 - **Places and routes as one map.** Rats learn a map of a maze, not only response chains, and take novel routes when
@@ -1996,6 +2017,22 @@ shelter, cook a meal, from these skills and commands.
    and a request can point at them like any entity). RULED: "yes".
 3. **The order** of 23.4: perception now, skills when training resumes, placing after it opens? Recommended: yes.
    RULED: "your choice"; taken as recommended.
+
+### 23.7 What the simulator side settled (the owner, 2026-10-22 late, as the coordinator reported)
+
+- **S5 includes the block's type.** Two fields beside each block candidate, outside the flat policy row (no width or
+  schema change): `break_progress` (1 - the block's health; 0 undamaged or masked) and `block_type_id` (the gym's
+  semantic id of the block asset; 0 unknown or masked). Live needs no bridge change (the block's health and asset id
+  are on the wire); the 0.7.2 atlas gains a semantic-id column. This layer then fills the block's registry columns,
+  description and tool fit by the id, and `break_progress` takes the token's first reserve column. Final names follow
+  when it lands.
+- **Only the looked-at block is a candidate.** On both sides only slot 0, the cell the camera hits, is ever filled:
+  `block_none_plus_candidates` means "none or the block I am looking at", as a player's crosshair. The block knowledge
+  beyond it comes from the stores (in the 0.7.2 audit 89% of block-candidate rows were remembered). So `break_block`
+  is look at the block, then hold the trigger; `search_for` looks around to find blocks.
+- **Items on the ground are not modeled** on either side (the simulator's overflow drops vanish; the bridge does not
+  observe item entities). The owner wants a live measurement first (do breaks spawn item entities; their lifetime and
+  pickup range), then a build to match. `pick_up` waits for it.
 
 ### 23.6 What grounds it (searched 2026-10-22; depth of reading stated)
 
