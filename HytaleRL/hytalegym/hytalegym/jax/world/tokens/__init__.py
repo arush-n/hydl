@@ -155,6 +155,10 @@ class WorldGeometryTokenObservation(NamedTuple):
     edge_flags: Array
     collision_box_mask: Array
     collision_boxes_relative: Array
+    # Optional int32 [B, A, token_capacity] block semantic ids, aligned with the
+    # token rows. None unless a producer holding exact block identity attaches
+    # them; air, padding and unknown rows read 0.
+    block_type_id: Array | None = None
 
 
 def produce_actor_world_geometry_tokens(

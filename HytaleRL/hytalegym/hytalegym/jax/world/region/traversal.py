@@ -10,7 +10,12 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from hytalegym.geometry.contract import CELL_COUNT
 from hytalegym.jax.world.perception.los import GeometryProvider
+from hytalegym.jax.world.region.block_semantics import (
+    RegionBlockSemanticAtlas,
+    lookup_region_block_semantics,
+)
 from hytalegym.jax.world.region.mutable_geometry import (
     region_geometry_has_mutations,
 )
@@ -20,9 +25,12 @@ from hytalegym.jax.world.region.types import (
     RegionTraversalAtlas,
 )
 from hytalegym.jax.world.tokens import (
+    WORLD_TOKEN_KIND_COLLISION_EXCEPTION,
+    WORLD_TOKEN_KIND_TRAVERSAL_SURFACE,
     WorldGeometryTokenObservation,
     produce_actor_world_geometry_tokens,
 )
+from hytalegym.jax.world.tokens._candidates import _LOCAL_CELL_OFFSETS
 from hytalegym.jax.world.traversal import (
     GRAPH_DIAGNOSTIC_QUERY_DISTANCE_EXCEEDED,
     GRAPH_DIAGNOSTIC_STATEFUL_TRANSITIONS,
@@ -42,6 +50,8 @@ from hytalegym.worldgen.region.traversal import (
 )
 
 REGION_TRAVERSAL_POLICY_STAGING_CAPACITY = 56
+# float32 feet heights can sit a hair above an integer block top.
+_SURFACE_FEET_EPSILON = 1e-3
 
 
 def region_traversal_atlas_from_graphs(
@@ -456,8 +466,13 @@ def produce_actor_region_world_geometry_tokens(
     maximum_distance: float = 4.0,
     view_sector_full_angle_radians: float = math.tau,
     max_los_cells: int | None = None,
+    semantic_atlas: RegionBlockSemanticAtlas | None = None,
 ) -> WorldGeometryTokenObservation:
-    """Publish native Region traversal through the actor-legal token gate."""
+    """Publish native Region traversal through the actor-legal token gate.
+
+    ``semantic_atlas`` is opt-in: when supplied, the rows also carry
+    ``block_type_id`` (see :func:`attach_region_block_type_ids`).
+    """
 
     traversal = query_region_traversal_tokens(
         atlas,
@@ -477,7 +492,7 @@ def produce_actor_region_world_geometry_tokens(
                 jnp.uint32(0),
             ),
         )
-    return produce_actor_world_geometry_tokens(
+    tokens = produce_actor_world_geometry_tokens(
         geometry,
         actor_position,
         actor_eye_position,
@@ -492,6 +507,66 @@ def produce_actor_region_world_geometry_tokens(
         maximum_distance=maximum_distance,
         view_sector_full_angle_radians=view_sector_full_angle_radians,
         max_los_cells=max_los_cells,
+    )
+    if semantic_atlas is None:
+        return tokens
+    return attach_region_block_type_ids(
+        tokens,
+        geometry,
+        semantic_atlas,
+        actor_position,
+    )
+
+
+def attach_region_block_type_ids(
+    tokens: WorldGeometryTokenObservation,
+    geometry: RegionGeometryState,
+    semantic_atlas: RegionBlockSemanticAtlas,
+    actor_position: jax.Array,
+) -> WorldGeometryTokenObservation:
+    """Attach the block id each Region token row describes or stands on.
+
+    Collision-exception rows describe their own cell:
+    floor(actor) + offset[source_index] in the local 9x9x9 window. Traversal
+    surface rows stand on the support block whose top is the feet height: the
+    cell (floor x, ceil(y - 1e-3) - 1, floor z) of actor + relative_position.
+    The epsilon keeps a full-block top at integer y from picking the cell
+    above. Padding rows, air, and every row of a mutated environment read 0,
+    which also means unknown.
+    """
+
+    if not isinstance(geometry, RegionGeometryState):
+        raise TypeError("geometry must be RegionGeometryState")
+    mask = tokens.token_mask
+    kind = tokens.token_kind
+    exception = mask & (kind == WORLD_TOKEN_KIND_COLLISION_EXCEPTION)
+    surface = mask & (kind == WORLD_TOKEN_KIND_TRAVERSAL_SURFACE)
+    batch, actors, capacity = mask.shape
+    actor_cell = jnp.floor(actor_position).astype(jnp.int32)
+    local = jnp.clip(tokens.source_index, 0, CELL_COUNT - 1)
+    exception_cell = actor_cell[:, :, None, :] + _LOCAL_CELL_OFFSETS[local]
+    world = actor_position[:, :, None, :] + tokens.relative_position
+    support_cell = jnp.stack(
+        (
+            jnp.floor(world[..., 0]),
+            jnp.ceil(world[..., 1] - _SURFACE_FEET_EPSILON) - 1,
+            jnp.floor(world[..., 2]),
+        ),
+        axis=3,
+    ).astype(jnp.int32)
+    cells = jnp.where(exception[..., None], exception_cell, support_cell)
+    selection = lookup_region_block_semantics(
+        semantic_atlas,
+        geometry.atlas,
+        cells.reshape(batch, actors * capacity, 3),
+        geometry.environment_world_id,
+        require_core=False,
+    )
+    ids = selection.block_type_id.reshape(batch, actors, capacity)
+    mutated = region_geometry_has_mutations(geometry)[:, None, None]
+    identified = (exception | surface) & ~mutated
+    return tokens._replace(
+        block_type_id=jnp.where(identified, ids, 0).astype(jnp.int32)
     )
 
 
