@@ -565,7 +565,7 @@ approach. Missing:
 | 3 | Fixed rules on game time: alarm and startle, sleep pressure and fatigue, hunger and the other drives; then lifecycle under normal death, and provenance. DESIGNED and APPROVED 2026-10-22; BUILT: startle, respawn, provenance (section 20.7); the drives wait for the clock (20.5) | 10.5, 10.7, 10.8, 16.1, 16.2, 16.5, 20 |
 | 4 | The event log and its tokens; the activity counters and levels. DESIGNED and APPROVED 2026-10-22; BUILT (section 21.6; the event tokens wait for step 7) | 10.6, 11.1, 16.6, 21 |
 | 5 | The long-term spatial memory: places, routes, coordinates. DESIGNED and APPROVED 2026-10-22; BUILT (section 22.7; the place tokens are step 7, section 24) | 10.11, 16.4, 22 |
-| 6 | Hearing: the sound registry, the hearing rule, heard entries in the stores, the orienting reflex (the token reads zero until S12). DESIGNED and APPROVED 2026-10-23 for today's inputs (section 28): the sound registry now; the rest when positional sounds are published (S12) | 17, 28 |
+| 6 | Hearing: the sound registry, the hearing rule, heard entries in the stores, the orienting reflex (the token reads zero until S12). DESIGNED and APPROVED 2026-10-23 for today's inputs (section 28); the sound registry BUILT (28.7); the rest when positional sounds are published (S12) | 17, 28 |
 | 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry (with it the status token's identity: which effect, its source entity, its damage cause, all in the observation and dropped today; `PERCEPTION.md` section 10.5), places, the proficiencies. First part DESIGNED and APPROVED 2026-10-22; BUILT (section 24.7: status identity, places, events) | 11.1 to 11.4, 11.6, 16.6, 17.8, 24 |
 | 8 | The formatted views (typed facts, words) and the recording. DESIGNED and APPROVED 2026-10-22; BUILT (section 25.6: the facts, the words, the recording) | 10.3, 10.9, 25 |
 | 9 | The social section (approved, 15.3). DESIGNED and APPROVED 2026-10-22 (section 26, with the rulings of 26.5) | 12, 15.3, 26 |
@@ -2573,6 +2573,24 @@ perception README row. The tables go to the private folder.
 1. **Build the sound registry now, and the rest of hearing when S12 lands?** Recommended: yes. The alternative, the
    whole of section 17 now on made-up events, gives a token that reads zero and constants no data can check.
    RULED: "continue with the next steps", taken as the recommendation; the asks of 28.4 sent to the coordinator.
+
+### 28.7 Built (2026-10-23): the sound registry
+
+`perception/sounds.py` (319 lines), written by a Haiku subagent from a written spec in its own worktree and re-checked
+here. Built on the 0.7.2 archive into the private folder (`perception/sounds_072`, 14.7 s): 1,569 sounds; by preset
+Moderate 700, Quiet 462, Loud 113, VeryQuiet 53, VeryLoud 18, ExtremelyQuiet 6, none 217 (the census of 28.1 exactly);
+112 categories, resolved through the `Parent` chains so every sound has one (1,421 set it directly); no missing or
+cyclic parents; 1,360 with a distance in their chain. 124 columns (12 fixed and 112 categories) and a 64-number
+description; looked up by asset id.
+
+Read from the 0.7.2 server's own classes (bytecode, not run in the game): `Volume` is in decibels; a key no sound in
+the chain sets takes `SoundEvent`'s constructor default, `MaxDistance` 16 blocks, `StartAttenuationDistance` 2,
+`SpatialBlend` 0.6. The 16-block default of the 209 sounds without a distance is the reading to check in the game first.
+The 0.7.2 language file names no sound, so the descriptions are the folders and the id.
+
+Checks: `test_sa_perception_sounds.py`, 7 (the census, `SFX_Bone_Hit` carrying 15 and fading at 4, a sound's own
+distance over its preset's, one preset each, the chain guards, the lookup, determinism and the round trip); with the
+effects test, 16 passed. Nothing reads the registry yet: the hearing rule waits for positional sounds (28.2).
 
 ### 28.6 What grounds it
 
