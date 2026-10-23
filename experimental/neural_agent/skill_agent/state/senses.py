@@ -23,8 +23,9 @@ target's ability and weapon rows, which the gym does not gate by perceptibility,
 the simulator gates them (the coordinator's S7).
 
 Seams. Fields the simulator does not publish yet read zero, with ``known`` 0: creature role, kind and attitude
-(S2), other entities beyond row 0 (S3, they fill as soon as the rows are published), held items (S4), block ids (S5),
-and the agent's maximum health. A status effect's id is read through the effects registry (``effects=``,
+(S2), other entities beyond row 0 (S3, they fill as soon as the rows are published), held items (S4), the block's
+identity and break progress (S5, read where the block view fills them: zero where it leaves them None), and the
+agent's maximum health. A status effect's id is read through the effects registry (``effects=``,
 ``perception/effects.py``): which effect it is, with ``effect_known`` 0 for an id the registry does not hold; without
 the registry its effect columns read zero.
 """
@@ -39,7 +40,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from experimental.neural_agent.skill_agent.contract import tokens_v3 as v3
-from experimental.neural_agent.skill_agent.contract.surface import ATTACK_PHASES, ATTITUDES
+from experimental.neural_agent.skill_agent.contract.surface import ATTACK_PHASES, ATTITUDES, BLOCK_PROPERTIES
 from experimental.neural_agent.skill_agent.perception import adapter as v2
 from experimental.neural_agent.skill_agent.state.action_history import ActionHistory, act_features
 from experimental.neural_agent.skill_agent.state.frames import POSITION_SCALE_BLOCKS, where, world_to_body
@@ -165,7 +166,7 @@ def perceive_rows(observation: Any, *, body_yaw_degrees: jax.Array | None = None
         "projectile": _projectile_rows(base, pose),
         "hazard": _hazard_rows(base, pose),
         "geometry": _geometry_rows(observation, light, pose),
-        "block_candidate": _block_rows(action_surface, block_reach_blocks, pose),
+        "block_candidate": _block_rows(action_surface, block_reach_blocks, pose, observation, tables),
         "inventory_slot": _inventory_rows(channel, tables, inventory_capacity),
         "recipe": _recipe_rows(action_surface),
         "act": None,
@@ -527,18 +528,50 @@ def _edges(f: jax.Array, position: jax.Array) -> jax.Array:
     return jnp.concatenate((gym[..., :1], to, gym[..., 2:]), axis=-1).reshape(batch, count, -1)
 
 
-def _block_rows(action_surface, reach: float | None, pose: Pose) -> tuple[jax.Array, jax.Array] | None:
+def _block_rows(action_surface, reach: float | None, pose: Pose, observation: Any = None,
+                tables: v2.RegistryTables | None = None) -> tuple[jax.Array, jax.Array] | None:
     if action_surface is None:
         return None
     view = action_surface.block_candidates
     f = view.candidate_f32  # [B, K, 28]: position (/reach, world), 16 affordance bits, 8 gather bits, quality
     position = world_to_body(f[..., :3] * jnp.float32(reach), pose.body_yaw[:, None])
     mask = jnp.asarray(view.candidate_mask, jnp.bool_) & jnp.asarray(view.available, jnp.bool_)[:, None]
-    rows = _put(_zeros(*mask.shape, "block_candidate"), {
+    columns = {
         "forward": where_of(position, pose, 0.5), "affordance_breakable": f[..., 3:3 + len(v3.AFFORDANCES)],
         "gather_bit_0": f[..., 19:19 + v3.GATHER_BITS], "required_quality": f[..., 27],
-    }, "block_candidate")
+    }
+    # S5: a view from before S5 (an older engine, such as a pinned render) has no such fields; read them as None.
+    progress, block_type_id = getattr(view, "break_progress", None), getattr(view, "block_type_id", None)
+    if progress is not None:  # the looked-at block's break progress (slot 0 only, by the producer)
+        columns["break_progress"] = progress
+    if tables is not None and block_type_id is not None:  # the block's identity, read by its semantic id
+        columns |= _block_identity(block_type_id, tables, observation)
+    rows = _put(_zeros(*mask.shape, "block_candidate"), columns, "block_candidate")
     return jnp.where(mask[..., None], rows, 0.0), mask
+
+
+def _block_identity(block_type_id: jax.Array, tables: v2.RegistryTables, observation: Any) -> dict[str, jax.Array]:
+    """The block candidates' registry columns, ``known`` and description, by the block's semantic id (int32[B, K]),
+    and how my tools fare against each block: the best carried tool (the perception channel's inventory, as the
+    inventory tokens read it) and the held one (``weapon_i32``, as the self token reads it). A block the registry does
+    not hold reads zero in all of them, with ``known`` 0, as the other seams do (not the -1 margin of "no tool fits")."""
+
+    row, found = v2.lookup(tables.block_keys, tables.block_rows, block_type_id)
+    channel = getattr(observation, "perception_v2", None)
+    if channel is None:  # no inventory published: no tools (one absent slot keeps the axis non-empty)
+        tool_rows = jnp.zeros((block_type_id.shape[0], 1), jnp.int32)
+        tool_present = jnp.zeros((block_type_id.shape[0], 1), jnp.bool_)
+    else:
+        tool_rows, tool_found = v2.lookup(tables.item_keys, tables.item_rows, channel.inventory_i32[..., 2])
+        tool_present = jnp.asarray(channel.inventory_mask, jnp.bool_) & tool_found
+    held, _ = v2.lookup(tables.item_keys, tables.item_rows, observation.weapon_i32[:, AGENT_ENTITY, _WEAPON_ID])
+    best_power, best_margin, held_power, held_margin = v2.tool_relations(tables, tool_rows, tool_present, held, row)
+    properties = tables.block_features[row]
+    columns = {f"block_{name}": properties[..., index] for index, name in enumerate(BLOCK_PROPERTIES)}
+    tools = {"best_power": best_power, "best_quality_margin": best_margin, "held_power": held_power,
+             "held_quality_margin": held_margin}
+    return columns | {"known": found, "description_0": tables.block_descriptions[row]} | {
+        name: jnp.where(found, value, 0.0) for name, value in tools.items()}
 
 
 def _inventory_rows(channel, tables, capacity: int) -> tuple[jax.Array, jax.Array] | None:

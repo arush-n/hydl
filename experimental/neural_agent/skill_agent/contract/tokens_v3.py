@@ -222,12 +222,14 @@ class GeometryTokenV3:
 class BlockCandidateTokenV3:
     """A block the agent could act on, perceived or remembered: where it is, its affordances, its gather type (the
     gym's index bits), the tool quality it needs, its registry properties, my tools' relations to it and its
-    description (the block id seam, S5)."""
+    description (the block identity, S5: the registry columns, the description and the tool relations are read by the
+    block's semantic id, ``known`` 1 when the registry holds it), and its break progress (S5, the first reserve column;
+    1 minus the block's health). S5 reads zero where the simulator's block view leaves its fields None."""
 
     FEATURES = (*WHERE_FEATURES, *MEMORY_FEATURES, *(f"affordance_{name}" for name in AFFORDANCES),
                 *(f"gather_bit_{bit}" for bit in range(GATHER_BITS)), "required_quality",
                 *(f"block_{name}" for name in BLOCK_PROPERTIES), "best_power", "best_quality_margin", "held_power",
-                "held_quality_margin", "known", *_DESCRIPTION, *_RESERVE, "marked")
+                "held_quality_margin", "known", *_DESCRIPTION, "break_progress", *_RESERVE[1:], "marked")
 
 
 class InventorySlotTokenV3:

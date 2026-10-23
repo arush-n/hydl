@@ -570,7 +570,7 @@ approach. Missing:
 | 8 | The formatted views (typed facts, words) and the recording. DESIGNED and APPROVED 2026-10-22; BUILT (section 25.6: the facts, the words, the recording) | 10.3, 10.9, 25 |
 | 9 | The social section (approved, 15.3). DESIGNED and APPROVED 2026-10-22 (section 26, with the rulings of 26.5); BUILT 2026-10-23 (section 26.7: the relationship the decision layer writes, the interaction facts, `spared`, personal space, the people in the views and the recording) | 12, 15.3, 26 |
 | T | The world's tick length: every state-layer constant in seconds, one tick length per world (found by the coordinator, 2026-10-23). DESIGNED and APPROVED 2026-10-23 (section 27); BUILT 2026-10-23 (section 27.7: `state/clock.py`, `tick_seconds` on `layer.step` and `state_tick.tick`; gen 5 unchanged column for column) | 27 |
-| W | World interaction: breaking, placing, using, picking up, and the commands (crafting, tools, items); the perception of break progress and items on the ground. DESIGNED and APPROVED 2026-10-22 (section 23); the perception follows the simulator's asks, the skills train when training resumes | 23 |
+| W | World interaction: breaking, placing, using, picking up, and the commands (crafting, tools, items); the perception of break progress and items on the ground. DESIGNED and APPROVED 2026-10-22 (section 23); the perception follows the simulator's asks: S5, the looked-at block's identity and break progress, READ 2026-10-23 (23.8); items on the ground (S13) wait; the skills train when training resumes | 23 |
 
 Every step is measured first with 2 agents, then scaled up (16.3).
 
@@ -2053,6 +2053,51 @@ shelter, cook a meal, from these skills and commands.
   what it is.
 - **The game's facts**: tool power and quality per gather type, bench recipes and the item mechanics are from the
   catalogue's survey of the 0.7.2 archive (2026-10-17).
+
+### 23.8 S5 read (2026-10-23), and how it was checked
+
+The simulator side landed S5 as 23.7 says (ca3447b, the coordinator's): `break_progress` and `block_type_id` beside
+each block candidate, filled on slot 0, the looked-at block, by the gen-7 Region camera and the native capture, None
+where a producer does not fill them. This layer now reads them (task 11's first half; items on the ground, S13, wait):
+- `contract/tokens_v3.py`: the block candidate's first reserve column is `break_progress`; the width is unchanged.
+- `state/senses.py`: `break_progress` from the view; by `block_type_id`, through the content registry (the same
+  `semantic_id` keys the items and creatures use), the block's registry columns, `known`, its description, and how my
+  tools fare against it (the best carried tool from the perception channel's inventory, the held one as the self token
+  reads it; `perception/adapter.tool_relations`). A block the registry does not hold reads zero in all of them with
+  `known` 0, as the other seams do. Where the view leaves the fields None, nothing is looked up and the rows are
+  exactly what they were.
+
+A Haiku subagent built it from a written spec in its own worktree; reviewed here, with three changes: an unknown
+block's tool margins read 0 rather than -1 (the "no tool fits" value); the render check runs long enough to see a
+block; and a view whose class predates S5 reads its fields as None. The last was found by the column probe: the pinned
+gen-7 render's engine (66376d7) has a block view without the two fields, and the first build failed on it with an
+AttributeError. The package gate would not have shown it, since that render's acceptance test already fails at the
+baseline.
+
+Checks:
+- **Unit** (`test_sa_block_identity.py`): `Rock_Stone` with break progress 0.4 reads `known` 1, 0.4, and the
+  registry's row and description; masked slots read zero; an unknown id reads zero with `known` 0; an iron pickaxe
+  carried or held gives the stone power 0.5 and margin 0.6, nothing carried gives 0 and -1; with the fields None the
+  rows equal today's, with and without the registry; a view without the fields reads as one with them None.
+- **On the simulator:** random play on the Region scenario (the current engine with the 0.7.2 pilot library, no
+  render; `bench/encoding_audit.region_steps`) first looks at a block on tick 8; over
+  200 ticks of 4 agents, 347 looked-at rows named 5 block types, all in the registry (`Soil_Pebbles` 235, `Soil_Grass`
+  95, `Rock_Stone` 14, `Rock_Stone_Mossy` 2, `Plant_Grass_Sharp_Short` 1). The test runs 40 ticks: 29
+  looked-at rows, every one `known` 1 (`Soil_Pebbles`) with the registry's row, and fails if none is read. Random play
+  never held a break long enough to move `break_progress`; that the Region camera publishes it for a damaged block is
+  the simulator's own test (`test_native_camera_candidate_publishes_identity_and_break_progress`), and this layer's
+  mapping is the unit test's.
+- **What moves** (the column probe of 26.7, 1f2e2dc against S5 merged onto it): on the current engine's Region
+  (200 ticks, 4 agents, no perception channel) only the block candidate's S5 columns: `known`, the six block
+  properties that vary among the blocks seen, the description, and the two tool margins (the agents hold a sword,
+  which has no power on soil or stone: the margins read -1, the powers stay 0). On the pinned gen-7 render and on
+  the duel nothing moves but the renamed column (`reserve_0` -> `break_progress`). The stores did not take part:
+  without the perception channel they do not write, and the render's engine has no fields. That a remembered block
+  keeps the columns it was stored with is read from `memory.py`, not run.
+- **The gate** (two passes, against the baseline taken at 6acadad): pass 1, 5 failed and 6 errors, the same 11
+  names, and 1,488 passed (the 1,480 of 27.7 and the 8 S5 tests); pass 2, 19 failed and 11 errors, the same 30
+  names. The gen-7 render's acceptance test fails as at the baseline, before it reaches this layer (`No module
+  named 'tests.jax'` in the worktree), which is why the gate could not have caught the AttributeError above.
 
 ## 24. Step 7, first part: the tokens for what is built (DESIGNED and APPROVED 2026-10-22, 24.5)
 
