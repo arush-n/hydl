@@ -38,16 +38,25 @@ from experimental.neural_agent.skill_agent.runtime.state_tick import _carried, _
 from experimental.neural_agent.skill_agent.state import layer
 
 
+class PackedRows(NamedTuple):
+    """One token type's valid rows of one decision: ``index`` int32[M, 2] holds each valid row's (lane, row),
+    ``features`` [M, F] its values in the storage dtype, and ``shape`` the dense (B, N, F)."""
+
+    index: np.ndarray
+    features: np.ndarray
+    shape: tuple
+
+
 class Decision(NamedTuple):
     """One decision of a rollout for every lane (B lanes, host arrays)."""
 
-    tokens: dict  # token type -> (features float32[B, N, F], valid bool[B, N])
+    tokens: dict  # token type -> (features float32[B, N, F], valid bool[B, N]), or PackedRows when recorded packed
     slots: dict  # object type -> int32[B, N]: each row's store slot, -1 for none
     restart: dict  # object type -> bool[B, C]: the store slots that took a new object this tick
     reset: np.ndarray  # bool[B]
-    latent: np.ndarray | None  # float32[B, S, W]: the memory the trunk step starts from, before any reset
-    background: np.ndarray | None  # float32[B, K, W]: the background the trunk step starts from, before any reset
-    stores: dict  # object type -> float32[B, C, W]: the store latents as the trunk step reads them
+    latent: np.ndarray | None  # float32[B, S, W]: the memory the trunk step starts from, before any reset; None if not kept
+    background: np.ndarray | None  # float32[B, K, W]: the background the trunk step starts from, before any reset; ditto
+    stores: dict | None  # object type -> float32[B, C, W]: the store latents as the trunk step reads them; None if not kept
 
 
 class Recording:
@@ -74,23 +83,41 @@ def _restarted(before: Any, after: Any) -> np.ndarray:
     return held & empty
 
 
+def _kept_tokens(tokens: dict, dtype: Any) -> dict:
+    """The tokens as :func:`record` keeps them: dense float32 when ``dtype`` is None, else each type's valid rows only."""
+
+    if dtype is None:
+        return {name: (np.asarray(features, np.float32), np.asarray(valid, bool))
+                for name, (features, valid) in tokens.items()}
+    kept = {}
+    for name, (features, valid) in tokens.items():
+        valid, values = np.asarray(valid, bool), np.asarray(features, np.float32)
+        kept[name] = PackedRows(np.argwhere(valid).astype(np.int32), values[valid].astype(dtype), values.shape)
+    return kept
+
+
 def record(recording: Recording, before: layer.AgentState, tokens: dict, after: layer.AgentState,
-           reset: Any = None) -> None:
+           reset: Any = None, *, dtype: Any = None, carry_at: Any = None) -> None:
     """Keep one decision. ``before`` is the state the layer step started from, ``after`` the state it returned, and
     ``tokens`` its token dict. Call it between ``layer.step`` and the trunk step, with the ``reset`` the step took
-    (None: no lane resets)."""
+    (None: no lane resets).
+
+    ``dtype`` (None: dense float32, as before) keeps each token type's valid rows only, in that dtype, which is what
+    makes a rollout's memory affordable (``docs/TRAINING_PLAN.md`` 8.6). ``carry_at`` (a set of decision indices; None:
+    every decision) keeps the carried state (latent, background, store latents) only at those decisions. :func:`cut`
+    needs it at each sequence's first decision."""
 
     objects = recording.config.object_types
     stores_before, stores_after = _stores(before), _stores(after)
+    kept = carry_at is None or len(recording.decisions) in carry_at
     recording.decisions.append(Decision(
-        tokens={name: (np.asarray(features, np.float32), np.asarray(valid, bool))
-                for name, (features, valid) in tokens.items()},
+        tokens=_kept_tokens(tokens, dtype),
         slots={name: np.asarray(after.object_slots[name], np.int32) for name in objects},
         restart={name: _restarted(stores_before[name].latent, stores_after[name].latent) for name in objects},
         reset=np.zeros(recording.batch, bool) if reset is None else np.asarray(reset, bool),
-        latent=None if after.latent is None else np.asarray(after.latent, np.float32),
-        background=None if after.background is None else np.asarray(after.background, np.float32),
-        stores={name: np.asarray(stores_after[name].latent, np.float32) for name in objects}))
+        latent=None if after.latent is None or not kept else np.asarray(after.latent, np.float32),
+        background=None if after.background is None or not kept else np.asarray(after.background, np.float32),
+        stores=None if not kept else {name: np.asarray(stores_after[name].latent, np.float32) for name in objects}))
 
 
 class Sequences(NamedTuple):
@@ -110,30 +137,52 @@ class Sequences(NamedTuple):
     stores: dict  # object type -> float32[n, C, W]: the store latents the first decision's trunk step reads
 
 
-def cut(recording: Recording, length: int) -> Sequences:
+def cut(recording: Recording, length: int, *, stride: int | None = None, ends: Any = None) -> Sequences:
     """Cut each lane's decisions into sequences of up to ``length`` (L) decisions. A reset starts a new sequence, so no
     sequence crosses one. Each sequence stores the carried state at its first decision.
 
+    ``stride`` (default ``length``, today's cut) is the distance between a lane's sequence starts; below ``length`` the
+    sequences overlap, each by ``length - stride`` (R2D2's burn-in, section 8.3 V1). ``ends`` (int[B], default all) is
+    each lane's number of decisions to use. From a packed recording (:func:`record` with ``dtype``) the tokens come back
+    packed, with no dense intermediate.
+
     Raises:
-        ValueError: If ``length`` is not a positive integer, or nothing was recorded.
+        ValueError: If ``length`` or ``stride`` is not a positive integer, ``ends`` is not one count per lane within the
+            recording, nothing was recorded, no decision is inside a lane's horizon, or a sequence starts at a decision
+            whose carried state was not kept (``record``'s ``carry_at``).
     """
 
     if isinstance(length, bool) or not isinstance(length, int) or length < 1:
         raise ValueError(f"length must be a positive integer, got {length!r}")
+    stride = length if stride is None else stride
+    if isinstance(stride, bool) or not isinstance(stride, int) or stride < 1:
+        raise ValueError(f"stride must be a positive integer, got {stride!r}")
     decisions = recording.decisions
     if not decisions:
         raise ValueError("nothing was recorded")
+    horizon = np.full(recording.batch, len(decisions), np.int64) if ends is None else np.asarray(ends, np.int64)
+    if horizon.shape != (recording.batch,) or horizon.min() < 0 or horizon.max() > len(decisions):
+        raise ValueError(f"ends must be one count per lane, each at most {len(decisions)}, got {ends!r}")
     spans = []  # (lane, first decision, steps)
     for lane in range(recording.batch):
-        start = 0
-        for step in range(1, len(decisions) + 1):
-            if step == len(decisions) or decisions[step].reset[lane] or step - start == length:
-                spans.append((lane, start, step - start))
-                start = step
+        segment = 0  # a reset, or the lane's horizon, closes a segment; its sequences start every ``stride``
+        for step in range(1, int(horizon[lane]) + 1):
+            if step == horizon[lane] or decisions[step].reset[lane]:
+                spans.extend((lane, begin, min(length, step - begin)) for begin in range(segment, step, stride))
+                segment = step
+    if not spans:
+        raise ValueError("no decision is inside a lane's horizon")
+    for _, start, _ in spans:
+        if decisions[start].stores is None:
+            raise ValueError(f"the carried state was not kept at decision {start}, where a sequence starts")
     count, objects, head = len(spans), recording.config.object_types, decisions[0]
-    tokens = {name: (np.zeros((count, length) + features.shape[1:], np.float32),
-                     np.zeros((count, length) + valid.shape[1:], bool))
-              for name, (features, valid) in head.tokens.items()}
+    packed = any(isinstance(value, PackedRows) for value in head.tokens.values())
+    if packed:
+        tokens = {name: _packed_tokens(decisions, spans, length, name) for name in head.tokens}
+    else:
+        tokens = {name: (np.zeros((count, length) + features.shape[1:], np.float32),
+                         np.zeros((count, length) + valid.shape[1:], bool))
+                  for name, (features, valid) in head.tokens.items()}
     slots = {name: np.full((count, length, head.slots[name].shape[1]), -1, np.int32) for name in objects}
     restart = {name: np.zeros((count, length, head.restart[name].shape[1]), bool) for name in objects}
     reset = np.zeros((count, length), bool)
@@ -143,9 +192,10 @@ def cut(recording: Recording, length: int) -> Sequences:
     for s, (lane, start, steps) in enumerate(spans):
         for pos in range(steps):
             decision = decisions[start + pos]
-            for name, (features, valid) in decision.tokens.items():
-                tokens[name][0][s, pos] = features[lane]
-                tokens[name][1][s, pos] = valid[lane]
+            if not packed:
+                for name, (features, valid) in decision.tokens.items():
+                    tokens[name][0][s, pos] = features[lane]
+                    tokens[name][1][s, pos] = valid[lane]
             for name in objects:
                 slots[name][s, pos] = decision.slots[name][lane]
                 restart[name][s, pos] = decision.restart[name][lane]
@@ -197,6 +247,55 @@ def unpack(sequences: Sequences) -> Sequences:
     return sequences._replace(tokens=tokens)
 
 
+def _packed_tokens(decisions: list, spans: list, length: int, name: str) -> PackedTokens:
+    """One token type's packed rows for the sequences: each (sequence, step) takes its decision's rows of its lane, in
+    sequence order (the index is sorted, so :func:`take` can slice it)."""
+
+    parts, values, lookups = [], [], {}
+    for s, (lane, start, steps) in enumerate(spans):
+        for pos in range(steps):
+            decision = start + pos
+            entry = decisions[decision].tokens[name]
+            if decision not in lookups:  # where each lane's rows begin in this decision's index
+                lookups[decision] = np.searchsorted(entry.index[:, 0], np.arange(entry.shape[0] + 1))
+            lo, hi = lookups[decision][lane], lookups[decision][lane + 1]
+            if hi > lo:
+                rows = entry.index[lo:hi, 1]
+                parts.append(np.column_stack([np.full(hi - lo, s, np.int32), np.full(hi - lo, pos, np.int32), rows]))
+                values.append(entry.features[lo:hi])
+    template = decisions[0].tokens[name]
+    index = np.concatenate(parts).astype(np.int32) if parts else np.zeros((0, 3), np.int32)
+    features = np.concatenate(values) if values else np.zeros((0, template.shape[-1]), template.features.dtype)
+    return PackedTokens(index, features, (len(spans), length) + tuple(template.shape[1:]))
+
+
+def take(sequences: Sequences, indices: Any) -> Sequences:
+    """The chosen sequences in the order given (repeats allowed), still packed where they were. A packed token type's
+    rows are sliced with ``np.searchsorted`` on its sequence index. ``unpack(take(...))`` is a dense batch."""
+
+    chosen = np.asarray(indices, np.int64)
+    count = len(chosen)
+    tokens = {}
+    for name, value in sequences.tokens.items():
+        if not isinstance(value, PackedTokens):
+            tokens[name] = (value[0][chosen], value[1][chosen])
+            continue
+        lo = np.searchsorted(value.index[:, 0], chosen, side="left")
+        hi = np.searchsorted(value.index[:, 0], chosen, side="right")
+        rows = np.concatenate([np.arange(a, b) for a, b in zip(lo, hi)] + [np.zeros(0, np.int64)])
+        new_sequence = np.repeat(np.arange(count, dtype=np.int32), hi - lo)
+        index = np.column_stack([new_sequence, value.index[rows, 1:]]).astype(np.int32)
+        tokens[name] = PackedTokens(index, value.features[rows], (count,) + tuple(value.shape[1:]))
+    return Sequences(
+        lane=sequences.lane[chosen], first=sequences.first[chosen], steps=sequences.steps[chosen],
+        reset=sequences.reset[chosen], tokens=tokens,
+        slots={name: value[chosen] for name, value in sequences.slots.items()},
+        restart={name: value[chosen] for name, value in sequences.restart.items()},
+        latent=None if sequences.latent is None else sequences.latent[chosen],
+        background=None if sequences.background is None else sequences.background[chosen],
+        stores={name: value[chosen] for name, value in sequences.stores.items()})
+
+
 def step(params: EncoderParams, config: EncoderConfig, carry: tuple, decision: dict) -> tuple[tuple, EncoderOutput]:
     """One decision of the unroll for a batch of sequences: the carry ``(memory, background, store latents)`` and the
     decision's inputs, each with the batch on its leading axis (``tokens`` by type, ``slots`` and ``restart`` by object
@@ -246,4 +345,5 @@ def unroll(params: EncoderParams, config: EncoderConfig, sequences: Sequences) -
     return jax.tree_util.tree_map(lambda leaf: jnp.swapaxes(leaf, 0, 1), outputs)
 
 
-__all__ = ["Decision", "PackedTokens", "Recording", "Sequences", "cut", "pack", "record", "step", "unpack", "unroll"]
+__all__ = ["Decision", "PackedRows", "PackedTokens", "Recording", "Sequences", "cut", "pack", "record", "step", "take",
+           "unpack", "unroll"]

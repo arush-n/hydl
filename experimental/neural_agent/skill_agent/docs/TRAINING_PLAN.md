@@ -410,7 +410,7 @@ Console replays of the mace fights: 20261020T062617Z-11750ee7 (scripted), 202610
 - A self-play league can cycle, or collapse onto one strategy (Balduzzi et al. 2019). The scripted styles stay in the
   pool as anchors, as AlphaStar kept its exploiters (Vinyals et al. 2019).
 
-## 8. Training on v3: the state layer and the trunk's memory (PROPOSED 2026-10-23; V0 APPROVED the same day, 8.4; the sequence machinery BUILT, 8.7)
+## 8. Training on v3: the state layer and the trunk's memory (PROPOSED 2026-10-23; V0 APPROVED the same day, 8.4; the sequence machinery BUILT, 8.7; V1 built, smoke and short pass run, 8.8 and 8.9)
 
 `VIRTUAL_HUMAN.md` section 13: "Moving the trainers onto `runtime/state_tick.py` is the first task when training
 resumes." The encoder and the state layer are now built through step 9 (with the tick fix and S5), so this section says
@@ -592,6 +592,187 @@ channels:
 - **The cut.** It needs a stride, so that sequences overlap by the burn-in (R2D2), and each lane's end (its horizon).
 
 **Gate** (two passes, against the 6acadad baseline): pass 1 the same 11 failing names, with 1,602 passed (the new sequence tests among them); pass 2 the same 30.
+
+### 8.8 V1 built, and its timed smoke (2026-10-23; the owner approved the smoke, not the full run)
+
+**What was built.** `training/distill_v3.py`, by a Haiku subagent from a written spec, checked and extended here. It is
+A2's DAgger loop (`distill.py`, unchanged) on v3:
+- **The rollout** runs `layer.step` with the agent's own pose, then the trunk's step with the carried state, then the
+  head. It records each decision, packed: the valid rows in float16, with the carried state kept only where a sequence
+  starts.
+- **The data:** sequences of L = 90 decisions that overlap by the burn-in B = 30 (R2D2). A sequence that starts at an
+  episode's reset carries the loss on every decision; a mid-episode one only after its burn-in. Every decision inside
+  a horizon carries exactly one loss term.
+- **The loss** re-runs the trunk over each sequence (`sequences.unroll`), applies the head, and takes A2's
+  cross-entropy plus the done term.
+- **The control** is the same run with the trunk's memory, background and object latents removed.
+
+`sequences.py` gained the keywords that make this fit in memory: `record(dtype=, carry_at=)`, `cut(stride=, ends=)`
+and `take`. Its defaults are unchanged.
+
+**Run C''s options, missed at first.** V1's gate names run C' (README 2.16), which passed only with three options:
+walk_to v3's stop margin, the look request's direction, and that direction measured in the head's frame. The spec said
+"A2's task", the builder left the options out, and the review here did not catch it.
+
+So the smoke and the overnight pass (8.9) ran with A2's original options. Their rates compare with each other, memory
+against control, but not with C'.
+
+Since 2026-10-24, `distill_v3` runs with C''s options by default (`DistillV3Config.walk_stop_margin`,
+`look_direction`, `look_frame`). `--walk-stop-margin 0 --no-look-direction` gives A2's options back.
+
+**Checked** (`test_sa_distill_v3.py` 17 passed, 2 skipped by design; `test_sa_sequences.py` 17 passed, 1 skipped):
+- with the parameters unchanged, the loss path's head logits equal the rollout's within 1.7e-6 (memory) and 1.43e-6
+  (control);
+- each decision in a horizon carries exactly one loss term;
+- a reset-start sequence trains the initial memory, and a mid-episode one does not;
+- twenty steps on one batch lower the loss;
+- a batch cut to the filled slots (below) gives the full batch's loss and gradient to float32 rounding, and the cut is
+  refused when a decision's valid rows do not come first;
+- DAgger's aggregate of two iterations reads each part back exactly;
+- V1 runs with run C''s options by default: the 'both' lane's look request carries its direction, the walk
+  request's stays empty, and the head frame without the direction is refused.
+
+A two-iteration run of each arm checked what the one-iteration smoke cannot (4 lanes, 3 steps an iteration):
+- the aggregate grows from 9 to 20 sequences;
+- the student drives half the lanes in the second iteration;
+- the cut holds;
+- `--params-out` saves parameters that load back.
+
+**The world's tick, measured:** 1/30 s on every lane (the trainers' flat world, `combat.last_motion_delta_seconds`), not
+the 0.045 s of the loaded pursuit arena.
+
+**The smoke as first run** (one iteration of 128 lanes, beta 1, 300 Adam steps on 12 sequences each; load 80 to 120 on
+18 cores, mostly another project's training; every token slot computed):
+
+| | Memory | Control |
+|---|---|---|
+| decisions, sequences, stored | 19,422; 381; 107 MB | the same episodes; 94 MB |
+| collect | 126 s | 89 s |
+| step p50 / p95 | 11.2 / 15.5 s | 10.8 / 20.0 s |
+| 300 steps | 3,463 s (58 min) | 3,490 s |
+| peak RSS | 21.0 GB | 18.8 GB |
+| loss, steps 0 / 100 / 200 / 299 | 2.89 / 0.26 / 0.14 / 0.26 | 3.12 / 0.25 / 0.14 / 0.25 |
+| eval seen: walk, look, both | 24%, 2%, 0% | 8%, 4%, 0% |
+| eval held out: walk, look, both | 3%, 5%, 1% | 5%, 4%, 0% |
+| illegal decisions | 0 | 0 |
+
+After 300 steps on the teachers' data alone, the rates are far from run C''s. That is expected: A2 trained 6 x 2,000
+steps with DAgger. The smoke measures the cost and checks the pipeline; it is not the gate.
+
+**Where the time goes, measured.** Building a batch on the host takes 5 to 150 ms, and the compiled step the rest: the
+forward pass about 2.5 s, the backward and Adam about 9.
+
+The trunk computes every token slot, filled or not. On this world only 39 of the 356 slots ever hold a row:
+- all 21 act rows, 5 kit, 1 entity, and the self, affect, persona and status;
+- no geometry, inventory, block candidates or other types.
+
+Empty slots are masked. Valid rows always come first in each type (checked), so a batch cut to the slots the data fills
+computes the same values:
+- the loss agrees to 7 digits;
+- the largest gradient gap is 1.2e-7, against gradients up to 0.6;
+- the step is about 13 times faster: 1.9 to 2.6 s against 28 to 33 s in the same process and conditions.
+
+`distill_v3` now cuts every batch that way (`_filled`):
+- it refuses data whose rows are not first, and keeps every row a request points at;
+- the key test runs on the cut batch.
+
+On the Region, geometry fills, so the gain there is smaller (not measured).
+
+**The smoke with the cut** (the same command, the same seeds; load 125 to 140):
+
+| | Memory | Control |
+|---|---|---|
+| slots computed | 39 of 356 | 39 of 356 |
+| step p50 / p95 | 1.83 / 2.20 s (was 11.2 / 15.5) | 1.36 / 1.70 s (was 10.8 / 20.0) |
+| 300 steps | 561 s (was 3,463) | 430 s (was 3,490) |
+| peak RSS | 3.5 GB (was 21.0) | 2.7 GB (was 18.8) |
+| loss at every logged step | the uncut run's to 6 digits (0.256438 against 0.256437 at step 299) | identical to 6 digits |
+| evaluation | identical rates, lane for lane | identical |
+| the whole smoke | 20 min (was 65) | 17 min (was 66) |
+
+- **The cut is the same training:** after 300 Adam steps the two paths still agree to 6 digits, and every evaluation
+  outcome is the same.
+- **The step is 6 to 8 times faster under this load.** In the profile, same process and conditions, it was 13 times.
+- **The evaluations now take the largest share,** 3 to 5 minutes each. They run the trunk at full capacity in the
+  rollout, which is not worth cutting at two evaluations a run.
+- **Memory against control, at this stage:**
+  - after step 0, where the initial parameters differ (2.89 against 3.12), the two loss curves agree within 0.02 at
+    every logged step, since both learn the same teacher labels on the same episodes;
+  - the memory run walks to seen goals more often: 21 of 86 lanes against 7;
+  - held out, the two are level.
+
+  This is one seed after 300 steps on teacher data only, so it is not evidence either way. V1's gate is the full
+  run's.
+
+**What it sets for the full run** (A2's schedule: 6 iterations of 2,000 steps, DAgger beta halving; inferred from the
+cut smoke's numbers at load 125 to 140, not run):
+- **Training:** 12,000 steps at 1.4 to 1.8 s is 4.5 to 6.1 hours an arm. Uncut, it would have been about 37.
+- **Collection:** about 2 to 3 minutes per iteration. The aggregate grows to about 117,000 decisions and 0.6 GB.
+- **Memory:** a peak near 3 to 4 GB; the step's memory does not grow with the aggregate.
+- **The two arms** run one after the other, so about 10 to 13 hours on today's shared machine. A quiet machine should
+  be about 3 times faster (8.9: 0.54 s a step at load 25 to 40 against 1.7 s under load; measured once).
+- **The ask to the owner,** with these numbers: the full V1 run of both arms, or a shorter schedule first, for
+  example 6 x 500 steps (about 3.5 hours for both).
+- **RULED 2026-10-24:** "do shorter passes overnight", and "ensure that it is proper before committing". Both arms run
+  at 6 x 500 steps, in parallel, with the parameters saved; its results are recorded in 8.9 once read. The full
+  schedule waits on them.
+
+**Gate** (two passes, against the 6acadad baseline, on 1e52c83 with V1's files):
+- pass 1: 1,636 passed. Of its 12 failing names, 11 are the baseline's, and one is 6101ddd's intended relations
+  test (VIRTUAL_HUMAN.md 26.8). None comes from V1;
+- pass 2: the same 30.
+
+### 8.9 The short pass, memory against control (2026-10-24; the owner: "do shorter passes overnight")
+
+**What ran.** Both arms with the same command, seeds and data:
+- 6 DAgger iterations of 500 steps, beta 1 then halving;
+- 128 lanes, the batch cut to the filled slots;
+- evaluation on seed 77001, 256 lanes, seen and held out.
+
+They ran in parallel, at load 85 to 140. The code that ran is kept beside the reports (`distill_v3_as_run.py`, hashes in
+`code.txt`).
+
+**One caveat.** It ran with A2's original options, before run C''s were made V1's default (8.8): walk_to v2, and no
+look direction. So these rates compare memory against control, not either against C'.
+
+| | Memory | Control |
+|---|---|---|
+| aggregate after 6 iterations | 2,445 sequences | 2,445 sequences |
+| step p50 by iteration | 1.66 to 2.01 s; 0.54 s in the last, at load 25 to 40 | 1.04 to 1.33 s |
+| the whole run | 94 min | 80 min |
+| illegal decisions (training, evaluation) | 0, 0 | 0, 0 |
+| seen, held success: walk, look, both | 0.767, 0.082, 0.118 | 0.872, 0.047, 0.094 |
+| seen, first hit: walk, look, both | 0.767, 0.671, 0.294 | 0.872, 0.435, 0.341 |
+| held out, held: walk, look, both | 0.733, 0.035, 0.176 | 0.686, 0.012, 0.129 |
+| held out, first hit: walk, look, both | 0.733, 0.188, 0.388 | 0.686, 0.247, 0.376 |
+
+**What it shows** (85 or 86 lanes per mode; one seed an arm):
+- **Training through time works over DAgger's iterations.**
+  - The aggregate grows to 2,445 sequences.
+  - The student drives 121 of the 128 new lanes in the last iteration.
+  - Each iteration's loss falls.
+  - No decision is illegal, in training or in either evaluation (79,669 decisions an arm).
+- **Walking is learnt:** 0.77 and 0.87 seen, 0.73 and 0.69 held out. A walk that arrives also holds.
+- **Looking is reached but not held:** held success is at most 0.08 in either arm, while first hits reach 0.19 to
+  0.67. This is the failure run C' fixed with the look direction in the head's frame (README 2.16), and these runs
+  did not have that option.
+- **No consistent difference between memory and control.**
+  - On seen goals, the control walks better: 75 of 86 lanes against 66, about 1.8 standard errors.
+  - On seen goals, the memory run reaches a look target more often: 57 of 85 against 37, about 3.2 standard errors.
+  - Held out, the look difference reverses (0.188 against 0.247), and the walk difference reverses too (0.733
+    against 0.686).
+
+  This task needs no memory, since each request carries its target. So "not worse" is the question V1 asks, and one
+  seed cannot answer it.
+- **The gradient's peaks grow with the iterations:** the largest norm goes from 10 to 37 (memory) and from 11 to 29
+  (control). There is no clipping. The loss still falls every iteration, but a full run should log the spikes and be
+  ready to clip.
+- **Speed.** The memory run's last iteration ran when the machine quieted (load 25 to 40) and took 0.54 s a step,
+  against 1.7 s under load 90 to 140: measured once.
+
+**Next, for the owner:** the same short pass with run C''s options, now V1's default, so that V1's bars against C'
+can be read. It is about 1.5 hours an arm in parallel at today's load, and less when the machine is quiet. A second
+seed would make the memory comparison readable.
 
 ## References
 
