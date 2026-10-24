@@ -72,6 +72,10 @@ HYTALE_ENV_PARAMETER_BINDINGS = MappingProxyType(
         # asynchronously (envs/block_type_table.py). The Gym's own default is
         # False, so forwarding it changes no behaviour.
         "block_type_ids": "block_type_ids",
+        # Added by the Gym on 2026-10-24: the S14 game clock on the learner-v3
+        # observation, from the bridge's time_of_day (envs/live_game_clock.py).
+        # The Gym's own default is False, so forwarding it changes no behaviour.
+        "learner_game_clock": "learner_game_clock",
     }
 )
 
@@ -287,6 +291,7 @@ class NativeBridgeSession:
         learner_v3_world_action_adapter: Any | None = None,
         render_mode: str | None = None,
         block_type_ids: bool = False,
+        learner_game_clock: bool = False,
     ) -> None:
         if not isinstance(spec, AgentSpec):
             raise TypeError("spec must be an AgentSpec")
@@ -354,6 +359,8 @@ class NativeBridgeSession:
             raise TypeError("combat_target_active must be bool")
         if not isinstance(block_type_ids, bool):
             raise TypeError("block_type_ids must be bool")
+        if not isinstance(learner_game_clock, bool):
+            raise TypeError("learner_game_clock must be bool")
         if not isinstance(target_profile, str):
             raise TypeError("target_profile must be a string")
         if (
@@ -395,6 +402,7 @@ class NativeBridgeSession:
         self.native_time_dilation = float(native_time_dilation)
         self.combat_target_active = combat_target_active
         self.block_type_ids = block_type_ids
+        self.learner_game_clock = learner_game_clock
         self.fidelity_fixture = fidelity_fixture
         self._lease: NativeEvidenceLease | None = None
         self._environment: HytaleEnv | None = None
@@ -514,6 +522,7 @@ class NativeBridgeSession:
                 learner_v3_world_action_adapter=(self.learner_v3_world_action_adapter),
                 render_mode=self.render_mode,
                 block_type_ids=self.block_type_ids,
+                learner_game_clock=self.learner_game_clock,
             )
         except Exception:
             lease.close()

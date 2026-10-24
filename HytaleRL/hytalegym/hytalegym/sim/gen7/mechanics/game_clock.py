@@ -63,6 +63,23 @@ def _seconds_until(target: float, second_of_day):
     return jnp.where(delta <= 0.0, jnp.float32(GAME_SECONDS_PER_DAY), delta)
 
 
+def clock_at(second, time_of_day, elapsed) -> GameClock:
+    """The clock from the second of the day (float32 [B]), time_of_day (int32 [B]) and game seconds since reset
+    (float32 [B]). The simulator derives all three from the tick count (``clock_fields``); live reads time_of_day from the
+    bridge (``hytalegym/envs/live_game_clock.py``)."""
+
+    batch = second.shape[0]
+    return GameClock(
+        time_of_day=time_of_day,
+        is_day=(second >= SUNRISE_SECONDS) & (second < NIGHTFALL_SECONDS),
+        seconds_to_sunrise=_seconds_until(SUNRISE_SECONDS, second),
+        seconds_to_nightfall=_seconds_until(NIGHTFALL_SECONDS, second),
+        game_seconds_elapsed=elapsed,
+        weather_index=jnp.full((batch,), WEATHER_UNKNOWN, dtype=jnp.int32),
+        weather_known=jnp.zeros((batch,), dtype=jnp.bool_),
+    )
+
+
 def clock_fields(tick_count, step_seconds: float) -> GameClock:
     """The clock of one batch from its tick counts (``state.combat.tick_count``, int [B]) and the step (seconds)."""
 
@@ -74,17 +91,7 @@ def clock_fields(tick_count, step_seconds: float) -> GameClock:
         0,
         TIME_OF_DAY_UNITS,
     ).astype(jnp.int32)
-    is_day = (second >= SUNRISE_SECONDS) & (second < NIGHTFALL_SECONDS)
-    batch = second.shape[0]
-    return GameClock(
-        time_of_day=time_of_day,
-        is_day=is_day,
-        seconds_to_sunrise=_seconds_until(SUNRISE_SECONDS, second),
-        seconds_to_nightfall=_seconds_until(NIGHTFALL_SECONDS, second),
-        game_seconds_elapsed=elapsed,
-        weather_index=jnp.full((batch,), WEATHER_UNKNOWN, dtype=jnp.int32),
-        weather_known=jnp.zeros((batch,), dtype=jnp.bool_),
-    )
+    return clock_at(second, time_of_day, elapsed)
 
 
 @lru_cache(maxsize=None)

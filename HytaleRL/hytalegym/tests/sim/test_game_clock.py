@@ -251,3 +251,98 @@ def test_the_flat_policy_vector_is_unchanged_by_the_switch(engines) -> None:
     on_flat = engines.on.layout.arsenal_policy_observation(engines.on.observe(engines.on.reset()))
     assert off_flat.shape[1] == engines.off.layout.ARSENAL_POLICY_OBSERVATION_SIZE
     np.testing.assert_array_equal(np.asarray(on_flat), np.asarray(off_flat))
+
+
+# ---- live (hytalegym/envs/live_game_clock.py): the bridge's time_of_day into the same GameClock -------------------------
+
+
+def test_live_clock_agrees_with_the_sim_at_the_same_time_of_day() -> None:
+    from hytalegym.envs.live_game_clock import LiveGameClock
+
+    for tick in (0, 49320, 86400 - 19800 + 17280):  # 05:30, nightfall, sunrise
+        sim = _at(tick)
+        live = LiveGameClock().update(int(sim.time_of_day[0]))
+        assert live.time_of_day.tolist() == sim.time_of_day.tolist()
+        assert live.is_day.tolist() == sim.is_day.tolist()
+        np.testing.assert_allclose(np.asarray(live.seconds_to_sunrise), np.asarray(sim.seconds_to_sunrise), atol=1.8)
+        np.testing.assert_allclose(np.asarray(live.seconds_to_nightfall), np.asarray(sim.seconds_to_nightfall), atol=1.8)
+        assert live.weather_index.tolist() == [game_clock.WEATHER_UNKNOWN]
+        assert live.weather_known.tolist() == [False]
+
+
+def test_live_elapsed_is_the_wrap_aware_change_since_reset() -> None:
+    from hytalegym.envs.live_game_clock import LiveGameClock
+
+    clock = LiveGameClock()
+    assert float(clock.update(5506).game_seconds_elapsed[0]) == 0.0  # the first reading starts the count
+    assert float(clock.update(5524).game_seconds_elapsed[0]) == pytest.approx(18 * 3.6)  # the jar-14 receipt's 60 ticks
+    assert float(clock.update(5524).game_seconds_elapsed[0]) == pytest.approx(18 * 3.6)  # no change, no time
+    clock.reset()
+    clock.update(23990)
+    assert float(clock.update(10).game_seconds_elapsed[0]) == pytest.approx(20 * 3.6)  # across midnight
+
+
+def test_live_clock_rejects_a_reading_outside_the_day() -> None:
+    from hytalegym.envs.live_game_clock import LiveGameClock
+
+    for bad in (-1, 24001, True):
+        with pytest.raises(ValueError):
+            LiveGameClock().update(bad)
+
+
+def test_with_game_clock_appends_the_field_last() -> None:
+    from typing import NamedTuple
+
+    from hytalegym.envs.live_game_clock import LiveGameClock, with_game_clock
+
+    class Observation(NamedTuple):
+        valid: int
+        failure_bits: int
+
+    clock = LiveGameClock().update(5500)
+    observation = with_game_clock(Observation(1, 0), clock)
+    assert observation._fields == ("valid", "failure_bits", "game_clock")
+    assert observation.game_clock is clock
+
+
+def test_the_live_env_switch_needs_a_bool_and_the_learner_observation() -> None:
+    from hytalegym.envs.hytale_env import HytaleEnv
+
+    with pytest.raises(TypeError):
+        HytaleEnv(learner_game_clock="yes")
+    with pytest.raises(ValueError):
+        HytaleEnv(learner_game_clock=True)  # no learner_v3_profile: nothing to append to
+
+
+def test_the_live_env_appends_the_clock_to_the_assembly_and_reset_restarts_elapsed() -> None:
+    from typing import NamedTuple
+
+    from hytalegym.envs.hytale_env import HytaleEnv
+    from hytalegym.envs.live_game_clock import LiveGameClock
+    from hytalegym.jax.combat.observation.v3.native.evidence import NativeActorEvidenceAssembly
+
+    class Observation(NamedTuple):
+        valid: int
+
+    assembly = NativeActorEvidenceAssembly(
+        evidence=None,
+        observation=Observation(1),
+        policy_observation=np.zeros(3, dtype=np.float32),
+        policy_action_mask=np.ones(2, dtype=np.bool_),
+        world_capabilities=None,
+        light_tokens=None,
+        actor_yaw_degrees=0.0,
+        raw_wire={},
+    )
+    env = SimpleNamespace(_live_game_clock=LiveGameClock())
+    first = HytaleEnv._with_live_game_clock(env, assembly, {"time_of_day": 5506})
+    second = HytaleEnv._with_live_game_clock(env, assembly, {"time_of_day": 5524})
+    assert first.observation._fields == ("valid", "game_clock")
+    assert int(second.observation.game_clock.time_of_day[0]) == 5524
+    assert float(second.observation.game_clock.game_seconds_elapsed[0]) == pytest.approx(18 * 3.6)
+    np.testing.assert_array_equal(second.policy_observation, assembly.policy_observation)  # the flat vector is untouched
+    env._live_game_clock.reset()
+    restarted = HytaleEnv._with_live_game_clock(env, assembly, {"time_of_day": 5530})
+    assert float(restarted.observation.game_clock.game_seconds_elapsed[0]) == 0.0
+    with pytest.raises(ValueError):
+        HytaleEnv._with_live_game_clock(env, assembly, {})

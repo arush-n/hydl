@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import dataclasses
 import hashlib
 import json
 import operator
@@ -118,6 +119,9 @@ class HytaleEnv(gym.Env):
         native_time_dilation: Server-authoritative simulation-time multiplier
             in ``(0.01, 4]``. Pair ``30 * speed`` TPS with ``speed`` dilation
             to fast-forward while retaining a 1/30-second logical tick.
+        learner_game_clock: Append the S14 ``game_clock`` field to the
+            learner-v3 observation, from the bridge's ``time_of_day``
+            (``envs/live_game_clock.py``). Needs ``learner_v3_profile``.
     """
 
     metadata = {"render_modes": ["human"], "render_fps": 20}
@@ -145,6 +149,7 @@ class HytaleEnv(gym.Env):
         native_tick_rate: int = 30,
         native_time_dilation: float = 1.0,
         block_type_ids: bool = False,
+        learner_game_clock: bool = False,
     ):
         super().__init__()
         self.task = task
@@ -202,6 +207,16 @@ class HytaleEnv(gym.Env):
         self._connection: BridgeConnection | None = None
         self.block_type_ids = block_type_ids
         self._block_type_loader: BlockTypeIdLoader | None = None
+        if not isinstance(learner_game_clock, bool):
+            raise TypeError("learner_game_clock must be bool")
+        if learner_game_clock and learner_v3_profile is None:
+            raise ValueError("learner_game_clock needs the learner-v3 observation (learner_v3_profile)")
+        self.learner_game_clock = learner_game_clock
+        self._live_game_clock: Any | None = None
+        if learner_game_clock:
+            from hytalegym.envs.live_game_clock import LiveGameClock
+
+            self._live_game_clock = LiveGameClock()
         self._step_count = 0
         self._native_actor_assembler: Any | None = None
         self._native_actor_assembly: Any | None = None
@@ -468,8 +483,21 @@ class HytaleEnv(gym.Env):
         self._require_observation(response)
         if self.block_type_ids:
             self._start_block_type_loader()
+        if self._live_game_clock is not None:
+            self._live_game_clock.reset()
 
         return self._parse_policy_response(response)
+
+    def _with_live_game_clock(self, assembly: Any, raw_observation: Mapping[str, Any]) -> Any:
+        """``assembly`` with the S14 clock appended to its learner observation as ``game_clock``, read from the bridge's
+        ``time_of_day`` (``envs/live_game_clock.py``; the same ``GameClock`` as the gen-7 construct)."""
+
+        from hytalegym.envs.live_game_clock import with_game_clock
+
+        if "time_of_day" not in raw_observation:
+            raise ValueError("learner_game_clock needs the bridge's time_of_day")
+        clock = self._live_game_clock.update(raw_observation["time_of_day"])
+        return dataclasses.replace(assembly, observation=with_game_clock(assembly.observation, clock))
 
     def _start_block_type_loader(self) -> None:
         if self._block_type_loader is None:
@@ -694,6 +722,8 @@ class HytaleEnv(gym.Env):
                 surface,
                 info,
             )
+        if self._live_game_clock is not None:
+            assembly = self._with_live_game_clock(assembly, raw_observation)
         self._native_actor_assembly = assembly
         info.update(
             {
