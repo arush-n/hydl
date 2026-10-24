@@ -886,6 +886,14 @@ DECLARATIONS = {
     "perception_roles": Derived(
         "construct (fidelity row none): its differential is in the Hook row"
     ),
+    "legal_hidden_held_item_and_abilities": Derived(
+        "patch (fidelity row 14): legal observation masks a hidden body's weapon and ability rows; its differential is "
+        "tests/sim/test_legal_observation_privilege.py (no 0.7.2 source value: a contract rule)"
+    ),
+    "legal_hidden_target_attack_phase": Derived(
+        "patch (fidelity row 14): legal observation keeps a hidden target's base attack values; its differential is "
+        "tests/sim/test_legal_observation_privilege.py (no 0.7.2 source value: a contract rule)"
+    ),
     "game_clock": (
         # S14 (owner 2026-10-23): the 0.7.2 day and night lengths; SECONDS_PER_DAY 86400 and the 0.6 day split are
         # WorldTimeResource constants (javap), checked by tests/sim/test_game_clock.py.

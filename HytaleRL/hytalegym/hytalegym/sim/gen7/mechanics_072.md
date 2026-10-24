@@ -405,3 +405,35 @@ with `i` the spin's own slot (0 Left, 1 Right). Gen 5 keeps no table.
 **Confirmed vs inferred.** Confirmed: the asset values (file read), the probe transitions (`probe_g7_before2.json`,
 `probe_g7_after.json`), gen-5 identical before and after. Inferred: the spin firing on release on the real game (follows
 from the Charging semantics in `programs/charge.py`); not live-measured.
+
+## Legal observation: hidden bodies read as absent (row 14, 2026-10-23; lane `lane_row14_fix`)
+
+Two `Patch` entries (`legal_hidden_held_item_and_abilities`, `legal_hidden_target_attack_phase`), both gen 7 only, both
+gated by `config.legal_observation` (the encoder's `entity_evidence` is True when the flag is off, and the target gate is
+`target_present | ~legal`, so legal-off values are the HEAD values).
+
+- Held item and ability rows (`jax/combat/observation/v3/encoding/encoder.py`): a body the actor cannot perceive, or that is
+  not living, publishes `weapon_i32 = (-1, 0, -1)` (the factory defaults of an empty loadout: `weapon_id` -1, `weapon_family`
+  0, active slot -1) and no ability rows (`ability_f32`/`ability_i32` 0, `ability_mask` and `ability_legal` False). The
+  actor's own row is always evidence.
+- Presence (`jax/combat/observation/v3/encoding/attack_compatibility.py`): `arsenal_target` is gated by `target_present`
+  (the base target mask, set from the target's perceptibility), so a hidden armed enemy keeps the base combat, target and
+  entity values, as an absent slot does, instead of index -1 and phase IDLE.
+
+**Differential.** `tests/sim/test_legal_observation_privilege.py` (row 14). Confirmed on the gen-7 render (seed 570057,
+2026-10-23): the hidden held-item pair (iron sword vs battleaxe) and the hidden presence pair (armed vs dead enemy) are
+bit-identical, both with and without perception_v2; their visible controls still change the observation. Probe of
+`weapon_i32` on the gen-7 render: a hidden armed enemy reads `[-1, 0, -1]`, the same as an absent enemy; a visible one
+reads its real weapon id.
+
+**Not fixed, by the bit-identity rule.** Gen 5 keeps the leak: the held-item and armed-presence pairs and the mana pair
+are xfail there (`GEN5_LEAK_PAIRS`). Gen 5 health, position and unarmed presence pass.
+
+**Mana pair (test construction).** The enemy-mana control is vacuous on the gen-7 renders: the visible control does not
+change with the enemy's mana (20.0, the default, or 5.0), so no learner field carries it there. The pair is skipped on
+gen 7 (`GEN7_VACUOUS_PAIRS`), and the hidden case is skipped with it because the skip is shared. Gen 5 does show the visible
+mana change. Cause not diagnosed (inferred: the gen-7 learner observation carries no enemy mana).
+
+**Confirmed vs inferred.** Confirmed: the privilege test before (6 failed: gen 7 and gen 7 + perception_v2) and after (0 failed, 8 skipped, 3 xfailed),
+the probe above, and the gates in the lane report. Inferred: the mana cause, and that the empty-loadout defaults are the
+absent value in every render (probed on gen 7 only).

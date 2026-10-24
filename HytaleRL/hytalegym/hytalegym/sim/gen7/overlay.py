@@ -428,7 +428,63 @@ _SKELETON_TURRET_NOTE = (
 _SKELETON_TURRET_ROW = "Skeleton_Archer_Turret"
 _SKELETON_TURRET_DIFF = "tests/sim/test_skeleton_archer_turret_bow.py (profile pins); the duel measurement (lane report, 2026-10-23)"
 
+# Row 14, legal observation (2026-10-23): with config.legal_observation on, a body the actor cannot perceive publishes no
+# held item and no ability rows. Its rows read as the absent slot (factory defaults: weapon_id -1, weapon_family 0, active
+# slot -1, no ability rows); the actor's own rows are always evidence. The target attack projection is gated by the target's
+# perception (target_present = base target mask), so a hidden armed enemy reads as no enemy: base values, as an absent slot.
+# Legal observation off: entity_evidence and the gate are all True, so every value is the HEAD value.
+_LEGAL_ROW14 = (
+    "tests/sim/test_legal_observation_privilege.py on the gen-7 render (seed 570057): the held-item pair (hidden iron sword "
+    "vs battleaxe) and the presence pair (hidden armed vs dead enemy) are bit-identical, and the visible control of each pair "
+    "still changes the observation; gen 5 keeps the leak (xfail, out of scope)"
+)
+
 PATCHES = (
+    # Row 14, held item and ability rows of a hidden entity (the encoder's legal evidence, not an absent slot's values).
+    Patch("legal_hidden_held_item_and_abilities", "combat/observation/v3/encoding/encoder.py",
+          "    entity_evidence = entity_evidence.at[:, AGENT_ENTITY].set(True)\n"
+          "    return LearnerObservationV3ActorEvidence(\n"
+          "        base=base,\n"
+          "        weapon_i32=weapon_i32,\n"
+          "        resource_f32=jnp.where(entity_evidence[:, :, None], resource_f32, 0.0),\n"
+          "        resource_mask=resource_mask,\n"
+          "        defense_f32=jnp.where(entity_evidence[:, :, None], defense_f32, 0.0),\n"
+          "        status_f32=jnp.where(entity_evidence[:, :, None, None], status_f32, 0.0),\n"
+          "        status_i32=jnp.where(entity_evidence[:, :, None, None], status_i32, 0),\n"
+          "        status_flags=jnp.where(entity_evidence[:, :, None], status_flags, jnp.uint32(0)),\n"
+          "        status_mask=status_mask & entity_evidence[:, :, None],\n"
+          "        ability_f32=ability_f32,\n"
+          "        ability_i32=ability_i32,\n"
+          "        ability_mask=ability_mask,\n"
+          "        ability_legal=legal,\n",
+          "    entity_evidence = entity_evidence.at[:, AGENT_ENTITY].set(True)\n"
+          "    return LearnerObservationV3ActorEvidence(\n"
+          "        base=base,\n"
+          "        weapon_i32=jnp.where(\n"
+          "            entity_evidence[:, :, None],\n"
+          "            weapon_i32,\n"
+          "            jnp.asarray((-1, 0, -1), dtype=jnp.int32),\n"
+          "        ),\n"
+          "        resource_f32=jnp.where(entity_evidence[:, :, None], resource_f32, 0.0),\n"
+          "        resource_mask=resource_mask,\n"
+          "        defense_f32=jnp.where(entity_evidence[:, :, None], defense_f32, 0.0),\n"
+          "        status_f32=jnp.where(entity_evidence[:, :, None, None], status_f32, 0.0),\n"
+          "        status_i32=jnp.where(entity_evidence[:, :, None, None], status_i32, 0),\n"
+          "        status_flags=jnp.where(entity_evidence[:, :, None], status_flags, jnp.uint32(0)),\n"
+          "        status_mask=status_mask & entity_evidence[:, :, None],\n"
+          "        ability_f32=jnp.where(entity_evidence[:, :, None, None], ability_f32, 0.0),\n"
+          "        ability_i32=jnp.where(entity_evidence[:, :, None, None], ability_i32, 0),\n"
+          "        ability_mask=ability_mask & entity_evidence[:, :, None],\n"
+          "        ability_legal=legal & entity_evidence[:, :, None],\n",
+          "14", "tests/sim/test_legal_observation_privilege.py (held-item pair)", _LEGAL_ROW14),
+    # Row 14, presence: a target the actor cannot perceive projects no attack phase (base values, as an absent slot).
+    Patch("legal_hidden_target_attack_phase", "combat/observation/v3/encoding/attack_compatibility.py",
+          "    arsenal_target = target_index_valid & jnp.any(target_ability_mask, axis=1)\n",
+          "    arsenal_target = target_index_valid & jnp.any(target_ability_mask, axis=1)\n"
+          "    arsenal_target = arsenal_target & (\n"
+          "        target_present | ~jnp.asarray(config.legal_observation, dtype=jnp.bool_)\n"
+          "    )\n",
+          "14", "tests/sim/test_legal_observation_privilege.py (presence pair)", _LEGAL_ROW14),
     # Row 11x, augment tags (construct crafting_augment_tags): the grant bits ride the context and the assets; the gate is a hook.
     Patch("augment_context_field", "crafting/types.py",
           "    input_mode: Array\n",
