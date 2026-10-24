@@ -85,6 +85,9 @@ VARIABLES: tuple[Variable, ...] = (
     *_group("self", "activity counters", "rule", ("distance_walked", "distance_sprinted", "distance_swum",
                                                    "distance_climbed", "damage_dealt", "damage_taken",
                                                    "items_gained", "food_eaten", "deaths"), low=0.0, high=1e9),
+    # The drives (``state/drives.py``, sections 16.1, 16.5 and 20.2): sleep pressure and hunger on the game clock, each
+    # in [0, 1]. The body reads neither: the top layers do, and their effect on the body is a regulator, future (16.1).
+    *_group("self", "drives", "rule", ("sleep_pressure", "hunger"), low=0.0, high=1.0),
 )
 NAMES: tuple[str, ...] = tuple(variable.name for variable in VARIABLES)
 BY_NAME: Mapping[str, Variable] = {variable.name: variable for variable in VARIABLES}

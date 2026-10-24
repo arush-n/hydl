@@ -13,7 +13,8 @@ stores it). One tick, :func:`step`:
 2. the senses read this tick's perceived rows;
 3. the emotional state appraises them, with the persona's gains, and is published to the variables;
 4. the event log registers this tick's changes (``state/events.py``, section 21), and its counters are published to the
-   variables;
+   variables; then the drives (``state/drives.py``, sections 16.1 and 20.2) take this tick's activity and the game clock,
+   and sleep pressure and hunger are published too;
 5. the top layers' writes are applied (``state/written.py``), and the live ``remember`` entries become the stores' tags;
 6. the stores take them, and the long-term places take this tick's events, marks and fear (``state/places.py``,
    section 22);
@@ -48,6 +49,7 @@ from experimental.neural_agent.skill_agent.contract import variables
 from experimental.neural_agent.skill_agent.contract.surface import ITEM_PROPERTIES
 from experimental.neural_agent.skill_agent.perception.adapter import lookup
 from experimental.neural_agent.skill_agent.state import clock
+from experimental.neural_agent.skill_agent.state import drives
 from experimental.neural_agent.skill_agent.state import registry
 from experimental.neural_agent.skill_agent.state import affect as feeling
 from experimental.neural_agent.skill_agent.state import events
@@ -97,6 +99,7 @@ class AgentState(NamedTuple):
     events: events.EventState | None = None  # the event log and the counters (state/events.py)
     places: places.PlaceState | None = None  # the long-term spatial memory (state/places.py, section 22)
     social: social.SocialState | None = None  # the people's interaction facts (state/social.py, section 26)
+    drives: drives.DriveState | None = None  # sleep pressure, hunger and the clock's last reading (state/drives.py)
 
 
 def initial_state(batch: int, latent: jax.Array | None = None, persona: jax.Array | None = None,
@@ -117,7 +120,8 @@ def initial_state(batch: int, latent: jax.Array | None = None, persona: jax.Arra
                       affect, slots["entity"], slots, background, written=written.initial_written(batch),
                       events=events.initial_events(batch, entities=capacities["entity"],
                                                    slots=capacities["inventory_slot"], outcomes=events.OUTCOME_SLOTS),
-                      places=places.initial_places(batch), social=social.initial_social(batch))
+                      places=places.initial_places(batch), social=social.initial_social(batch),
+                      drives=drives.initial(batch))
 
 
 def _restarts(reset: jax.Array | None, respawn: jax.Array | None) -> jax.Array | None:
@@ -300,6 +304,11 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
                          respawn)
     logged = events.update(state.events, observed, reset, tick_seconds=tick_seconds)
     values = registry.put(values, events.COUNTERS, logged.counters)
+    own = perceived.rows["self"][0][:, 0]  # the self token: its movement states, ``sleeping`` among them
+    dynamic = drives.update(state.drives, getattr(observation, "game_clock", None), reset=reset,
+                            asleep=own[:, _SELF["moving_sleeping"]] > 0.5,
+                            activity=drives.activity(logged, state.events.counters, history, reset))
+    values = registry.put(values, drives.NAMES, jnp.stack([dynamic.sleep_pressure, dynamic.hunger], axis=-1))
     record = written.apply(state.written, writes, reset)
     memory = stores.update(state.memory, perceived, written.tags(record), reset, tick_seconds=tick_seconds)
     placed = places.update(
@@ -344,7 +353,7 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
     ids = fit_ids(entity_ids, valid, capacities["entity"])  # aligned with tokens["entity"], perceived and remembered
     slots = stores.object_slots(memory, tokens, ids, perceived.pose)
     return tokens, AgentState(history, memory, state.latent, values, affect, ids, slots, state.background,
-                              written=record, events=logged, places=placed, social=socialed)
+                              written=record, events=logged, places=placed, social=socialed, drives=dynamic)
 
 
 def _present_first(present: jax.Array, count: int, *columns: tuple[jax.Array, Any]) -> list[jax.Array]:
@@ -452,7 +461,7 @@ def load(path: str | Path, like: AgentState, *, maps: Mapping[str, Mapping[str, 
     ``like``'s values in the rest (step 9: 16 entity entries, now 150). A part of the state the save lacks (added since,
     as the object latents, the background summary on 2026-10-22, the written entries on step 2 of section 19, and the
     event log on step 4 of section 21, which a save from before it loads as an empty log, and the places on step 5 of
-    section 22, which load with none) takes ``like``'s value.
+    section 22, which load with none, and the drives, which load at rest) takes ``like``'s value.
     """
 
     maps, dropped = maps or {}, dropped or {}

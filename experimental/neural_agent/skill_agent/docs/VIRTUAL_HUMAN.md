@@ -562,7 +562,7 @@ approach. Missing:
 | 1b | DONE 2026-10-22: the body's path on v3: the generalist reads every token type; every entity row carries its id; the runtime ticks the state layer (`runtime/state_tick.py`); a request points at a perceived or remembered entity; request to action tested. The trainers stay on v1 until training resumes | 13 (this section) |
 | 1c | DONE 2026-10-22: the memory design: a parallel write; object files for entities and block candidates (one latent each, keyed by identity); a gist of 16 latent slots plus a cache of 32 remembered cells for the background; the tick a quarter to a third faster on real rows (18.4) | 18 |
 | 2 | Structured writes from the top two layers; the tags move onto them. DESIGNED and APPROVED 2026-10-22 (section 19, rulings in 19.7); BUILT 2026-10-22 (section 19.8) | 10.4, 19 |
-| 3 | Fixed rules on game time: alarm and startle, sleep pressure and fatigue, hunger and the other drives; then lifecycle under normal death, and provenance. DESIGNED and APPROVED 2026-10-22; BUILT: startle, respawn, provenance (section 20.7); the drives wait for the clock (20.5) | 10.5, 10.7, 10.8, 16.1, 16.2, 16.5, 20 |
+| 3 | Fixed rules on game time: alarm and startle, sleep pressure and fatigue, hunger and the other drives; then lifecycle under normal death, and provenance. DESIGNED and APPROVED 2026-10-22; BUILT: startle, respawn, provenance (section 20.7); sleep pressure and hunger on the game clock (20.8, 2026-10-24) | 10.5, 10.7, 10.8, 16.1, 16.2, 16.5, 20 |
 | 4 | The event log and its tokens; the activity counters and levels. DESIGNED and APPROVED 2026-10-22; BUILT (section 21.6; the event tokens built with step 7, 24.7) | 10.6, 11.1, 16.6, 21 |
 | 5 | The long-term spatial memory: places, routes, coordinates. DESIGNED and APPROVED 2026-10-22; BUILT (section 22.7; the place tokens built with step 7, 24.7) | 10.11, 16.4, 22 |
 | 6 | Hearing: the sound registry, the hearing rule, heard entries in the stores, the orienting reflex (the token reads zero until S12). DESIGNED and APPROVED 2026-10-23 for today's inputs (section 28); the sound registry BUILT (28.7); the rest when positional sounds are published (S12) | 17, 28 |
@@ -1671,6 +1671,73 @@ about the same impulse (0.401 against 0.402, neutral persona). The first hit's a
 1.41 and habituation divides it by about 1.40. Both factors are as designed; the size of the potentiation is the
 estimate above. If repeats should weaken, the potentiation's gain is the knob (`state/affect.py`, the `1.0 + affect.fear`
 term).
+
+### 20.8 Built (2026-10-23): sleep pressure and hunger on the game clock
+
+**The trigger.** 20.5 ruled that the clock rules wait for a clock. S14 brought one: the coordinator's d1aa4b6, the
+construct `game_clock`, opt in. The drives were built to the approved design (16.1, 16.5, 20.2), by a Haiku subagent
+from a written spec, checked here.
+
+**What reads the clock.** `state/drives.py` reads `getattr(observation, "game_clock", None)`.
+- **The elapsed game time:** the change in `game_seconds_elapsed`, or else in live's `time_of_day`, taken with its
+  24,000-unit wrap (3.6 game seconds a unit).
+- **Nothing moves:**
+  - with no clock (every world today without the construct): today's behaviour, unchanged;
+  - on the first tick of a clock;
+  - after a reset.
+- **Sleep pressure S:** process S (Daan, Beersma and Borbely 1984): 18.2 game hours rising while awake, 4.2 falling
+  while asleep. Asleep means the self token's `moving_sleeping`, which nothing sets yet.
+- **Hunger H:**
+  - it rises `HUNGER_PER_GAME_HOUR` = 0.5/24 [E] a game hour;
+  - it rises with exhaustion: Minecraft's weights (0.1 a block sprinted, 0.01 a block swum, 0.05 a jump, counted once
+    a press, 0.1 a hit dealt or taken) times `EXHAUSTION_TO_HUNGER` = 1/80 [E];
+  - each `ate` event lowers it by `FOOD_SATISFACTION` = 0.25 [E].
+- **Start, reset, respawn.** Both start at 0 (a world starts at 05:30, rested and fed), a reset restores that, and a
+  respawn keeps them (16.2).
+
+**Where they are published.**
+- **The variables:** `sleep_pressure` and `hunger`, group "drives", source rule. The body reads neither, so the
+  trunk's token widths are unchanged (checked).
+- **The views:** `facts()["drives"]`, with the time of day, day or night, S and H, and one sentence in `words` when
+  there is a clock.
+- **Saves:** a save from before them loads them at rest.
+
+**Decided in the build** (low-stakes, recorded so it can be reversed):
+- **Paused live.** A paused clock, with the same `time_of_day` every tick, moves no time. Activity still moves hunger,
+  since the exertion is real. With no clock at all nothing moves.
+- **Precision.** Sleep pressure's awake update is written with `expm1`, so a small S keeps its digits in float32.
+  The asleep update, multiplied each tick, drifts about 9e-4 relative over a whole night of 33,444 one-second ticks
+  (measured). That is far below the estimates' own uncertainty.
+
+**Checked.**
+- **Tests.** `test_sa_drives.py`: 13 unit tests covering:
+  - no clock, nothing moves;
+  - 18.2 hours awake gives 1 - 1/e, and 4.2 asleep gives S/e;
+  - a skipped night counts as the time it skipped;
+  - the hunger rates, and meals;
+  - live's wrap, and a paused clock;
+  - reset and respawn;
+  - the views;
+  - the saves.
+- **Regressions.** The state, social, views and registry tests: 188 passed before and after.
+- **End to end, the clock alone (confirmed).** On a fresh gen-7 render of this tree, `game_seconds_elapsed`
+  advances 1 a tick. After 300 game seconds, S = 0.004568295 against the formula's 0.004568288, and H is the idle
+  rate times 300/3600.
+- **End to end, the clock with perception_v2 (fails).** That pair fails today, in the simulator's render:
+  perception_v2's encoder wraps game_clock's and raises before the first tick. That is the coordinator's lane. The
+  report to them was held and expired undelivered (2026-10-23); its text is kept for the owner. The test is a strict
+  xfail naming it.
+- **Gate** (two passes, against the 6acadad baseline, on a tree holding the spared change 6101ddd):
+  - pass 1: 1,602 passed and 2 xfailed. Of its 12 failing names, 11 are the baseline's, and one is the coordinator's
+    relations test that 6101ddd fails, as intended (26.8). None comes from the drives. The 14 drive tests passed,
+    the simulator run among them, and the pair test is the second xfail;
+  - pass 2: the same 30.
+
+**Open for the owner:**
+- the three [E] rates;
+- whether a consumable that is not food (a potion) should count as a meal: today it does, since the item registry has
+  no food tier;
+- live needs the host to publish `time_of_day` as `game_clock`; that ask is in the same held message.
 
 ## 21. Step 4: the event log and the activity counters (DESIGNED and APPROVED 2026-10-22)
 

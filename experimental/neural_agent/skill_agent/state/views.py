@@ -1,9 +1,10 @@
 """The views of the state (``docs/VIRTUAL_HUMAN.md`` section 25; its grounding is 25.5): one agent's state read as typed
 facts, and as the words the LLM is told. Both run on the host, off the tick.
 
-:func:`facts` reads one lane into a JSON-safe dict: the persona's traits, the feelings and the counters; what the agent
-knows of others (``runtime/state_tick.known_entities``, by the ids the layer perceives); the people it has met, each
-with the relationship the decision layer wrote about it and its interaction facts (``state/social.py``, section 26);
+:func:`facts` reads one lane into a JSON-safe dict: the persona's traits, the feelings, the counters, the clock and the
+drives (``state/drives.py``); what the agent knows of others (``runtime/state_tick.known_entities``, by the ids the
+layer perceives); the people it has met, each with the relationship the decision layer wrote about it and its
+interaction facts (``state/social.py``, section 26);
 where it has been (the long-term places and routes, each place with its distance and bearing from the agent now); what
 happened lately (the event log, newest first); and what the top layers wrote, with its writer and its age. The decision
 layer reads the state through these facts, and no model rates them.
@@ -25,7 +26,7 @@ import numpy as np
 
 from experimental.neural_agent.skill_agent.contract import variables
 from experimental.neural_agent.skill_agent.state import affect as feeling
-from experimental.neural_agent.skill_agent.state import clock, events, layer, registry, social, written
+from experimental.neural_agent.skill_agent.state import clock, drives, events, layer, registry, social, written
 from experimental.neural_agent.skill_agent.state.frames import world_to_body
 from experimental.neural_agent.skill_agent.state.places import PLACE_KINDS
 
@@ -166,8 +167,8 @@ def facts(state: layer.AgentState, lane: int, *, own_position: Any = None, body_
         dt_seconds: One tick, in seconds: the ages (``*_s``) are ticks times it.
 
     Returns:
-        ``{"self", "feeling", "entities", "places", "routes", "events", "written", "people"}`` as the module docstring
-        lists them.
+        ``{"self", "feeling", "entities", "places", "routes", "events", "written", "people", "drives"}`` as the module
+        docstring lists them.
     """
 
     from experimental.neural_agent.skill_agent.runtime import state_tick  # lazily: runtime imports the state
@@ -224,6 +225,8 @@ def facts(state: layer.AgentState, lane: int, *, own_position: Any = None, body_
                   for slot in range(events.EVENT_SLOTS - 1, -1, -1) if held[slot]]
 
     clock_written = int(np.asarray(state.written.now)[lane])
+    clocked = bool(np.asarray(state.drives.has_clock)[lane])
+    time_of_day = float(np.asarray(state.drives.time_of_day)[lane])
     return {
         "self": {"traits": {name: read(name) for name in TRAITS},
                  "counters": {name: read(name) for name in events.COUNTERS}},
@@ -242,6 +245,9 @@ def facts(state: layer.AgentState, lane: int, *, own_position: Any = None, body_
                                place=True),
         },
         "people": _people(state, lane, here, yaw, clock, clock_written, dt_seconds),
+        "drives": {"time_of_day_hours": time_of_day / drives.UNITS_PER_GAME_HOUR if clocked else None,
+                   "is_day": drives.is_day(time_of_day) if clocked else None,
+                   "sleep_pressure": read("sleep_pressure"), "hunger": read("hunger")},
     }
 
 
@@ -269,6 +275,19 @@ def _feeling_line(feeling: Mapping[str, Any]) -> str:
 def _counters_line(counters: Mapping[str, float]) -> str:
     shown = [f"{_COUNTER_WORDS[name]} {_number(value)}" for name, value in counters.items() if value != 0.0]
     return f"Counters: {', '.join(shown)}." if shown else ""
+
+
+def _drives_line(drives_facts: Mapping[str, Any] | None) -> str:
+    """The clock and the drives in one sentence, with a clock only: the game hour, day or night, sleep pressure and
+    hunger (16.1; the top layers read them, the body does not). Empty without a clock, or for facts made before the
+    drives."""
+
+    if drives_facts is None or drives_facts["time_of_day_hours"] is None:
+        return ""
+    hour, minute = divmod(round(drives_facts["time_of_day_hours"] * 60) % (24 * 60), 60)
+    part = "day" if drives_facts["is_day"] else "night"
+    return (f"It is {hour:02d}:{minute:02d} ({part}); sleep pressure {_two(drives_facts['sleep_pressure'])}, "
+            f"hunger {_two(drives_facts['hunger'])}.")
 
 
 def _entity_line(entity: Mapping[str, Any]) -> str:
@@ -395,14 +414,18 @@ def words(facts: Mapping[str, Any], budget: int = 1200) -> str:
     """The facts as plain sentences, at most ``budget`` characters long (the module docstring).
 
     The feeling line comes first, then the counters line when a counter is non-zero; both are always written, so a
-    budget below their length is exceeded by them alone. Then the candidates, best first, each on its own line, stopping
-    at the first one that would take the text past the budget.
+    budget below their length is exceeded by them alone. Then the clock and the drives, one sentence with a clock only,
+    and the candidates, best first, each on its own line, stopping at the first one that would take the text past the
+    budget.
     """
 
     lines = [_feeling_line(facts["feeling"])]
     counters = _counters_line(facts["self"]["counters"])
     if counters:
         lines.append(counters)
+    drives_line = _drives_line(facts.get("drives"))
+    if drives_line:
+        lines.append(drives_line)
     text = "\n".join(lines)
     for line in _ranked(facts):
         grown = f"{text}\n{line}"
