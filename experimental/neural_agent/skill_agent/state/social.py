@@ -58,6 +58,9 @@ SPARE_REACH_BLOCKS: float = feeling.THREAT_REACH_BLOCKS
 """The reach of a chance to strike me: the reach the emotion rules assume for an attacker."""
 SPARE_FACING_DEGREES: float = 45.0
 """A chance faces me within this angle [E]: between its facing and the direction from it to me."""
+MIN_CHANCE_SECONDS: float = 0.25
+"""A chance counts as spared only if it lasted this long [E] (section 26.8): about a person's simple reaction time to a
+visual signal (recalled: 0.2 to 0.25 s), so not striking within less is not a choice. Pauses count toward it."""
 _TAKEN: int = events.EVENT_KINDS.index("damage_taken")
 _DEALT: int = events.EVENT_KINDS.index("damage_dealt")
 _ME, _THEM, _BOTH = (STARTED.index(name) for name in ("me", "them", "both"))
@@ -86,6 +89,7 @@ class Records(NamedTuple):
     spared: jax.Array  # int32[B, S]: the completed chances it had to strike me and did not take
     chance_open: jax.Array  # bool[B, S]: a chance is open now (it is in reach and facing me)
     chance_hit: jax.Array  # bool[B, S]: a hit from it landed during the open chance
+    chance_start: jax.Array  # int32[B, S]: the tick the open chance began (its length counts pauses); -1 if none
     valid: jax.Array  # bool[B, S]
 
 
@@ -105,6 +109,7 @@ def _empty(batch: int, slots: int) -> Records:
                    ticks_in_view=zeros, hits_taken=zeros, hits_dealt=zeros, damage_taken=floats, damage_dealt=floats,
                    started=minus, last_interaction=minus, last_kind=minus, spared=zeros,
                    chance_open=jnp.zeros((batch, slots), jnp.bool_), chance_hit=jnp.zeros((batch, slots), jnp.bool_),
+                   chance_start=jnp.full((batch, slots), -1, jnp.int32),
                    valid=jnp.zeros((batch, slots), jnp.bool_))
 
 
@@ -129,7 +134,7 @@ def lookup(state: SocialState, ids: jax.Array) -> jax.Array:
 
 def update(state: SocialState, seen_ids: jax.Array, seen_world: jax.Array | None, seen_chance: jax.Array,
            logged: events.EventState, written_ids: jax.Array, reset: jax.Array | None = None,
-           tick_seconds: float = clock.DEFAULT_TICK_SECONDS) -> SocialState:
+           tick_seconds: float = clock.DEFAULT_TICK_SECONDS, seen_alive: jax.Array | None = None) -> SocialState:
     """The table after this tick (module docstring).
 
     A blow from it during a chance, on the tick the chance opens included, takes the chance: only an unhit one counts.
@@ -144,7 +149,10 @@ def update(state: SocialState, seen_ids: jax.Array, seen_world: jax.Array | None
             are the ring entries stamped with it.
         written_ids: int32[B, K], the keys of the live written entity entries (-1 padding): their records are kept.
         reset: bool[B], the lanes that start empty first (an episode boundary). A respawn changes nothing.
-        tick_seconds: The world's tick (section 27), which turns ``MEETING_GAP_SECONDS`` into ticks.
+        tick_seconds: The world's tick (section 27), which turns ``MEETING_GAP_SECONDS`` and ``MIN_CHANCE_SECONDS``
+            into ticks.
+        seen_alive: bool[B, N], aligned with ``seen_ids``: the person is seen alive (None: every one is). A chance that
+            closes because the person is seen dead is not counted: it did not choose.
     """
 
     batch, slots = state.records.key_id.shape
@@ -198,7 +206,7 @@ def update(state: SocialState, seen_ids: jax.Array, seen_world: jax.Array | None
         meetings=jnp.ones_like(zeros), meeting_start=jnp.broadcast_to(now, (batch, slots)),
         ticks_in_view=jnp.ones_like(zeros), hits_taken=zeros, hits_dealt=zeros, damage_taken=floats,
         damage_dealt=floats, started=minus, last_interaction=minus, last_kind=minus, spared=zeros,
-        chance_open=falses, chance_hit=falses, valid=jnp.ones((batch, slots), jnp.bool_))
+        chance_open=falses, chance_hit=falses, chance_start=zeros - 1, valid=jnp.ones((batch, slots), jnp.bool_))
     rec = jax.tree_util.tree_map(
         lambda new, old: jnp.where(hit.reshape(hit.shape + (1,) * (old.ndim - hit.ndim)), new, old), fresh, rec)
 
@@ -228,15 +236,20 @@ def update(state: SocialState, seen_ids: jax.Array, seen_world: jax.Array | None
     # seen in reach and facing me (a newcomer's included) and closes on a tick it is seen and is not. While the person
     # is out of sight the chance pauses: losing sight of it is my doing, not its choice. A hit from it during the chance
     # (its first tick and a pause included) means the chance was taken: it closes unspared. A chance left open from an
-    # earlier meeting is dropped uncounted.
+    # earlier meeting is dropped uncounted. It counts only if it lasted ``MIN_CHANCE_SECONDS`` (pauses included) and the
+    # person is seen alive as it closes (section 26.8).
     seen_now = seen | hit  # perceived this tick, a newcomer included
     chance_seen = (jnp.any(match & seen_chance[:, :, None], axis=1)
                    | (hit & jnp.take_along_axis(seen_chance, source, axis=1)))
     was_open, was_hit = rec.chance_open & ~new_meeting & ~hit, rec.chance_hit & ~new_meeting & ~hit
     chance = jnp.where(seen_now, chance_seen, was_open)
     struck = was_hit | ((was_open | chance) & got)
-    rec = rec._replace(spared=rec.spared + (was_open & ~chance & ~struck).astype(jnp.int32),
-                       chance_open=chance, chance_hit=struck & chance)
+    alive = seen_now if seen_alive is None else (jnp.any(match & seen_alive[:, :, None], axis=1)
+                                                 | (hit & jnp.take_along_axis(seen_alive, source, axis=1)))
+    lasted = now - rec.chance_start >= clock.at_least(MIN_CHANCE_SECONDS, tick_seconds)  # read where it was open
+    rec = rec._replace(spared=rec.spared + (was_open & ~chance & ~struck & alive & lasted).astype(jnp.int32),
+                       chance_open=chance, chance_hit=struck & chance,
+                       chance_start=jnp.where(chance, jnp.where(was_open, rec.chance_start, now), -1))
     return SocialState(rec, unrecorded)
 
 
@@ -252,6 +265,6 @@ def space_target(closeness: jax.Array, hostility: jax.Array, fear: jax.Array) ->
     return zone + (SPACE_PUBLIC_BLOCKS - zone) * h
 
 
-__all__ = ["CLOSENESS_EDGES", "MEETING_GAP_SECONDS", "Records", "SOCIAL_SLOTS", "SPACE_PUBLIC_BLOCKS",
-           "SPACE_SCALE_BLOCKS", "SPACE_ZONES", "SPARE_FACING_DEGREES", "SPARE_REACH_BLOCKS", "STARTED", "SocialState",
-           "initial_social", "lookup", "space_target", "update"]
+__all__ = ["CLOSENESS_EDGES", "MEETING_GAP_SECONDS", "MIN_CHANCE_SECONDS", "Records", "SOCIAL_SLOTS",
+           "SPACE_PUBLIC_BLOCKS", "SPACE_SCALE_BLOCKS", "SPACE_ZONES", "SPARE_FACING_DEGREES", "SPARE_REACH_BLOCKS",
+           "STARTED", "SocialState", "initial_social", "lookup", "space_target", "update"]

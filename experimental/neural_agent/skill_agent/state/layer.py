@@ -314,8 +314,9 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
     seen_world = None if perceived.pose.position is None else stores._world_of(entity_rows, perceived.pose)
     written_ids = jnp.where(record.entity.valid, record.entity.key_id, -1)
     seen_chance = _chances(entity_rows, present)
+    seen_alive = present & (entity_rows[..., _ENTITY["alive"]] > 0.5)
     socialed = social.update(state.social, seen_ids, seen_world, seen_chance, logged, written_ids, reset,
-                             tick_seconds=tick_seconds)
+                             tick_seconds=tick_seconds, seen_alive=seen_alive)
     remembered = stores.read(memory, perceived.pose, tick_seconds=tick_seconds)
     rows = dict(perceived.rows)
     rows["act"] = (act_features(history, tick_seconds), jnp.ones(history.last_choice.shape, jnp.bool_))

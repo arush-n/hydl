@@ -2412,7 +2412,8 @@ agent, updated each tick after the event log:
 - **chances not taken** (`spared`; added 2026-10-23, 26.5 item 5): a chance is a stretch of ticks when it was
   perceived, alive, within 3.75 blocks of me (the reach `affect.py` assumes for an attacker) and facing me (within 45
   degrees [E]); it counts when the stretch ends with no hit from it. Corrected 2026-10-23 (26.8): the stretch pauses
-  while the person is out of sight and ends only when it is seen out of reach or turned away. It is the decision layer's input for benevolence
+  while the person is out of sight and ends only when it is seen out of reach or turned away; it counts only if the
+  person was seen alive when it ended and it lasted at least a reaction time (0.25 s [E]). It is the decision layer's input for benevolence
   ("could have struck, did not"; `../../docs/MIDDLE_LAYER.md` section 11), counted every tick here because the
   decision layer reads at its own cadence.
 - Helping, trading and talking get their counts when the simulator publishes transfers and speech (12.3, 12.4).
@@ -2592,9 +2593,39 @@ hit from out of sight takes the paused chance; a chance from an earlier meeting 
 passed. Gate (two passes, against the 6acadad baseline): pass 1 the same 11 failing names (1,491 passed: the 3
 new), pass 2 the same 30.
 
-**Still open** (not changed; recorded for the owner): a chance closed because the person died while facing me counts
-as spared, though it did not choose; and a chance of a single tick counts, though no attack lands in a tick. Neither
-appeared in the duel run; a minimum length (an attack's windup) and "seen alive" on closing are the fixes if they do.
+**Left open at first** (recorded for the owner): a chance closed because the person died while facing me counted as
+spared, though it did not choose; and a chance of a single tick counted, though no attack lands in a tick. Neither
+appeared in the duel run; a minimum length and "seen alive" on closing were the fixes offered.
+
+**The two open cases, closed (2026-10-23; the owner, "you have approval", on the fix offered):**
+- **A death is not a choice.** A chance that closes because the person is seen dead is not counted. `social.update`
+  takes `seen_alive` (the perceived rows' alive flag, from `layer.step`).
+- **A chance must last a reaction time.** It counts only if it lasted at least `MIN_CHANCE_SECONDS` = 0.25 s [E], about a
+  person's simple reaction time to a visual signal (recalled: 0.2 to 0.25 s), pauses included: not striking within less
+  is not a choice. The bound is a reaction time rather than an attack's windup because the question is whether the
+  person had time to decide, not whether its swing would land; a windup is weapon-specific and the record does not know
+  the weapon. 8 ticks at 1/30 s, 6 at 0.045 s (`clock.at_least`).
+- **How the length is measured.** The record keeps `chance_start`, the tick the open chance began, and the length is
+  the tick it closes minus that. It is a time stamp, as the rest of the record uses: counting calls would agree in the
+  state layer, which steps every tick, but not for a caller that passes its own tick numbers. A save made before it
+  loads with no chance open (-1; checked).
+- **Checked:** `test_sa_social.py` 70 passed (the chances in the counting tests now last the minimum; new: a chance
+  shorter than it does not count; a person seen dying while facing me did not spare me, and the same chance alive
+  does count; pauses count toward the length); the duel run still gives 0 spared.
+- **Gate** (two passes, against the 6acadad baseline, run on the first version, which counted calls):
+  - pass 2: the same 30 failing names;
+  - pass 1: 1,588 passed, and one new failing name:
+    `test_na_relations.py::test_a_completed_spared_chance_raises_benevolence_by_a_twentieth`.
+  - That test is the coordinator's. It opens a chance for one tick and expects it counted, which is the case this
+    closes.
+  - It went to the coordinator with the fix, checked with its own helpers: the same chance closed 7 or more ticks
+    later counts (its harness steps 0.045 s, where the minimum is 6 ticks).
+- **After the switch to `chance_start`:**
+  - `test_sa_social.py` and `test_na_relations.py`: 87 passed, with that one failing;
+  - the duel run gives 0 spared;
+  - the old save loads.
+
+  The full gate runs again with the drives (20.8), whose tree holds this change.
 
 ## 27. The world's tick length (DESIGNED and APPROVED 2026-10-23, with the ruling of 27.5)
 
