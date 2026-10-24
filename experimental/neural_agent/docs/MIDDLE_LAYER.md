@@ -224,7 +224,12 @@ largest changes first; a change under 0.05 is not written). Constants marked [E]
   0.2 d (rivalry), not anger. `ability` moves toward their measured hit rate on me, scaled to [-1, 1] [E].
 - **Peace** (time in view with no harm either way, per meeting): `closeness += 1/30` per meeting that lasted over 60 s
   without a hit, following Humanoid Agents' ±1 on a 0-30 scale per interaction (§26.6). `benevolence += 0.05` when
-  they could have struck (in reach and facing me, the bodies' reports) and did not [E].
+  they could have struck (in reach and facing me, the bodies' reports) and did not [E]. The input is the skill layer's
+  `spared` count. Since 3eb1806 a chance pauses while the person is out of sight and closes only when they are seen out of
+  reach or turned away. A hit during a pause takes it, and a chance from an earlier meeting is dropped. Before that fix,
+  losing sight counted as being spared: all 36 duel counts were the agent's gaze. Two further corrections, approved by
+  the owner and pending in the skill layer: a death while facing no longer counts, and a chance must last at least a
+  reaction time. The rule reads the count as it is.
 - **Decay** (written by the decision layer; written values never fade on their own, §19.7): `anger` halves every 60 s
   out of contact, `fear` every 120 s out of view, `hostility` every 30 min [E]. `closeness`, trust parts and roles do
   not decay; Humanoid Agents' closeness does not.
