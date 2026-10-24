@@ -26,7 +26,7 @@ Approximations (each is a cost, stated here so the skill layer can judge them):
 from __future__ import annotations
 
 import os
-from functools import lru_cache
+from functools import lru_cache, wraps
 from typing import Any, NamedTuple
 
 import jax.numpy as jnp
@@ -164,6 +164,7 @@ def construct(original, profile):
     if value is not True:
         raise ValueError(f"hearing must be a bool, got {value!r}")
 
+    @wraps(original)  # perception_v2 unwraps the encoder it receives to find the rendered package
     def encode_with_heard_sounds(state, params, world_features, world_capabilities, config, *, world_geometry=None):
         observation = original(
             state, params, world_features, world_capabilities, config, world_geometry=world_geometry

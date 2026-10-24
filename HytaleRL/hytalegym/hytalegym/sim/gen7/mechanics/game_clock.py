@@ -20,7 +20,7 @@ Grounding (DESIGN.md in the lane folder; CONFIRMED = a named source or bytecode 
 
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import lru_cache, wraps
 from typing import Any, NamedTuple
 
 import jax.numpy as jnp
@@ -105,6 +105,7 @@ def construct(original, profile):
         raise ValueError(f"game_clock must be a bool, got {value!r}")
     step_seconds = float(profile.step_duration.nominal_seconds)
 
+    @wraps(original)  # perception_v2 unwraps the encoder it receives to find the rendered package
     def encode_with_game_clock(state, params, world_features, world_capabilities, config, *, world_geometry=None):
         observation = original(
             state, params, world_features, world_capabilities, config, world_geometry=world_geometry
