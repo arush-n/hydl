@@ -20,6 +20,7 @@ from hytalegym.combat.telemetry import (
 )
 from hytalegym.geometry import geometry_space, parse_geometry
 from hytalegym.rulesets import load_combat_ruleset
+from hytalegym.envs.block_type_table import BlockTypeIdLoader, fetch_block_type_table
 from hytalegym.utils.connection import BridgeConnection
 
 # Observation dimensions
@@ -143,6 +144,7 @@ class HytaleEnv(gym.Env):
         worldgen_structure: str = "Default",
         native_tick_rate: int = 30,
         native_time_dilation: float = 1.0,
+        block_type_ids: bool = False,
     ):
         super().__init__()
         self.task = task
@@ -198,6 +200,8 @@ class HytaleEnv(gym.Env):
         self.render_mode = render_mode
 
         self._connection: BridgeConnection | None = None
+        self.block_type_ids = block_type_ids
+        self._block_type_loader: BlockTypeIdLoader | None = None
         self._step_count = 0
         self._native_actor_assembler: Any | None = None
         self._native_actor_assembly: Any | None = None
@@ -462,8 +466,19 @@ class HytaleEnv(gym.Env):
             }
         )
         self._require_observation(response)
+        if self.block_type_ids:
+            self._start_block_type_loader()
 
         return self._parse_policy_response(response)
+
+    def _start_block_type_loader(self) -> None:
+        if self._block_type_loader is None:
+            self._block_type_loader = BlockTypeIdLoader(self.host, self.port)
+        self._block_type_loader.start()
+
+    def fetch_block_type_table(self) -> list[tuple[int, str]]:
+        """Fetch the server's block-type table over a new connection."""
+        return fetch_block_type_table(self.host, self.port)
 
     def step(
         self,
@@ -607,6 +622,7 @@ class HytaleEnv(gym.Env):
         resolved_native_ability_slot = self._native_actor_assembler.native_ability_slot(
             action
         )
+        held_charge = self._native_actor_assembler.charge_held(action)
         translation = translate_learner_arsenal_action_to_native(
             action,
             decoded.low_level_action,
@@ -614,10 +630,17 @@ class HytaleEnv(gym.Env):
             requested_charge_time_seconds=(
                 self._native_actor_assembler.requested_charge_time_seconds(action)
             ),
+            charge_held=held_charge,
+            charge_hold_seconds=self._native_actor_assembler.charge_hold_seconds(action),
             native_ability_slot=resolved_native_ability_slot,
             native_world_verb_request=native_world_verb_request,
             policy_legal=policy_legal,
             policy_reject_reasons=reject_reasons,
+        )
+        self._native_actor_assembler.note_charge_held(
+            int(np.asarray(action.ability_slot)[0])
+            if held_charge and translation.legal
+            else None
         )
         self._host_action_legal = translation.legal
         self._host_action_reject_reasons = translation.reject_reasons
@@ -1076,7 +1099,41 @@ class HytaleEnv(gym.Env):
                 raw_observation["native_inventory"]
             )
         info["step_count"] = self._step_count
+        if self.block_type_ids:
+            info.update(self._parse_block_type_ids(response))
         return info
+
+    def _parse_block_type_ids(self, response: dict) -> dict:
+        """Window of semantic block type ids aligned with nearby_blocks.
+
+        Shape [9, 9, 9], indexed [dx + 4, dy + 4, dz + 4] (dx slowest), the same
+        flattening as the nearby_blocks observation array. Air is 0.
+        """
+        obs_data = response.get("obs")
+        raw_blocks = (
+            obs_data.get("nearby_blocks", []) if isinstance(obs_data, Mapping) else []
+        )
+        side = NEARBY_BLOCK_RADIUS * 2 + 1
+        runtime_ids = np.zeros((side, side, side), dtype=np.int32)
+        for block in raw_blocks:
+            if isinstance(block, (list, tuple)) and len(block) == 4:
+                dx, dy, dz, block_type = (int(value) for value in block)
+                if all(-NEARBY_BLOCK_RADIUS <= v <= NEARBY_BLOCK_RADIUS for v in (dx, dy, dz)):
+                    runtime_ids[
+                        dx + NEARBY_BLOCK_RADIUS,
+                        dy + NEARBY_BLOCK_RADIUS,
+                        dz + NEARBY_BLOCK_RADIUS,
+                    ] = block_type
+        loader = self._block_type_loader
+        if loader is None:
+            semantic_ids, unknown = np.zeros(runtime_ids.shape, dtype=np.int32), 0
+        else:
+            semantic_ids, unknown = loader.lookup(runtime_ids)
+        return {
+            "nearby_block_type_id": semantic_ids,
+            "block_type_ids_ready": bool(loader is not None and loader.ready),
+            "nearby_block_type_unknown_count": unknown,
+        }
 
     @staticmethod
     def _require_observation(response: dict) -> None:

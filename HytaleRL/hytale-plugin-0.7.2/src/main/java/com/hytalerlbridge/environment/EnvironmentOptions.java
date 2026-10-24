@@ -35,7 +35,9 @@ public record EnvironmentOptions(
     float nativeTimeDilation,
     java.util.List<NativeResourceOverride> nativeFidelityResourceOverrides,
     String combatTargetRole,
-    NativeCraftingOracleFixture craftingOracle
+    NativeCraftingOracleFixture craftingOracle,
+    boolean waterTickingDisabled,
+    Double spawnYawDegrees
 ) {
     public static final int DEFAULT_NATIVE_TICK_RATE = 30;
     public static final float DEFAULT_NATIVE_TIME_DILATION = 1.0f;
@@ -131,6 +133,8 @@ public record EnvironmentOptions(
             nativeTimeDilation,
             nativeFidelityResourceOverrides,
             null,
+            null,
+            false,
             null
         );
     }
@@ -193,6 +197,8 @@ public record EnvironmentOptions(
             nativeTimeDilation,
             null,
             null,
+            null,
+            false,
             null
         );
     }
@@ -653,6 +659,9 @@ public record EnvironmentOptions(
     }
 
     public EnvironmentOptions {
+        if (spawnYawDegrees != null && !Double.isFinite(spawnYawDegrees)) {
+            throw new IllegalArgumentException("spawn_yaw must be finite");
+        }
         backend = normalized(backend, "simulator");
         world = normalized(world, "flat");
         worldgenStructure = normalized(worldgenStructure, "Default");
@@ -992,6 +1001,11 @@ public record EnvironmentOptions(
 
     public boolean hasSpawn() {
         return spawnX != null;
+    }
+
+    /** Whether reset sets the learner body's yaw (degrees, spawn_yaw); absent keeps the yaw 0 spawn. */
+    public boolean hasSpawnYaw() {
+        return spawnYawDegrees != null;
     }
 
     public boolean hasNativeCombatInteraction() {

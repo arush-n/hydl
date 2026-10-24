@@ -20,7 +20,8 @@ Reward on the live side: ``live_reach_step`` and ``live_hold_step`` call the sim
 observation's absolute ``position`` (``hytale_env.py`` ``_parse_observation``). The combat objectives have no live
 reward yet, because their observation fields (health, target health) are not mapped here.
 
-Body yaw is not a reset key on the live side (gap L1), so the body starts at its role's heading.
+Body yaw goes out as ``spawn_yaw`` (degrees) on the default-fixture spawn path when it is non-zero (gap L1, bridge
+option; absent keeps the yaw-0 spawn). The named native_duel fixture gets no spawn_yaw.
 """
 
 from __future__ import annotations
@@ -56,11 +57,12 @@ LIVE_RESET_KEYS = (
     "fidelity_fixture",
     "combat_target_role",
     "combat_target_active",
+    "spawn_yaw",
 )
 LIVE_GAP_REGION = (
-    "ReachPlaceRegion has no live reset (gap L2). static_region rejects a spawn and needs a generated world "
-    "(NativeEnvironmentSession 6154-6157), and the bridge has no Region library reset. Closes with a bridge reset that "
-    "loads a Region library world and reports its spawn. Sim only until then."
+    "ReachPlaceRegion has no live reset (gap L2). The bridge now accepts a spawn with static_region (NativeEnvironmentSession "
+    "createFidelityFixture), but the bridge has no Region library reset that loads a Region library world. Closes with a "
+    "bridge reset that loads a Region library world. Sim only until then."
 )
 LIVE_GAP_EVADE_TURRET = (
     "EvadeTurret has no live fixture (gap L3). Closes with a turret-role combat target: a bridge fixture or option "
@@ -111,12 +113,19 @@ def compile_live(spec: TaskSpec, *, ticks_per_step: int = 4) -> LiveTask:
             options["combat_target_active"] = True
             task = "kill_trork"
             notes.append("built-in Trork_Brawler: kill_trork spawns the matchup target (inferred, not launched)")
+        if body.yaw_degrees != 0.0:
+            options["spawn_yaw"] = float(body.yaw_degrees)
     if task is not None:
         env_kwargs["task"] = task
     env_kwargs["ticks_per_step"] = ticks_per_step
     limit_ticks = time_limit_ticks(spec)
     steps = math.ceil(limit_ticks / ticks_per_step)
-    notes.append("body yaw is not a reset key: the live body starts at the role's heading (gap L1)")
+    if "spawn_yaw" in options:
+        notes.append(f"body yaw {body.yaw_degrees} deg sent as spawn_yaw (gap L1 bridge option, not yet live-checked)")
+    elif isinstance(objective, DefeatTarget) and body.yaw_degrees != 0.0:
+        notes.append("body yaw not sent: native_duel gets no spawn_yaw (gap L1 stays open for the duel fixture)")
+    else:
+        notes.append("body yaw 0 deg: spawn_yaw absent, the body starts at yaw 0 as before (gap L1)")
     notes.append(f"time limit {spec.time_limit_seconds} s = {limit_ticks} ticks = {steps} steps at ticks_per_step={ticks_per_step}")
     return LiveTask(options=options, env_kwargs=env_kwargs, max_episode_steps=steps, notes=tuple(notes))
 

@@ -72,10 +72,20 @@ public record PolicyWorldActionBinding(
             );
         }
         if (verb.equals("place_block")) {
-            throw new IllegalArgumentException(
-                "Place is fail-closed until the rotation-zero destination "
-                    + "and exact Region placed-geometry identity are joined"
-            );
+            // Mirrors the Python decoder's rotation-zero Place subset
+            // (world_action_capture.py, rotation_zero_place): an explicit
+            // (0, 0, 0) rotation into an exact empty destination.
+            if (
+                !rotationApplicable
+                    || CaptureValidation.anyNonzero(rotation)
+                    || !expectedBlockId.equals("Empty")
+                    || sourceSlot < 0
+            ) {
+                throw new IllegalArgumentException(
+                    "Place is admitted only for the rotation-zero subset "
+                        + "into an exact empty cell"
+                );
+            }
         }
         if (
             verb.equals("break_block")

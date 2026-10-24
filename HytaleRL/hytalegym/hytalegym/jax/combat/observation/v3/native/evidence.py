@@ -333,6 +333,8 @@ class NativeActorEvidenceAssembler:
         return options
 
     def reset(self) -> None:
+        # Authored slot the learner is holding a melee charge in (None when released).
+        self._held_charge_slot: int | None = None
         self._first_world_tick: int | None = None
         self._last_world_tick: int | None = None
         self._episode_tick_count = 0
@@ -434,7 +436,10 @@ class NativeActorEvidenceAssembler:
             ),
             resource_mask=resource_mask,
             ability_legal=(
-                projected.ability_legal
+                (
+                    projected.ability_legal
+                    | jnp.asarray(self._held_charge_open(bound_abilities))
+                )
                 & jnp.asarray(bound_abilities)
                 & jnp.asarray(
                     _required_resources_available(
@@ -675,6 +680,66 @@ class NativeActorEvidenceAssembler:
             slot,
             source_entity_index=AGENT_ENTITY,
         )
+
+    def charge_hold_seconds(self, action) -> float:
+        """Top threshold of a held melee charge, or 0.0 when the slot is not held.
+
+        A slot is held when its authored Charging table has rows, does not set
+        AllowIndefiniteHold, and has no authored outer request (the sentinel is
+        -1). The bridge then runs the charge to this top threshold, where it fires
+        by itself, and releases it to zero when the learner stops holding. Every
+        other slot keeps the requested-charge path unchanged.
+        """
+
+        slot = int(np.asarray(action.ability_slot)[0])
+        loadout = self.config.loadout
+        event_mask = np.asarray(loadout.ability_event_mask, dtype=np.bool_)
+        if not 0 <= slot < event_mask.shape[2]:
+            return 0.0
+        if not np.any(event_mask[0, AGENT_ENTITY, slot]):
+            return 0.0
+        count = int(
+            np.asarray(loadout.ability_hold_count, dtype=np.int32)[0, AGENT_ENTITY, slot]
+        )
+        if count <= 0:
+            return 0.0
+        if bool(
+            np.asarray(loadout.ability_hold_allow_indefinite, dtype=np.bool_)[
+                0, AGENT_ENTITY, slot
+            ]
+        ):
+            return 0.0
+        requested = np.asarray(
+            loadout.ability_requested_charge_time_seconds, dtype=np.float32
+        )[0, AGENT_ENTITY, slot]
+        if requested >= np.float32(0.0):
+            return 0.0
+        thresholds = np.asarray(loadout.ability_hold_threshold_seconds, dtype=np.float32)
+        return float(thresholds[0, AGENT_ENTITY, slot, count - 1])
+
+    def charge_held(self, action) -> bool:
+        """Whether this tick's request holds a melee charge (wire ``charge_held``)."""
+
+        return self.charge_hold_seconds(action) > 0.0
+
+    def note_charge_held(self, slot: int | None) -> None:
+        """Record the slot an accepted step holds (None when it released the charge).
+
+        The next assembly keeps that slot legal while the bridge still says it is
+        bound: the native charging chain makes the slot busy in the arsenal
+        projection, but in the simulator a held charge admits nothing until it
+        fires (programs/charge.py), so the slot stays legal for the whole hold.
+        """
+
+        self._held_charge_slot = slot
+
+    def _held_charge_open(self, bound_abilities) -> np.ndarray:
+        """The held slot as an ability-legal mask (still ANDed with the bridge's binding)."""
+
+        held = np.zeros_like(bound_abilities)
+        if self._held_charge_slot is not None:
+            held[0, AGENT_ENTITY, self._held_charge_slot] = True
+        return held
 
     def native_ability_slot(self, action) -> int:
         """Map one authored policy slot onto the compact reset-bound list."""

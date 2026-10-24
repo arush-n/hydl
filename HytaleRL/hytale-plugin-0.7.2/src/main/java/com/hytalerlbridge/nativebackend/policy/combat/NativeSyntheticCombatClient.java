@@ -149,6 +149,16 @@ public final class NativeSyntheticCombatClient {
         if (previous == null) bindCount++;
     }
 
+    /**
+     * Marks a bound chain as a held learner charge: its Charging ops fire at
+     * their own top thresholds (capped by the bound requested time) instead of
+     * waiting the full requested time.
+     */
+    public void markChargeHeld(InteractionChain chain) {
+        Cursor cursor = cursors.get(chain);
+        if (cursor != null) cursor.chargeHeld = true;
+    }
+
     /** Deliver the release edge for a continuation-held interaction. */
     public boolean release(
         Ref<EntityStore> actor,
@@ -537,7 +547,7 @@ public final class NativeSyntheticCombatClient {
                 ? Math.max(0.0f, interaction.getRunTime())
                 : 0.0f;
             double finishSeconds = charging
-                ? cursor.requestedChargeSeconds
+                ? chargeFinishSeconds(cursor, inner)
                 : applyForce == null
                     ? runTime
                     : applyForceFinishSeconds(runTime, applyForce.duration);
@@ -637,7 +647,7 @@ public final class NativeSyntheticCombatClient {
                 data.chargeValue = finished
                     ? (float) Math.min(
                         Float.MAX_VALUE,
-                        cursor.requestedChargeSeconds
+                        cursor.chargeHeld ? finishSeconds : cursor.requestedChargeSeconds
                     )
                     : -1.0f;
             }
@@ -1239,12 +1249,45 @@ public final class NativeSyntheticCombatClient {
         return data == null || data.state == null ? "" : data.state.name();
     }
 
+    /**
+     * Where one Charging op finishes. A non-held charge waits the full requested
+     * time. A held charge (see {@link #markChargeHeld}) fires each op at its own
+     * highest threshold, the way a held client does, and stays capped by the
+     * requested time, so a release (requested time 0) still finishes at once.
+     */
+    private static double chargeFinishSeconds(Cursor cursor, Operation inner) {
+        if (!cursor.chargeHeld) {
+            return cursor.requestedChargeSeconds;
+        }
+        return Math.min(
+            cursor.requestedChargeSeconds,
+            chargeHoldTopSeconds(inner, cursor.requestedChargeSeconds)
+        );
+    }
+
+    /** Highest charge threshold of one Charging op's client table. */
+    private static double chargeHoldTopSeconds(Operation inner, double fallback) {
+        if (!(inner instanceof ChargingInteraction interaction)) {
+            return fallback;
+        }
+        var packet = (com.hypixel.hytale.protocol.ChargingInteraction)
+            interaction.toPacket();
+        double top = -1.0;
+        if (packet.chargedNext != null) {
+            for (Float threshold : packet.chargedNext.keySet()) {
+                top = Math.max(top, threshold);
+            }
+        }
+        return top < 0.0 ? fallback : top;
+    }
+
     private static float syncProgress(InteractionSyncData data) {
         return data == null ? -1.0f : data.progress;
     }
 
     private static final class Cursor {
         private double requestedChargeSeconds;
+        private boolean chargeHeld;
         private final Ref<EntityStore> selectedTarget;
         private int operationIndex = -1;
         private double elapsedSeconds;
@@ -1295,7 +1338,9 @@ public final class NativeSyntheticCombatClient {
         }
 
         private Cursor forkChild() {
-            return new Cursor(requestedChargeSeconds, selectedTarget);
+            Cursor child = new Cursor(requestedChargeSeconds, selectedTarget);
+            child.chargeHeld = chargeHeld;
+            return child;
         }
 
         private void requestFork(InteractionType forkType) {

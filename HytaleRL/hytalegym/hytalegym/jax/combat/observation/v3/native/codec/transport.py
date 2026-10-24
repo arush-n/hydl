@@ -291,6 +291,8 @@ def translate_learner_arsenal_action_to_native(
     *,
     lane: int = 0,
     requested_charge_time_seconds: float = 0.0,
+    charge_held: bool = False,
+    charge_hold_seconds: float = 0.0,
     native_ability_slot: int | None = None,
     native_world_verb_request: NativeWorldVerbRequest | None = None,
     policy_legal: bool = True,
@@ -320,6 +322,13 @@ def translate_learner_arsenal_action_to_native(
     charge = float(requested_charge_time_seconds)
     if not np.isfinite(charge) or charge < 0.0:
         raise ValueError("requested_charge_time_seconds must be finite and nonnegative")
+    if not isinstance(charge_held, (bool, np.bool_)):
+        raise TypeError("charge_held must be boolean")
+    hold_seconds = float(charge_hold_seconds)
+    if not np.isfinite(hold_seconds) or hold_seconds < 0.0:
+        raise ValueError("charge_hold_seconds must be finite and nonnegative")
+    if charge_held and hold_seconds <= 0.0:
+        raise ValueError("charge_held requires a positive charge_hold_seconds")
     if not isinstance(policy_legal, (bool, np.bool_)):
         raise TypeError("policy_legal must be boolean")
     if not isinstance(policy_reject_reasons, tuple) or not all(
@@ -449,6 +458,7 @@ def translate_learner_arsenal_action_to_native(
     # sides, so the integer's meaning changed consistently -- but a deployed
     # jar older than that change will steer this bin as a WORLD bearing.
     world_direction = int(semantic["world_move_direction"])
+    held_charge = bool(charge_held) and bool(requested["ability_slot"])
     native = _native_noop()
     if world_direction == 0:
         native.update(
@@ -487,6 +497,10 @@ def translate_learner_arsenal_action_to_native(
             # which is applied only when it lands in [0, 9).
             "hotbar_slot": int(row[ACTION_HOTBAR_SLOT]) - 1,
             "requested_charge_time": charge,
+            # Held melee charge: the bridge runs the requested slot's charge to
+            # charge_hold_seconds and releases it when this flag drops.
+            "charge_held": int(held_charge),
+            "charge_hold_seconds": hold_seconds if held_charge else 0.0,
         }
     )
     if native_world_verb_request is not None:
@@ -541,6 +555,8 @@ def _native_noop() -> dict[str, object]:
         "camera_delta_pitch": 0.0,
         "hotbar_slot": -1,
         "requested_charge_time": 0.0,
+        "charge_held": 0,
+        "charge_hold_seconds": 0.0,
     }
 
 

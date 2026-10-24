@@ -1,6 +1,7 @@
 package com.hytalerlbridge.worldgen.policyactions.capture.model;
 
 import com.hytalerlbridge.worldgen.NativeMutableBlockEvidence;
+import java.util.Arrays;
 import java.util.List;
 
 /** Complete fixed-capacity block candidate surface. */
@@ -138,11 +139,40 @@ public record PolicyWorldActionBlockSurface(
                 );
             }
             if (secondary != null) {
-                throw new IllegalArgumentException(
-                    "Place remains fail-closed until the rotation-zero "
-                        + "destination and placed geometry are exact"
-                );
+                // The native destination is the clicked cell moved by the
+                // face offset (jax/world/interactions/blocks/candidates.py,
+                // BLOCK_PLACEMENT_FACE_OFFSETS); any other cell is refused.
+                if (
+                    !secondary.verb().equals("place_block")
+                        || !Arrays.equals(
+                            secondary.target(),
+                            placementDestination(
+                                visibleCell,
+                                secondary.blockFace()
+                            )
+                        )
+                ) {
+                    throw new IllegalArgumentException(
+                        "Secondary binding must be the place destination "
+                            + "of the clicked cell and face"
+                    );
+                }
             }
+        }
+
+        /** Face value f (1..6) places at cell + offset[f - 1]; same table as the Python decoder. */
+        private static final int[][] PLACEMENT_FACE_OFFSETS = {
+            {0, 1, 0}, {0, -1, 0}, {0, 0, -1}, {0, 0, 1}, {1, 0, 0}, {-1, 0, 0},
+        };
+
+        static int[] placementDestination(int[] cell, int blockFace) {
+            if (blockFace < 1 || blockFace > 6) {
+                throw new IllegalArgumentException("Block face is outside 1..6");
+            }
+            int[] offset = PLACEMENT_FACE_OFFSETS[blockFace - 1];
+            return new int[] {
+                cell[0] + offset[0], cell[1] + offset[1], cell[2] + offset[2],
+            };
         }
 
         @Override public int[] visibleCell() { return visibleCell.clone(); }

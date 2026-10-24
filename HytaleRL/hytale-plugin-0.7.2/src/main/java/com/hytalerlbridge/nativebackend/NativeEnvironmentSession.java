@@ -560,6 +560,9 @@ final class NativeEnvironmentSession
     private InteractionChain trackedAgentAbilityChain;
     private InteractionChain trackedAgentAbilityParentChain;
     private int trackedAgentAbilitySlot = -1;
+    // Learner held charge (charge_held): the slot being held and its charging chain.
+    private final NativeChargeHold nativeChargeHold = new NativeChargeHold();
+    private InteractionChain nativeChargeHoldChain;
     private String trackedAgentAbilityId = "";
     private String trackedAgentAbilityType = "";
     private long trackedAgentAbilityStartTick = -1L;
@@ -2267,6 +2270,16 @@ final class NativeEnvironmentSession
                 }
             }
         }
+        // A held charge ends on the first tick that no longer holds its slot.
+        // Continuation ticks carry the held level, so they never release it.
+        if (
+            policyCombatHandle == null
+                && actorId == 0
+                && nativeChargeHold.decide(action.chargeHeld(), action.abilitySlot())
+                    == NativeChargeHold.Decision.RELEASE
+        ) {
+            releaseNativeChargeHold(ref, store);
+        }
         if (firstControlTick) {
             actorState.applyLookDelta(
                 action.cameraDeltaYaw(),
@@ -2304,6 +2317,8 @@ final class NativeEnvironmentSession
                 );
                 step.observeAttack(actorId, admission);
             }
+            // A guard fork is not held: it keeps the ordinary request.
+            boolean heldCharge = action.chargeHeld() && requestedGuardFork == null;
             if (
                 policyCombatHandle == null
                     && actorId == 0
@@ -2314,7 +2329,10 @@ final class NativeEnvironmentSession
                     npc,
                     store,
                     action.abilitySlot(),
-                    action.requestedChargeTime(),
+                    heldCharge
+                        ? action.chargeHoldSeconds()
+                        : action.requestedChargeTime(),
+                    heldCharge,
                     requestedGuardFork,
                     step
                 );
@@ -2719,6 +2737,8 @@ final class NativeEnvironmentSession
         trackedNativeGuardStartTick = -1L;
         trackedNativeGuardFinishTick = -1L;
         pendingAgentAbilityFork = null;
+        nativeChargeHold.end();
+        nativeChargeHoldChain = null;
         trackedAgentAbilityChain = null;
         trackedAgentAbilityParentChain = null;
         trackedAgentAbilitySlot = -1;
@@ -2821,9 +2841,15 @@ final class NativeEnvironmentSession
         config.setResourceStorageProvider(EmptyResourceStorageProvider.INSTANCE);
         config.setTicking(true);
         config.setBlockTicking(options.blockTickingEnabled());
+        if (options.waterTickingDisabled()) {
+            // Capture mode (opt-in): FluidSystems$Ticking gates on the disabled fluid tags, not on block ticking.
+            config.setDisabledFluidTickers(Set.of("Fluid=Water"));
+        }
         config.setPvpEnabled(false);
         config.setFallDamageEnabled(true);
-        config.setGameTimePaused(true);
+        // The game clock runs as in the real game (owner 2026-10-23: unpause live; S14). NativeProcessingOracle saves and
+        // restores the pause state it finds, so it no-ops on a running clock.
+        config.setGameTimePaused(false);
         config.setSpawningNPC(false);
         config.setIsSpawnMarkersEnabled(false);
         config.setIsAllNPCFrozen(false);
@@ -3117,12 +3143,16 @@ final class NativeEnvironmentSession
     private void spawnAgent(NPCPlugin npcPlugin) {
         runOnWorld(() -> {
             Store<EntityStore> store = world.getEntityStore().getStore();
+            // spawn_yaw (degrees, opt-in) sets the learner body and head yaw; absent keeps the yaw 0 spawn.
+            float spawnYaw = options.hasSpawnYaw()
+                ? (float) Math.toRadians(options.spawnYawDegrees())
+                : 0.0f;
             Pair<Ref<EntityStore>, ?> spawned = npcPlugin.spawnNPC(
                 store,
                 options.npcRole(),
                 null,
                 new Vector3d(spawnX, spawnY, spawnZ),
-                new Rotation3f(0.0f, 0.0f, 0.0f)
+                new Rotation3f(0.0f, spawnYaw, 0.0f)
             );
             if (spawned == null || spawned.left() == null) {
                 throw new IllegalStateException("Hytale rejected native NPC spawn");
@@ -3130,6 +3160,10 @@ final class NativeEnvironmentSession
             agentRef = spawned.left();
             NPCEntity npc = store.getComponent(agentRef, NPCEntity.getComponentType());
             if (npc == null) throw new IllegalStateException("Spawned NPC has no NPCEntity component");
+            if (options.hasSpawnYaw()) {
+                HeadRotation spawnHead = store.getComponent(agentRef, HeadRotation.getComponentType());
+                if (spawnHead != null) spawnHead.setRotation(new Rotation3f(0.0f, spawnYaw, 0.0f));
+            }
             npc.addReservation(reservationId);
             npc.setDespawnTime(Float.POSITIVE_INFINITY);
             store.addComponent(
@@ -4016,6 +4050,7 @@ final class NativeEnvironmentSession
         Store<EntityStore> store,
         int abilitySlot,
         double requestedChargeTime,
+        boolean held,
         InteractionType guardForkType,
         PendingStep step
     ) {
@@ -4031,6 +4066,15 @@ final class NativeEnvironmentSession
         }
 
         NativeInteractionBinding binding = nativeCombatAbilities.get(abilitySlot);
+        // The held charge is still running: a repeated request neither
+        // re-queues it nor resets its charge (NativeInteractionQueue).
+        if (
+            held
+                && nativeChargeHold.decide(true, abilitySlot)
+                    == NativeChargeHold.Decision.CONTINUE
+        ) {
+            return true;
+        }
         if (pendingAgentAbilityFork != null) {
             step.abilityRejectReason = "native_combat_busy";
             return false;
@@ -4108,6 +4152,9 @@ final class NativeEnvironmentSession
             chain,
             requestedChargeTime
         );
+        if (held) {
+            syntheticCombatClient.markChargeHeld(chain);
+        }
         // This is an explicit policy/item-root edge, not the autonomous
         // AbilityCombatAction self-target branch.  The latter owns its
         // authored two-second controller pause; direct roots are governed by
@@ -4123,7 +4170,27 @@ final class NativeEnvironmentSession
         trackedAgentAbilityFinishTick = -1L;
         step.abilityInteractionId = binding.id();
         step.abilityInteractionType = binding.type().name();
+        if (held) {
+            nativeChargeHold.begin(abilitySlot);
+            nativeChargeHoldChain = chain;
+        }
         return true;
+    }
+
+    /** Ends the held charge once: the synthetic client delivers the release edge. */
+    private void releaseNativeChargeHold(
+        Ref<EntityStore> ref,
+        Store<EntityStore> store
+    ) {
+        InteractionChain chain = nativeChargeHoldChain;
+        nativeChargeHold.end();
+        nativeChargeHoldChain = null;
+        if (chain != null) {
+            // A release sets the charge to zero, so the chain finishes on the
+            // base branch of its charging table (every early branch of the
+            // melee tables is the base swing).
+            syntheticCombatClient.release(ref, store, chain);
+        }
     }
 
     private void requestNativeDodge(
@@ -6151,9 +6218,10 @@ final class NativeEnvironmentSession
                 EnvironmentOptions.STATIC_REGION_FIXTURE
             )
         ) {
-            if (options.hasSpawn() || !usesGeneratedWorld()) {
+            // A spawn is allowed (live parity, gap L2): it is the learner start, and the given y is used as-is.
+            if (!usesGeneratedWorld()) {
                 throw new IllegalArgumentException(
-                    "static_region requires generated Hytale world and default spawn"
+                    "static_region requires generated Hytale world"
                 );
             }
             return;
@@ -7755,7 +7823,10 @@ final class NativeEnvironmentSession
                 authored ? binding.id() : "",
                 authored ? binding.type().name() : "",
                 authored,
-                capability.legal() && abilityCombatAvailable,
+                // A held charge keeps its own slot legal while it runs (the
+                // chain itself makes the slot busy); other slots stay refused.
+                (capability.legal() || nativeChargeHold.holds(slot))
+                    && abilityCombatAvailable,
                 active,
                 tracked ? trackedAgentAbilityStartTick : -1L,
                 tracked ? trackedAgentAbilityFinishTick : -1L

@@ -464,6 +464,8 @@ class NativeActorMajorHostComposer:
             requested_charge_time_seconds=(
                 assembler.requested_charge_time_seconds(action)
             ),
+            charge_held=assembler.charge_held(action),
+            charge_hold_seconds=assembler.charge_hold_seconds(action),
             native_ability_slot=native_ability_slot,
             native_world_verb_request=native_world_verb_request,
             policy_legal=policy_legal,

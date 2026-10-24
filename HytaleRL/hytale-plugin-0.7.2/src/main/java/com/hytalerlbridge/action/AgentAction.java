@@ -42,7 +42,15 @@ public record AgentAction(
     double bodyDeltaYaw,
     // Learner gait: 0 idle, 1 walk, 2 run, 3 sprint, 4 sneak (LearnerArsenalAction.gait).
     // It sets body speed only (gaitScaledLocalMove); posture and stamina are not modelled.
-    int gait
+    int gait,
+    // Held charge level for the requested ability slot (wire key "charge_held").
+    // While true, the bridge starts the slot's charge and keeps it charging until
+    // the level drops; a stop releases it (NativeChargeHold). chargeHoldSeconds
+    // (wire key "charge_hold_seconds") is the hold table's top threshold, the
+    // point where the charge fires by itself while still held. Both are zero or
+    // false when absent, so older senders behave as before.
+    boolean chargeHeld,
+    double chargeHoldSeconds
 ) {
     /** Backward-compatible constructor for callers predating typed World verbs. */
     public AgentAction(
@@ -98,7 +106,9 @@ public record AgentAction(
             worldMoveDirection,
             NativeWorldVerbRequest.none(),
             0.0,
-            0
+            0,
+            false,
+            0.0
         );
     }
 
@@ -226,6 +236,20 @@ public record AgentAction(
         if (gait < 0 || gait >= GAIT_FORWARD.length) {
             throw new IllegalArgumentException("gait must be in [0, 4]");
         }
+        if (
+            !Double.isFinite(chargeHoldSeconds)
+                || chargeHoldSeconds < 0.0
+                || chargeHoldSeconds > Float.MAX_VALUE
+        ) {
+            throw new IllegalArgumentException(
+                "chargeHoldSeconds must be a finite nonnegative float"
+            );
+        }
+        if (chargeHeld && chargeHoldSeconds <= 0.0) {
+            throw new IllegalArgumentException(
+                "chargeHeld requires a positive chargeHoldSeconds"
+            );
+        }
         if (nativeWorldVerbRequest == null) {
             nativeWorldVerbRequest = NativeWorldVerbRequest.none();
         }
@@ -311,7 +335,9 @@ public record AgentAction(
             worldMoveDirection,
             NativeWorldVerbRequest.none(),
             0.0,
-            gait
+            gait,
+            chargeHeld,
+            chargeHoldSeconds
         );
     }
 
@@ -348,7 +374,9 @@ public record AgentAction(
             // getDouble returns 0.0 for a missing key, so a sender predating the
             // body/head split still means "no body steer" and behaves as before.
             getDouble(map, "body_delta_yaw"),
-            getInt(map, "gait")
+            getInt(map, "gait"),
+            getBool(map, "charge_held"),
+            getDouble(map, "charge_hold_seconds")
         );
     }
 

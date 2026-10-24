@@ -123,6 +123,61 @@ above, `mutable_block_cells` during a held break can fail with
 `ArithmeticException: long overflow` (`Duration.toNanos` in
 `RegionGeometryCapture.mutableBlockRow`).
 
+## Held charge on the learner path (`charge_held`, 2026-10-22)
+
+`AgentAction` carries two additive keys: `charge_held` (boolean, default false)
+and `charge_hold_seconds` (finite, nonnegative float, default 0). `continuation()`
+keeps both, as it keeps `guardHeld`. The Python learner sends both on each tick
+it requests a melee hold slot: an authored Charging table with rows, no
+`AllowIndefiniteHold`, and no authored outer request (sword thrust, battleaxe
+swings, mace charges). `charge_hold_seconds` is that table's top threshold. The
+outer `requested_charge_time` stays 0 for these slots.
+
+Bridge semantics (`NativeEnvironmentSession.requestNativeAbility`, `NativeChargeHold`):
+
+- The first held request queues the slot's root with `charge_hold_seconds` as
+  its charge and binds the synthetic client with the same value. The charge
+  fires by itself at that threshold, as the simulator's auto-fire does.
+- A held tick on the same slot, including continuation ticks, never re-queues
+  and never resets the charge (the refusal path in `NativeInteractionQueue`
+  would apply zero).
+- The first tick without the level, or with another slot, releases the charge
+  once. The synthetic client delivers the release, which sets the charge to
+  zero, so a hold that ends before the top takes the base branch. The release
+  value is zero, not the elapsed hold: the sword's and battleaxe's outer 0.2 s
+  gates would route an elapsed release into the charged branch.
+- While the level is set, the held slot stays legal in the advertised ability
+  mask (`Ability.hostLegal`); every other slot keeps its refusal.
+
+Why no indefinite hold: `InteractionManager` skips `simulationTick` in
+remote-client mode, so `ChargingInteraction.simulateTick0`'s own auto-fire at
+`highestChargeValue` never runs, and the synthetic cursor finishes a charge only
+at its requested seconds. An infinite cursor would never reach the thrust, and
+a release would swing. Bytecode: Server-0.7.2.jar,
+`InteractionManager` (`hasRemoteClient` gates) and
+`ChargingInteraction.simulateTick0`.
+
+Not covered: `AllowIndefiniteHold` tables (staff, wand, spellbook, knife, spear,
+guns) and slots with an authored outer request (flame staff) keep the
+requested-charge path. Live (jar `3865F45F`, 2026-10-24, receipts
+`gen7_probes/thrust_lunge/thrust_lunge_Kweebec_Razorleaf_jar14_{edge,hold10,hold30}.json`): a 30-tick
+hold on slot 3 thrusts (lunge 2.78 blocks from r+21, every held tick legal); a 10-tick hold and a
+one-tick press swing with no lunge.
+
+Held timing (fix 1, 2026-10-23): a held charge (`NativeSyntheticCombatClient.markChargeHeld`, called
+from `requestNativeAbility` when `held`) makes each Charging op finish at its own highest threshold
+(`chargedNext` max key on the protocol packet: 0.174 for the swing op, 0.565 for the thrust op) and
+send that value, capped by the requested hold time, so a release still finishes at 0. The thrust
+then fires near 0.739 s (about 22 ticks at 30 Hz). Without this, each op waited the full hold (0.85 s)
+and a 30-tick hold released before the thrust (see the 2026-10-23 live receipt). The learner keeps a
+held slot legal in the evidence's `ability_legal` (`NativeActorEvidenceAssembler._held_charge_open`)
+while the bridge binds the slot (`host_legal`, which includes `NativeChargeHold.holds`): the busy
+charging chain closes the slot in the arsenal projection, and in the simulator a held charge admits
+nothing until it fires, so the slot stays legal there. Fix 3 reopened only the policy head mask; the
+decoder reads the observation's own ability mask, so the third held tick was refused and sent as a
+no-op, which released the charge into a swing (2026-10-24 fix3 hold30 receipt: legal ticks 11-12,
+refused from 13).
+
 ## Host contracts the 0.7.2 bridge pins (2026-10-19)
 
 The bridge refuses a session when a host contract it pins differs from the value the Python host
@@ -193,6 +248,31 @@ file name; the live run confirms the block id.
 
 The bridge jar changes with this build, so `bridge_jar_sha256` in `hytalegym/hytalegym/server_versions/v0_7.py`
 is re-pinned after the final build.
+
+## Block-type table request and async loader (2026-10-23)
+
+`block_type_table` (no environment needed; handled without `requireEnvironment`)
+returns `{type, schema: "hytalerl_block_type_table_v1", version: 1, count,
+entries: [[runtime_id, asset_id], ...]}` for every `BlockType` asset. Runtime ids
+are `BlockType.getAssetMap().getIndex(assetId)`, the same ids `nearby_blocks`
+rows carry (`column.getBlock`; `NativeWorldAccess` sets blocks with `getIndex`).
+Codec: `network/codec/BlockTypeTableCodec.java`, dispatch in `ClientHandler`.
+
+Python: `hytalegym/envs/block_type_table.py`. `BlockTypeIdLoader` starts a daemon
+thread after `HytaleEnv.reset()` when the env is built with `block_type_ids=True`.
+The fetch uses a new `BridgeConnection`, never the env socket, and the result is
+cached on the class keyed by (host, port). Lookups never block: before the table
+arrives they return 0. Errors are kept in `loader.error` and never raised.
+
+Opt-in info keys (absent when the flag is off): `nearby_block_type_id` int32
+[9, 9, 9] indexed `[dx+4, dy+4, dz+4]`, the same flattening as the
+`nearby_blocks` array, so the window matches `nearby_blocks` cell for cell; air
+is 0; `block_type_ids_ready` bool; `nearby_block_type_unknown_count` counts
+nonzero runtime ids missing from the table.
+
+Caveat: `geometry/GeometryFrame.java` maps runtime ids through the plugin's own
+enum `world/BlockType.fromId`, not the asset map. This request does not change
+that path.
 
 ## Outside this folder
 

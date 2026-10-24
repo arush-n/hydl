@@ -68,6 +68,10 @@ HYTALE_ENV_PARAMETER_BINDINGS = MappingProxyType(
         # to preserve the native 1/30-second logical delta while fast-forwarding.
         "native_tick_rate": "native_tick_rate",
         "native_time_dilation": "native_time_dilation",
+        # Added by the Gym on 2026-10-23: the server's block-type table, loaded
+        # asynchronously (envs/block_type_table.py). The Gym's own default is
+        # False, so forwarding it changes no behaviour.
+        "block_type_ids": "block_type_ids",
     }
 )
 
@@ -282,6 +286,7 @@ class NativeBridgeSession:
         learner_v3_world_geometry_config: Any | None = None,
         learner_v3_world_action_adapter: Any | None = None,
         render_mode: str | None = None,
+        block_type_ids: bool = False,
     ) -> None:
         if not isinstance(spec, AgentSpec):
             raise TypeError("spec must be an AgentSpec")
@@ -347,6 +352,8 @@ class NativeBridgeSession:
             raise ValueError("native_time_dilation must be finite and in (0.01, 4]")
         if not isinstance(combat_target_active, bool):
             raise TypeError("combat_target_active must be bool")
+        if not isinstance(block_type_ids, bool):
+            raise TypeError("block_type_ids must be bool")
         if not isinstance(target_profile, str):
             raise TypeError("target_profile must be a string")
         if (
@@ -387,6 +394,7 @@ class NativeBridgeSession:
         self.native_tick_rate = native_tick_rate
         self.native_time_dilation = float(native_time_dilation)
         self.combat_target_active = combat_target_active
+        self.block_type_ids = block_type_ids
         self.fidelity_fixture = fidelity_fixture
         self._lease: NativeEvidenceLease | None = None
         self._environment: HytaleEnv | None = None
@@ -505,6 +513,7 @@ class NativeBridgeSession:
                 ),
                 learner_v3_world_action_adapter=(self.learner_v3_world_action_adapter),
                 render_mode=self.render_mode,
+                block_type_ids=self.block_type_ids,
             )
         except Exception:
             lease.close()

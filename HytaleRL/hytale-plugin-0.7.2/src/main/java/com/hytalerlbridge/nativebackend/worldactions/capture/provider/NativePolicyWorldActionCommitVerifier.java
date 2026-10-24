@@ -45,18 +45,19 @@ public final class NativePolicyWorldActionCommitVerifier {
         )) {
             return Verification.rejected(STALE_GENERATION);
         }
-        if (request.verb().equals("place_block")) {
-            return Verification.rejected(PLACE_ROTATION_UNAVAILABLE);
-        }
         boolean selected = switch (request.verb()) {
             case "use" -> useMatches(request, fresh);
-            case "break_block" -> blockMatches(request, fresh);
+            case "break_block", "place_block" -> blockMatches(request, fresh);
             case "craft_recipe" -> recipeMatches(request, fresh);
             default -> false;
         };
-        return selected
-            ? Verification.certified()
-            : Verification.rejected(STALE_SELECTION);
+        if (selected) return Verification.certified();
+        // No admitted Place candidate matches yet (the surface provider emits no secondary Place binding).
+        return Verification.rejected(
+            request.verb().equals("place_block")
+                ? PLACE_ROTATION_UNAVAILABLE
+                : STALE_SELECTION
+        );
     }
 
     private static boolean useMatches(

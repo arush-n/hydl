@@ -8,6 +8,7 @@ import com.hytalerlbridge.environment.StepResult;
 import com.hytalerlbridge.entity.PrivilegedEntityQuery;
 import com.hytalerlbridge.entity.PrivilegedNpcSnapshot;
 import com.hytalerlbridge.entity.PrivilegedNpcUuidQuery;
+import com.hytalerlbridge.network.codec.BlockTypeTableCodec;
 import com.hytalerlbridge.network.codec.ResourceOverrideCodec;
 import com.hytalerlbridge.observation.NativeActorEvidenceRequest;
 import com.hytalerlbridge.worldgen.WorldgenStructureMarkerQuery;
@@ -180,6 +181,13 @@ public final class ClientHandler implements Runnable {
             }
             case "config" -> {
                 handleConfig(message, output);
+                yield true;
+            }
+            case "block_type_table" -> {
+                BlockTypeTableCodec.sendBlockTypeTable(
+                    output,
+                    BlockTypeTableCodec.liveEntries()
+                );
                 yield true;
             }
             case "region_manifest" -> {
@@ -372,7 +380,9 @@ public final class ClientHandler implements Runnable {
                 : nativeTimeDilation.floatValue(),
             ResourceOverrideCodec.decode(options),
             getStringField(options, "combat_target_role"),
-            CraftingOracleOptions.decode(options)
+            CraftingOracleOptions.decode(options),
+            getBooleanField(options, "water_ticking_disabled", false),
+            getOptionalDoubleField(options, "spawn_yaw")
         );
 
         environmentManager.destroy(environmentId);
