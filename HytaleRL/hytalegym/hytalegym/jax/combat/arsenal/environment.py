@@ -2476,8 +2476,14 @@ def geometry_arsenal_world_capabilities(
     role_opaque_mask: jax.Array | None = None,
     view_sector_full_angle_radians: jax.Array | float | None = None,
     legal_observation_sensor_range: bool = False,
+    projectile_clear_past_window_edge: bool = False,
 ) -> ArsenalWorldCapabilities:
     """Bind candidate perception, projectile contact, force, and dodge.
+
+    ``projectile_clear_past_window_edge=True`` (opt-in, owner ruling 2026-10-23)
+    passes ``clear_past_window_edge`` to ``geometry_projectile_first_contact_result``:
+    a projectile sweep is checked inside the geometry window only (see there).
+    False keeps the original fail-closed window.
 
     ``role_opaque_mask=None`` intentionally requests base block opacity only.
     Production callers that need native role-specific opacity must supply the
@@ -2514,6 +2520,8 @@ def geometry_arsenal_world_capabilities(
         raise ValueError(
             "legal_observation_sensor_range is implemented for the two-entity path only"
         )
+    if not isinstance(projectile_clear_past_window_edge, bool):
+        raise TypeError("projectile_clear_past_window_edge must be a bool")
     agent_offset = _broadcast_los_offset(
         geometry.agent_los_offset,
         batch,
@@ -2742,6 +2750,7 @@ def geometry_arsenal_world_capabilities(
                 jnp.concatenate((-flat_extent, flat_extent), axis=1),
                 entity_fraction,
                 entity_hit,
+                clear_past_window_edge=projectile_clear_past_window_edge,
             )
             packed_available = contact.available & flat_query
             flat_available = (
@@ -2780,6 +2789,7 @@ def geometry_arsenal_world_capabilities(
                 lambda values: geometry_projectile_first_contact_result(
                     geometry,
                     *values,
+                    clear_past_window_edge=projectile_clear_past_window_edge,
                 ),
                 (
                     jnp.moveaxis(world.muzzle_position, 1, 0),

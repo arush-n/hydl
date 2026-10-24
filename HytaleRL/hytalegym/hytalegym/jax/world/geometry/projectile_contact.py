@@ -9,6 +9,7 @@ from typing import NamedTuple
 import jax
 import jax.numpy as jnp
 
+from hytalegym.geometry.contract import CELL_RADIUS
 from hytalegym.jax.world.geometry import aabb_first_contact_result
 from hytalegym.jax.world.region.geometry import (
     region_aabb_first_contact_result,
@@ -51,16 +52,29 @@ def geometry_projectile_first_contact_result(
     entity_contact_mask: Array,
     *,
     segment_capacity: int = DEFAULT_PROJECTILE_CONTACT_SEGMENTS,
+    clear_past_window_edge: bool = False,
 ) -> ProjectileFirstContactResult:
     """Return the first solid-world contact before the nearest entity contact.
 
     Native projectile physics computes the nearest entity fraction first and
     bounds the block cast by it. The explicit entity inputs preserve that
     ordering while leaving entity collision ownership outside World.
+
+    ``clear_past_window_edge=True`` (opt-in, owner ruling 2026-10-23) checks a
+    local GeometryState window only inside the window: the sweep is available
+    whenever it is valid and within segment capacity, and it is clear unless a
+    known block is hit before the swept box leaves the geometry window. A sweep
+    that leaves the window with no hit before the edge is clear, and the
+    projectile's own collision decides past the edge, as the live 0.7.2 server
+    does. A RegionGeometryState is the whole captured region, not a window
+    around the actor, so the option leaves it unchanged (fail closed past the
+    region's bounds).
     """
 
     if not isinstance(geometry, (GeometryState, RegionGeometryState)):
         raise TypeError("geometry must be GeometryState or RegionGeometryState")
+    if not isinstance(clear_past_window_edge, bool):
+        raise TypeError("clear_past_window_edge must be a bool")
     if (
         isinstance(segment_capacity, bool)
         or not isinstance(segment_capacity, int)
@@ -128,6 +142,14 @@ def geometry_projectile_first_contact_result(
         raw_fraction = cast_fraction * contact.hit_fraction
         raw_normal = contact.contact_normal
         exhausted = valid & contact.geometry_exhausted
+        if clear_past_window_edge:
+            exit_fraction = _window_exit_fraction(
+                geometry,
+                safe_points,
+                cast_delta,
+                safe_bounds,
+            )
+            raw_hit = raw_hit & (contact.hit_fraction <= exit_fraction)
     else:
         width = safe_bounds[:, 3:] - safe_bounds[:, :3]
         axis_moving = jnp.abs(cast_delta) > _EPSILON
@@ -199,7 +221,10 @@ def geometry_projectile_first_contact_result(
 
     invalid = ~valid
     geometry_exhausted = exhausted | capacity_exceeded | invalid
-    available = valid & ~capacity_exceeded & ~exhausted
+    if clear_past_window_edge and isinstance(geometry, GeometryState):
+        available = valid & ~capacity_exceeded
+    else:
+        available = valid & ~capacity_exceeded & ~exhausted
     block_precedes_entity = (
         ~entity_mask | (raw_fraction < entity_fraction)
     )
@@ -218,6 +243,47 @@ def geometry_projectile_first_contact_result(
         invalid=invalid,
         segment_count=jnp.where(valid, required, 0),
     )
+
+
+def _window_exit_fraction(
+    geometry: GeometryState,
+    position: Array,
+    displacement: Array,
+    bounds: Array,
+) -> Array:
+    """Fraction of ``displacement`` at which the swept box leaves the window.
+
+    Mirrors the cell test of ``_sweep._local_motion_boxes``: a face leaves when
+    its floor cell passes +/- CELL_RADIUS from the origin, i.e. the swept
+    minimum drops below ``origin - R`` or the swept maximum reaches
+    ``origin + R + 1``. A box that starts outside on an axis exits at 0; an
+    axis that never moves and starts inside never exits (+inf).
+    """
+
+    origin = jnp.broadcast_to(
+        jnp.asarray(geometry.origin, dtype=jnp.float32),
+        position.shape,
+    )
+    lower = origin - jnp.float32(CELL_RADIUS)
+    upper = origin + jnp.float32(CELL_RADIUS + 1)
+    start_minimum = position + bounds[:, :3]
+    start_maximum = position + bounds[:, 3:]
+    started_outside = (start_minimum < lower) | (start_maximum > upper)
+    positive = displacement > _EPSILON
+    negative = displacement < -_EPSILON
+    safe_delta = jnp.where(positive | negative, displacement, 1.0)
+    leave_high = (upper - start_maximum) / safe_delta
+    leave_low = (lower - start_minimum) / safe_delta
+    axis_exit = jnp.where(
+        started_outside,
+        jnp.float32(0.0),
+        jnp.where(
+            positive,
+            leave_high,
+            jnp.where(negative, leave_low, jnp.float32(jnp.inf)),
+        ),
+    )
+    return jnp.min(axis_exit, axis=1)
 
 
 def _provider_bounds(

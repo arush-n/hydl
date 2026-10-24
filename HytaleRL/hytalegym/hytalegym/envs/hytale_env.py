@@ -319,12 +319,17 @@ class HytaleEnv(gym.Env):
                 neutral_arsenal_policy_action_factors,
             )
 
+            from hytalegym.server_versions import server_profile
+
             self._native_actor_assembler = NativeActorEvidenceAssembler(
                 learner_v3_profile,
                 target_profile=learner_v3_target_profile,
                 ticks_per_step=ticks_per_step,
                 world_geometry_config=learner_v3_world_geometry_config,
                 native_perception_capture=self.capture_perception_channels,
+                projectile_clear_past_window_edge=(
+                    server_profile().projectile_clear_past_window_edge
+                ),
             )
             if learner_v3_world_action_adapter is not None and not isinstance(
                 learner_v3_world_action_adapter,

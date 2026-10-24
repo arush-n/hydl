@@ -67,6 +67,9 @@ class ServerProfile:
     # Artifact that evidences ``world_geometry_token_capacity`` (named in the
     # policy config manifest, so it is checkpoint-visible).
     world_geometry_capacity_evidence: str | None = None
+    # Projectile sweeps are checked inside the geometry window only, not refused
+    # past its edge (opt-in, owner ruling 2026-10-23). False keeps the window gate.
+    projectile_clear_past_window_edge: bool = False
 
 
 def release_line(version: object) -> tuple[int, int] | None:

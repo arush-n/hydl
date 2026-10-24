@@ -26,4 +26,7 @@ PROFILE = ServerProfile(
     world_geometry_capacity_evidence=(
         "artifacts/fidelity_evidence/region_token_capacity/census_3seeds_200.log"
     ),
+    # Live 0.7.2 has no window gate on the bow (receipt
+    # artifacts/fidelity_evidence/gen7_probes/shortbow_tiers_b4eec032.json).
+    projectile_clear_past_window_edge=True,
 )

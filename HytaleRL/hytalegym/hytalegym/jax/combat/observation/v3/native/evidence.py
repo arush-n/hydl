@@ -168,6 +168,7 @@ class NativeActorEvidenceAssembler:
         ticks_per_step: int = 4,
         world_geometry_config: WorldGeometryPolicyConfig | None = None,
         native_perception_capture: NativePerceptionCapture | None = None,
+        projectile_clear_past_window_edge: bool | None = None,
     ) -> None:
         if not isinstance(agent_profile, str) or not agent_profile:
             raise ValueError("agent_profile must name a catalog profile")
@@ -190,6 +191,12 @@ class NativeActorEvidenceAssembler:
         ):
             raise TypeError("native_perception_capture must be callable or None")
         self.native_perception_capture = native_perception_capture
+        if projectile_clear_past_window_edge is not None and not isinstance(
+            projectile_clear_past_window_edge, bool
+        ):
+            raise TypeError("projectile_clear_past_window_edge must be a bool or None")
+        # None omits the keyword, so the world function's own default decides.
+        self.projectile_clear_past_window_edge = projectile_clear_past_window_edge
         loadout = hytale_0_5_7_loadouts(
             agent_profile,
             target_profiles=target_profile,
@@ -1285,12 +1292,22 @@ class NativeActorEvidenceAssembler:
                 WORLD_TOKEN_PROVENANCE_NATIVE_EXACT_GEOMETRY,
             )
 
+            window_edge_option = (
+                {}
+                if self.projectile_clear_past_window_edge is None
+                else {
+                    "projectile_clear_past_window_edge": (
+                        self.projectile_clear_past_window_edge
+                    ),
+                }
+            )
             world = geometry_arsenal_world_capabilities(
                 state,
                 self.params,
                 geometry=geometry,
                 config=self.config,
                 role_opaque_mask=role_mask,
+                **window_edge_option,
             )
             if role_available:
                 raw_tokens = geometry_arsenal_world_token_source(
