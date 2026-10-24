@@ -2115,7 +2115,15 @@ Checks:
   which has no power on soil or stone: the margins read -1, the powers stay 0). On the pinned gen-7 render and on
   the duel nothing moves but the renamed column (`reserve_0` -> `break_progress`). The stores did not take part:
   without the perception channel they do not write, and the render's engine has no fields. That a remembered block
-  keeps the columns it was stored with is read from `memory.py`, not run.
+  keeps the columns it was stored with was read from `memory.py`; PROVEN 2026-10-23
+  (`test_sa_block_identity_memory.py`, through `layer.step` with a position channel: a `Rock_Stone` seen at 0.4
+  and then out of view comes back as one remembered row with every S5 column as stored; a deliberate fault in the
+  read makes it fail).
+- **Break progress, simulator to token: cannot be run today.** The Region scene binds no block executor: it builds
+  one only from a native item-interaction recording made against the deployed bridge, and the bridge's evidence
+  folder (1F874DFC) has none. So no break is ever legal there (the candidate head is masked; the trigger head reads
+  "primary legal" only as the mask's fallback). The test is a strict expected failure on exactly that reason, and
+  turns into a failure, to be unmarked, when a recording exists. Sent to the coordinator.
 - **The gate** (two passes, against the baseline taken at 6acadad): pass 1, 5 failed and 6 errors, the same 11
   names, and 1,488 passed (the 1,480 of 27.7 and the 8 S5 tests); pass 2, 19 failed and 11 errors, the same 30
   names. The gen-7 render's acceptance test fails as at the baseline, before it reaches this layer (`No module
