@@ -485,6 +485,14 @@ PATCHES = (
           "        target_present | ~jnp.asarray(config.legal_observation, dtype=jnp.bool_)\n"
           "    )\n",
           "14", "tests/sim/test_legal_observation_privilege.py (presence pair)", _LEGAL_ROW14),
+    # Row 6a, the clear-flight gate (#139, owner ruling 2026-10-23): the sweep is checked inside the 9x9x9 window only;
+    # past the window edge counts as clear (the 0.7.2 primary root has no range condition).
+    Patch("projectile_clear_past_window_edge", "combat/arsenal/environment.py",
+          "    projectile_clear_past_window_edge: bool = False,\n",
+          "    projectile_clear_past_window_edge: bool = True,\n",
+          "6a", "tests/sim/test_bow_window_edge.py (the rendered default) and tests/jax/world/geometry/"
+          "test_projectile_window_edge.py (open floor at 4.5, 6 and 8 blocks clear; walls inside and at the edge block)",
+          "the 0.7.2 live host sets the same option (server_versions/v0_7.py); gen 5 keeps the fail-closed window"),
     # Row 11x, augment tags (construct crafting_augment_tags): the grant bits ride the context and the assets; the gate is a hook.
     Patch("augment_context_field", "crafting/types.py",
           "    input_mode: Array\n",

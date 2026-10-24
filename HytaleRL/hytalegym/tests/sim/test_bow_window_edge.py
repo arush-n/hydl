@@ -2,16 +2,25 @@
 
 The projectile cases (open floor 3, 4.5, 6, 8 blocks; walls inside and at the edge) are in
 ``tests/jax/world/geometry/test_projectile_window_edge.py``. This file pins the switches: the repo default stays off
-(gen 5 unchanged), and only the 0.7.2 server line turns it on for the native host. The gen-7 render is NOT wired yet:
-renders read HEAD, so the window-edge option needs a committed shared-source change before a Patch can anchor on it. Live receipt: ``artifacts/fidelity_evidence/gen7_probes/shortbow_tiers_b4eec032.json``.
+(gen 5 unchanged), the 0.7.2 server line turns it on for the native host, and the gen-7 render turns it on through the
+overlay Patch ``projectile_clear_past_window_edge``. Live receipt:
+``artifacts/fidelity_evidence/gen7_probes/shortbow_tiers_b4eec032.json``.
 """
 
 from __future__ import annotations
 
 import inspect
+from importlib import import_module
+
+import pytest
 
 from hytalegym.jax.combat.arsenal import environment as repo_environment
 from hytalegym.server_versions import server_profile
+from hytalegym.sim.common import render as R
+from hytalegym.sim.common.overlay import HeadSource
+from hytalegym.sim.gen7.overlay import OVERLAY as GEN7_OVERLAY
+
+from .support import mount_fresh, unmount
 
 PARAMETER = "projectile_clear_past_window_edge"
 
@@ -26,3 +35,19 @@ def test_repo_default_stays_off() -> None:
 def test_only_the_0_7_2_line_turns_the_native_host_option_on() -> None:
     assert server_profile("0.7.2").projectile_clear_past_window_edge is True
     assert server_profile("0.5.7").projectile_clear_past_window_edge is False
+
+
+@pytest.fixture(scope="module")
+def gen7_environment(tmp_path_factory):
+    path = tmp_path_factory.mktemp("bow_window_edge") / "gen7"
+    R.render(GEN7_OVERLAY, path, source=HeadSource())
+    package = mount_fresh(path).__name__
+    try:
+        yield import_module(package + ".combat.arsenal.environment")
+    finally:
+        unmount(package)
+
+
+def test_the_gen7_render_turns_the_option_on(gen7_environment) -> None:
+    parameter = inspect.signature(gen7_environment.geometry_arsenal_world_capabilities).parameters[PARAMETER]
+    assert parameter.default is True

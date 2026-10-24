@@ -894,6 +894,11 @@ DECLARATIONS = {
         "patch (fidelity row 14): legal observation keeps a hidden target's base attack values; its differential is "
         "tests/sim/test_legal_observation_privilege.py (no 0.7.2 source value: a contract rule)"
     ),
+    "projectile_clear_past_window_edge": Derived(
+        "patch (fidelity row 6a, #139): owner ruling 2026-10-23, the clear-flight gate checks inside the geometry window "
+        "only; receipt gen7_probes/shortbow_tiers_b4eec032.json (live masked the bow past about 4 blocks); no 0.7.2 source "
+        "value: the 0.7.2 primary root has no range condition"
+    ),
     "game_clock": (
         # S14 (owner 2026-10-23): the 0.7.2 day and night lengths; SECONDS_PER_DAY 86400 and the 0.6 day split are
         # WorldTimeResource constants (javap), checked by tests/sim/test_game_clock.py.
