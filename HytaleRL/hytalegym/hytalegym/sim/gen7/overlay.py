@@ -1075,6 +1075,24 @@ PATCHES = (
           "SPEAR_PROFILE_NAMES = CORE_PROFILE_NAMES[-16:]\n",
           'PROFILE_NAMES = (*PROFILE_NAMES, "skeleton_archer_turret_bow")\nSPEAR_PROFILE_NAMES = CORE_PROFILE_NAMES[-16:]\n',
           _SKELETON_TURRET_ROW, _SKELETON_TURRET_DIFF, _SKELETON_TURRET_NOTE),
+    # S12: the dense GeometryState's block id under each entity's feet, attached to the capabilities. The field defaults
+    # to None, so every constructor and gen 5 are unchanged; only a geometry with an identity grid fills it. Region worlds
+    # stay None (their semantic atlas is not in reach of the capability builder). The hearing row reads it.
+    Patch("block_under_feet_field", "combat/arsenal/schema/types.py",
+          "    target_force_pushed_knockback: Array\n\n\nclass ArsenalCommands(NamedTuple):",
+          "    target_force_pushed_knockback: Array\n"
+          "    # S12 (default None: no producer and no identity grid leave it unset): the block id under each entity's feet, [B, E].\n"
+          "    block_under_feet: Array | None = None\n\n\nclass ArsenalCommands(NamedTuple):",
+          "S12", "tests/sim/test_hearing_channel.py: the render test reads block_under_feet from a dense geometry",
+          "combat/arsenal/schema/types.py: one optional trailing field; no leaf when None"),
+    Patch("block_under_feet_dense", "combat/arsenal/environment.py",
+          "    return world._replace(\n        actor_world_state_available=actor_state.available,\n",
+          "    from hytalegym.sim.gen7.mechanics.feet_block import block_under_feet_for_capabilities as _block_under_feet\n"
+          "    return world._replace(\n        block_under_feet=_block_under_feet(geometry, state.combat.position),\n"
+          "        actor_world_state_available=actor_state.available,\n",
+          "S12", "tests/sim/test_hearing_channel.py: the render test reads block_under_feet from a dense geometry",
+          "geometry_arsenal_world_capabilities: fills block_under_feet from the dense identity grid (mechanics/feet_block.py); "
+          "Region and grid-less geometry stay None"),
     # Block breaking (owner yes 2026-10-23): the Region removal certificate refuses a break only when a neighbour actually
     # rests on the target (0.7.2 testBlockPhysicsAtPosition reads only its support keys' cells), or is chain-capable,
     # protruding or unknown. The catalog must carry the faces, so both defaults flip; gen 5 keeps the any-neighbour rule.
@@ -1408,6 +1426,13 @@ HOOKS = (
          "the switch-off identity, the rendered field and the unchanged flat layout",
          note="sim/gen7/mechanics/game_clock.py: opt-in game_clock field after the existing learner fields; reads tick_count and "
          "the step; weather published as unknown; gen 5 returns the original"),
+    Hook("hearing", "combat/observation/v3/encoding/encoder.py", "encode_learner_observation_v3",
+         f"{_MECHANICS}.heard_sounds:construct", "hearing", "active",
+         differential="tests/sim/test_hearing_channel.py: the switch-off identity, the field order, the two-body MoveIn gain, "
+         "silence on Soil_Grass, the range gate and the perception flag; tests/sim/test_feet_block.py: the feet cell",
+         note="sim/gen7/mechanics/heard_sounds.py: opt-in heard_sounds field after game_clock; stateless footstep cadence "
+         "(MoveIn every 30 ticks while moving); block under the feet from world_capabilities.block_under_feet, else Soil_Grass. "
+         "The producer is mechanics/feet_block.py, attached on the dense path by the block_under_feet_dense Patch; Region stays None"),
 )
 
 OVERLAY = Overlay(

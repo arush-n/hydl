@@ -899,6 +899,18 @@ DECLARATIONS = {
         "only; receipt gen7_probes/shortbow_tiers_b4eec032.json (live masked the bow past about 4 blocks); no 0.7.2 source "
         "value: the 0.7.2 primary root has no range condition"
     ),
+    "block_under_feet_field": Derived(
+        "patch (S12): an optional trailing capability field, None unless the dense identity grid fills it; its "
+        "differential is in tests/sim/test_hearing_channel.py"
+    ),
+    "block_under_feet_dense": Derived(
+        "patch (S12): the dense GeometryState's identity grid at the feet cell; its differential is in "
+        "tests/sim/test_hearing_channel.py"
+    ),
+    "hearing": Derived(
+        "construct (S12): the footstep MoveIn content is read at run time from Assets.zip by jax/world/audio/hearing.py; "
+        "its differential is in the Hook row"
+    ),
     "cascade_support_faces": Derived(
         "patch (break, owner yes 2026-10-23): the Region block catalog carries each entry's rotated support faces; the faces "
         "come from Assets.zip Support/MaxSupportDistance through worldgen/block_support.support_face_geometry; its differential "
