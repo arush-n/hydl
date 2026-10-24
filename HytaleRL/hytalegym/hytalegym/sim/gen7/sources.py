@@ -899,6 +899,20 @@ DECLARATIONS = {
         "only; receipt gen7_probes/shortbow_tiers_b4eec032.json (live masked the bow past about 4 blocks); no 0.7.2 source "
         "value: the 0.7.2 primary root has no range condition"
     ),
+    "cascade_support_faces": Derived(
+        "patch (break, owner yes 2026-10-23): the Region block catalog carries each entry's rotated support faces; the faces "
+        "come from Assets.zip Support/MaxSupportDistance through worldgen/block_support.support_face_geometry; its differential "
+        "is tests/sim/test_break_cascade_rule.py"
+    ),
+    "cascade_provider_cell_rule": Derived(
+        "patch (break, owner yes 2026-10-23): a neighbour refuses a break only if the target is one of its support provider "
+        "cells, or it is chain-capable, protruding or unknown; grounded in 0.7.2 BlockPhysicsUtil.testBlockPhysicsAtPosition "
+        "(javap; tmp/lane_cascade_t1/FINDINGS.md); its differential is tests/sim/test_break_cascade_rule.py"
+    ),
+    "cascade_catalog_support_faces": Derived(
+        "patch (break, owner yes 2026-10-23): the catalog builder's default matches the executor's, so every gen-7 "
+        "catalog carries the support faces from Assets.zip; its differential is tests/sim/test_break_cascade_rule.py"
+    ),
     "game_clock": (
         # S14 (owner 2026-10-23): the 0.7.2 day and night lengths; SECONDS_PER_DAY 86400 and the 0.6 day split are
         # WorldTimeResource constants (javap), checked by tests/sim/test_game_clock.py.

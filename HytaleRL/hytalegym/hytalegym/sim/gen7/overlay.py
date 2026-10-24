@@ -1075,6 +1075,28 @@ PATCHES = (
           "SPEAR_PROFILE_NAMES = CORE_PROFILE_NAMES[-16:]\n",
           'PROFILE_NAMES = (*PROFILE_NAMES, "skeleton_archer_turret_bow")\nSPEAR_PROFILE_NAMES = CORE_PROFILE_NAMES[-16:]\n',
           _SKELETON_TURRET_ROW, _SKELETON_TURRET_DIFF, _SKELETON_TURRET_NOTE),
+    # Block breaking (owner yes 2026-10-23): the Region removal certificate refuses a break only when a neighbour actually
+    # rests on the target (0.7.2 testBlockPhysicsAtPosition reads only its support keys' cells), or is chain-capable,
+    # protruding or unknown. The catalog must carry the faces, so both defaults flip; gen 5 keeps the any-neighbour rule.
+    Patch("cascade_support_faces", "combat/arsenal/world_actions/executor.py",
+          "    support_faces: bool = False,\n",
+          "    support_faces: bool = True,\n",
+          "break", "tests/sim/test_break_cascade_rule.py (the rendered defaults) and tests/jax/world/region/"
+          "test_removal_cascade_provider_rule.py (side neighbour allowed, neighbour above refuses, leaves and unknown refuse)",
+          "compile_region_block_executor_assets builds the catalog with support faces"),
+    Patch("cascade_provider_cell_rule", "combat/arsenal/world_actions/executor.py",
+          "    provider_cell_rule: bool = False,\n",
+          "    provider_cell_rule: bool = True,\n",
+          "break", "tests/sim/test_break_cascade_rule.py (the rendered defaults) and tests/jax/world/region/"
+          "test_removal_cascade_provider_rule.py",
+          "make_region_block_action_surface_executor uses the tier-1 removal certificate (tmp/lane_cascade_design/DESIGN.md)"),
+    Patch("cascade_catalog_support_faces", "world/block_actions/_resolution.py",
+          "    support_faces: bool = False,\n",
+          "    support_faces: bool = True,\n",
+          "break", "tests/sim/test_break_cascade_rule.py (the rendered defaults) and tests/sim/"
+          "test_region_executor_crafting.py (a catalog built directly reaches the rule's executor)",
+          "block_action_catalog_from_local builds every gen-7 catalog with support faces, so a catalog built outside the "
+          "executor assets still carries what the provider-cell rule needs"),
 
 )
 
