@@ -410,7 +410,7 @@ Console replays of the mace fights: 20261020T062617Z-11750ee7 (scripted), 202610
 - A self-play league can cycle, or collapse onto one strategy (Balduzzi et al. 2019). The scripted styles stay in the
   pool as anchors, as AlphaStar kept its exploiters (Vinyals et al. 2019).
 
-## 8. Training on v3: the state layer and the trunk's memory (PROPOSED 2026-10-23; V0 APPROVED the same day, 8.4)
+## 8. Training on v3: the state layer and the trunk's memory (PROPOSED 2026-10-23; V0 APPROVED the same day, 8.4; the sequence machinery BUILT, 8.7)
 
 `VIRTUAL_HUMAN.md` section 13: "Moving the trainers onto `runtime/state_tick.py` is the first task when training
 resumes." The encoder and the state layer are now built through step 9 (with the tick fix and S5), so this section says
@@ -551,6 +551,47 @@ is the same for both (2.3 to 4.9 ms).
   decisions): 1 to 2 s an Adam step on A2's 1,024 decisions (about 11 sequences), so 0.5 to 1 hour an iteration and 3
   to 7 hours for A2's six iterations on this machine. So V1 starts with a timed smoke (one iteration, a few hundred
   steps) before its full budget is asked for.
+
+### 8.7 The sequence machinery built (G1, 2026-10-23; no training)
+
+**What was built.** 8.2 item 2's machinery, by a Haiku subagent from a written spec, checked here:
+- `training/sequences.py`, with `record`, `cut`, `step`, `unroll`, `pack` and `unpack`;
+- `runtime/state_tick.trunk_step`, `tick`'s trunk half moved out unchanged, so `tick` is `layer.step` then
+  `trunk_step`.
+
+Nothing trains here.
+
+**The test rollout** (`test_sa_sequences.py`): 12 decisions at batch 2 on the trainers' flat world, through `tick`
+with a fresh v3 trunk (`bench/agent_models.CONFIG`). The cut is L = 6, and lane 1 resets at decision 4. It runs on two
+channels:
+- none, as the flat world publishes, so the object stores stay empty;
+- the agent's own pose (`own_pose_channel`), so the entity store fills and the reset empties it.
+
+**What it showed:**
+- **Exact, one decision at a time.** Replayed one stored sequence at a time, one decision at a time, the trunk
+  reproduces every output of the rollout bit for bit: the context, the memory, the background, every token type and
+  the object latents, across the reset and the sequence boundaries.
+- **Batched under `lax.scan`,** it is within 1.91e-6 on the flat run and 1.67e-6 with the own pose. This is float32
+  rounding across program shapes. The jitted rollout differs from the eager one at the same tick by the same 1.91e-6,
+  and the unroll is identical jitted and eager on the same inputs (the builder's log, rerun here). The scan test's
+  bound is 1e-5, about five times that.
+- **float16 storage** moves the outputs by at most 4.65e-4 (the act token; the context 2.1e-4, the memory 1.1e-4).
+- **Gradients through time** are finite, and the last decision's context reaches the memory's initial slots.
+- **The cut.** A sequence never crosses a reset; its stored start is the rollout's carried state; and pack then
+  unpack restores the valid rows exactly in float32.
+- **The restart mask is exact under changed parameters.** The mask marks the slots whose latent the state layer
+  zeroed. The layer only ever keeps a slot's latent or zeroes it, for a new thing or a reset (`state/memory.py`
+  line 184); it never moves one between slots.
+- **Not exercised:** a restart in the middle of a sequence, a new thing taking a slot after the first decision.
+  Neither rollout has one. It needs a world where things come and go (the duel, the Region).
+
+**What V1 needs beyond it.**
+- **Memory.** `record` keeps every decision dense in float32, with its carried state. Dense tokens are about 169 KB a
+  lane decision (8.6), so one 128-lane rollout of 480 decisions would hold about 10 GB. V1 packs at record time and
+  keeps the carried state only where sequences start.
+- **The cut.** It needs a stride, so that sequences overlap by the burn-in (R2D2), and each lane's end (its horizon).
+
+**Gate** (two passes, against the 6acadad baseline): pass 1 the same 11 failing names, with 1,602 passed (the new sequence tests among them); pass 2 the same 30.
 
 ## References
 

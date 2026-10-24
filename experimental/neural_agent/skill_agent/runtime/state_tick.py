@@ -6,6 +6,7 @@ perceived or remembered. The v1 path is unchanged (``model/freezing.py`` ``encod
 - :func:`tick`: the state layer, then the trunk once: the latent memory and the background summary carried (reset where
   a lane starts over), and each important thing's object latent read from its store slot and written back
   (``docs/VIRTUAL_HUMAN.md`` section 18).
+- :func:`trunk_step`: :func:`tick`'s trunk half, on tokens the layer has already stepped (the training unroll repeats it).
 - :func:`entity_rows` and :func:`point`: the v3 resolver, an entity handle to the token row that holds it, inside the
   jitted tick (``contract/references.py`` resolves v1 token records, and stays free of JAX).
 - :func:`module_factors`: a skill module's action for every agent: the masked argmax on its scope's heads, neutral
@@ -60,6 +61,14 @@ def tick(trunk: Trunk, state: layer.AgentState, observation: Any, *, last_action
 
     tokens, state = layer.step(observation, state, last_action=last_action, reset=reset,
                                tick_seconds=tick_seconds, **step)
+    return trunk_step(trunk, tokens, state, reset)
+
+
+def trunk_step(trunk: Trunk, tokens: Mapping[str, tuple[Any, Any]], state: layer.AgentState,
+               reset: jax.Array | None) -> tuple[StateView, layer.AgentState]:
+    """The trunk's half of :func:`tick`, on the ``tokens`` of a state that ``layer.step`` has just returned: the same
+    reads and writes, which ``training/sequences.py`` repeats through time. The stores were emptied by the layer, so
+    only the latent memory and the background are restarted here, where ``reset`` is True."""
     batch = state.entity_ids.shape[0]
     latent = _carried(state.latent, initial_memory(trunk.params, trunk.config, batch), reset)
     background = _carried(state.background, initial_background(trunk.params, trunk.config, batch), reset)
@@ -325,4 +334,5 @@ class ModuleBody:
 
 
 __all__ = ["AgentView", "Lowering", "ModuleBody", "OwnPose", "StateView", "encode_contexts", "entity_rows",
-           "host_inputs", "known_entities", "module_factors", "own_pose_channel", "point", "step_lanes", "tick"]
+           "host_inputs", "known_entities", "module_factors", "own_pose_channel", "point", "step_lanes", "tick",
+           "trunk_step"]
