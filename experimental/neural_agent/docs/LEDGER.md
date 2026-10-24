@@ -1479,3 +1479,27 @@ verdict: COMMITTED; not pushed. Open for the owner: the three [E] rates; a potio
 command: owner, 2026-10-23: "Start V1 smoke (Recommended)"; 2026-10-24: "do shorter passes overnight", "ensure that it is proper before committing".
 result: `training/distill_v3.py` (built by a Haiku subagent from a written spec, checked and extended here): A2's DAgger loop on the v3 state layer (the agent's own pose as its channel) and a trunk with memory, trained through time on stored sequences (L 90, burn-in 30, overlapping); `sequences.py` gains packed recording, a strided cut and `take` (defaults unchanged). Each batch is cut to the token slots the data fills (39 of 356 on the flat world): the same training to 6 digits after 300 steps, the step 11.2 s to 1.8 s and peak RSS 21 to 3.5 GB. Smoke (one iteration, 300 steps): pipeline end to end, 0 illegal; the flat world's tick measures 1/30 s. Short pass (6 x 500, both arms in parallel, overnight): walking learnt (0.77 to 0.87 seen), looks reached but not held (held at most 0.08), no consistent memory-against-control difference (one seed). Both ran with A2's original options: run C''s (walk_to v3's margin, the head-frame look direction), which V1's gate names, were missed in the spec and the review; they are now V1's default, checked by a test and a two-iteration run. Gate (two passes against 6acadad, on 1e52c83 + V1): pass 1 the baseline's 11 and 6101ddd's intended relations test, none from V1 (1,636 passed); pass 2 the same 30. c7eeda1 (the coordinator's gen-7 bow gate) landed on main meanwhile.
 verdict: COMMITTED; not pushed. Next, for the owner: the short pass with C''s options (V1's bars against C'), and a second seed for the memory comparison. Run reports and parameters are in the session scratchpad (v1_smoke, v1_smoke_cut, v1_short), not in the repo.
+
+## 2026-10-24 — coordinator: jar 14 (3865F45F), Region breaks and S12 on gen 7, the construct chain, answers to the skill layer's asks
+command: owner, 2026-10-23: tier-1 Region breaks may land after their gate ("gen 5 is basically deprecated"); S12 and S14 approved; the hold-wire live check; "carry them over to the java server". Owner, 2026-10-24: "assume you always have permission for cross session messages". Three replies to the skill layer were held by its session and expired, so their content is here.
+result:
+- **1deb46d, aeabb64: Region breaks, tier 1, on gen 7.** A neighbour refuses a break only if the target is one of its support cells, or it is chain-capable or unknown (0.7.2 `BlockPhysicsUtil.testBlockPhysicsAtPosition`). On by default in the gen-7 render, off in the repo engine (gen 5 unchanged). End to end: the Soil_Pebbles block that was always refused breaks on the first hold tick; afterwards the mutable overlay reads the cell empty. Read post-break cells through `lookup_region_geometry_blocks` (the overlay), not `lookup_region_block_semantics` (the immutable atlas, which stays stale).
+- **46a793e, S12 hearing (opt-in `Constructs.hearing`).** A `heard_sounds` field after `game_clock`: footsteps of every body within each sound's MaxDistance (K = 16), the sound set from the block under the walker's feet (dense geometry; Region falls back to Soil_Grass).
+- **1636891, the construct chain (the skill layer's item 3).** `perception_v2` + `game_clock` (+ `hearing`) now encode together; the clock and hearing wrappers keep `__wrapped__`. The skill layer's strict xfail in `test_sa_drives.py` should XPASS.
+- **6d9307f, jar 14 (`3865F45F`).**
+  - The game clock runs live (5506 -> 5524 over 60 ticks).
+  - Held charges work: `charge_held`; hold30 thrusts, hold10 swings.
+  - The block-type table (opt-in `block_type_ids`).
+  - Spawn yaw, the water-ticking-off option and place rotation zero.
+  - The shortbow is legal and fires past 4 blocks: damage 4/7/19 at tiers 2-4 = 0.7.2.
+  - The NPC observation pin is fixed. Recertification is run 13 (next).
+- **4580ac0, the live game_clock (the skill layer's ask, opt-in `HytaleEnv(learner_game_clock=True)`).**
+  - The learner observation gains `game_clock`, the same `GameClock` as the sim (`sim/gen7/mechanics/game_clock.clock_at`).
+  - `time_of_day` is the bridge value; is_day and seconds to sunrise and nightfall come from time_of_day x 3.6.
+  - `game_seconds_elapsed` is the wrap-aware change since reset x 3.6 (it moves in 3.6 s steps); weather is unknown.
+- **The skill layer's benevolence note (6101ddd).** The decision layer's `test_na_relations.py` closes the chance at 10 + `at_least(MIN_CHANCE_SECONDS, DT)` = tick 16; 18 passed.
+- **Answers to the JVM-agent audit (skill layer, 2026-10-24):**
+  - (1) The jar is jar 14, 6d9307f; recert run 13 is next.
+  - (2) `experimental/jvm-agent-0.7.2` compiles against Server-0.7.2.jar only and mirrors none of jar 14's contracts. Its suite reads 33 passed, 13 failed with both the old and the new jar. 10 of the 13 are "geometry_token_f32 has 5764 values, contract says 12576": its fixtures predate the 96-token capacity (04c3b18) and the port. Re-exporting them needs a live bridge and, per its DEV.md, CUDA. Live v3 control goes through the Python host for now. The JVM refresh is the owner's call (asked).
+  - (3) Live fields: game_clock above. `audio` -> `heard_sounds` needs the sound-index -> asset-id table and per-sound source positions; scoped next. Block type ids: jar 14 publishes `nearby_block_type_id` [9,9,9] (opt-in), `block_type_ids_ready` and `nearby_block_type_unknown_count`; name the S5 fields to fill. There is no live `perception_v2` capture path.
+verdict: COMMITTED; not pushed.
