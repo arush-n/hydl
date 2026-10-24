@@ -2124,6 +2124,12 @@ Checks:
   folder (1F874DFC) has none. So no break is ever legal there (the candidate head is masked; the trigger head reads
   "primary legal" only as the mask's fallback). The test is a strict expected failure on exactly that reason, and
   turns into a failure, to be unmarked, when a recording exists. Sent to the coordinator.
+  - The coordinator, the same day: the recording exists (run 12's, promoted to
+    `HytaleRL/hytalegym/tests/fidelity/fixtures/world/v0_7/`, not to the evidence folder the scene reads), and the
+    trigger head's (True, False) is a forced neutral, one legal choice with no gradient, so it teaches nothing.
+  - Probed here with the scene pointed at that recording: every executor flag binds, but the candidate head still
+    masks the looked-at breakable block (Soil_Pebbles, tick 8), so no break can be chosen. Handed back to the
+    coordinator, whose world it is; the test stays an expected failure until a break is legal in the default scene.
 - **The gate** (two passes, against the baseline taken at 6acadad): pass 1, 5 failed and 6 errors, the same 11
   names, and 1,488 passed (the 1,480 of 27.7 and the 8 S5 tests); pass 2, 19 failed and 11 errors, the same 30
   names. The gen-7 render's acceptance test fails as at the baseline, before it reaches this layer (`No module
