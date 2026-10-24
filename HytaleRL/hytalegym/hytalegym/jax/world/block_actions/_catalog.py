@@ -89,6 +89,9 @@ class BlockActionCatalog(NamedTuple):
     tool_drop: BlockDropTable
     soft_drop: BlockDropTable
     harvest_drop: BlockDropTable
+    # Opt-in tier-1 inputs; None unless built with support_faces=True.
+    support_face_mask: Array = None
+    support_chain: Array = None
 
 
 class BlockActionTargetResult(NamedTuple):

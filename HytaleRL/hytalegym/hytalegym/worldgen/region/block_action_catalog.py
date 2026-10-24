@@ -48,6 +48,19 @@ REGION_BLOCK_ACTION_CATALOG_VERSION = 4
 _STATE_SEPARATOR = "_State_Definitions_"
 
 
+# Tier-1 support-face fields are derived from the same installed assets (the
+# evidence hash binds them). They stay out of the hashed meaning so that
+# semantic_sha256 does not move with the opt-in removal rule.
+_TIER_ONE_DERIVED_ENTRY_FIELDS = ("support_face_mask", "support_chain")
+
+
+def _hashed_entry(entry) -> dict:
+    value = asdict(entry)
+    for name in _TIER_ONE_DERIVED_ENTRY_FIELDS:
+        value.pop(name)
+    return value
+
+
 @dataclass(frozen=True)
 class RegionBlockActionCatalog:
     """Canonical host catalog plus non-semantic installed-asset provenance."""
@@ -133,7 +146,7 @@ class RegionBlockActionCatalog:
                 "source_block_semantic_sha256": (
                     self.source_block_semantic_sha256
                 ),
-                "entries": [asdict(entry) for entry in self.entries],
+                "entries": [_hashed_entry(entry) for entry in self.entries],
                 "gather_defaults": [
                     None if spec is None else asdict(spec)
                     for spec in self.gather_defaults

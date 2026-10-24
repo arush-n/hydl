@@ -25,6 +25,10 @@ from hytalegym.worldgen.block_actions import (
     SUPPORT_DROP_FALL,
     SUPPORT_DROP_NONE,
 )
+from hytalegym.worldgen.block_support import (
+    SUPPORT_FACE_BASE_COUNT,
+    SUPPORT_FACE_DIRECTIONS,
+)
 
 
 Array = jax.Array
@@ -36,13 +40,28 @@ REMOVAL_CASCADE_DIAGNOSTIC_TARGET_NOT_SINGLE_CELL = 1 << 1
 REMOVAL_CASCADE_DIAGNOSTIC_NEIGHBOUR_UNAVAILABLE = 1 << 2
 REMOVAL_CASCADE_DIAGNOSTIC_SUPPORT_DEPENDENT = 1 << 3
 
-_NEIGHBOUR_OFFSETS = jnp.asarray(
+_NEIGHBOUR_OFFSET_TUPLES = [
+    (x, y, z)
+    for y in (-1, 0, 1)
+    for z in (-1, 0, 1)
+    for x in (-1, 0, 1)
+    if (x, y, z) != (0, 0, 0)
+]
+_NEIGHBOUR_OFFSETS = jnp.asarray(_NEIGHBOUR_OFFSET_TUPLES, dtype=jnp.int32)
+# Tier 1: a neighbour N = c + o reads the target c through a base-face support
+# key F only when dir(F) == -o (the native connecting offset of a base face is
+# its own direction, confirmed on the 0.7.2 jar). -1 means no base face does.
+_PROVIDER_FACE_BY_NEIGHBOUR = jnp.asarray(
     [
-        (x, y, z)
-        for y in (-1, 0, 1)
-        for z in (-1, 0, 1)
-        for x in (-1, 0, 1)
-        if (x, y, z) != (0, 0, 0)
+        next(
+            (
+                face
+                for face in range(SUPPORT_FACE_BASE_COUNT)
+                if SUPPORT_FACE_DIRECTIONS[face] == (-x, -y, -z)
+            ),
+            -1,
+        )
+        for x, y, z in _NEIGHBOUR_OFFSET_TUPLES
     ],
     dtype=jnp.int32,
 )
@@ -67,9 +86,20 @@ def region_removal_cascade_safety(
     environment_world_id: Array,
     *,
     require_core: bool = True,
+    provider_cell_rule: bool = False,
 ) -> RegionRemovalCascadeSafety:
-    """Certify removals that cannot start native support propagation."""
+    """Certify removals that cannot start native support propagation.
 
+    ``provider_cell_rule=False`` is the original rule: any support-dependent
+    neighbour refuses. ``True`` (opt-in, needs a catalog built with
+    ``support_faces=True``) refuses a
+    neighbour only if it is chain-capable, protrudes out of its cell, or is
+    support-dependent through a base face whose provider cell is the target.
+    Unknown neighbours refuse under both rules.
+    """
+
+    if not isinstance(provider_cell_rule, bool):
+        raise TypeError("provider_cell_rule must be a bool")
     positions = jnp.asarray(block_positions, dtype=jnp.int32)
     if positions.ndim != 3 or positions.shape[-1] != 3:
         raise ValueError("block_positions must have shape [batch, query, 3]")
@@ -83,6 +113,12 @@ def region_removal_cascade_safety(
         or catalog.support_drop_type.shape != (capacity,)
     ):
         raise ValueError("catalog support semantics have invalid shapes")
+    if provider_cell_rule and (
+        catalog.support_face_mask is None or catalog.support_chain is None
+    ):
+        raise TypeError(
+            "provider_cell_rule needs a catalog built with support_faces=True"
+        )
 
     target = query_region_block_action_target(
         semantic_atlas,
@@ -136,12 +172,12 @@ def region_removal_cascade_safety(
     )
     match_count = jnp.sum(matches, axis=-1)
     slot = jnp.argmax(matches, axis=-1).astype(jnp.int32)
-    dependent = catalog.support_dependent[slot]
+    dependent_slot = catalog.support_dependent[slot]
     drop_type = catalog.support_drop_type[slot].astype(jnp.int32)
     support_value_valid = (
-        (~dependent & (drop_type == SUPPORT_DROP_NONE))
+        (~dependent_slot & (drop_type == SUPPORT_DROP_NONE))
         | (
-            dependent
+            dependent_slot
             & (drop_type > SUPPORT_DROP_NONE)
             & (drop_type <= SUPPORT_DROP_FALL)
         )
@@ -154,7 +190,33 @@ def region_removal_cascade_safety(
             | ((match_count == 1) & support_value_valid)
         )
     )
-    dependent = neighbour_known & semantic.block_present & dependent
+    present = neighbour_known & semantic.block_present
+    if provider_cell_rule:
+        face_mask = catalog.support_face_mask[slot]
+        provider_face = jnp.broadcast_to(
+            jnp.tile(_PROVIDER_FACE_BY_NEIGHBOUR, queries)[None, :],
+            slot.shape,
+        )
+        shift = jnp.maximum(provider_face, 0).astype(jnp.uint32)
+        provides = (provider_face >= 0) & (
+            ((face_mask >> shift) & jnp.uint32(1)) == 1
+        )
+        boxes_n = physical.collision_boxes
+        box_mask_n = physical.collision_box_mask
+        neighbour_inside_cell = jnp.all(
+            ~box_mask_n
+            | (
+                jnp.all(boxes_n[..., :3] >= 0.0, axis=-1)
+                & jnp.all(boxes_n[..., 3:] <= 1.0, axis=-1)
+            ),
+            axis=-1,
+        )
+        endangers = (
+            dependent_slot & (catalog.support_chain[slot] | provides)
+        ) | ~neighbour_inside_cell
+        dependent = present & endangers
+    else:
+        dependent = present & dependent_slot
     falling = dependent & (drop_type == SUPPORT_DROP_FALL)
     neighbourhood_shape = (batch, queries, len(_NEIGHBOUR_OFFSETS))
     neighbour_known = neighbour_known.reshape(neighbourhood_shape)

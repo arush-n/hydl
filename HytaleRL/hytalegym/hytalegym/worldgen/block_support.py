@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import hashlib
 import json
 from itertools import combinations
+from typing import NamedTuple
 
 from hytalegym.worldgen.block_actions import (
     SUPPORT_DROP_BREAK,
@@ -305,6 +306,56 @@ def resolve_local_block_support_semantics(
         tag_ids=tags,
         block_set_ids=sets,
     )
+
+
+SUPPORT_FACE_DIRECTIONS = _FACE_DIRECTIONS
+SUPPORT_FACE_BASE_COUNT = 6
+SUPPORT_FACE_ALL_MASK = (1 << SUPPORT_FACE_COUNT) - 1
+
+
+class SupportFaceGeometry(NamedTuple):
+    """Rotated support-face keys of one block, for the tier-1 removal rule."""
+
+    face_mask: int
+    chain: bool
+
+
+def support_face_geometry(
+    block: Mapping[str, object],
+    rotation_index: int = 0,
+) -> SupportFaceGeometry:
+    """Summarise a block's rotated support keys; never raises.
+
+    ``face_mask`` sets bit ``f`` when the rotated support map has a key on the
+    face ``SUPPORT_FACE_DIRECTIONS[f]``. ``chain`` is True when the block can
+    carry support propagation (MaxSupportDistance, a merged face key, an
+    empty or Filler row), or when a key is a composite edge/corner face whose
+    native connecting offsets are not trusted. Unparseable input and any
+    empty row fail closed: all bits set and chain True.
+    """
+
+    try:
+        rotation = _rotation(rotation_index)
+        maximum = _integer(
+            block.get("MaxSupportDistance", 0),
+            "MaxSupportDistance",
+            minimum=0,
+            maximum=14,
+        )
+        support = _effective_support(block)
+        groups = _support_groups(support, rotation)
+    except (AttributeError, TypeError, ValueError):
+        return SupportFaceGeometry(SUPPORT_FACE_ALL_MASK, True)
+    chain = maximum > 0 or any(name in _MERGED_FACES for name in support)
+    chain = chain or any(not rows for rows in support.values())
+    mask = 0
+    for group in groups:
+        mask |= 1 << group.block_face
+        if any(clause.filler is not None for clause in group.clauses):
+            chain = True
+    if mask >> SUPPORT_FACE_BASE_COUNT:
+        chain = True
+    return SupportFaceGeometry(mask, chain)
 
 
 def block_support_contract() -> dict[str, object]:

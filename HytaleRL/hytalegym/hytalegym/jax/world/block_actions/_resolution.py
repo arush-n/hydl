@@ -225,6 +225,18 @@ def _validate_catalog(catalog: BlockActionCatalog) -> None:
         BLOCK_SEMANTIC_KEY_WORDS,
     ):
         raise ValueError("catalog semantic keys have the wrong shape")
+    support_face_fields = (
+        catalog.support_face_mask is not None,
+        catalog.support_chain is not None,
+    )
+    if any(support_face_fields):
+        if not all(support_face_fields):
+            raise ValueError("catalog support-face fields must be set together")
+        if (
+            catalog.support_face_mask.shape != (capacity,)
+            or catalog.support_chain.shape != (capacity,)
+        ):
+            raise ValueError("catalog support-face fields have the wrong shape")
     for name in (
         "support_dependent",
         "support_drop_type",
@@ -277,6 +289,7 @@ def block_action_catalog_from_local(
     drop_programs: Sequence[LocalDropProgram] = (),
     entry_capacity: int | None = None,
     drop_capacity: int = BLOCK_DROP_OUTPUT_CAPACITY,
+    support_faces: bool = False,
 ) -> BlockActionCatalog:
     """Pad source-resolved block routes and reject semantic-key aliases."""
 
@@ -381,7 +394,7 @@ def block_action_catalog_from_local(
                 getattr(entry, name),
                 program_indices,
             )
-    return BlockActionCatalog(
+    catalog = BlockActionCatalog(
         entry_mask=jnp.asarray(mask),
         semantic_key=jnp.asarray(keys),
         support_dependent=jnp.asarray(support_dependent),
@@ -404,4 +417,19 @@ def block_action_catalog_from_local(
         tool_drop=_device_drop_table(route_tables["tool_drop"]),
         soft_drop=_device_drop_table(route_tables["soft_drop"]),
         harvest_drop=_device_drop_table(route_tables["harvest_drop"]),
+    )
+    if not support_faces:
+        return catalog
+    face_mask = np.zeros(capacity, dtype=np.uint32)
+    chain = np.ones(capacity, dtype=np.bool_)  # empty slots: chain-capable
+    for index, entry in enumerate(source):
+        if not 0 <= entry.support_face_mask < (1 << 26):
+            raise ValueError("support_face_mask must fit 26 faces")
+        if not isinstance(entry.support_chain, bool):
+            raise TypeError("support_chain must be boolean")
+        face_mask[index] = entry.support_face_mask
+        chain[index] = entry.support_chain
+    return catalog._replace(
+        support_face_mask=jnp.asarray(face_mask),
+        support_chain=jnp.asarray(chain),
     )

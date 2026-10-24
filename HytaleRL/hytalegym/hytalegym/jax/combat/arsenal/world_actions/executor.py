@@ -349,6 +349,7 @@ def compile_region_block_executor_assets(
     region_manifest_path: str | Path,
     block_semantic_manifest_path: str | Path,
     assets_path: str | Path | None = None,
+    support_faces: bool = False,
 ) -> RegionBlockExecutorAssets:
     """Compile exact action data for a selected frozen Region working set.
 
@@ -474,6 +475,7 @@ def compile_region_block_executor_assets(
         block_catalog=block_action_catalog_from_local(
             compiled.entries,
             drop_programs=compiled.drop_programs,
+            support_faces=support_faces,
         ),
         gather_defaults=block_gather_defaults_from_local(
             compiled.gather_defaults
@@ -623,9 +625,24 @@ def make_region_block_action_surface_executor(
     crafting_assets: RegionFieldcraftAssets | None = None,
     state_change_use_table: RegionStateChangeUseTable | None = None,
     modification_allowed: bool = False,
+    provider_cell_rule: bool = False,
 ):
-    """Build a JIT-safe Break/Place/fieldcraft executor over one Region."""
+    """Build a JIT-safe Break/Place/fieldcraft executor over one Region.
 
+    ``provider_cell_rule`` (opt-in, default off) selects the tier-1 removal
+    certificate; ``block_catalog`` must carry support faces (support_faces=True).
+    """
+
+    if not isinstance(provider_cell_rule, bool):
+        raise TypeError("provider_cell_rule must be a bool")
+    if provider_cell_rule and (
+        block_catalog.support_face_mask is None
+        or block_catalog.support_chain is None
+    ):
+        raise TypeError(
+            "provider_cell_rule needs a block_catalog built with "
+            "support_faces=True"
+        )
     if not callable(block_candidate_provider):
         raise TypeError("block_candidate_provider must be callable")
     if not isinstance(interaction_table, RegionBlockInteractionTable):
@@ -808,6 +825,7 @@ def make_region_block_action_surface_executor(
             block_catalog,
             selection.position,
             world.geometry.environment_world_id,
+            provider_cell_rule=provider_cell_rule,
         )
         placement_support = region_block_placement_support_result(
             world.geometry.atlas,

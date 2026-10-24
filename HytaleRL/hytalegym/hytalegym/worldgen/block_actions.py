@@ -95,6 +95,10 @@ class LocalBlockActionSemantics:
     tool_drop: LocalDropRoute
     soft_drop: LocalDropRoute
     harvest_drop: LocalDropRoute
+    # Tier-1 removal rule inputs (block_support.support_face_geometry); the
+    # defaults fail closed for any caller that does not set them.
+    support_face_mask: int = (1 << 26) - 1
+    support_chain: bool = True
 
 
 ItemLookup = Callable[[str], Mapping[str, object]]
@@ -264,11 +268,16 @@ def resolve_local_block_action_semantics(
             "Breaking.Quantity",
         )
     )
+    from hytalegym.worldgen.block_support import support_face_geometry
+
     support_dependent, support_drop_type = _support_semantics(block_data)
+    face_geometry = support_face_geometry(block_data, rotation_index)
     return LocalBlockActionSemantics(
         semantic_key=block_semantic_key(identifier, rotation_index),
         support_dependent=support_dependent,
         support_drop_type=support_drop_type,
+        support_face_mask=face_geometry.face_mask,
+        support_chain=face_geometry.chain,
         tool_breakable=tool_breakable,
         soft_breakable=soft_breakable,
         soft_weapon_breakable=soft_weapon_breakable,
