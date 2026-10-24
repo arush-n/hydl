@@ -410,7 +410,7 @@ Console replays of the mace fights: 20261020T062617Z-11750ee7 (scripted), 202610
 - A self-play league can cycle, or collapse onto one strategy (Balduzzi et al. 2019). The scripted styles stay in the
   pool as anchors, as AlphaStar kept its exploiters (Vinyals et al. 2019).
 
-## 8. Training on v3: the state layer and the trunk's memory (PROPOSED 2026-10-23; V0 APPROVED the same day, 8.4; the sequence machinery BUILT, 8.7; V1 built, smoke and short pass run, 8.8 and 8.9)
+## 8. Training on v3: the state layer and the trunk's memory (PROPOSED 2026-10-23; V0 APPROVED the same day, 8.4; the sequence machinery BUILT, 8.7; V1 built, smoke and short pass run, 8.8 and 8.9; V1 PASSES, 8.10)
 
 `VIRTUAL_HUMAN.md` section 13: "Moving the trainers onto `runtime/state_tick.py` is the first task when training
 resumes." The encoder and the state layer are now built through step 9 (with the tick fix and S5), so this section says
@@ -773,6 +773,49 @@ look direction. So these rates compare memory against control, not either agains
 **Next, for the owner:** the same short pass with run C''s options, now V1's default, so that V1's bars against C'
 can be read. It is about 1.5 hours an arm in parallel at today's load, and less when the machine is quiet. A second
 seed would make the memory comparison readable.
+
+### 8.10 V1 with run C''s options: the gate passes (2026-10-24; the owner approved the pass)
+
+**What ran.** The same short pass as 8.9 (6 iterations of 500 steps, 128 lanes, the batch cut to the filled slots),
+now with run C''s options (V1's default since 8.8): walk_to v3's stop margin, and the look direction in the head's
+frame.
+- Two seeds, memory and control: four runs in parallel.
+- They ran from a clean worktree at ec87aa9, at load 70 to 110.
+- The reports and parameters are in the session scratchpad (`v1_cprime/`), not in the repo.
+
+**The bars** (A2's, `training/bars.py`'s rules):
+- Held success, against the teachers' seen rates from run C' (README 2.16: walk 1.000, look 1.000, both 0.906).
+  The teachers' rates do not depend on the student: the same seeds, world and options.
+- T5: the teacher less the student is at most 0.10.
+- Held out: at least 0.90 of seen.
+- E4: pace within 5% on at least 95% of lanes.
+
+| Run | Walk, seen / held out | Look | Both | Pace | Bars |
+|---|---|---|---|---|---|
+| memory, seed 0 | 1.000 / 0.942 | 0.953 / 0.953 | 0.835 / 0.859 | 0.967 | all pass |
+| memory, seed 1 | 1.000 / 0.988 | 0.988 / 0.988 | 0.859 / 0.788 | 0.953 | all pass |
+| control, seed 0 | 1.000 / 1.000 | 0.976 / 0.824 | 0.859 / 0.776 | 0.980 | held-out look 0.843 fails |
+| control, seed 1 | 1.000 / 1.000 | 1.000 / 0.953 | 0.859 / 0.859 | 0.974 | all pass |
+| run C' (v1, the bar) | 1.000 / 1.000 | 0.988 / 1.000 | 0.882 / 0.847 | 0.980 | all pass |
+
+No decision was illegal, in training or in any evaluation.
+
+**The gate of 8.3, V1:**
+- **At least C''s rates:** the memory run passes every bar on both seeds.
+- **The memory run not worse than its control:** it passes on two seeds of two, the control on one of two.
+
+V1 passes. With C''s options, the short schedule (6 x 500 steps, a quarter of A2's) is enough, so the full schedule
+is not needed for the gate.
+
+**Cost.** A memory run took 143 minutes and a control run 107, all four in parallel at load 70 to 110. The memory
+trunk's step is about 1.4 times the control's.
+
+**What it sets.**
+- The memory trunk is the shared frozen trunk for the skills' modules (V2, 8.3), from either seed.
+- Its walk_to and look_at heads already serve those two verbs as skill bodies: the architecture test (8.11, being
+  built).
+- V2's per-skill trainer on the frozen v3 trunk is being built (`training/skill_dagger_v3.py`). Its full runs wait on
+  the owner's approval.
 
 ## References
 
