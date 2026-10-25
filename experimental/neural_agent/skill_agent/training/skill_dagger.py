@@ -404,12 +404,17 @@ def _share(flags: np.ndarray, lanes: np.ndarray) -> float | None:
 
 
 def _holding_share(counted: np.ndarray, counted_ok: np.ndarray, lanes: np.ndarray) -> dict:
-    """A holding skill's share: the mean over lanes with at least one counted tick of the counted ticks in view over the
-    counted ticks, and the number of those lanes (``counted_lanes``)."""
+    """A holding skill's share: the counted ticks in view over the counted ticks, pooled over the lanes (owner,
+    2026-10-25: "Pool over reachable ticks", so a lane with one counted tick no longer weighs as much as one with
+    hundreds). Beside it: the mean over lanes with at least one counted tick of each lane's share (``lane_mean_share``,
+    the rule until then), the number of those lanes (``counted_lanes``) and the counted ticks (``counted_ticks``)."""
 
     has = lanes & (counted > 0)
     ratio = counted_ok / np.maximum(counted, 1)
-    return {"share": float(ratio[has].mean()) if has.any() else None, "counted_lanes": int(has.sum())}
+    ticks = int(counted[has].sum())
+    return {"share": float(counted_ok[has].sum() / ticks) if ticks else None,
+            "lane_mean_share": float(ratio[has].mean()) if has.any() else None,
+            "counted_lanes": int(has.sum()), "counted_ticks": ticks}
 
 
 def summarise(strategy: Strategy, lanes: Lanes, trace: Trace) -> dict:

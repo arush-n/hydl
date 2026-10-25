@@ -95,13 +95,24 @@ def in_reach(combat: CombatState, goals: TrackGoals) -> jax.Array:
     return (jnp.abs(yaw_offset) <= reach) & (jnp.abs(pitch) <= reach)
 
 
-@functools.lru_cache(maxsize=None)
-def spec(*, maximum_turn_degrees: float = 45.0) -> SkillSpec:
-    """track's spec with its teacher bound: look_at v2 at entity 1, no lead. A holding skill: ``counts`` is
+TEACHER_STEP_DEGREES = 18.0
+"""The yaw cap track's teacher uses (owner, 2026-10-25: "Cap track only"): the head's per-tick rate on the gen-7 ruleset
+(``teacher.py``; ``TRAINING.md`` section 9). ``spec(step_degrees=None)`` binds the uncapped rule of earlier runs."""
+
+
+def spec(*, maximum_turn_degrees: float = 45.0, step_degrees: float | None = TEACHER_STEP_DEGREES) -> SkillSpec:
+    """track's spec with its teacher bound: look_at v2 at entity 1, no lead, its yaw command capped at ``step_degrees``
+    (``TEACHER_STEP_DEGREES`` since 2026-10-25; None is the uncapped rule of earlier runs). A holding skill: ``counts`` is
     :func:`in_reach`. Cached, so equal settings give the same spec object (the training kernels are cached on it)."""
 
+    return _spec(float(maximum_turn_degrees), None if step_degrees is None else float(step_degrees))
+
+
+@functools.lru_cache(maxsize=None)
+def _spec(maximum_turn_degrees: float, step_degrees: float | None) -> SkillSpec:
     def teacher(combat: Any, goals: TrackGoals):
-        return track_choices(combat, goals.tolerance_degrees, maximum_turn_degrees=maximum_turn_degrees)
+        return track_choices(combat, goals.tolerance_degrees, maximum_turn_degrees=maximum_turn_degrees,
+                             step_degrees=step_degrees)
 
     return SkillSpec(name="track", scope="gaze", sample=sample, request=request, teacher=teacher,
                      success=TrackTasks.success, metrics=None, holding=True, counts=in_reach)
@@ -109,6 +120,7 @@ def spec(*, maximum_turn_degrees: float = 45.0) -> SkillSpec:
 
 __all__ = [
     "PRESENT",
+    "TEACHER_STEP_DEGREES",
     "in_reach",
     "lowering",
     "lowering_batch",
