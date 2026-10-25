@@ -44,6 +44,7 @@ from hytalegym.jax.combat.arsenal.environment import (
     open_flat_arsenal_world_capabilities,
 )
 from hytalegym.jax.combat.arsenal.factory import empty_arsenal_commands
+from hytalegym.jax.combat.observation import empty_injected_world_features
 from hytalegym.jax.combat.arsenal.runtime import reset_arsenal_batch
 from hytalegym.jax.combat.arsenal.training_inventory import training_inventory_from_config
 from hytalegym.jax.combat.observation.v3.policy import ARSENAL_POLICY_ACTION_HEAD_SIZES
@@ -126,12 +127,22 @@ def _profiles(value: str | Sequence[str], batch: int) -> list[str]:
     return names
 
 
-def _capabilities(arsenal, locomotion, params, config, *, sector, sensor_range):
+def _with_floor(capabilities, floor_id):
+    """``capabilities`` with ``block_under_feet`` = ``floor_id`` under both entities (the duel's floor, every step)."""
+
+    batch = capabilities.target_candidate_perceptible.shape[0]
+    return capabilities._replace(
+        block_under_feet=jnp.full((batch, ENTITY_COUNT), floor_id, dtype=jnp.int32)
+    )
+
+
+def _capabilities(arsenal, locomotion, params, config, *, sector, sensor_range, floor_id=None):
     """Open-flat capabilities with both rows of the perception pair gated.
 
     The fixture gates entity 0's row (``[:, AGENT, TARGET]``). Entity 1's row is
     the same fixture evaluated on entity 1's actor-first view, whose agent row is
     entity 1 (``views.actor_first_arsenal_view``), mapped back to the physical rows.
+    ``floor_id`` (a semantic id) fills ``block_under_feet`` on both sets when given.
     """
 
     physical = open_flat_arsenal_world_capabilities(
@@ -141,6 +152,8 @@ def _capabilities(arsenal, locomotion, params, config, *, sector, sensor_range):
         legal_observation_sensor_range=sensor_range,
         view_sector_full_angle_radians=sector,
     )
+    if floor_id is not None:
+        physical = _with_floor(physical, floor_id)
     batch = arsenal.combat.health.shape[0]
     view_state, view_config, _ = actor_first_arsenal_view(
         arsenal,
@@ -156,6 +169,8 @@ def _capabilities(arsenal, locomotion, params, config, *, sector, sensor_range):
         legal_observation_sensor_range=sensor_range,
         view_sector_full_angle_radians=sector,
     )
+    if floor_id is not None:
+        seen = _with_floor(seen, floor_id)
     return physical._replace(
         target_candidate_perceptible=physical.target_candidate_perceptible.at[
             :, TARGET_ENTITY, AGENT_ENTITY
@@ -229,8 +244,57 @@ def _entity_one_on_its_own_maxima(structured, arsenal, locomotion, params):
     return structured._replace(base=base)
 
 
-def _observe(arena, capabilities, params, config, assignment):
-    """Per-actor learner-v3 structure and action mask, actor-major ``[B, 2, ...]``."""
+def _construct_fields(arena, capabilities, params, config, assignment, encode, structured):
+    """The fields a construct wrapper adds to the learner encoder, per policy slot, as ``[B, P, ...]`` arrays.
+
+    ``observe_policy_actors_flat`` never calls the encoder, so a construct hooked on the encoder reaches no seat.
+    Each slot's actor-first view (``actor_first_arsenal_view``, the view the multi-actor path builds, with the
+    capabilities permuted the same way) is encoded by the hooked ``encode``; the fields beyond the base structure
+    are kept. ``encode`` is the arena's encoder when the constructs are on, and ``None`` otherwise.
+    """
+
+    batch = arena.arsenal.combat.health.shape[0]
+    rows = []
+    for slot in range(ENTITY_COUNT):
+        view_state, view_config, view_capabilities = actor_first_arsenal_view(
+            arena.arsenal,
+            config,
+            capabilities,
+            arena.locomotion,
+            jnp.full((batch,), slot, dtype=jnp.int32),
+        )
+        rows.append(
+            encode(
+                view_state,
+                params,
+                empty_injected_world_features(batch),
+                view_capabilities,
+                view_config,
+            )
+        )
+    base = type(structured)._fields
+    extra = [name for name in rows[0]._fields if name not in base]
+    active = assignment.active
+
+    def stacked(name):
+        values = jax.tree_util.tree_map(
+            lambda *leaves: jnp.stack(leaves, axis=1), *[getattr(row, name) for row in rows]
+        )
+        return jax.tree_util.tree_map(
+            lambda leaf: jnp.where(
+                active.reshape(active.shape + (1,) * (leaf.ndim - 2)), leaf, jnp.zeros_like(leaf)
+            ),
+            values,
+        )
+
+    return type(rows[0])(*structured, *[stacked(name) for name in extra])
+
+
+def _observe(arena, capabilities, params, config, assignment, encode=None):
+    """Per-actor learner-v3 structure and action mask, actor-major ``[B, 2, ...]``.
+
+    ``encode``: the hooked learner encoder when gen-7 constructs are on (see :func:`_construct_fields`), else ``None``.
+    """
 
     observation = observe_policy_actors_flat(
         arena.arsenal, params, capabilities, config, arena.locomotion, assignment
@@ -249,6 +313,8 @@ def _observe(arena, capabilities, params, config, assignment):
     structured = _entity_one_on_its_own_maxima(
         structured, arena.arsenal, arena.locomotion, params
     )
+    if encode is not None:
+        structured = _construct_fields(arena, capabilities, params, config, assignment, encode, structured)
     return observation._replace(structured=structured)
 
 
@@ -368,6 +434,7 @@ def make_duel_arena(
     knockback_gated_control_lock: bool = True,
     target_regeneration: bool = True,
     target_force_pushed_knockback: bool = True,
+    floor_block: str | None = None,
 ) -> DuelArena:
     """Build the two-entity duel on the open-flat fixture.
 
@@ -421,6 +488,11 @@ def make_duel_arena(
 
     The two opt-ins need the #108 engine pieces; on an engine built from HEAD (which predates them) both are no-ops.
 
+    ``floor_block``: a block name (e.g. ``"Plant_Bush"``) that both entities stand on at every step, published as
+    ``block_under_feet`` on the physical and the seen capabilities. The hearing construct then plays that floor's MoveIn
+    footsteps (sim/gen7/mechanics/heard_sounds.py). ``None`` (the default) leaves the capabilities as they are, so the floor
+    is Soil_Grass and silent. Only a gen-7 render has the ``block_under_feet`` field; any other engine raises ``ValueError``.
+
     Returns:
         A :class:`DuelArena`. ``reset(keys, *, entity_position=None, entity_health=None,
         entity_yaw=None)`` returns ``(state, observation_entity0, observation_entity1,
@@ -461,7 +533,21 @@ def make_duel_arena(
     regeneration_on = target_regeneration and tick_target_regeneration is not None
     from hytalegym.jax.combat.arsenal.schema.types import ArsenalWorldCapabilities
 
+    floor_id = None
+    if floor_block is not None:
+        if not isinstance(floor_block, str) or not floor_block:
+            raise ValueError(f"floor_block must be a block name or None, got {floor_block!r}")
+        if "block_under_feet" not in ArsenalWorldCapabilities._fields:
+            raise ValueError(
+                "floor_block needs a capability field block_under_feet (a gen-7 render); this engine has none"
+            )
+        floor_id = semantic_id(floor_block)
     push_on = target_force_pushed_knockback and "target_force_pushed_knockback" in ArsenalWorldCapabilities._fields
+    # The learner encoder as the engine exposes it. A gen-7 construct wraps it with functools.wraps, which sets
+    # __wrapped__; the encoder itself is never wrapped, so None means no construct is on (the stock path).
+    from hytalegym.jax.combat.observation.v3.encoding.encoder import encode_learner_observation_v3
+
+    encode = encode_learner_observation_v3 if hasattr(encode_learner_observation_v3, "__wrapped__") else None
     params = default_combat_params(microticks=1) if combat_params is None else combat_params
     if int(params.microticks) != 1:
         raise ValueError("combat_params.microticks must be 1: the duel takes one decision per tick")
@@ -510,8 +596,9 @@ def make_duel_arena(
             config,
             sector=sector,
             sensor_range=legal_observation_sensor_range,
+            floor_id=floor_id,
         )
-        return _observe(arena, capabilities, params, config, assignment), capabilities
+        return _observe(arena, capabilities, params, config, assignment, encode=encode), capabilities
 
     def policy_rows(observation):
         structured = observation.structured

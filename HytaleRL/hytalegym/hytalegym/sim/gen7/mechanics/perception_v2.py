@@ -202,6 +202,7 @@ def construct(original, profile):
     if value is not True:
         raise ValueError(f"perception_v2 must be a bool, got {value!r}")
 
+    @wraps(original)  # sets __wrapped__: the duel arena detects the construct wrappers through it
     def encode_with_channel(state, params, world_features, world_capabilities, config, *, world_geometry=None):
         observation = original(
             state, params, world_features, world_capabilities, config, world_geometry=world_geometry
