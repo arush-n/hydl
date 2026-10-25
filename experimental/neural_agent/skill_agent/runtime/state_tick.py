@@ -18,6 +18,7 @@ perceived or remembered. The v1 path is unchanged (``model/freezing.py`` ``encod
 from __future__ import annotations
 
 import functools
+import importlib
 from dataclasses import dataclass, replace
 from typing import Any, Callable, Mapping, NamedTuple, Sequence
 
@@ -32,8 +33,8 @@ from experimental.neural_agent.skill_agent.model.encoder import (
     initial_background,
     initial_memory,
 )
-from experimental.neural_agent.skill_agent.model.generalist import ARG_GROUPS, GeneralistRequests
-from experimental.neural_agent.skill_agent.neural_skills.spec import Pose
+from experimental.neural_agent.skill_agent.model.generalist import ARG_FEATURES, ARG_GROUPS, GeneralistRequests
+from experimental.neural_agent.skill_agent.neural_skills.spec import VERBS, Pose
 from experimental.neural_agent.skill_agent.model.skill_module import SkillModule, Trunk, check_trunk, module_outputs
 from experimental.neural_agent.skill_agent.runtime.combiner import AgentContext, BodyStep
 from experimental.neural_agent.skill_agent.contract.tokens_v3 import CAPACITIES_V3, EntityTokenV3
@@ -160,8 +161,17 @@ def own_pose_channel(observation: Any, position: jax.Array, body_yaw_degrees: ja
                       jnp.zeros((batch, slots, 3), jnp.int32),
                       jnp.zeros((batch, slots, len(INVENTORY_POLICY_FLOAT_FEATURES)), jnp.float32),
                       jnp.zeros((batch, slots), jnp.bool_))
-    with_channel = NamedTuple("WithOwnPose", [(name, Any) for name in observation._fields] + [("perception_v2", Any)])
+    with_channel = _with_pose_channel(tuple(observation._fields))
     return with_channel(*observation, channel)
+
+
+@functools.lru_cache(maxsize=None)
+def _with_pose_channel(fields: tuple[str, ...]) -> type:
+    """The NamedTuple class of an observation with ``perception_v2`` appended, one per tuple of field names. The host
+    calls :func:`own_pose_channel` every tick: a class built per call is a new pytree type, so the compiled tick
+    retraces each time (6.5 s a tick in the architecture test, 2026-10-24)."""
+
+    return NamedTuple("WithOwnPose", [(name, Any) for name in fields] + [("perception_v2", Any)])
 
 
 def host_inputs(observation: Any, action_factors: jax.Array, done: jax.Array, *, own_position: jax.Array | None = None,
@@ -325,12 +335,24 @@ class AgentView(NamedTuple):
     action_mask: Any
 
 
+class JointView(NamedTuple):
+    """An agent's :class:`AgentView` with its live requests this tick, which :func:`encode_contexts` hands a body when it
+    is given ``live_requests``. ``live`` maps each verb name to the agent's live request (the middle layer's
+    ``ActionRequest``), for any verbs; a body with a ``layout`` reads its trained neighbours' requests from it."""
+
+    agent: AgentView
+    live: Mapping[str, Any]
+
+
 def encode_contexts(view: StateView, contexts: Mapping[int, AgentContext], agents: Sequence[int], *, poses: Pose,
-                    ticks: int | Sequence[int], action_masks: Any) -> dict[int, AgentContext]:
+                    ticks: int | Sequence[int], action_masks: Any,
+                    live_requests: Mapping[int, Mapping[str, Any]] | None = None) -> dict[int, AgentContext]:
     """Agent -> its context with its row of ``view`` (``agents[i]`` is row i), its pose, decision tick and legal mask
     (row i of ``poses`` with leading dimension B, of ``ticks`` (one tick, or one per row) and of ``action_masks``
     bool[B, 124]: the caller's, as ``distill.build_requests``' inputs are), and every entity it knows: those it knew,
-    and those its entity rows hold, perceived or remembered."""
+    and those its entity rows hold, perceived or remembered. Its ``observation_tokens`` is the :class:`AgentView`; with
+    ``live_requests`` (agent -> verb name -> its live request this tick), it is a :class:`JointView` carrying that
+    agent's live requests (none for an agent it lacks)."""
 
     ids = np.asarray(view.entity_ids)
     tick_rows = np.broadcast_to(np.asarray(ticks), (len(agents),))
@@ -339,8 +361,10 @@ def encode_contexts(view: StateView, contexts: Mapping[int, AgentContext], agent
     for row, agent in enumerate(agents):
         held = frozenset(int(value) for value in ids[row] if value >= 0)
         pose = Pose(*(leaf[row:row + 1] for leaf in poses))
-        out[agent] = replace(contexts[agent],
-                             observation_tokens=AgentView(view, row, pose, int(tick_rows[row]), masks[row]),
+        tokens = AgentView(view, row, pose, int(tick_rows[row]), masks[row])
+        if live_requests is not None:
+            tokens = JointView(tokens, dict(live_requests.get(agent, {})))
+        out[agent] = replace(contexts[agent], observation_tokens=tokens,
                              known_entities=contexts[agent].known_entities | held)
     return out
 
@@ -351,39 +375,117 @@ the request's arguments as the skill's trainer builds them (``neural_skills/<ski
 agent's pose (leading dimension 1) and its decision tick."""
 
 
+V1_LAYOUT: tuple[str, ...] = ("walk_to", "look_at")
+"""The slot order V1's generalist was trained with (``training/distill.py``, ``_request_slots``): walk_to in slot 0 and
+look_at in slot 1, on every body (the bodies of ``scratchpad/v1_bodies/*``)."""
+
+
+def v2_layout(skill: str, beside: Sequence[str]) -> tuple[str, ...]:
+    """The slot order a skill trained by ``training/skill_dagger.py`` was trained with: the skill in slot 0, then the
+    skills beside it in their strategy's order (``beside``, verb names)."""
+
+    return (skill, *beside)
+
+
+@functools.lru_cache(maxsize=None)
+def _skill(verb: str) -> tuple[int, str, Lowering]:
+    """A verb's id, scope and lowering, from its skill folder (``neural_skills/<verb>/skill.py``)."""
+
+    skill = importlib.import_module(f"experimental.neural_agent.skill_agent.neural_skills.{verb}.skill")
+    spec = skill.spec()
+    return spec.verb, spec.scope, skill.lowering
+
+
+def _unjoin(observation_tokens: Any) -> tuple[AgentView, Mapping[str, Any]]:
+    """A body's tokens as its agent view and its live requests: a :class:`JointView`'s, or an :class:`AgentView`'s with
+    none."""
+
+    if isinstance(observation_tokens, JointView):
+        return observation_tokens.agent, observation_tokens.live
+    if isinstance(observation_tokens, AgentView):
+        return observation_tokens, {}
+    raise TypeError("a v3 module body reads an AgentView or a JointView (runtime/state_tick.py encode_contexts)")
+
+
 @dataclass(frozen=True)
 class ModuleBody:
-    """A skill module as a combiner body on the v3 path: its request in slot 0 (the entity pointer resolved from the
-    request's entity handle), and the masked argmax of each head of its scope among the heads it was trained on
-    (``training/blocks.HEAD_NAMES``); the other gen-7 heads are left out, so the combiner keeps them neutral. The
-    mask is the agent's legal action mask (``AgentView.action_mask``), as ``module_factors`` and
-    ``distill_v3._student`` take it. It never reports done; the middle layer withdraws the request."""
+    """A skill module as a combiner body on the v3 path, in the request slots it was trained with, and the masked argmax
+    of each head of its scope among the heads it was trained on (``training/blocks.HEAD_NAMES``); the other gen-7 heads
+    are left out, so the combiner keeps them neutral. The mask is the agent's legal action mask
+    (``AgentView.action_mask``), as ``module_factors`` and ``distill_v3._student`` take it.
+
+    ``layout`` (None: its own request alone, in slot 0, as before): the verb names of the slots the module was trained
+    with (:data:`V1_LAYOUT`, :func:`v2_layout`). Slot s holds the request of verb ``layout[s]``: the body's own request
+    for its own verb, and for another verb the agent's live request of that verb (``JointView.live``, lowered by that
+    skill's own ``lowering``). A verb with no live request leaves its slot empty, with its verb and scope set and valid
+    False, as ``training/distill.py`` and ``training/skill_dagger.py`` build it. Each entity handle is resolved to its
+    token row.
+
+    ``report_done`` (False: never done, and the middle layer withdraws the request, as before): done when the module's
+    own done logit is above 0, that is when its sigmoid, the probability of done, is above 0.5 (``model/skill_module.py``).
+    """
 
     module: SkillModule
     trunk: Trunk
     lower: Lowering
+    layout: tuple[str, ...] | None = None
+    report_done: bool = False
+
+    def __post_init__(self) -> None:
+        if self.layout is None:
+            return
+        if self.module.skill not in self.layout:
+            raise ValueError(f"layout {self.layout} does not hold the module's own skill {self.module.skill!r}")
+        if len(set(self.layout)) != len(self.layout) or len(self.layout) > self.module.config.max_requests:
+            raise ValueError(f"layout {self.layout} repeats a verb or has more slots than the module's "
+                             f"{self.module.config.max_requests}")
+        for name in self.layout:
+            if name not in VERBS or VERBS.index(name) not in self.module.known:
+                raise ValueError(f"layout names {name!r}, a verb the module does not know (known {self.module.known})")
+
+    def requests(self, request: Any, observation_tokens: Any) -> GeneralistRequests:
+        """The module's request slots for this tick, as its layout names them (see the class docstring)."""
+
+        agent, live = _unjoin(observation_tokens)
+        own = self.module
+        slots = own.config.max_requests
+        names = self.layout or (own.skill,)
+        # with no layout, every slot names the module's own verb and scope, as before; with one, an empty slot names verb
+        # 0 and scope 0, as the trainers' build_requests do (an invalid slot's verb and scope never reach the outputs)
+        rest_verb, rest_scope = (own.verb, SCOPE_NAMES.index(own.scope)) if self.layout is None else (0, 0)
+        verb = np.full(slots, rest_verb, np.int32)
+        scope = np.full(slots, rest_scope, np.int32)
+        valid = np.zeros(slots, bool)
+        args = np.zeros((slots, ARG_FEATURES), np.float32)
+        present = np.zeros((slots, len(ARG_GROUPS)), bool)
+        handles = np.full(slots, -1, np.int32)
+        for slot, name in enumerate(names):
+            if name == own.skill:
+                verb_id, scope_name, lower, item = own.verb, own.scope, self.lower, request
+            else:
+                verb_id, scope_name, lower = _skill(name)
+                item = live.get(name)
+            verb[slot], scope[slot] = verb_id, SCOPE_NAMES.index(scope_name)
+            if item is None:
+                continue
+            args[slot], present[slot] = lower(item, agent.pose, agent.tick)
+            valid[slot] = True
+            handles[slot] = -1 if item.args.entity is None else int(item.args.entity)
+        return GeneralistRequests(
+            verb=jnp.asarray(verb)[None], args=jnp.asarray(args)[None], arg_present=jnp.asarray(present)[None],
+            entity_pointer=entity_rows(jnp.asarray(handles)[None], agent.view.entity_ids[agent.row:agent.row + 1]),
+            cell_pointer=jnp.full((1, slots), -1, jnp.int32), scope=jnp.asarray(scope)[None],
+            valid=jnp.asarray(valid)[None])
 
     def __call__(self, request: Any, ticks_since_start: int, observation_tokens: Any, belief_tokens: Any) -> BodyStep:
-        if not isinstance(observation_tokens, AgentView):
-            raise TypeError("a v3 module body reads an AgentView (runtime/state_tick.py encode_contexts)")
-        view, row, pose, tick, action_mask = observation_tokens
-        one = jax.tree_util.tree_map(lambda leaf: leaf[row:row + 1], view)
-        args, present = self.lower(request, pose, tick)
-        slots = self.module.config.max_requests
-        handle = -1 if request.args.entity is None else int(request.args.entity)
-        requests = GeneralistRequests(
-            verb=jnp.full((1, slots), self.module.verb, jnp.int32),
-            args=jnp.zeros((1, slots, len(args)), jnp.float32).at[0, 0].set(jnp.asarray(args, jnp.float32)),
-            arg_present=jnp.zeros((1, slots, len(ARG_GROUPS)), bool).at[0, 0].set(jnp.asarray(present, bool)),
-            entity_pointer=jnp.full((1, slots), -1, jnp.int32), cell_pointer=jnp.full((1, slots), -1, jnp.int32),
-            scope=jnp.full((1, slots), SCOPE_NAMES.index(self.module.scope), jnp.int32),
-            valid=jnp.zeros((1, slots), bool).at[0, 0].set(True))
-        requests = point(one, requests, jnp.full((1, slots), -1, jnp.int32).at[0, 0].set(handle))
+        agent, _ = _unjoin(observation_tokens)
+        one = jax.tree_util.tree_map(lambda leaf: leaf[agent.row:agent.row + 1], agent.view)
+        requests = self.requests(request, observation_tokens)
         check_trunk(self.module, self.trunk)
         out = _module_program(self.module.config, self.module.known, self.module.verb)(
             self.module.params, one.encoded, one.masks, requests)
         host = jax.device_get(out.head_logits)
-        legal = np.asarray(action_mask, bool)
+        legal = np.asarray(agent.action_mask, bool)
         choices: dict[str, int] = {}
         for index, name in enumerate(HEAD_NAMES):
             if scope_of(name) != self.module.scope:
@@ -391,9 +493,11 @@ class ModuleBody:
             start, size = HEAD_STARTS[index], HEAD_SIZES[index]
             logits = np.where(legal[start:start + size], np.asarray(host[name][0]), -np.inf)
             choices[name] = int(np.argmax(logits))
-        return BodyStep(choices)
+        # the done logit: its sigmoid is above 0.5 exactly when the logit is above 0
+        done = self.report_done and bool(np.asarray(jax.device_get(out.done))[0] > 0.0)
+        return BodyStep(choices, done=done)
 
 
-__all__ = ["AgentView", "Lowering", "ModuleBody", "OwnPose", "StateView", "encode_contexts", "entity_rows",
-           "host_inputs", "known_entities", "module_factors", "own_pose_channel", "point", "step_lanes", "tick",
-           "trunk_step"]
+__all__ = ["AgentView", "JointView", "Lowering", "ModuleBody", "OwnPose", "StateView", "V1_LAYOUT", "encode_contexts",
+           "entity_rows", "host_inputs", "known_entities", "module_factors", "own_pose_channel", "point", "step_lanes",
+           "tick", "trunk_step", "v2_layout"]

@@ -1650,3 +1650,34 @@ result:
 - **`skill_dagger_v3 --init-module MODULE.npz`** (`start_module`): a module starts from a trained one on the same trunk, scope and sizes, as the recipe's dependent skill does. The report records it as `init_module`. The fresh default is bit-identical (`test_sa_init_module.py`, 3 passed).
 gate: two passes on a56f434 with holding skills and track, follow and --init-module, and the ModuleBody fix, against the step-9 baseline (6acadad). Pass 1: the baseline's 11 failing names, none new (1,766 passed, 2 xfailed). Pass 2: 1 failing name, a baseline one. Landed on 842180e (the coordinator's 812c2ef..842180e, no shared files but the ledger).
 verdict: COMMITTED; not pushed. Next, for the owner: follow's smoke and run.
+
+## 2026-10-25 — skill_agent: ModuleBody reads the live requests it was trained beside; trained done; the pose channel's class cached (the coordinator's architecture test, 9cff734)
+command: the coordinator's architecture test (9cff734, eval/README.md): the trained walk_to and look_at bodies work end to end through the decision layer, S_t and the combiner, but looking while walking held out reaches 0.781 against the reference's 0.906, because ModuleBody gives the module only its own request.
+result: Built by a Haiku subagent from a written spec, checked here. The API, for the coordinator (two messages expired today):
+- **`AgentView` is unchanged** (5 fields, so the harness's unpacking still works). A new `JointView(agent, live)` carries the agent's live requests by verb name. `encode_contexts(..., live_requests={agent: {verb: request}})` returns JointViews; without it, AgentViews as before.
+- **`ModuleBody(..., layout=..., report_done=...)`.**
+  - `layout` is the verbs in the slot order the module was trained with: `V1_LAYOUT = ("walk_to", "look_at")` for every `v1_bodies/*` body (`distill._request_slots`), and `v2_layout(skill, beside) = (skill, *beside)` for V2 modules (`skill_dagger.build_requests`). Each slot holds its verb's request, lowered by that skill's own `lowering`, or is empty with its verb and scope set.
+  - None keeps the own-request-only body.
+  - `report_done=True` reports done when the module's trained done logit is above 0; the default is never done. Holding skills are never done.
+- **`own_pose_channel`** caches its NamedTuple class per field set, so host callers no longer make the compiled `step_lanes` retrace every tick (it compiled 3 times over 3 ticks before; once after).
+- **The coordinator's harness** (`eval/run_architecture.py`, 96 lanes, held out, seed 77001, `v1_bodies/memory_s0`), driven from a scratch script that passes `live_requests`:
+
+| | both held | looking while walking | walking held |
+|---|---|---|---|
+| default | 0.750 | 0.781 | 0.969 |
+| `V1_LAYOUT` | 0.875 | 0.906 | 0.969 |
+| reference | 0.906 | 0.906 | 1.000 |
+
+  - 0 illegal decisions in every arm.
+  - The default arm reproduces the coordinator's numbers exactly, and looking while walking now matches the reference.
+- **Tests:** `test_sa_module_body_joint.py` (local) 11 passed. Its slots equal `distill.build_requests` and `skill_dagger.build_requests` field for field; the arguments match to 1.2e-7, float32 rounding of the look direction, whose cause is unconfirmed. `test_sa_state_tick.py`, `test_sa_export_v1.py` and `test_sa_step_lanes_jit.py` pass 20 of 20, before and after.
+- **V2 bodies ready:** `scratchpad/v2_bodies/memory_s1/` (V1's trunk, V2's walk_to module and look_at's 6 x 2,000 module): 32 of 32 lanes succeed and hold for both skills, seen and held out, 0 illegal. Use `v2_layout`: walk_to's module ("walk_to", "look_at"), look_at's ("look_at", "walk_to").
+- **For the coordinator:** pass `live_requests` from the scratchpad's requests for each agent, and `layout=` per body. Batching a module across agents per verb (the route to 30 Hz at many agents) is noted, not built.
+- **Speed** (owner, 2026-10-25: "also try to optimize or tell the other agent to optimize and increase speed"; the message may be held). Asks on the coordinator's side:
+  1. Cache gen-7 renders by the rendered sources' HEAD, the constructs and the server line. Every slow test and probe renders its own engine, 30 to 85 s each.
+  2. Cache Region fixtures on disk by library sha and selection. They take 19, 57 and 85 s at batch 32 for working sets of 1, 8 and 16.
+  3. Profile the scratchpad and combiner's per-agent host path, 3 to 5 ms per agent per tick at 96 agents.
+  4. Remove per-tick host transfers in env.step's wrappers.
+  On this side: a sharded test gate, the trainer's bit-exact speedups, and ModuleBody batched across agents per verb.
+gate: two passes on a56f434 with holding skills and track, follow and --init-module, and the ModuleBody fix, against the step-9 baseline (6acadad). Pass 1: the baseline's 11 failing names, none new (1,766 passed, 2 xfailed). Pass 2: 1 failing name, a baseline one. Landed on 842180e (the coordinator's 812c2ef..842180e, no shared files but the ledger).
+verdict: COMMITTED; not pushed.
