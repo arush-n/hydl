@@ -38,7 +38,11 @@ CLI (from the repo root; CPU)::
 
     PYTHONPATH=/Users/arush/hydl:/Users/arush/hydl/HytaleRL/hytalegym JAX_PLATFORMS=cpu nice -n 10 \\
         .venv/bin/python experimental/neural_agent/eval/run_architecture.py --bodies DIR --out REPORT.json \\
-        [--arms reference,stack] [--order fresh] [--lanes 96] [--seed 77001] [--held-out] [--ticks N]
+        [--arms reference,stack] [--order fresh] [--lanes 96] [--seed 77001] [--held-out] [--ticks N] [--per-agent]
+
+The stack arm batches each verb's bodies across agents (``state_tick.run_module_batches`` before the combiner, each
+``ModuleBody`` reading its agent's stored step); ``--per-agent`` calls them one agent at a time. Both give the same
+report (held out, 96 lanes, 2026-10-25: every non-timing field equal; combiner and bodies 68.6 -> 49.2 ms a tick).
 """
 
 from __future__ import annotations
@@ -159,12 +163,15 @@ class JointModuleBody:
         return BodyStep(choices)
 
 
-def build_library(trunk: Any, walk: Any, look: Any, *, joint: bool = False) -> SkillLibrary:
+def build_library(trunk: Any, walk: Any, look: Any, *, joint: bool = False, batched: bool = False) -> SkillLibrary:
     """walk_to and look_at registered with their trained bodies and the skills' own lowerings (not from the catalogue,
-    which this harness does not read). ``joint`` registers the diagnostic :class:`JointModuleBody` instead."""
+    which this harness does not read). ``joint`` registers the diagnostic :class:`JointModuleBody` instead. ``batched``
+    gives each ``ModuleBody`` an empty ``batch_results`` dict that :func:`run_stack` refills every tick."""
 
     def body(module: Any, lowering: Any) -> Any:
-        return JointModuleBody(module, trunk) if joint else state_tick.ModuleBody(module, trunk, lowering)
+        if joint:
+            return JointModuleBody(module, trunk)
+        return state_tick.ModuleBody(module, trunk, lowering, batch_results={} if batched else None)
 
     library = SkillLibrary()
     library.create("walk_to", description="walk to a point at a pace and stop inside a radius", scopes=("locomotion",),
@@ -282,7 +289,7 @@ class GoalDecider:
 
 
 def run_stack(directory: Path, *, seed: int, lanes: int, held_out: bool, order: str, max_ticks: int | None,
-              joint: bool = False) -> dict:
+              joint: bool = False, batch: bool = True) -> dict:
     trunk, walk, look, _ = load_bodies(directory)
     config, _ = reference_config(trunk, walk, look)
     kernels = config.kernels()
@@ -300,8 +307,10 @@ def run_stack(directory: Path, *, seed: int, lanes: int, held_out: bool, order: 
     carry, observation, _ = env.step(carry, jnp.asarray(neutral), jax.random.split(keys[1], lanes))
     tick_seconds = distill_v3._world_tick(carry.runtime.combat)
 
-    library = build_library(trunk, walk, look, joint=joint)
+    batch = batch and not joint  # the diagnostic joint body has no batch path
+    library = build_library(trunk, walk, look, joint=joint, batched=batch)
     combiner = library.combiner(layout="gen7")
+    bodies = library.executors()
     document = SharedState()
     ground_y = np.asarray(carry.runtime.combat.position[:, AGENT_ENTITY, 1], np.float64)
     decider = GoalDecider(library, episode, ground_y, tick_seconds)
@@ -379,6 +388,17 @@ def run_stack(directory: Path, *, seed: int, lanes: int, held_out: bool, order: 
                 contexts = {agent: replace(context, observation_tokens=(context.observation_tokens,
                                                                          document.requests.for_agent(agent)))
                             for agent, context in contexts.items()}
+            if batch:  # one module pass per verb over its agents; each body then returns its agent's stored step
+                live: dict[int, dict[str, Any]] = {}
+                for agent in agents:
+                    for request in document.requests.for_agent(agent):
+                        if request.verb in live.setdefault(agent, {}):
+                            raise RuntimeError(f"agent {agent} has two live {request.verb} requests; a batch holds one")
+                        live[agent][request.verb] = request
+                results = state_tick.run_module_batches(binding.view, contexts, bodies, live)
+                for verb, body in bodies.items():
+                    body.batch_results.clear()
+                    body.batch_results.update(results.get(verb, {}))
             steps = combine_from_scratchpad(document, combiner, index, contexts)
             for step in steps.values():
                 statuses.update(status.kind for status in step.statuses)
@@ -458,6 +478,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--ticks", type=int, default=None, help="cap the stack arm's ticks (a smoke)")
     parser.add_argument("--joint", action="store_true",
                         help="the stack arm's bodies read every live request (diagnostic JointModuleBody)")
+    parser.add_argument("--per-agent", action="store_true",
+                        help="call each body per agent (no ModuleBatch); the batched default gives the same choices")
     args = parser.parse_args(argv)
 
     arms = [arm.strip() for arm in args.arms.split(",") if arm.strip()]
@@ -483,8 +505,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         for order in orders:
             started = time.perf_counter()
             report = run_stack(args.bodies, seed=args.seed, lanes=args.lanes, held_out=args.held_out, order=order,
-                               max_ticks=args.ticks, joint=args.joint)
+                               max_ticks=args.ticks, joint=args.joint, batch=not args.per_agent)
             report["wall_seconds"] = round(time.perf_counter() - started, 1)
+            report["bodies_batched"] = not args.per_agent and not args.joint
             results["runs"][f"stack_{order}" + ("_joint" if args.joint else "")] = report
             save()
     print(json.dumps(results["bars"], indent=1))
