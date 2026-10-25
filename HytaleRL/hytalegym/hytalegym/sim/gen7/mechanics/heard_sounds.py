@@ -29,6 +29,7 @@ import os
 from functools import lru_cache, wraps
 from typing import Any, NamedTuple
 
+import jax
 import jax.numpy as jnp
 
 from hytalegym.jax.combat.contracts.semantic import semantic_id
@@ -63,7 +64,10 @@ class HeardSounds(NamedTuple):
 
 @lru_cache(maxsize=4)
 def _tables(assets_zip: str) -> FootstepTables:
-    return footstep_tables(load_footstep_content(assets_zip))
+    # Cached, so built concretely even when the first call is inside a jitted reset or step: a traced build would cache
+    # that trace's tracers (test_hearing_channel.py test_tables_first_built_inside_a_trace_stay_concrete).
+    with jax.ensure_compile_time_eval():
+        return footstep_tables(load_footstep_content(assets_zip))
 
 
 def footstep_tables_from_env() -> FootstepTables:

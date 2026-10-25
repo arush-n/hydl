@@ -438,3 +438,19 @@ def test_the_dense_identity_grid_reaches_the_capabilities_and_the_hearing_field(
     assert len(own) == 1
     assert int(heard.sound_id[0, own[0]]) == semantic_id("SFX_Bush_MoveIn")
     assert float(heard.gain[0, own[0]]) == pytest.approx(MOVE_IN_RECORD.volume_linear, rel=1e-6)
+
+
+def test_tables_first_built_inside_a_trace_stay_concrete():
+    """The footstep tables are cached on their first call. A first call inside a jitted reset or step must cache concrete
+    arrays, not that trace's tracers (the skill layer, 6413a52, finding 2: UnexpectedTracerError with a jitted reset)."""
+
+    heard_sounds._tables.cache_clear()
+
+    @jax.jit
+    def first(x):
+        return x + heard_sounds.footstep_tables_from_env().block_keys.shape[0]
+
+    first(jnp.int32(0))
+    tables = heard_sounds.footstep_tables_from_env()
+    keys = np.asarray(tables.block_keys)  # a cached tracer raises here
+    assert keys.size > 0 and bool(jnp.all(tables.block_keys + 0 == keys))
