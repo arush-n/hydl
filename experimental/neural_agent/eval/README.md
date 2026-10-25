@@ -178,8 +178,11 @@ a request is withdrawn when its goal is done or out of time); the combiner on S_
 `state_tick.ModuleBody` per verb, lowered by the skill's own `lowering`; the simulator steps on the combined 12 heads. The
 world is the bodies' training world (`training.blocks.environment`: the committed engine, motion timing pinned to 1/30 s).
 The `reference` arm is the trained student as the skill layer evaluates it (`distill_v3.evaluate`: one generalist call a
-tick with both requests, masked argmax) on the same goals, spawns and keys. `--order session` runs the state tick after the
-combiner, as `session.run_session` orders its hook, so bodies read the previous tick's view. `--joint` is a diagnostic:
+tick with both requests, masked argmax) on the same goals, spawns and keys. `--order session` (removed 2026-10-25) ran the
+state tick after the combiner, as `session.run_session` orders its hook, so bodies read the previous tick's view; its rows
+below are a record. Since 2026-10-25 the stack arm runs on the gen-7 host session runner
+(`session_gen7.run_gen7_session`: state tick, executive, timed decision, batched bodies and the combiner, goal reports, world
+step; owner ruling "Host loop for gen 7"), with the same report as before on held-out and seen episodes. `--joint` is a diagnostic:
 `JointModuleBody` gives each module every live request of a verb it was trained beside, as in training.
 
 **Results** (bodies `v1_bodies/memory_s0`, 96 lanes, 32 per mode, seed 77001; `out/architecture_2026-10-24/*.json`; one lane

@@ -13,8 +13,9 @@ One host tick for B lanes, in the default order (``--order fresh``):
    ``AgentView``; the statuses go to ``skills``;
 4. the simulator steps on the combined action (the gym's 12 heads).
 
-``--order session`` runs step 1 after step 3, as ``session.run_session`` orders its hook (the state tick last), so the
-bodies read the previous tick's view and the first tick is neutral.
+The loop is :func:`experimental.neural_agent.session_gen7.run_gen7_session`; this file supplies the world, the decider
+and the bookkeeping. The session order (the state tick after the bodies, as ``session.run_session``) is no longer run:
+``--order fresh`` is the only order (2026-10-25, the move to the runner).
 
 Arms, on the same goals, spawns and keys (``distill_v3.evaluate``'s derivation from ``--seed``):
 
@@ -51,10 +52,9 @@ import argparse
 import json
 import sys
 import time
-from collections import Counter
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, NamedTuple, Sequence
 
 import jax
 import jax.numpy as jnp
@@ -76,7 +76,8 @@ from experimental.neural_agent.skill_agent.neural_skills.walk_to import skill as
 from experimental.neural_agent.skill_agent.runtime import state_tick  # noqa: E402
 from experimental.neural_agent.skill_agent.runtime.combiner import AgentContext, BodyStep  # noqa: E402
 from experimental.neural_agent.skill_agent.runtime.library import SkillLibrary  # noqa: E402
-from experimental.neural_agent.skill_agent.runtime.scratchpad import ANY_WORLD, combine_from_scratchpad  # noqa: E402
+from experimental.neural_agent.skill_agent.runtime.scratchpad import ANY_WORLD  # noqa: E402
+from experimental.neural_agent.session_gen7 import Gen7SessionConfig, run_gen7_session  # noqa: E402
 from experimental.neural_agent.skill_agent.training import blocks, distill, distill_v3  # noqa: E402
 from experimental.neural_agent.tasks import task_spec as ts  # noqa: E402
 from hytalegym.jax.combat.types import AGENT_ENTITY  # noqa: E402
@@ -288,8 +289,59 @@ class GoalDecider:
 # ---- the stack arm ------------------------------------------------------------------------------------------------
 
 
+class _StackFacts(NamedTuple):
+    """The facts of one tick of the stack world (what the runner hands the caller's callables)."""
+
+    observation: Any
+    combat: Any
+    last: Any  # the actions executed on the previous tick (neutral on tick 0)
+    first: bool
+    mask: Any  # the legal action mask this tick's decision reads
+    decided_mask: Any  # after a step: the mask the step's actions were chosen under
+    executed: Any  # after a step: the actions the step ran
+
+
+class _StackWorld:
+    """The environment for :func:`run_gen7_session`: the blocks environment, stepped on the runner's actions. Tick ``t``
+    uses ``keys[t + 2]``; the caller has already run the reset and the neutral first step (``keys[0]``, ``keys[1]``)."""
+
+    def __init__(self, env: Any, carry: Any, observation: Any, keys: Any, neutral: np.ndarray, lanes: int):
+        self.env, self.carry, self.observation = env, carry, observation
+        self.keys, self.neutral, self.lanes = keys, neutral, lanes
+        self.index = 0
+
+    def reset(self) -> _StackFacts:
+        return _StackFacts(self.observation, self.carry.runtime.combat, self.neutral, True,
+                           self.carry.action_mask, None, None)
+
+    def step(self, actions: np.ndarray) -> _StackFacts:
+        decided_mask = self.carry.action_mask
+        self.carry, self.observation, _ = self.env.step(self.carry, jnp.asarray(actions),
+                                                        jax.random.split(self.keys[self.index + 2], self.lanes))
+        self.index += 1
+        return _StackFacts(self.observation, self.carry.runtime.combat, actions, False,
+                           self.carry.action_mask, decided_mask, actions)
+
+
+class _StackDecider:
+    """The decision layer as the runner's decider: the goals start on tick 0 and are judged on each later tick."""
+
+    def __init__(self, goal: GoalDecider, lanes: int):
+        self.goal = goal
+        self.look_ok = np.zeros(lanes, bool)  # set by the run's record hook: each lane's look success on the last tick
+
+    def decide(self, tick: int, document: SharedState, facts: _StackFacts, executive: Any) -> None:
+        if tick == 0:
+            self.goal.start(0)
+        else:
+            self.goal.judge(tick, facts.combat, self.look_ok)
+        self.goal.write(document, tick)
+
+
 def run_stack(directory: Path, *, seed: int, lanes: int, held_out: bool, order: str, max_ticks: int | None,
               joint: bool = False, batch: bool = True) -> dict:
+    if order != "fresh":
+        raise ValueError("run_stack has one order, fresh: the session order is not in the gen-7 runner")
     trunk, walk, look, _ = load_bodies(directory)
     config, _ = reference_config(trunk, walk, look)
     kernels = config.kernels()
@@ -313,7 +365,9 @@ def run_stack(directory: Path, *, seed: int, lanes: int, held_out: bool, order: 
     bodies = library.executors()
     document = SharedState()
     ground_y = np.asarray(carry.runtime.combat.position[:, AGENT_ENTITY, 1], np.float64)
-    decider = GoalDecider(library, episode, ground_y, tick_seconds)
+    goal = GoalDecider(library, episode, ground_y, tick_seconds)
+    decider = _StackDecider(goal, lanes)
+    world = _StackWorld(env, carry, observation, keys, neutral, lanes)
 
     pose_type: list[type] = []
 
@@ -344,88 +398,39 @@ def run_stack(directory: Path, *, seed: int, lanes: int, held_out: bool, order: 
     yaws = np.zeros((ticks + 1, lanes), np.float32)
     seconds = np.zeros((ticks, lanes), np.float32)
     decisions = illegal = 0
-    statuses: Counter = Counter()
-    clock = Counter()
 
     def record_instant(index: int, combat: Any) -> None:
         positions[index] = np.asarray(combat.position[:, AGENT_ENTITY][:, [0, 2]])
         yaws[index] = np.asarray(combat.yaw[:, AGENT_ENTITY])
 
-    def state_tick_now(index: int, tag: int) -> None:
-        combat = carry.runtime.combat
-        transition = (observation, combat.position[:, AGENT_ENTITY], combat.yaw[:, AGENT_ENTITY], last,
-                      np.full((lanes,), index == 0))
-        started = time.perf_counter()
-        binding.on_tick(document, tag, False, transition)
-        jax.block_until_ready(binding.view.encoded)
-        clock["state_tick"] += time.perf_counter() - started
+    def transition_of(facts: _StackFacts) -> tuple:
+        combat = facts.combat
+        return (facts.observation, combat.position[:, AGENT_ENTITY], combat.yaw[:, AGENT_ENTITY], facts.last,
+                np.full((lanes,), facts.first))
 
-    record_instant(0, carry.runtime.combat)
-    last = neutral
-    look_ok = np.zeros(lanes, bool)
-    for index in range(ticks):
-        combat = carry.runtime.combat
-        if order == "fresh":
-            state_tick_now(index, index - 1)  # the statuses of the combiner's last tick reach the layer now
+    def contexts(tick: int, view: Any, facts: _StackFacts) -> dict:
+        combat = facts.combat
+        poses = Pose(combat.position[:, AGENT_ENTITY], combat.yaw[:, AGENT_ENTITY], combat.agent_head_yaw,
+                     combat.agent_head_pitch)
+        out = state_tick.encode_contexts(view, base, agents, poses=poses, ticks=tick, action_masks=facts.mask)
+        if joint:
+            out = {agent: replace(context, observation_tokens=(context.observation_tokens,
+                                                              document.requests.for_agent(agent)))
+                   for agent, context in out.items()}
+        return out
 
-        started = time.perf_counter()
-        if index == 0:
-            decider.start(index)
-        else:
-            decider.judge(index, combat, look_ok)
-        decider.write(document, index)
-        clock["decision"] += time.perf_counter() - started
-
-        started = time.perf_counter()
-        if binding.view is None:  # the session order's first tick: no view yet
-            executed = neutral
-        else:
-            poses = Pose(combat.position[:, AGENT_ENTITY], combat.yaw[:, AGENT_ENTITY], combat.agent_head_yaw,
-                         combat.agent_head_pitch)
-            contexts = state_tick.encode_contexts(binding.view, base, agents, poses=poses, ticks=index,
-                                                  action_masks=carry.action_mask)
-            if joint:
-                contexts = {agent: replace(context, observation_tokens=(context.observation_tokens,
-                                                                         document.requests.for_agent(agent)))
-                            for agent, context in contexts.items()}
-            if batch:  # one module pass per verb over its agents; each body then returns its agent's stored step
-                live: dict[int, dict[str, Any]] = {}
-                for agent in agents:
-                    for request in document.requests.for_agent(agent):
-                        if request.verb in live.setdefault(agent, {}):
-                            raise RuntimeError(f"agent {agent} has two live {request.verb} requests; a batch holds one")
-                        live[agent][request.verb] = request
-                results = state_tick.run_module_batches(binding.view, contexts, bodies, live)
-                for verb, body in bodies.items():
-                    body.batch_results.clear()
-                    body.batch_results.update(results.get(verb, {}))
-            steps = combine_from_scratchpad(document, combiner, index, contexts)
-            for step in steps.values():
-                statuses.update(status.kind for status in step.statuses)
-            executed = np.stack([np.asarray(steps[lane].factors[:blocks.HEAD_COUNT], np.int32) for lane in agents])
-        clock["combiner_and_bodies"] += time.perf_counter() - started
-
-        if order == "session":
-            state_tick_now(index, index)
-
+    def record(index: int, facts: _StackFacts, steps: Any) -> None:
+        """After tick ``index``'s step: its legality, the post-step instants and the goal bookkeeping."""
+        nonlocal decisions, illegal, walk_hit, look_hit, walk_streak, look_streak, walk_held, look_held
         keep = index < horizon
-        mask = np.asarray(carry.action_mask)
         decisions += int(keep.sum())
-        illegal += int(np.sum(keep & ~blocks.legal_rows(mask, executed)))
-
-        started = time.perf_counter()
-        carry, observation, _ = env.step(carry, jnp.asarray(executed), jax.random.split(keys[index + 2], lanes))
-        last = executed
-        combat = carry.runtime.combat
-        clock["environment"] += time.perf_counter() - started
-        if index % 25 == 0:
-            print(f"stack {order} tick {index}/{ticks} ms/tick so far "
-                  f"{ {name: round(1000.0 * value / (index + 1), 1) for name, value in clock.items()} }",
-                  file=sys.stderr, flush=True)
+        illegal += int(np.sum(keep & ~blocks.legal_rows(np.asarray(facts.decided_mask), np.asarray(facts.executed))))
         done_count = index + 1
+        combat = facts.combat
         record_instant(done_count, combat)
         seconds[index] = np.asarray(combat.last_motion_delta_seconds)
         walk_ok, look_ok = (np.asarray(value) for value in kernels.success(combat, episode))
+        decider.look_ok = look_ok
         walk_hit = np.where((walk_hit < 0) & walk_active & walk_ok & (done_count <= walk_horizon), done_count,
                             walk_hit).astype(np.int32)
         look_hit = np.where((look_hit < 0) & look_active & look_ok & (done_count <= look_horizon), done_count,
@@ -435,16 +440,23 @@ def run_stack(directory: Path, *, seed: int, lanes: int, held_out: bool, order: 
         look_streak, look_held = blocks.hold_update(look_streak, look_held, look_ok, done_count, look_horizon,
                                                     look_active)
 
+    record_instant(0, carry.runtime.combat)
+    session = run_gen7_session(
+        world, decider, combiner, bodies, binding, Gen7SessionConfig(ticks=ticks, batch_bodies=batch),
+        contexts=contexts, transition_of=transition_of, head_count=blocks.HEAD_COUNT, document=document,
+        record=record)
+
     rollout = distill.Rollout(walk_hit=walk_hit, look_hit=look_hit, positions=positions, yaws=yaws, seconds=seconds,
                               decisions=decisions, illegal=illegal, teacher_illegal=0, samples=None,
                               walk_held=walk_held, look_held=look_held)
     report = {"arm": "stack_joint" if joint else "stack", "order": order, "held_out": held_out, "seed": seed, "lanes": lanes, "ticks": ticks,
               "modes": list(distill.MODES), **distill._summarise(episode, rollout)}
     report["tick_seconds"] = tick_seconds
-    report["decision_layer"] = decider.report()
-    report["combiner_statuses"] = dict(statuses)
-    report["host_ms_per_tick"] = {name: round(1000.0 * value / ticks, 2) for name, value in clock.items()}
-    report["host_ms_per_tick"]["total"] = round(1000.0 * sum(clock.values()) / ticks, 2)
+    report["decision_layer"] = goal.report()
+    report["combiner_statuses"] = dict(session.metrics.status_counts)
+    ms = session.metrics.host_ms_per_tick
+    report["host_ms_per_tick"] = {"state_tick": ms["state_tick"], "decision": ms["decision"],
+                                  "combiner_and_bodies": ms["bodies"], "environment": ms["world"], "total": ms["total"]}
     return report
 
 
@@ -471,7 +483,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--bodies", type=Path, required=True, help="a v1_bodies/<run> folder")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--arms", default="reference,stack")
-    parser.add_argument("--order", choices=("fresh", "session", "both"), default="fresh")
+    parser.add_argument("--order", choices=("fresh",), default="fresh",
+                        help="the only order: the session order is not in the gen-7 runner (session_gen7.py)")
     parser.add_argument("--lanes", type=int, default=96)
     parser.add_argument("--seed", type=int, default=77001)
     parser.add_argument("--held-out", action="store_true")
@@ -485,7 +498,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     arms = [arm.strip() for arm in args.arms.split(",") if arm.strip()]
     if not arms or any(arm not in ("reference", "stack") for arm in arms):
         parser.error("--arms takes reference and/or stack")
-    orders = ("fresh", "session") if args.order == "both" else (args.order,)
+    orders = (args.order,)
     _, _, _, manifest = load_bodies(args.bodies)
     results: dict[str, Any] = {"bodies": str(args.bodies), "manifest_run": manifest.get("run"),
                                "manifest_arm": manifest.get("arm"), "argv": list(argv or sys.argv[1:]), "runs": {}}
