@@ -1140,6 +1140,114 @@ PATCHES = (
           "encoder: observable_active_slot takes ability_hold_slot while held and the queued charged child's slot on its "
           "start-queue tick; feeds the agent attack compatibility, the active one-hot and the weapon_i32 slot column, as "
           "the live active slot does"),
+    # Charge root (row 5f, live jar 3865F45F): a short press releases the sword's held slot 3 into its swing, which the
+    # engine admits as slot 0. Live reports the chain's root, slot 3, through the swing; its stamina regen pause applies
+    # only when the thrust runs (quick_press_regen_jar15b.json), which the admission already does from the child. So the
+    # child keeps its own admission (cooldown, cost, regen delay) and only its root slot names the charge that made it.
+    Patch("charge_release_root", "combat/arsenal/runtime.py",
+          "    hold_slot, hold_seconds, requested_slot = resolve_charge_hold(\n"
+          "        state.arsenal.ability_hold_slot,\n"
+          "        state.arsenal.ability_hold_seconds,\n"
+          "        commands.ability_slot,\n"
+          "        runtime_loadout,\n"
+          "        jnp.asarray(params.nominal_dt, dtype=jnp.float32),\n"
+          "    )\n",
+          "    hold_slot, hold_seconds, requested_slot = resolve_charge_hold(\n"
+          "        state.arsenal.ability_hold_slot,\n"
+          "        state.arsenal.ability_hold_seconds,\n"
+          "        commands.ability_slot,\n"
+          "        runtime_loadout,\n"
+          "        jnp.asarray(params.nominal_dt, dtype=jnp.float32),\n"
+          "    )\n"
+          "    # Gen 7 (row 5f): the slot whose charge emitted this tick's child: the held slot on a release, the requested\n"
+          "    # charging slot on an auto-fire; -1 when nothing was emitted or the request is not a charge.\n"
+          "    _released = (state.arsenal.ability_hold_slot >= 0) & (commands.ability_slot != state.arsenal.ability_hold_slot)\n"
+          "    _charging = (commands.ability_slot >= 0) & (\n"
+          "        jnp.take_along_axis(\n"
+          "            runtime_loadout.ability_hold_count,\n"
+          "            jnp.clip(commands.ability_slot, 0, runtime_loadout.ability_hold_count.shape[2] - 1)[..., None],\n"
+          "            axis=2,\n"
+          "        )[..., 0]\n"
+          "        > 0\n"
+          "    )\n"
+          "    _charge_root = jnp.where(\n"
+          "        requested_slot < 0,\n"
+          "        jnp.int32(-1),\n"
+          "        jnp.where(_released, state.arsenal.ability_hold_slot, jnp.where(_charging, commands.ability_slot, -1)),\n"
+          "    ).astype(jnp.int32)\n",
+          "5f", "tests/sim/test_held_charge_active_slot.py: a one-tick press on slot 3 reads 3 from the press through the swing",
+          "runtime: the charge that emitted the admitted child (release or auto-fire), for charge_release_root_admitted"),
+    Patch("charge_release_root_admitted", "combat/arsenal/runtime.py",
+          "    arsenal, mechanics, ability_requested, ability_accepted = start_abilities(\n"
+          "        prestart_arsenal,\n"
+          "        mechanics,\n"
+          "        requested_slot,\n"
+          "        runtime_loadout,\n"
+          "        commands.world,\n"
+          "        alive,\n"
+          "        config.mechanics_rules,\n"
+          "        admission_mechanics=state.mechanics,\n"
+          "    )\n",
+          "    arsenal, mechanics, ability_requested, ability_accepted = start_abilities(\n"
+          "        prestart_arsenal,\n"
+          "        mechanics,\n"
+          "        requested_slot,\n"
+          "        runtime_loadout,\n"
+          "        commands.world,\n"
+          "        alive,\n"
+          "        config.mechanics_rules,\n"
+          "        admission_mechanics=state.mechanics,\n"
+          "    )\n"
+          "    # Gen 7 (row 5f): an admitted charge child runs under the charge's root (the admission above used the child).\n"
+          "    arsenal = arsenal._replace(\n"
+          "        active_ability_root_slot=jnp.where(\n"
+          "            ability_accepted & (_charge_root >= 0) & (arsenal.failure_bits == 0)[:, None],\n"
+          "            _charge_root,\n"
+          "            arsenal.active_ability_root_slot,\n"
+          "        )\n"
+          "    )\n",
+          "5f", "tests/sim/test_held_charge_active_slot.py: the short press reads 3 throughout; tests/sim/test_learner_cost.py "
+          "and the stamina receipts: the quick press keeps the swing's admission (no regen pause)",
+          "runtime: active_ability_root_slot names the charging slot for an admitted charge child; read by the observation "
+          "projection and the active interaction type (equal types on every current charging weapon)"),
+    # Learner instant costs (row 8f, live jar 3865F45F): the bridge leases remote-client mode for policy-controlled chains,
+    # so the learner applies a native NPC instant ChangeStat once (thrust 10 -> 6 live, authored 4); autonomous NPCs run
+    # simulationTick and serverTick and pay twice. The spend and the observed cost read one rule (mechanics/learner_cost.py).
+    Patch("learner_cost_single_application", "combat/arsenal/programs/ability.py",
+          "    cost = effective_resource_cost(\n"
+          "        _gather_ability(loadout.ability_resource_cost, slot),\n"
+          "        cost_kind,\n"
+          "    )\n",
+          "    cost = effective_resource_cost(\n"
+          "        _gather_ability(loadout.ability_resource_cost, slot),\n"
+          "        cost_kind,\n"
+          "    )\n"
+          "    # Gen 7 (row 8f): the learner's policy-controlled chains apply a native NPC instant cost once.\n"
+          "    from hytalegym.sim.gen7.mechanics.learner_cost import learner_single_application as _learner_cost\n"
+          "\n"
+          "    cost = _learner_cost(cost, _gather_ability(loadout.ability_resource_cost, slot), cost_kind)\n",
+          "8f", "tests/sim/test_learner_cost.py: the sword thrust from 10 stamina leaves the learner at 6 on gen 7 (gen 5: 2) "
+          "and an NPC entity at 2 on both",
+          "ability resource spend: entity AGENT_ENTITY pays the authored amount for kinds 2 and 3; other entities keep the "
+          "two applications"),
+    Patch("learner_cost_single_application_observed", "combat/observation/v3/encoding/encoder.py",
+          "    effective_cost = effective_resource_cost(\n"
+          "        loadout.ability_resource_cost,\n"
+          "        loadout.ability_resource_cost_kind,\n"
+          "    )\n",
+          "    effective_cost = effective_resource_cost(\n"
+          "        loadout.ability_resource_cost,\n"
+          "        loadout.ability_resource_cost_kind,\n"
+          "    )\n"
+          "    # Gen 7 (row 8f): the learner's own costs are observed at one application, as they are spent.\n"
+          "    from hytalegym.sim.gen7.mechanics.learner_cost import learner_single_application as _learner_cost\n"
+          "\n"
+          "    effective_cost = _learner_cost(\n"
+          "        effective_cost, loadout.ability_resource_cost, loadout.ability_resource_cost_kind\n"
+          "    )\n",
+          "8f", "tests/sim/test_learner_cost.py: the learner's observed thrust cost is half the gen-5 value; the NPC row's is "
+          "unchanged",
+          "encoder: the normalized ability cost feature reads the learner's single application"),
     # Block breaking (owner yes 2026-10-23): the Region removal certificate refuses a break only when a neighbour actually
     # rests on the target (0.7.2 testBlockPhysicsAtPosition reads only its support keys' cells), or is chain-capable,
     # protruding or unknown. The catalog must carry the faces, so both defaults flip; gen 5 keeps the any-neighbour rule.

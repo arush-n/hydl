@@ -930,6 +930,26 @@ DECLARATIONS = {
         "gen7_probes/thrust_lunge/thrust_lunge_Kweebec_Razorleaf_jar14_{edge,hold10,hold30}.json, slot 3 from r+0); "
         "its differential is tests/sim/test_held_charge_active_slot.py"
     ),
+    "charge_release_root": Derived(
+        "patch (row 5f): live reports a charge chain's root slot through its released child (thrust_lunge_*_jar14_edge.json: "
+        "slot 3 through the one-tick press's swing); its differential is tests/sim/test_held_charge_active_slot.py"
+    ),
+    "charge_release_root_admitted": Derived(
+        "patch (row 5f): the root is recorded after admission, so the child's own cooldown, cost and stamina regen delay "
+        "stay (live quick_press_regen_jar15b.json: no regen pause after a quick slot-3 press, a 2 s pause after the thrust); "
+        "its differential is tests/sim/test_held_charge_active_slot.py"
+    ),
+    "learner_cost_single_application": Derived(
+        "patch (row 8f): the bridge leases remote-client mode for policy-controlled chains "
+        "(NativeEnvironmentSession.bindSyntheticCombatClient), so the learner applies a native NPC instant ChangeStat once; "
+        "live receipt gen7_probes/thrust_lunge/thrust_lunge_Kweebec_Razorleaf_jar14_hold30.json (stamina 10 -> 6, "
+        "authored 4); 0.7.2 InteractionManager.doTickChain runs both passes without a remote client (autonomous NPCs "
+        "pay twice); its differential is tests/sim/test_learner_cost.py"
+    ),
+    "learner_cost_single_application_observed": Derived(
+        "patch (row 8f): the learner's observed ability cost follows its spend (learner_cost_single_application); its "
+        "differential is tests/sim/test_learner_cost.py"
+    ),
     "game_clock": (
         # S14 (owner 2026-10-23): the 0.7.2 day and night lengths; SECONDS_PER_DAY 86400 and the 0.6 day split are
         # WorldTimeResource constants (javap), checked by tests/sim/test_game_clock.py.

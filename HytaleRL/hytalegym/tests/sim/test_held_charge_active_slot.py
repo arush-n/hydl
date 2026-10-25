@@ -6,9 +6,9 @@ charge in ``ability_hold_slot`` with ``active_ability_slot`` -1 until the child 
 for its start-queue tick. On gen 7 the observation now reports the held slot, and the charged child's slot on that tick.
 Legality is untouched: the held slot stays legal while it is held, in both renders.
 
-Open (strict xfail below): a short press releases into the sword's swing, which the engine runs as slot 0 with no memory
-of the charging root, so after the held tick the observation reads -1 for two start-queue ticks and then 0, where live
-reads 3. Matching it needs the engine to keep the charge root, not an observation patch.
+A short press releases into the sword's swing, which the engine admits as slot 0. Gen-7 Patches ``charge_release_root``
+and ``charge_release_root_admitted`` record slot 3 as that child's root after its admission, so the swing reads 3 as live
+does, while its cooldown, cost and stamina regen delay stay the swing's (live: no regen pause after a quick press).
 """
 
 from __future__ import annotations
@@ -109,8 +109,6 @@ def test_gen7_reports_the_held_slot_on_every_held_tick(renders, request_until: i
     assert [o for step, _, o, _ in rows if step <= request_until] == [THRUST_SLOT] * request_until
 
 
-@pytest.mark.xfail(strict=True, reason="the engine forgets the charging root once the short branch's swing (slot 0) is "
-                   "admitted: the swing reads -1 for its two start-queue ticks, then 0; live reads 3 throughout")
 def test_gen7_short_press_swing_reads_the_charging_slot_as_live(renders) -> None:
     with _mounted(renders / "gen7") as package:
         rows = _run(package, 1)
@@ -123,6 +121,46 @@ def test_gen7_keeps_the_held_slot_legal_while_it_is_held(renders) -> None:
         rows = _run(package, 30)
     admitted = min(step for step, active, _, _ in rows if active == THRUST_SLOT)
     assert all(legal for step, _, _, legal in rows if step < admitted)
+
+
+def test_gen7_short_press_keeps_the_swings_stamina_regen(renders) -> None:
+    """The quick press's swing keeps its own admission: no stamina regen delay (slot 3's -2 s applies to the thrust)."""
+
+    with _mounted(renders / "gen7") as package:
+        delays = _delays(package, 1)
+    assert all(d == 0.0 for d in delays)
+
+
+def _delays(package: str, request_until: int) -> list[float]:
+    """The agent's stamina regen delay after each step, for slot 3 requested on steps 1..request_until."""
+
+    combat = import_module(package + ".combat")
+    arsenal = import_module(package + ".combat.arsenal")
+    environment = import_module(package + ".combat.arsenal.environment")
+    params = combat.default_combat_params(microticks=1, target_active=False)
+    loadout = arsenal.hytale_0_5_7_loadouts(["iron_sword"], target_profiles=["iron_sword"])
+    config = arsenal.arsenal_runtime_config(loadout, specialize=False, sensor_range=params.sensor_range)
+    position = np.zeros((1, 2, 3), np.float32)
+    position[:, 1, 2] = -12.0
+    health = jnp.asarray([[params.agent_max_health, params.target_max_health]], jnp.float32)
+    state, _ = arsenal.reset_arsenal_batch(jax.random.split(jax.random.key(570057), 1), params, config,
+                                           entity_position=jnp.asarray(position), entity_health=health,
+                                           entity_yaw=jnp.zeros((1, 2), jnp.float32))
+    action = jnp.zeros((1, combat.ACTION_SIZE), jnp.float32)
+
+    @jax.jit
+    def step(state, slot, key):
+        world = environment.open_flat_arsenal_world_capabilities(state, params, config=config)
+        command = arsenal.empty_arsenal_commands(1)
+        command = command._replace(ability_slot=command.ability_slot.at[:, 0].set(slot), world=world)
+        return arsenal.step_arsenal_batch(state, action, key, params, command, config).state
+
+    delays = []
+    for tick in range(1, TICKS + 1):
+        slot = THRUST_SLOT if tick <= request_until else -1
+        state = step(state, jnp.int32(slot), jax.random.split(jax.random.key(tick), 1))
+        delays.append(float(np.asarray(state.mechanics.stamina_regen_delay_seconds)[0, 0]))
+    return delays
 
 
 def test_gen5_is_unchanged_the_held_slot_reads_inactive(renders) -> None:
