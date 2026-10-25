@@ -475,6 +475,85 @@ def render(
     return manifest
 
 
+RENDER_CACHE_ENV = "HYTALEGYM_RENDER_CACHE"
+"""Directory of cached renders (default ``~/.cache/hytalegym/renders``)."""
+RENDER_CACHE_KEEP = 24
+"""Cached renders kept; older ones (by modification time) are removed after a new one is written."""
+
+
+def render_key(overlay: "Overlay", source: "HeadSource") -> str:
+    """sha256 over everything a render reads, so equal keys mean byte-identical renders.
+
+    The committed sources (the git tree of ``PACKAGE_ROOT`` at ``source.commit``), the overlay and its profile record,
+    the working tree's ``hytalegym/sim`` package (the overlay, profiles, content layer, mechanics and this renderer are
+    imported from there, not from the commit), and the identity of ``HYTALE_ASSETS_ZIP`` (path, size, modification
+    time), which the content layer may read.
+    """
+
+    from hytalegym.sim.common import overlay as ov
+
+    digest = hashlib.sha256()
+    tree = source._git("rev-parse", f"{source.commit}:{ov.PACKAGE_ROOT}").strip()
+    digest.update(f"tree {tree}\n".encode())
+    digest.update(f"overlay {overlay.sha256()}\n".encode())
+    digest.update(json.dumps(_profile_record(overlay), sort_keys=True, default=str).encode())
+    sim_root = Path(__file__).resolve().parents[1]
+    for path in sorted(sim_root.rglob("*")):
+        parts = path.relative_to(sim_root).parts
+        if len(parts) > 1 and parts[1] == "engine":  # a render's own output (default_out_dir), not an input
+            continue
+        if path.is_file() and "__pycache__" not in path.parts and not path.name.startswith("."):
+            digest.update(f"\nfile {path.relative_to(sim_root).as_posix()}\n".encode())
+            digest.update(path.read_bytes())
+    assets = os.environ.get("HYTALE_ASSETS_ZIP", "")
+    if assets and Path(assets).is_file():
+        stat = Path(assets).stat()
+        digest.update(f"\nassets {assets} {stat.st_size} {stat.st_mtime_ns}\n".encode())
+    return digest.hexdigest()
+
+
+def render_cached(
+    overlay: "Overlay",
+    *,
+    source: "HeadSource | None" = None,
+    cache_root: str | Path | None = None,
+) -> Path:
+    """A render of ``overlay`` shared across processes: reuse the cached one for this :func:`render_key`, else render it.
+
+    Callers treat the returned directory as read-only (``mount`` reads it in place; mount it as often as needed). A new
+    render is written by :func:`render` into a private directory and moved into place with one rename, so a reader never
+    sees a partial render; when two processes race, the first rename wins and the other's copy is dropped.
+    """
+
+    from hytalegym.sim.common import overlay as ov
+
+    source = source or ov.HeadSource()
+    root = Path(cache_root or os.environ.get(RENDER_CACHE_ENV) or Path.home() / ".cache" / "hytalegym" / "renders")
+    out = root / f"{overlay.generation}-{render_key(overlay, source)[:20]}"
+    if (out / MANIFEST_NAME).is_file():
+        return out
+    root.mkdir(parents=True, exist_ok=True)
+    private = root / f".{out.name}.{os.getpid()}"
+    if private.exists():
+        shutil.rmtree(private)
+    render(overlay, private, source=source)
+    try:
+        private.rename(out)
+    except OSError:  # another process placed the same render first
+        shutil.rmtree(private, ignore_errors=True)
+        if not (out / MANIFEST_NAME).is_file():
+            raise
+    _prune_render_cache(root, keep=RENDER_CACHE_KEEP)
+    return out
+
+
+def _prune_render_cache(root: Path, *, keep: int) -> None:
+    renders = sorted((p for p in root.iterdir() if p.is_dir() and not p.name.startswith(".")),
+                     key=lambda p: p.stat().st_mtime, reverse=True)
+    for stale in renders[keep:]:
+        shutil.rmtree(stale, ignore_errors=True)
+
+
 def _write_atomically(out: Path, outputs: dict[str, bytes], manifest: dict) -> None:
     out = out.resolve()
     if out.exists():
