@@ -1116,6 +1116,76 @@ path on the Region's traversal graph: walk, climb up to 1.3 blocks, drop up to 3
   is already there on A, so placement alone may not be enough (inferred). A nonlinear probe, still running, will show
   whether the position is there but not linearly readable.
 
+### 8.14 The people trunk: built (stage PT1), and its runs approved (2026-10-25)
+
+**The rulings.** The owner, 2026-10-25:
+- "People trunk now, terrain later": retrain V1's trunk with people placed anywhere and moving, with come_here and
+  track teachers in its mix; terrain gets its own trunk run once its teacher is certified.
+- Then, on this build: "Approve all, modules if probe passes".
+
+**Why** (8.13's probe, stage P2). The frozen V1 trunk's entity row carries the person's body-frame position much less
+than the raw token does. Test R² for the forward offset, trunk row against raw token:
+
+| Lane set | Ridge | Small MLP | Raw token |
+|---|---|---|---|
+| A: fixed spot (walk_to's lanes) | 0.63 | 0.68 | ≥ 0.998 |
+| B: placed per lane (come_here's) | 0.46 | 0.52 | ≥ 0.998 |
+| C: moving (track's) | 0.84 | 0.87 | ≥ 0.998 |
+
+- A read-out fitted on A fails on B (R² below 0, ridge or MLP).
+- A shuffled-target control scores about 0.
+- V1 was trained with entity 1 inert at `blocks.OTHER_XYZ`. This is the measured ground for 8.12's inference about the
+  entity skills.
+
+**The trainer** (`training/trunk_v3.py`; its README row has the details). It is V1's method, imported from
+`distill_v3`: a fresh trunk with memory and a generalist head, trained through time on stored sequences (burn-in 30 on
+90) by DAgger, with the slot cut. The lanes come from the skills' own V2 strategies:
+- walk_to, look_at, come_here and track, each with its lane kinds (alone, and beside the other skill);
+- entity 1 placed per lane in come_here's and track's lanes (track's moves on its path), and in walk_to's and look_at's
+  lanes by come_here's placement (`--fixed-other` keeps V1's spot, as an ablation);
+- each request's entity handle resolved to its token row at every decision;
+- every active skill's teacher labelling its own scope.
+
+The generalist is sized for every verb (`MODULE_CONFIG`). The report carries:
+- A2's evaluation, which `distill_v3` writes, scored on 8.10's bars;
+- the generalist on come_here's and track's lanes against their teachers;
+- the teacher lanes' success per skill.
+
+**Checks.**
+- On the same A2 episodes, the generalised rollout records exactly what `distill_v3._rollout` records: every token,
+  label, mask and request field.
+- `bench/entity_probe.py`, P2's probe in the repo, reproduces P2's ridge numbers exactly (72 rows).
+- **Teachers only:** the person placed anywhere costs the walk_to and look_at teachers nothing (success, hold and pace
+  identical to V1's spot; the walker's path is identical, since the person does not block it in this simulator).
+
+**Cost** (measured at load 21 to 65). One collection of 128 lanes is about 109 s across the four skills (V1's: 42 s).
+A training step is 0.44 to 0.79 s, so a 6 x 500 run is about 33 to 50 minutes plus its evaluation.
+
+**The approved plan.**
+- A timed smoke (1 x 300).
+- Then 6 x 500 on seeds 0 and 1, plus seed 0 with `--fixed-other`, in parallel.
+- **The trunk passes if:**
+  - V1's A2 bars hold (8.10's rules, against run C''s teacher seen rates);
+  - the probe reads placed and moving people at ridge R² of at least 0.9, forward and right (V1: 0.46 and 0.23 placed,
+    0.84 and 0.81 moving).
+- Then come_here's, track's and follow's modules are retrained on it at 6 x 2,000, as in 8.12.
+- The ablation separates the placement's effect from the added skills'.
+
+**The terrain teacher's stalls are an engine freeze** (stage T2; no training).
+- **What they are.** On gen 7, 29 of the path-teacher bench's 36 failed lanes (8.13) are bodies frozen in mid-air: not
+  grounded, with zero motion under every command (forward, back, jump and both strafes all tried).
+- **Ruled out:** geometry exhaustion (never set), the core's edge (6 to 23 blocks away), penetration, the walk
+  controller's locks, and the teacher. No stall was a stop command, and a path-teacher lane never caught a corner.
+- **The mechanism, traced end to end on 4 lanes:**
+  - the engine's support sweep clips a grounded walker's move at a ledge, which puts the footprint exactly on a floor
+    box's edge in float32;
+  - the grounded probe needs strict overlap, so it reports airborne;
+  - the airborne stop rule then zeroes the whole move on a time-0 touch, every tick.
+- **The engine's code:** `jax/combat/runtime/agent.py:947-963` and `1005`, `jax/world/geometry/_sweep.py:489-492` and
+  `515-520`, `jax/world/geometry/__init__.py:486-496`.
+- **It is the coordinator's** (the ledger entry carries the repro and two candidate fixes). The terrain teacher's
+  certificate waits on that fix; the teachers' 60 to 85% reach on gen 7 is mostly this freeze.
+
 ## References
 
 - Agarwal, R., et al. (2021). Deep reinforcement learning at the edge of the statistical precipice. NeurIPS.

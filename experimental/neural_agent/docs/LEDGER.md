@@ -1883,3 +1883,22 @@ result: Built by a Haiku subagent from a written spec, reviewed here.
 - **Not done:** `bars.py` scores only the A2 v2 schema, and V1-style reports lack the teachers' rates. The run is scored as 8.10 scored V1, against run C''s teacher seen rates; a reference option for `bars.py` is a follow-up.
 gate: two passes, sharded, on 989a0e1 with the people-trunk trainer and the probe tool: pass 1 the step-9 baseline's 11 failing names, none new; the integration shard 7 passed; pass 2 1 failing name, a baseline one.
 verdict: COMMITTED; not pushed.
+
+## 2026-10-25 — skill_agent docs: TRAINING_PLAN 8.14 (the people trunk built and its runs approved; the terrain stalls traced to an engine freeze)
+command: the owner, 2026-10-25: "People trunk now, terrain later", then "Approve all, modules if probe passes".
+result:
+- 8.14 records the people trunk's ground (P2, ridge and MLP), its trainer, its checks and cost, and the approved plan:
+  - a smoke, then 6 x 500 on seeds 0 and 1 plus a `--fixed-other` ablation;
+  - the trunk passes on V1's A2 bars and the probe (ridge R² of at least 0.9, forward and right, on placed and moving people);
+  - then come_here's, track's and follow's modules at 6 x 2,000.
+- It also records stage T2: the gen-7 walking stalls are an engine freeze, not the teacher.
+- **For the coordinator (the cross-session message was held twice):** a grounded walker clipped at a ledge freezes in mid-air for good. It is 29 of the 36 failed gen-7 lanes in `bench/region_path_teacher.py`.
+  - (1) The support sweep clips the move (`jax/combat/runtime/agent.py:947-958`), which leaves the footprint exactly on a floor box's edge in float32: for lane 11, body x min -33.0 + (-0.30000001) = -33.29999923706055 = the box's x max.
+  - (2) The grounded probe needs strict overlap (`jax/world/geometry/_sweep.py:489-492`), so `agent_grounded` is False (`agent.py:1005`).
+  - (3) Next tick `walk_airborne` is True, passed as stop_on_vertical_collision (`agent.py:959-963`). The fall plus the horizontal move gives a time-0 hit on the floor top (`_sweep.py:515-520`, normal +y), and `stop_vertical` zeroes the whole move (`jax/world/geometry/__init__.py:486-496`).
+  - (4) It repeats every tick. Either part of the move alone is free; no command frees the lane (0 of 29).
+  - **Repro:** region-library-pilot-v2-072, the gen-7 render, batch 32, band 6-10, the path teacher (one hop), seed 0, lane 11 (world slot 7): clipped at tick 15 to (-33.0, 110.0, 23.00243), frozen from tick 16; floor cells (-34,109,22) and (-34,109,23), tops 110.0.
+  - **Candidate fixes (not implemented):** ignore a time-0 face touch whose normal points away from the motion in the stop rule, or let the grounded probe accept edge support. Live parity is unknown.
+  - Traced on 4 lanes; the other 25 share the signature.
+gate: two passes, sharded, on 989a0e1 with the people-trunk trainer and the probe tool: pass 1 the step-9 baseline's 11 failing names, none new; the integration shard 7 passed; pass 2 1 failing name, a baseline one.
+verdict: COMMITTED; not pushed.
