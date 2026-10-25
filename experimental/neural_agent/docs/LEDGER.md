@@ -1709,3 +1709,31 @@ result:
 Runs and modules are in the session scratchpad (`v3_runs/`, `v2_bodies/`).
 gate: two passes on a56f434 with holding skills and track, follow and --init-module, and the ModuleBody fix, against the step-9 baseline (6acadad). Pass 1: the baseline's 11 failing names, none new (1,766 passed, 2 xfailed). Pass 2: 1 failing name, a baseline one. Landed on 842180e (the coordinator's 812c2ef..842180e, no shared files but the ledger).
 verdict: COMMITTED; not pushed. Open for the owner: come_here beside look_at (accept alone-only for now, or more diagnosis).
+
+## 2026-10-25 — skill_agent: the trainers' terrain world, a 0.7.2 Region adapter, and the straight-line baseline (`skill_agent/neural_skills/step_and_hop/TRAINING.md`, `go_around/TRAINING.md`: "the terrain task world")
+command: owner, 2026-10-24: "we want to get everything done asap so that we can start training the neural polcieis"; the next skills (step_and_hop, go_around) wait on a terrain world for the trainers.
+result: Built by a Haiku subagent from a written spec, checked here.
+- **`tasks/region_tasks.py`, `make_region_task_environment`:** the flat world's interface (`batch`, `reset(keys, agent_xz, agent_yaw, other_xyz)`, `step`) on the 0.7.2 Region library (`region-library-pilot-v2-072`).
+  - It uses the npc_walk motion model, `legal_observation` on, entity 1 inert, and a 1/30 s tick.
+  - The yaw is set after the reset.
+  - Placements come from traversal pairs inside a separation band, with each lane's floor height.
+  - It draws from 8 worlds per batch (`WORKING_SET_CAPACITY`): 17 distinct spawns per 32 lanes, against 2 from one world.
+  - The agent's per-tick motion equals the flat world's tick for tick: 0.011, 0.022, 0.033, 0.044, then 0.050 blocks a tick.
+  - The state layer fills geometry rows on every lane.
+- **The straight-line baseline** (`bench/region_baseline.py`; walk_to v3's teacher, which does not path-plan; 20 s, batch 32): it reaches the goal on 66%, 47% and 28% of lanes at 3 to 6, 6 to 10 and 10 to 15 blocks (median 1.2, 2.7 and 4.8 s; 21, 19 and 16 distinct spawns). **It ran on the default (gen 5) engine**, not under `runtime/gen7`'s launcher (the builder's report), and gen 5 has no step-up (`sim/gen7/mechanics/auto_step_up.py:3`). So every route needing a climb was unreachable for any teacher, and the numbers understate gen 7, which steps up by 1.3 blocks, as the graph's climb edges do. Re-measuring under gen 7 comes with the terrain teachers (the owner's ruling: train on gen 7).
+- **Gaps for the owners of `worlds/` and the simulator** (worked around here, not edited):
+  - `load_region` builds the player motion model and no `legal_observation` (`worlds/region.py` ~568-570);
+  - `REGION_PROVIDER_SEAMS` leaves out the capability and token providers (~619-627);
+  - `ArsenalResetBatch` has no yaw (`arsenal/environment.py:463-476`);
+  - this module uses `worlds.region`'s private helpers (`_library_manifests`, `_identity`, `loader`), and a public loader would remove that coupling.
+- **The obstacle profiles** (climb, stairs, drop, detour) exist only as uncommitted edits in the main tree (`HytaleRL/examples/jax_arsenal_world_benchmark.py`, `arena/training/runs/pursuit_run.py`, last touched 2026-10-16). The owner (2026-10-25) said to finish and land them, and they are sim side, so a tested patch is ready for the coordinator: `scratchpad/drafts/spawn_pair_profiles.patch`.
+  - It touches one file, the benchmark, +261/-59 on blob 8398e00.
+  - The default "level" placements are byte-identical to HEAD.
+  - Every profile's rise rule holds on the 0.7.2 library (climb 1 to 9, stairs 2 to 3, drop -6 to -2, flat_detour 0 with no sightline).
+  - The benchmark's tests fail on identical names before and after, all already failing at HEAD.
+  - The moves that change default placements (core margins, source spread) are left out.
+  The adapter passes `spawn_pair_profile` once it lands.
+- **Tests:** `test_sa_region_tasks.py` (local, slow) 7 passed: placements, off-placement refusal, the tick, legal observation and entity 1 inert, steady npc_walk speed on unobstructed walks, geometry rows, the walk_to share.
+gate: its files are new, and only its own test imports them; that test passed (7) on ec8c28b, and again on 842180e with the four commits above (7 passed, with HYTALEGYM_LOS_EARLY_EXIT and the Region digest cache on). The rest of the tree is as gated for the commits above.
+- **Terrain for a walker, as surveyed 2026-10-25:** the traversal graph per world (`worldgen/region/traversal.py`; edges walk, climb up to 1.3 and drop up to 5; costs horizontal), a jit-able A* that returns paths (`jax/world/navigation/__init__.py:211-392`), and npc_walk's jump, which rises only 0.41 blocks (`jax/combat/types.py:589-597`), so it climbs nothing.
+verdict: COMMITTED; not pushed. Open for the owner: the obstacle-profile work, and whether step_and_hop and go_around train on the frozen V1 trunk, whose geometry weights are at their initial values (it never saw terrain), or on a trunk trained with terrain.
