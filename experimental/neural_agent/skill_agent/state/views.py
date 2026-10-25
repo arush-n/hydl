@@ -227,6 +227,8 @@ def facts(state: layer.AgentState, lane: int, *, own_position: Any = None, body_
     clock_written = int(np.asarray(state.written.now)[lane])
     clocked = bool(np.asarray(state.drives.has_clock)[lane])
     time_of_day = float(np.asarray(state.drives.time_of_day)[lane])
+    food, saturation, exhaustion = (float(np.asarray(getattr(state.drives, name))[lane])
+                                    for name in ("food", "saturation", "exhaustion"))
     return {
         "self": {"traits": {name: read(name) for name in TRAITS},
                  "counters": {name: read(name) for name in events.COUNTERS}},
@@ -247,7 +249,8 @@ def facts(state: layer.AgentState, lane: int, *, own_position: Any = None, body_
         "people": _people(state, lane, here, yaw, clock, clock_written, dt_seconds),
         "drives": {"time_of_day_hours": time_of_day / drives.UNITS_PER_GAME_HOUR if clocked else None,
                    "is_day": drives.is_day(time_of_day) if clocked else None,
-                   "sleep_pressure": read("sleep_pressure"), "hunger": read("hunger")},
+                   "sleep_pressure": read("sleep_pressure"), "food": food, "saturation": saturation,
+                   "exhaustion": exhaustion, "hunger": read("hunger")},
     }
 
 
@@ -278,16 +281,19 @@ def _counters_line(counters: Mapping[str, float]) -> str:
 
 
 def _drives_line(drives_facts: Mapping[str, Any] | None) -> str:
-    """The clock and the drives in one sentence, with a clock only: the game hour, day or night, sleep pressure and
-    hunger (16.1; the top layers read them, the body does not). Empty without a clock, or for facts made before the
-    drives."""
+    """The drives in one sentence (16.1, 20.9): the food points, always; the game hour, day or night, and sleep pressure
+    with a clock only, since sleep pressure holds still without one (the top layers read them, the body does not). Empty
+    for facts made before the drives."""
 
-    if drives_facts is None or drives_facts["time_of_day_hours"] is None:
+    if drives_facts is None:
         return ""
+    food = f"food {_number(drives_facts['food'])}/{_number(drives.FOOD_MAX)}"
+    if drives_facts["time_of_day_hours"] is None:
+        return f"Drives: {food}."
     hour, minute = divmod(round(drives_facts["time_of_day_hours"] * 60) % (24 * 60), 60)
     part = "day" if drives_facts["is_day"] else "night"
     return (f"It is {hour:02d}:{minute:02d} ({part}); sleep pressure {_two(drives_facts['sleep_pressure'])}, "
-            f"hunger {_two(drives_facts['hunger'])}.")
+            f"{food}.")
 
 
 def _entity_line(entity: Mapping[str, Any]) -> str:

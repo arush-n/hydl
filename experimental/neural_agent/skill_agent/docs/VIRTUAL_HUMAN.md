@@ -562,7 +562,7 @@ approach. Missing:
 | 1b | DONE 2026-10-22: the body's path on v3: the generalist reads every token type; every entity row carries its id; the runtime ticks the state layer (`runtime/state_tick.py`); a request points at a perceived or remembered entity; request to action tested. The trainers stay on v1 until training resumes | 13 (this section) |
 | 1c | DONE 2026-10-22: the memory design: a parallel write; object files for entities and block candidates (one latent each, keyed by identity); a gist of 16 latent slots plus a cache of 32 remembered cells for the background; the tick a quarter to a third faster on real rows (18.4) | 18 |
 | 2 | Structured writes from the top two layers; the tags move onto them. DESIGNED and APPROVED 2026-10-22 (section 19, rulings in 19.7); BUILT 2026-10-22 (section 19.8) | 10.4, 19 |
-| 3 | Fixed rules on game time: alarm and startle, sleep pressure and fatigue, hunger and the other drives; then lifecycle under normal death, and provenance. DESIGNED and APPROVED 2026-10-22; BUILT: startle, respawn, provenance (section 20.7); sleep pressure and hunger on the game clock (20.8, 2026-10-24) | 10.5, 10.7, 10.8, 16.1, 16.2, 16.5, 20 |
+| 3 | Fixed rules on game time: alarm and startle, sleep pressure and fatigue, hunger and the other drives; then lifecycle under normal death, and provenance. DESIGNED and APPROVED 2026-10-22; BUILT: startle, respawn, provenance (section 20.7); sleep pressure and hunger on the game clock (20.8, 2026-10-24); hunger on Minecraft's model, without a clock (20.9, 2026-10-24) | 10.5, 10.7, 10.8, 16.1, 16.2, 16.5, 20 |
 | 4 | The event log and its tokens; the activity counters and levels. DESIGNED and APPROVED 2026-10-22; BUILT (section 21.6; the event tokens built with step 7, 24.7) | 10.6, 11.1, 16.6, 21 |
 | 5 | The long-term spatial memory: places, routes, coordinates. DESIGNED and APPROVED 2026-10-22; BUILT (section 22.7; the place tokens built with step 7, 24.7) | 10.11, 16.4, 22 |
 | 6 | Hearing: the sound registry, the hearing rule, heard entries in the stores, the orienting reflex (the token reads zero until S12). DESIGNED and APPROVED 2026-10-23 for today's inputs (section 28); the sound registry BUILT (28.7); the rest when positional sounds are published (S12) | 17, 28 |
@@ -1738,6 +1738,83 @@ from a written spec, checked here.
 - whether a consumable that is not food (a potion) should count as a meal: today it does, since the item registry has
   no food tier;
 - live needs the host to publish `time_of_day` as `game_clock`; that ask is in the same held message.
+
+### 20.9 Hunger on Minecraft's model (2026-10-24)
+
+**The ruling.** The owner, on 20.8's estimated rates (2026-10-24): "make it based like minecraft, sprint amount, and
+stuff like that". Hunger now follows Minecraft Java Edition's food model. Every number is Minecraft's, from the
+Minecraft Wiki's "Hunger" and "Food" pages, read 2026-10-24. Sleep pressure is unchanged.
+
+**The state** (`state/drives.py`):
+- `food`, 0 to 20 points;
+- `saturation`, 0 to food, the points that drain first;
+- `exhaustion`, 0 to 4: activity not yet paid for.
+
+A world starts at 20, 5 and 0, as a new Minecraft world does. A reset restores that. A respawn keeps all three: the
+owner's ruling for this agent (16.2, "hunger carries on"), where Minecraft restores them.
+
+**Exhaustion**, Minecraft's weights:
+- 0.1 a block sprinted and 0.01 a block swum (the counters' increments);
+- 0.05 a jump, or 0.2 for a jump on a sprinting tick;
+- 0.1 a hit landed, and 0.1 a hit taken;
+- nothing for walking.
+
+Each whole 4.0 takes a point, from saturation first, then from food; the remainder carries.
+
+**Meals.** Each `ate` event (16.5) restores its item's food points, capped at 20, then its saturation, capped at the
+food, times the count eaten.
+- **`FOODS` holds 48 Hytale foods,** each mapped to a Minecraft food. Hytale's foods have no hunger values, so each
+  mapping is our estimate [E]; the numbers themselves are Minecraft's:
+  - bread and cheese → bread (5 food, 6 saturation); grilled fish → cooked cod (5, 6);
+  - cooked wild meat → cooked mutton (6, 9.6); the meat kebab → steak (8, 12.8);
+  - the other kebabs and the salads → a stew (6, 7.2); pies → pumpkin pie (8, 4.8);
+  - raw meats → raw beef, porkchop or chicken; raw fish → raw cod (2, 0.4);
+  - raw vegetables → carrot (3, 3.6), the potato → potato (1, 0.6), chilli and rice → melon slice (2, 1.2);
+  - fruits → apple (4, 2.4) or sweet berries (2, 0.4);
+  - snacks → cookie (2, 0.4).
+- **The poison fruit** follows Minecraft's poisonous potato (2, 1.2): in Minecraft a poisonous food still feeds, and
+  Hytale's poison fruit heals when eaten. Its poison is not modelled.
+- **Anything else restores nothing.** That includes potions, bandages, drinks, recipes, upgrades, and the glowing
+  mushrooms, which apply Poison and are not food (Minecraft's raw mushrooms are not eaten). This closes 20.8's open
+  case of a potion counting as a meal.
+- **A test checks that the table covers the game:** each of the 50 `Food_`, `Plant_Fruit_` and `Plant_Crop_*_Item`
+  items in 0.7.2's assets is in `FOODS` or `NOT_FOOD`, with the reason. No two ids collide under `semantic_id`.
+
+**No passive drain.** Minecraft has none, so 20.8's 0.5 a day is gone. Hunger therefore needs no clock and moves in
+every world. Sleep pressure still needs one and holds still without it. This replaces 20.8's "no clock, nothing moves"
+for hunger.
+
+**Published.**
+- `hunger` = 1 - food / 20: 0 fed, 1 starving. The variable's name and range are unchanged.
+- `facts()["drives"]` adds food, saturation and exhaustion.
+- The `words` sentence gives the food points always, and the time of day with a clock.
+
+**Not modelled:**
+- natural regeneration's cost (6.0 exhaustion per HP healed), since Hytale heals without hunger;
+- block breaking (0.005 a block), since no break events exist yet;
+- the Hunger effect;
+- starvation, and losing the sprint at 6 food or below. These are effects on the body: regulators, future (16.1).
+
+**A correction to the spec.** It mapped some crops by "Food_Small" and "Food_Large", which are the items' hitbox
+sizes, not food sizes (the builder found it). The pumpkin now maps like the other raw vegetables, and chilli and rice
+stay a small raw bite, by our estimate.
+
+**Checked:**
+- `test_sa_drives.py`: 21 passed and 1 xfailed when built (on 46a793e), the slow tests included; on dc9037a 20 passed
+  and 2 xfailed, the real-simulator clock test, because the coordinator's 6d9307f no longer delivers the clock to the
+  flat world's observation (bisected 2026-10-24; section 29). They cover:
+  - the start, a reset and a respawn;
+  - the threshold, with saturation first and the remainder carried;
+  - every weight, and the sprint-jump;
+  - no drain over 24 game hours;
+  - with no clock, hunger follows sprinting;
+  - meals: bread, the cap, two in a tick, a potion, an unlisted item;
+  - the event log's plumbing;
+  - the table's coverage;
+  - the views, and saves (a save from before D2 loads at rest);
+  - on a fresh gen-7 render with the clock (46a793e), food 20 and hunger 0 after 300 idle ticks.
+- The state and social tests: 188 passed, before and after.
+- **Gate:** two passes on dc9037a with all six of 2026-10-24, against the step-9 baseline (6acadad). Pass 1: the baseline's 11 failing names and 18 more, each explained. `test_sa_export_v1.py`'s 11 and `test_sa_integration_gen7.py`'s 5 were this lane's (the export rebuilt V1's configuration with `sound`; the check's capture under the compiled tick), fixed and re-run: export 11 passed, integration 5 passed and 1 strict xfail (the Region carries no construct since 6d9307f). `test_sa_drives.py`'s real-simulator clock test (2) fails on a clean dc9037a too, bisected to the coordinator's 6d9307f, now a strict xfail (drives 20 passed, 2 xfailed). 1,693 passed. Pass 2: 1 failing name, a baseline one (29 of the baseline's 30 now pass). Only their own tests import the two files fixed after the gate. Landed on e826fa7 (the coordinator's live hearing; no shared files).
 
 ## 21. Step 4: the event log and the activity counters (DESIGNED and APPROVED 2026-10-22)
 
