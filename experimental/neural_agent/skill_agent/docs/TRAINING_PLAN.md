@@ -410,7 +410,7 @@ Console replays of the mace fights: 20261020T062617Z-11750ee7 (scripted), 202610
 - A self-play league can cycle, or collapse onto one strategy (Balduzzi et al. 2019). The scripted styles stay in the
   pool as anchors, as AlphaStar kept its exploiters (Vinyals et al. 2019).
 
-## 8. Training on v3: the state layer and the trunk's memory (PROPOSED 2026-10-23; V0 APPROVED the same day, 8.4; the sequence machinery BUILT, 8.7; V1 built, smoke and short pass run, 8.8 and 8.9; V1 PASSES, 8.10)
+## 8. Training on v3: the state layer and the trunk's memory (PROPOSED 2026-10-23; V0 APPROVED the same day, 8.4; the sequence machinery BUILT, 8.7; V1 built, smoke and short pass run, 8.8 and 8.9; V1 PASSES, 8.10; V2 run, 8.11)
 
 `VIRTUAL_HUMAN.md` section 13: "Moving the trainers onto `runtime/state_tick.py` is the first task when training
 resumes." The encoder and the state layer are now built through step 9 (with the tick fix and S5), so this section says
@@ -816,6 +816,87 @@ trunk's step is about 1.4 times the control's.
   built).
 - V2's per-skill trainer on the frozen v3 trunk is being built (`training/skill_dagger_v3.py`). Its full runs wait on
   the owner's approval.
+
+### 8.11 V2: each skill its own module on the frozen V1 trunk, and the trained skills as bodies (2026-10-24)
+
+**The rulings.**
+- The owner (2026-10-24): "we want to get everything done asap so that we can start training the neural policies and
+  actually start to test the architecture".
+- V2 was approved: "Approve V2 now": walk_to and look_at as their own modules on V1's frozen memory trunk, 6 x 500
+  steps.
+- The owner's ruling of 2026-10-19 applies: each skill is its own module on a shared frozen trunk, trained by its own
+  strategy.
+
+**The trainer** (`training/skill_dagger_v3.py`, built by a Haiku subagent from a written spec and checked here). It is
+`skill_dagger`'s method on v3:
+- the rollout runs the state layer and the frozen trunk with its carried state;
+- the dataset keeps each decision's trunk outputs, packed as valid rows;
+- the module (a generalist head) is fitted per decision. The trunk is frozen, so there is no gradient through time.
+
+**Checked:**
+- the stored outputs reproduce the module's rollout logits (1.4e-6);
+- the trunk's parameters do not change, and only the module's take a gradient;
+- twenty steps on one batch lower the loss;
+- the report scores on `bars.py --skill`.
+- **The decisive check** (no training): V1's own heads run as V2 modules reproduce V1. On the same 64 held-out
+  episodes, with matched policies, positions, hits, holds and decisions are identical. So the V2 rollout, lowering and
+  evaluation are V1's.
+
+**The runs** (both skills in parallel, 42 minutes each at load 50 to 120):
+- the trunk: `memory_s1`'s, frozen, sha e6800023cca5;
+- 6 iterations x 500 steps at 128 lanes; evaluation on seed 77001, 256 lanes;
+- a step is about 0.2 s, since only the module trains;
+- look_at's run stored 595 MB of trunk outputs (float16).
+
+| Held success, module (teacher) | Seen | Held out | Bars |
+|---|---|---|---|
+| walk_to alone | 1.000 (1.000) | 1.000 (1.000) | all pass; pace 97.8%, radius 100% |
+| walk_to beside look_at | 1.000; look_at beside it 0.852 (0.844 beside the teacher) | 1.000; look_at 0.883 (0.867) | all pass |
+| look_at alone | 0.992 (1.000) | 0.992 (1.000) | all pass |
+| look_at while walking | 0.906 (0.906) | 0.812 (0.859) | T5 passes; held out / seen 0.897, bar 0.90: fails by 0.003 |
+
+- **walk_to's module passes every bar.**
+- **look_at's module passes every bar but one,** by 0.003: the held-out ratio of looking while walking. That is the
+  bar V1's own head missed when run as a module (0.860, in the reproduction check), and the one the teacher itself
+  drops on most (0.906 to 0.859).
+- **A second look_at seed** (seed 1, 29 minutes) gives the same 0.897:
+  - looking while walking: seen 0.914 (the teacher 0.906), held out 0.820 (0.859);
+  - looking alone: 1.000 both.
+
+  So the gap is real, not noise: looking toward the held-out band while walking generalises about 4 points worse
+  than the teacher on both seeds, though T5 holds everywhere. V1's generalist shows the same lean on one of its two
+  seeds (0.917 in 8.10). The likely fix is a longer look_at schedule (A2 trained 4 times as many steps); not run.
+
+**The trained skills as bodies** (`training/export_v1.py`, built by a Haiku subagent from a written spec and checked
+here). V1's runs are exported to `scratchpad/v1_bodies/<run>/`:
+- a trunk with its token layout;
+- the walk_to and look_at modules;
+- a manifest.
+
+Through `state_tick.ModuleBody`, as the combiner executes a skill:
+- on 32 seen and 32 held-out lanes per skill, the bodies succeed and hold on every lane;
+- their first success tick equals V1's own student on every lane;
+- no executed action is illegal;
+- the memory arm, with its state carried across ticks by `step_lanes`, also matches V1 tick for tick.
+
+Four seam defects found on the way were fixed:
+- the loaded trunk's config was unhashable;
+- a body drove a head it was never trained on (`mount`);
+- there was no production lowering: the request's arguments now come from the agent's pose and tick (`AgentView`);
+- the legal mask was not applied.
+
+One more appeared when the hearing slice added the `sound` token type (VIRTUAL_HUMAN.md 28.8): the export rebuilt
+V1's configuration from today's schema, `sound` included, and could no longer load V1's runs. It now uses V1's
+configuration as trained (`export_v1.as_trained`), and the saved layout covers the trunk's own types.
+
+**What is left for the architecture test.** The decision layer must drive these bodies on gen 7: goals become walk_to
+and look_at requests, and the combiner executes them through `ModuleBody`. That is the coordinator's lane, asked in the
+ledger on 2026-10-24 (two messages expired undelivered). The skill side's pieces are in place:
+- the bodies;
+- the lowering;
+- `step_lanes`, compiled at 20.6 ms a tick (29).
+
+**Gate:** two passes on dc9037a with all six of 2026-10-24, against the step-9 baseline (6acadad). Pass 1: the baseline's 11 failing names and 18 more, each explained. `test_sa_export_v1.py`'s 11 and `test_sa_integration_gen7.py`'s 5 were this lane's (the export rebuilt V1's configuration with `sound`; the check's capture under the compiled tick), fixed and re-run: export 11 passed, integration 5 passed and 1 strict xfail (the Region carries no construct since 6d9307f). `test_sa_drives.py`'s real-simulator clock test (2) fails on a clean dc9037a too, bisected to the coordinator's 6d9307f, now a strict xfail (drives 20 passed, 2 xfailed). 1,693 passed. Pass 2: 1 failing name, a baseline one (29 of the baseline's 30 now pass). Only their own tests import the two files fixed after the gate. Landed on e826fa7 (the coordinator's live hearing; no shared files).
 
 ## References
 
