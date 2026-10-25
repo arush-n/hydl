@@ -23,7 +23,6 @@ from hytalegym.geometry.contract import (
     cell_index,
     empty_geometry,
 )
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.gen5.profile import PROFILE as GEN5
 from hytalegym.sim.gen7.mechanics import npc_fluid_walk
@@ -138,7 +137,7 @@ def _pool_frame():
 @pytest.fixture(scope="module")
 def engine(tmp_path_factory):
     out = tmp_path_factory.mktemp("render") / "gen7"
-    R.render(GEN7_OVERLAY, out, source=HeadSource())
+    out = support.render_for_test(GEN7_OVERLAY, out, source=HeadSource())
     package = support.mount_fresh(out).__name__
     return {
         "agent": import_module(f"{package}.combat.runtime.agent"),

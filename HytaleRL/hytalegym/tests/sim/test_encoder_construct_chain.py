@@ -17,12 +17,11 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.gen7 import overlay as gen7_overlay
 from hytalegym.sim.gen7.profile import PROFILE as GEN7
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 ADDED = ("perception_v2", "game_clock", "heard_sounds")
 
@@ -37,7 +36,7 @@ def package(tmp_path_factory):
     sys.modules[name] = shim
     try:
         target = tmp_path_factory.mktemp("render_chain") / "gen7"
-        R.render(replace(gen7_overlay.OVERLAY, profile=f"{name}:PROFILE"), target, source=HeadSource())
+        target = render_for_test(replace(gen7_overlay.OVERLAY, profile=f"{name}:PROFILE"), target, source=HeadSource())
         mounted = mount_fresh(target).__name__
         yield mounted
         unmount(mounted)

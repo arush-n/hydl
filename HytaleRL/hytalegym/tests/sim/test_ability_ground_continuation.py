@@ -25,7 +25,6 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.common.profile import Constructs
 from hytalegym.sim.gen5.profile import PROFILE as GEN5
@@ -33,7 +32,7 @@ from hytalegym.sim.gen7.mechanics import ability_ground_continuation as agc
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7_OVERLAY
 from hytalegym.sim.gen7.profile import PROFILE as GEN7
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 AGENT, TARGET = 0, 1
 SEED = 570057
@@ -223,8 +222,7 @@ def render_dirs(tmp_path_factory) -> dict[str, Path]:
         dirs = {}
         for label, overlay in (("on", GEN7_OVERLAY), ("committed", committed),
                                ("off", replace(GEN7_OVERLAY, profile=f"{module_name}:PROFILE"))):
-            R.render(overlay, base / label, source=HeadSource())
-            dirs[label] = base / label
+            dirs[label] = render_for_test(overlay, base / label, source=HeadSource())
         yield dirs
     finally:
         sys.modules.pop(module_name, None)

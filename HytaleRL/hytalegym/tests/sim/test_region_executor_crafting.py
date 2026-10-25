@@ -61,7 +61,7 @@ from hytalegym.worldgen.region import (
     certified_chunk_api_manifest,
 )
 
-from .support import ARCHIVES, mount_fresh, unmount
+from .support import ARCHIVES, mount_fresh, render_for_test, unmount
 
 CRAFT = json.loads(Path(__file__).with_name("crafting_oracle_072.json").read_text(encoding="utf-8"))
 STAGE5 = json.loads(Path(__file__).with_name("stage5_oracle_072.json").read_text(encoding="utf-8"))
@@ -132,7 +132,7 @@ def package(tmp_path_factory):
     """The gen-7 render, rendered once for this module and mounted under its manifest name."""
 
     out = tmp_path_factory.mktemp("render") / "gen7"
-    R.render(GEN7_OVERLAY, out, source=HeadSource())
+    out = render_for_test(GEN7_OVERLAY, out, source=HeadSource())
     name = mount_fresh(out).__name__
     yield name
     unmount(name)

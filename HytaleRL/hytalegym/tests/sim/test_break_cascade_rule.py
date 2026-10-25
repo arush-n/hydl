@@ -16,11 +16,10 @@ from importlib import import_module
 
 import pytest
 
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7_OVERLAY
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 SWITCHES = (
     ("combat.arsenal.world_actions.executor", "compile_region_block_executor_assets", "support_faces"),
@@ -42,7 +41,7 @@ def test_repo_defaults_stay_off(module: str, function: str, parameter: str) -> N
 @pytest.fixture(scope="module")
 def gen7_package(tmp_path_factory):
     path = tmp_path_factory.mktemp("break_cascade_rule") / "gen7"
-    R.render(GEN7_OVERLAY, path, source=HeadSource())
+    path = render_for_test(GEN7_OVERLAY, path, source=HeadSource())
     package = mount_fresh(path).__name__
     try:
         yield package

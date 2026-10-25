@@ -13,12 +13,11 @@ from importlib import import_module
 
 import pytest
 
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.gen5.overlay import OVERLAY as GEN5
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 PROFILE = "combat/arsenal/profiles/hytale_0_5_7.py"
 PINS = (
@@ -31,14 +30,14 @@ PINS = (
 @pytest.fixture(scope="module")
 def gen7_render(tmp_path_factory):
     out = tmp_path_factory.mktemp("skeleton_archer_turret_bow") / "gen7"
-    R.render(GEN7, out, source=HeadSource())
+    out = render_for_test(GEN7, out, source=HeadSource())
     return out
 
 
 @pytest.fixture(scope="module")
 def gen5_render(tmp_path_factory):
     out = tmp_path_factory.mktemp("skeleton_archer_turret_bow") / "gen5"
-    R.render(GEN5, out, source=HeadSource())
+    out = render_for_test(GEN5, out, source=HeadSource())
     return out
 
 

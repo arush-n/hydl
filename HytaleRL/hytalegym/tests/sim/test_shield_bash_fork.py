@@ -17,7 +17,6 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.common.profile import Constructs
 from hytalegym.sim.gen5.overlay import OVERLAY as GEN5_OVERLAY
@@ -26,7 +25,7 @@ from hytalegym.sim.gen7.mechanics import shield_bash_fork
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7_OVERLAY
 from hytalegym.sim.gen7.profile import PROFILE as GEN7
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 SEED = 570057
 TICKS = 16
@@ -108,7 +107,7 @@ def replays(tmp_path_factory):
     engines = {}
     for name, overlay in (("gen7", GEN7_OVERLAY), ("gen5", GEN5_OVERLAY)):
         target = tmp_path_factory.mktemp("render") / name
-        R.render(overlay, target, source=HeadSource())
+        target = render_for_test(overlay, target, source=HeadSource())
         engines[name] = _Replay(mount_fresh(target).__name__)
     yield engines
     for engine in engines.values():

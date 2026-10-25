@@ -21,11 +21,10 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7_OVERLAY
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 SEED = 0
 #: The gait run factor the live probes hold (run, forward).
@@ -96,7 +95,7 @@ def _lift(carry, height: float):
 @pytest.fixture(scope="module")
 def package(tmp_path_factory):
     path = tmp_path_factory.mktemp("landing_walk_knockback") / "gen7"
-    R.render(GEN7_OVERLAY, path, source=HeadSource())
+    path = render_for_test(GEN7_OVERLAY, path, source=HeadSource())
     name = mount_fresh(path).__name__
     yield name
     unmount(name)

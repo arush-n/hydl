@@ -26,7 +26,7 @@ from hytalegym.sim.gen7 import overlay as gen7_overlay
 from hytalegym.sim.gen7.mechanics import game_clock, heard_sounds, perception_v2
 from hytalegym.sim.gen7.profile import PROFILE as GEN7
 
-from .support import ARCHIVES, HYTALEGYM, REPOSITORY
+from .support import ARCHIVES, HYTALEGYM, REPOSITORY, render_for_test
 
 ASSETS = os.environ.get("HYTALE_ASSETS_ZIP", str(ARCHIVES["gen7"]))
 FLOOR = "Plant_Bush"
@@ -113,8 +113,8 @@ def _assets(monkeypatch):
 @pytest.fixture(scope="module")
 def render_dir(tmp_path_factory):
     out = tmp_path_factory.mktemp("duel_render") / "gen7"
-    manifest = R.render(gen7_overlay.OVERLAY, out, source=HeadSource())
-    return out, manifest
+    out = render_for_test(gen7_overlay.OVERLAY, out, source=HeadSource())
+    return out, R.read_manifest(out)
 
 
 def _run_probe(tmp_path: Path, engine: Path, constructs: tuple[str, ...], floor: str) -> dict:

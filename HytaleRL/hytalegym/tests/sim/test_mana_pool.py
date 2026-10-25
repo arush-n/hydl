@@ -12,14 +12,13 @@ import pytest
 
 from hytalegym.jax.combat.mechanics import factory
 from hytalegym.jax.combat.types import AGENT_ENTITY
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.gen5.profile import PROFILE as GEN5
 from hytalegym.sim.gen7.mechanics import mana_pool
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7_OVERLAY
 from hytalegym.sim.gen7.profile import PROFILE as GEN7
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 
 def test_gen5_returns_the_original_factory() -> None:
@@ -54,7 +53,7 @@ PROFILE_LOADOUT = "iron_sword"
 @pytest.fixture(scope="module")
 def render(tmp_path_factory):
     target = tmp_path_factory.mktemp("mana_pool_render") / "gen7"
-    R.render(GEN7_OVERLAY, target, source=HeadSource())
+    target = render_for_test(GEN7_OVERLAY, target, source=HeadSource())
     package = mount_fresh(target).__name__
     yield package
     unmount(package)

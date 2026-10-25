@@ -33,7 +33,7 @@ from hytalegym.sim.gen7.mechanics import perception_v2
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7_OVERLAY
 from hytalegym.sim.gen7.profile import PROFILE as GEN7
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 SEED = 570057
 LOADOUT = "iron_sword"
@@ -89,7 +89,8 @@ class _Engine:
 @pytest.fixture(scope="module")
 def engine(tmp_path_factory):
     target = tmp_path_factory.mktemp("render") / "gen7"
-    manifest = R.render(GEN7_OVERLAY, target, source=HeadSource())
+    target = render_for_test(GEN7_OVERLAY, target, source=HeadSource())
+    manifest = R.read_manifest(target)
     built = _Engine(mount_fresh(target).__name__)
     built.manifest = manifest
     built.on = perception_v2.construct(built.encoder.encode_learner_observation_v3, ON)
@@ -108,7 +109,7 @@ def on_engine(tmp_path_factory):
     sys.modules[name] = module  # the rendered package imports its profile when it mounts, so it stays until teardown
     try:
         target = tmp_path_factory.mktemp("render_on") / "gen7"
-        R.render(replace(GEN7_OVERLAY, profile=f"{name}:PROFILE"), target, source=HeadSource())
+        target = render_for_test(replace(GEN7_OVERLAY, profile=f"{name}:PROFILE"), target, source=HeadSource())
         built = _Engine(mount_fresh(target).__name__)
         yield built
         unmount(built.package)

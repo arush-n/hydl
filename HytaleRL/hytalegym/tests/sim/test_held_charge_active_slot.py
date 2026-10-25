@@ -21,12 +21,11 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.gen5.overlay import OVERLAY as GEN5
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 THRUST_SLOT = 3
 TICKS = 60
@@ -44,9 +43,10 @@ def _mounted(out):
 @pytest.fixture(scope="module")
 def renders(tmp_path_factory):
     root = tmp_path_factory.mktemp("held_charge_active_slot")
-    R.render(GEN7, root / "gen7", source=HeadSource())
-    R.render(GEN5, root / "gen5", source=HeadSource())
-    return root
+    return {
+        "gen7": render_for_test(GEN7, root / "gen7", source=HeadSource()),
+        "gen5": render_for_test(GEN5, root / "gen5", source=HeadSource()),
+    }
 
 
 def _run(package: str, request_until: int) -> list[tuple[int, int, int, bool]]:
@@ -94,7 +94,7 @@ def _end(rows) -> int:
 
 
 def test_gen7_reports_the_held_slot_through_a_full_thrust_with_no_gap(renders) -> None:
-    with _mounted(renders / "gen7") as package:
+    with _mounted(renders["gen7"]) as package:
         rows = _run(package, 30)
     end = _end(rows)
     observed = [o for step, _, o, _ in rows if step <= end]
@@ -104,20 +104,20 @@ def test_gen7_reports_the_held_slot_through_a_full_thrust_with_no_gap(renders) -
 
 @pytest.mark.parametrize("request_until", [1, 10])
 def test_gen7_reports_the_held_slot_on_every_held_tick(renders, request_until: int) -> None:
-    with _mounted(renders / "gen7") as package:
+    with _mounted(renders["gen7"]) as package:
         rows = _run(package, request_until)
     assert [o for step, _, o, _ in rows if step <= request_until] == [THRUST_SLOT] * request_until
 
 
 def test_gen7_short_press_swing_reads_the_charging_slot_as_live(renders) -> None:
-    with _mounted(renders / "gen7") as package:
+    with _mounted(renders["gen7"]) as package:
         rows = _run(package, 1)
     busy = [o for step, active, o, _ in rows if step == 1 or active >= 0]
     assert busy == [THRUST_SLOT] * len(busy)
 
 
 def test_gen7_keeps_the_held_slot_legal_while_it_is_held(renders) -> None:
-    with _mounted(renders / "gen7") as package:
+    with _mounted(renders["gen7"]) as package:
         rows = _run(package, 30)
     admitted = min(step for step, active, _, _ in rows if active == THRUST_SLOT)
     assert all(legal for step, _, _, legal in rows if step < admitted)
@@ -126,7 +126,7 @@ def test_gen7_keeps_the_held_slot_legal_while_it_is_held(renders) -> None:
 def test_gen7_short_press_keeps_the_swings_stamina_regen(renders) -> None:
     """The quick press's swing keeps its own admission: no stamina regen delay (slot 3's -2 s applies to the thrust)."""
 
-    with _mounted(renders / "gen7") as package:
+    with _mounted(renders["gen7"]) as package:
         delays = _delays(package, 1)
     assert all(d == 0.0 for d in delays)
 
@@ -164,7 +164,7 @@ def _delays(package: str, request_until: int) -> list[float]:
 
 
 def test_gen5_is_unchanged_the_held_slot_reads_inactive(renders) -> None:
-    with _mounted(renders / "gen5") as package:
+    with _mounted(renders["gen5"]) as package:
         rows = _run(package, 30)
     admitted = min(step for step, active, _, _ in rows if active == THRUST_SLOT)
     assert admitted > 1

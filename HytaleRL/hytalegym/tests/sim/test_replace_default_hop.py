@@ -45,7 +45,6 @@ import numpy as np
 import pytest
 
 from hytalegym.jax.combat.arsenal.schema.contract import EVENT_FLAG_SERVER_SELECTOR
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.common.profile import Constructs
 from hytalegym.sim.gen5.profile import PROFILE as GEN5
@@ -53,7 +52,7 @@ from hytalegym.sim.gen7.mechanics import replace_default_hop as rdh
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7_OVERLAY
 from hytalegym.sim.gen7.profile import PROFILE as GEN7
 
-from .support import data_dir, mount_fresh, unmount
+from .support import data_dir, mount_fresh, render_for_test, unmount
 
 AGENT, TARGET = 0, 1
 SEED = 570057
@@ -262,8 +261,7 @@ def render_dirs(tmp_path_factory) -> dict[str, Path]:
         dirs = {}
         for label, overlay in (("on", GEN7_OVERLAY), ("off", replace(GEN7_OVERLAY, profile=f"{name}:PROFILE")),
                                ("committed", committed)):
-            R.render(overlay, base / label, source=HeadSource())
-            dirs[label] = base / label
+            dirs[label] = render_for_test(overlay, base / label, source=HeadSource())
         yield dirs
     finally:
         sys.modules.pop(name, None)

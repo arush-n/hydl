@@ -16,11 +16,10 @@ import pytest
 
 from hytalegym.jax.combat.arsenal import environment as repo_environment
 from hytalegym.server_versions import server_profile
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7_OVERLAY
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 PARAMETER = "projectile_clear_past_window_edge"
 
@@ -40,7 +39,7 @@ def test_only_the_0_7_2_line_turns_the_native_host_option_on() -> None:
 @pytest.fixture(scope="module")
 def gen7_environment(tmp_path_factory):
     path = tmp_path_factory.mktemp("bow_window_edge") / "gen7"
-    R.render(GEN7_OVERLAY, path, source=HeadSource())
+    path = render_for_test(GEN7_OVERLAY, path, source=HeadSource())
     package = mount_fresh(path).__name__
     try:
         yield import_module(package + ".combat.arsenal.environment")

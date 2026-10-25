@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -51,6 +52,22 @@ def mount_fresh(out_dir):
     name = render_module.read_manifest(Path(out_dir).resolve())["package"]
     unmount(name)
     return render_module.mount(out_dir)
+
+
+def render_for_test(overlay, out_dir, *, source=None) -> Path:
+    """Render ``overlay`` for a test and return the directory the test reads it from.
+
+    Unset ``HYTALEGYM_RENDER_CACHE``: render into ``out_dir`` as the suite always did and return it. Set: return the shared,
+    read-only cached render for the same overlay and source (``render.render_cached``, which reads the variable itself), so
+    ``out_dir`` is not written. Callers only mount or read the result; nothing may write into it.
+    """
+
+    from hytalegym.sim.common import render as render_module
+
+    if os.environ.get(render_module.RENDER_CACHE_ENV):
+        return render_module.render_cached(overlay, source=source)
+    render_module.render(overlay, out_dir, source=source)
+    return Path(out_dir)
 
 
 def unmount(package: str) -> None:

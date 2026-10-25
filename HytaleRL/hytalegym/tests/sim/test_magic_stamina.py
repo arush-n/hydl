@@ -18,12 +18,11 @@ import pytest
 
 from hytalegym.jax.combat.arsenal.programs.ability import effective_resource_cost
 from hytalegym.jax.combat.arsenal.schema import contract
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.gen7.mechanics import magic_costs
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7_OVERLAY
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 STAMINA = 0  # RESOURCE_STAMINA index (checked against the rendered profile in test_stamina_index_is_resource_stamina)
 ZIP = os.environ.get("HYTALE_ASSETS_ZIP")
@@ -32,7 +31,7 @@ ZIP = os.environ.get("HYTALE_ASSETS_ZIP")
 @pytest.fixture(scope="module")
 def render(tmp_path_factory):
     target = tmp_path_factory.mktemp("magic_stamina_render") / "gen7"
-    R.render(GEN7_OVERLAY, target, source=HeadSource())
+    target = render_for_test(GEN7_OVERLAY, target, source=HeadSource())
     package = mount_fresh(target).__name__
     yield package
     unmount(package)

@@ -16,7 +16,6 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.common.profile import Constructs
 from hytalegym.sim.gen5.overlay import OVERLAY as GEN5_OVERLAY
@@ -25,7 +24,7 @@ from hytalegym.sim.gen7.mechanics import reset_head_heading
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7_OVERLAY
 from hytalegym.sim.gen7.profile import PROFILE as GEN7
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 SEED = 570057
 LOADOUT = "iron_sword"
@@ -65,7 +64,7 @@ def engines(tmp_path_factory):
     built = {}
     for name, overlay in (("gen7", GEN7_OVERLAY), ("gen5", GEN5_OVERLAY)):
         target = tmp_path_factory.mktemp("render") / name
-        R.render(overlay, target, source=HeadSource())
+        target = render_for_test(overlay, target, source=HeadSource())
         built[name] = _Engine(mount_fresh(target).__name__)
     yield built
     for engine in built.values():

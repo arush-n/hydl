@@ -29,7 +29,7 @@ from hytalegym.sim.gen7.mechanics import crafting_augment_tags as aug
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7_OVERLAY
 from hytalegym.sim.gen7.profile import PROFILE as GEN7
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 RECORDING = Path(__file__).resolve().parents[1] / "fidelity" / "fixtures" / "world" / "v0_7" / "native_crafting_catalog_recording.json"
 GOBLIN = "GoblinLab_Workbench"
@@ -111,7 +111,7 @@ def test_a_tagged_slot_is_cleared_unless_the_bench_grants_its_tags() -> None:
 @pytest.fixture(scope="module")
 def rendered(tmp_path_factory) -> Path:
     out = tmp_path_factory.mktemp("gen7_augment")
-    R.render(GEN7_OVERLAY, out, source=HeadSource())
+    out = render_for_test(GEN7_OVERLAY, out, source=HeadSource())
     return out
 
 

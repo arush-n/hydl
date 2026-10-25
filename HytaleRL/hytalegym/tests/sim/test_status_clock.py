@@ -23,7 +23,6 @@ import pytest
 
 from hytalegym.jax.combat.mechanics.factory import default_mechanics_rules, empty_mechanics_state
 from hytalegym.jax.combat.mechanics.runtime import statuses as stock
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.gen5.profile import PROFILE as GEN5
 from hytalegym.sim.gen7.mechanics import hit_interrupt as hi
@@ -31,7 +30,7 @@ from hytalegym.sim.gen7.mechanics import status_clock as sc
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7_OVERLAY
 from hytalegym.sim.gen7.profile import PROFILE as GEN7
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 DT = np.float32(1.0 / 30.0)
 TARGET = 1
@@ -182,8 +181,7 @@ def render_dirs(tmp_path_factory) -> dict[str, Path]:
         dirs = {}
         for label, overlay in (("on", GEN7_OVERLAY), ("committed", committed),
                                ("off", replace(GEN7_OVERLAY, profile=f"{module_name}:PROFILE"))):
-            R.render(overlay, base / label, source=HeadSource())
-            dirs[label] = base / label
+            dirs[label] = render_for_test(overlay, base / label, source=HeadSource())
         yield dirs
     finally:
         sys.modules.pop(module_name, None)

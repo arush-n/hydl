@@ -20,13 +20,13 @@ import pytest
 import importlib
 
 from hytalegym.sim.common import bench
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.common.profile import Constructs
 from hytalegym.sim.gen5.profile import PROFILE as GEN5
 from hytalegym.sim.gen7.mechanics import ability_start_split, guard_cooldown, shortbow_reset_ammo
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7_OVERLAY
 from hytalegym.sim.gen7.profile import PROFILE as GEN7
+from .support import render_for_test
 
 FIXTURE = json.loads((Path(__file__).parent / "timing_receipts_072.json").read_text(encoding="utf-8"))
 #: Names the construct reads from a rendered module's globals (the shortbow loadout builder's module).
@@ -273,7 +273,7 @@ def test_the_pinned_constants_are_the_engine_values() -> None:
 
 def test_the_gen7_render_imports_with_the_three_timing_hooks(tmp_path) -> None:
     rendered = tmp_path / "gen7"
-    R.render(GEN7_OVERLAY, rendered, source=HeadSource())
+    rendered = render_for_test(GEN7_OVERLAY, rendered, source=HeadSource())
     package = bench.package_for("gen7", rendered)
     hooked = {
         "combat.mechanics.runtime.motion": "apply_defense_commands",

@@ -29,6 +29,7 @@ from hytalegym.sim.gen7.overlay import OVERLAY as GEN7_OVERLAY
 from hytalegym.sim.gen7.profile import PROFILE as GEN7
 from hytalegym.worldgen import block_semantic_key
 from hytalegym.worldgen.native_crafting import NativeCraftingRecipe
+from .support import render_for_test
 
 FIXTURE = Path(__file__).with_name("crafting_oracle_072.json")
 FIXTURE_DATA = json.loads(FIXTURE.read_text(encoding="utf-8"))
@@ -41,7 +42,7 @@ def engine(tmp_path_factory):
     """The gen-7 render, rendered once for this module and mounted under its manifest name."""
 
     out = tmp_path_factory.mktemp("render") / "gen7"
-    R.render(GEN7_OVERLAY, out, source=HeadSource())
+    out = render_for_test(GEN7_OVERLAY, out, source=HeadSource())
     package = R.mount(out).__name__
     return {
         "crafting": import_module(f"{package}.combat.arsenal.world_actions.crafting"),

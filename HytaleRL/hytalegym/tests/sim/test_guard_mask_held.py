@@ -18,11 +18,10 @@ import jax
 import numpy as np
 import pytest
 
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7_OVERLAY
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 SEED = 0
 
@@ -76,7 +75,7 @@ def _mounted(path: Path) -> Iterator[str]:
 @pytest.fixture(scope="module")
 def traces(tmp_path_factory) -> dict[str, list[dict[str, Any]]]:
     path = tmp_path_factory.mktemp("guard_mask_held") / "gen7"
-    R.render(GEN7_OVERLAY, path, source=HeadSource())
+    path = render_for_test(GEN7_OVERLAY, path, source=HeadSource())
     with _mounted(path) as package:
         env = _Env(package)
         return {

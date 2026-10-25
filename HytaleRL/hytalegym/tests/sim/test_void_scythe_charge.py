@@ -11,12 +11,11 @@ from importlib import import_module
 
 import pytest
 
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.gen5.overlay import OVERLAY as GEN5
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 SPIN_TABLES = ("hold_table=((0.0, index), (1.67, 2)),", "for index, (ability_asset, selector, force) in enumerate(normal)")
 
@@ -24,14 +23,14 @@ SPIN_TABLES = ("hold_table=((0.0, index), (1.67, 2)),", "for index, (ability_ass
 @pytest.fixture(scope="module")
 def gen7_render(tmp_path_factory):
     out = tmp_path_factory.mktemp("void_scythe_charge") / "gen7"
-    R.render(GEN7, out, source=HeadSource())
+    out = render_for_test(GEN7, out, source=HeadSource())
     return out
 
 
 @pytest.fixture(scope="module")
 def gen5_render(tmp_path_factory):
     out = tmp_path_factory.mktemp("void_scythe_charge") / "gen5"
-    R.render(GEN5, out, source=HeadSource())
+    out = render_for_test(GEN5, out, source=HeadSource())
     return out
 
 

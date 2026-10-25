@@ -20,7 +20,6 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.common.profile import Constructs
 from hytalegym.sim.gen5.profile import PROFILE as GEN5
@@ -28,7 +27,7 @@ from hytalegym.sim.gen7.mechanics import npc_jump_carry
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7_OVERLAY
 from hytalegym.sim.gen7.profile import PROFILE as GEN7
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 SEED = 0
 #: The gait run factor the live probes hold (run, forward).
@@ -97,8 +96,8 @@ def _knock(carry):
 
 
 def _render_rows(overlay, base, label: str, jump_ticks: set[int], steps: int, knock_ticks: frozenset = frozenset()) -> list[dict]:
-    R.render(overlay, base / label, source=HeadSource())
-    package = mount_fresh(base / label).__name__
+    rendered = render_for_test(overlay, base / label, source=HeadSource())
+    package = mount_fresh(rendered).__name__
     try:
         return _Learner(package).run(jump_ticks, steps, knock_ticks)
     finally:

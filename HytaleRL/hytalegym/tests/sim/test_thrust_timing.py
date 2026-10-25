@@ -17,14 +17,13 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.content import adapters as A
 from hytalegym.sim.common.content import load
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.gen5.overlay import OVERLAY as GEN5
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 THRUST = "Weapon_Sword_Primary_Thrust"
 THRUST_SLOT = 3
@@ -63,14 +62,14 @@ def _mounted(out):
 @pytest.fixture(scope="module")
 def gen7_render(tmp_path_factory):
     out = tmp_path_factory.mktemp("thrust_timing") / "gen7"
-    R.render(GEN7, out, source=HeadSource())
+    out = render_for_test(GEN7, out, source=HeadSource())
     return out
 
 
 @pytest.fixture(scope="module")
 def gen5_render(tmp_path_factory):
     out = tmp_path_factory.mktemp("thrust_timing") / "gen5"
-    R.render(GEN5, out, source=HeadSource())
+    out = render_for_test(GEN5, out, source=HeadSource())
     return out
 
 

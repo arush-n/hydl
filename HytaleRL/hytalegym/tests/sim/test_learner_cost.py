@@ -17,12 +17,11 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.gen5.overlay import OVERLAY as GEN5
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 THRUST_SLOT = 3
 SWING_SLOT = 0
@@ -43,9 +42,10 @@ def _mounted(out):
 @pytest.fixture(scope="module")
 def renders(tmp_path_factory):
     root = tmp_path_factory.mktemp("learner_cost")
-    R.render(GEN7, root / "gen7", source=HeadSource())
-    R.render(GEN5, root / "gen5", source=HeadSource())
-    return root
+    return {
+        "gen7": render_for_test(GEN7, root / "gen7", source=HeadSource()),
+        "gen5": render_for_test(GEN5, root / "gen5", source=HeadSource()),
+    }
 
 
 def _setup(package: str):
@@ -98,21 +98,21 @@ def _observed_cost_row(package: str) -> np.ndarray:
 
 
 def test_the_learner_pays_the_thrust_once_on_gen7_and_twice_on_gen5(renders):
-    with _mounted(renders / "gen7") as package:
+    with _mounted(renders["gen7"]) as package:
         assert _min_stamina(package, 0) == pytest.approx(10.0 - AUTHORED)
-    with _mounted(renders / "gen5") as package:
+    with _mounted(renders["gen5"]) as package:
         assert _min_stamina(package, 0) == pytest.approx(10.0 - 2 * AUTHORED)
 
 
 def test_an_npc_entity_still_pays_twice_on_gen7(renders):
-    with _mounted(renders / "gen7") as package:
+    with _mounted(renders["gen7"]) as package:
         assert _min_stamina(package, 1) == pytest.approx(10.0 - 2 * AUTHORED)
 
 
 def test_the_learner_observes_the_cost_it_pays(renders):
-    with _mounted(renders / "gen7") as package:
+    with _mounted(renders["gen7"]) as package:
         gen7 = _observed_cost_row(package)
-    with _mounted(renders / "gen5") as package:
+    with _mounted(renders["gen5"]) as package:
         gen5 = _observed_cost_row(package)
     assert np.array_equal(gen7[SWING_SLOT], gen5[SWING_SLOT])  # the swing costs nothing on either line
     changed = np.flatnonzero(gen7[THRUST_SLOT] != gen5[THRUST_SLOT])

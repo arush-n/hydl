@@ -15,13 +15,12 @@ import pytest
 
 from hytalegym.combat.assets.weapon_archetypes import LEGACY_CASTER_PROFILE_NAMES
 from hytalegym.jax.combat.arsenal.schema import contract
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.gen5.profile import PROFILE as GEN5
 from hytalegym.sim.gen7.mechanics import magic_costs
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7_OVERLAY
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 NAMED = ("flame_staff", "ice_staff", "stoneskin_wand", "root_wand", "skeleton_mage_spellbook")
 ZIP = os.environ.get("HYTALE_ASSETS_ZIP")
@@ -95,7 +94,7 @@ def test_table_matches_the_0_7_2_assets() -> None:
 @pytest.fixture(scope="module")
 def render(tmp_path_factory):
     target = tmp_path_factory.mktemp("magic_costs_render") / "gen7"
-    R.render(GEN7_OVERLAY, target, source=HeadSource())
+    target = render_for_test(GEN7_OVERLAY, target, source=HeadSource())
     package = mount_fresh(target).__name__
     yield package
     unmount(package)

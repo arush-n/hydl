@@ -24,12 +24,11 @@ from functools import cache, partial
 import numpy as np
 import pytest
 
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.gen5.overlay import OVERLAY as GEN5_OVERLAY
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7_OVERLAY
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
@@ -244,7 +243,7 @@ def _overlays() -> dict:
 def render(request, tmp_path_factory):
     variant = request.param
     target = tmp_path_factory.mktemp(f"row14_{variant}") / variant
-    R.render(_overlays()[variant], target, source=HeadSource())
+    target = render_for_test(_overlays()[variant], target, source=HeadSource())
     package = mount_fresh(target).__name__
     yield variant, package
     unmount(package)

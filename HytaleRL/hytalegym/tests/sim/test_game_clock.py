@@ -26,7 +26,7 @@ from hytalegym.sim.gen7 import overlay as gen7_overlay
 from hytalegym.sim.gen7.mechanics import game_clock
 from hytalegym.sim.gen7.profile import PROFILE as GEN7
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 STEP = 1.0 / 30.0
 START = 19800  # 05:30, the live WorldConfig default
@@ -197,8 +197,10 @@ def engines(tmp_path_factory):
     try:
         off_dir = tmp_path_factory.mktemp("render_off") / "gen7"
         on_dir = tmp_path_factory.mktemp("render_on") / "gen7"
-        off_manifest = R.render(gen7_overlay.OVERLAY, off_dir, source=HeadSource())
-        on_manifest = R.render(replace(gen7_overlay.OVERLAY, profile=f"{name}:PROFILE"), on_dir, source=HeadSource())
+        off_dir = render_for_test(gen7_overlay.OVERLAY, off_dir, source=HeadSource())
+        on_dir = render_for_test(replace(gen7_overlay.OVERLAY, profile=f"{name}:PROFILE"), on_dir, source=HeadSource())
+        off_manifest = R.read_manifest(off_dir)
+        on_manifest = R.read_manifest(on_dir)
         off = _Engine(mount_fresh(off_dir).__name__)
         on = _Engine(mount_fresh(on_dir).__name__)
         yield SimpleNamespace(off=off, on=on, off_manifest=off_manifest, on_manifest=on_manifest)

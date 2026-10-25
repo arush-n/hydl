@@ -31,7 +31,6 @@ import pytest
 from hytalegym.jax.combat.contracts.semantic import semantic_id
 from hytalegym.jax.combat.mechanics.schema.contract import STATUS_FLAG_DISABLE_ABILITIES, STATUS_FLAG_DISABLE_MOVEMENT
 from hytalegym.jax.combat.mechanics.schema.types import StatusState
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.common.profile import Constructs
 from hytalegym.sim.gen5.profile import PROFILE as GEN5
@@ -39,7 +38,7 @@ from hytalegym.sim.gen7.mechanics import hit_interrupt as hi
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7_OVERLAY
 from hytalegym.sim.gen7.profile import PROFILE as GEN7
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 TARGET = 1
 TABLE = hi.load_table(GEN7.data_dir)
@@ -371,8 +370,7 @@ def render_dirs(tmp_path_factory) -> dict[str, Path]:
         dirs = {}
         for label, overlay in (("on", GEN7_OVERLAY), ("committed", committed),
                                ("off", replace(GEN7_OVERLAY, profile=f"{module_name}:PROFILE"))):
-            R.render(overlay, base / label, source=HeadSource())
-            dirs[label] = base / label
+            dirs[label] = render_for_test(overlay, base / label, source=HeadSource())
         yield dirs
     finally:
         sys.modules.pop(module_name, None)

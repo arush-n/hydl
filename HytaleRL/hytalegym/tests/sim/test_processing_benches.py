@@ -20,7 +20,6 @@ import numpy as np
 import pytest
 
 from hytalegym.jax.crafting import identity_sha256_words
-from hytalegym.sim.common import render as R
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.gen5.profile import PROFILE as GEN5
 from hytalegym.sim.gen7.mechanics import processing_benches, timed_crafting
@@ -29,7 +28,7 @@ from hytalegym.sim.gen7.profile import PROFILE as GEN7
 from hytalegym.worldgen import block_semantic_key
 from hytalegym.worldgen.native_crafting import NativeCraftingRecipe
 
-from .support import mount_fresh, unmount
+from .support import mount_fresh, render_for_test, unmount
 
 FIXTURE = Path(__file__).with_name("stage5_oracle_072.json")
 FIXTURE_DATA = json.loads(FIXTURE.read_text(encoding="utf-8"))
@@ -54,7 +53,7 @@ def engine(tmp_path_factory):
     """The gen-7 render, rendered once for this module and mounted under its manifest name."""
 
     out = tmp_path_factory.mktemp("render") / "gen7"
-    R.render(GEN7_OVERLAY, out, source=HeadSource())
+    out = render_for_test(GEN7_OVERLAY, out, source=HeadSource())
     package = mount_fresh(out).__name__
     yield {
         "crafting": import_module(f"{package}.combat.arsenal.world_actions.crafting"),
