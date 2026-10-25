@@ -6,7 +6,7 @@ of the agent; turning the body stays with walk_to or the decision layer, so trac
 
 **Status (2026-10-24): built, not trained.** The owner ruled the gaze-only form on 2026-10-24 (`TRAINING.md` section 8).
 The trainer's holding-skill support and the mover in the rollout are built (`../../training/skill_dagger_v3.py`,
-`../../training/bars.py`). The smoke and the run wait on the owner's approval (`TRAINING.md` stage 2). Follow is next and is
+`../../training/bars.py`). The smoke and the run wait on the owner's approval (`TRAINING.md` stage 2). Follow (`../follow/`) is
 built on the same trainer features.
 
 | File | What it is |

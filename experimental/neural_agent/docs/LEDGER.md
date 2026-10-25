@@ -1636,3 +1636,17 @@ result: Built by a Haiku subagent from a written spec, checked here.
 - **Tests** (local): `test_sa_track.py` 11 passed. `test_sa_come_here.py`'s VERBS pin now checks the prefix (append-only).
 gate: two passes on a56f434 with holding skills and track, follow and --init-module, and the ModuleBody fix, against the step-9 baseline (6acadad). Pass 1: the baseline's 11 failing names, none new (1,766 passed, 2 xfailed). Pass 2: 1 failing name, a baseline one. Landed on 842180e (the coordinator's 812c2ef..842180e, no shared files but the ledger).
 verdict: COMMITTED; not pushed. Next, for the owner: track's smoke and run.
+
+## 2026-10-25 — skill_agent: follow built, and the trainer's --init-module (`skill_agent/neural_skills/follow/TRAINING.md` stage 1)
+command: owner, 2026-10-24, on follow: "Sprint; walk+sneak; park runners (Recommended)"; on come_here: "Start from walk_to's module (Recommended)".
+result:
+- **follow** (built by a Haiku subagent from a written spec, checked here): stay 2 to 5 blocks behind entity 1, by handle; the band as two scalars.
+  - The person walks a looped random walk, and the learner starts 3.5 blocks behind, facing them.
+  - Walk 1.5 and sneak 2.75 in training, 2.0 to 2.3 held out.
+  - The teacher is walk_to v3 toward the point 3.5 blocks behind the person, sprinting, reading the observed state as the other teachers do.
+  - The trainer is unchanged; walk_to's and look_at's golden fingerprint is identical.
+  - **The certificate** (`--teacher follow`): T1 share in band 0.935 seen (walk 0.968, sneak 0.903) and 0.945 held out; T2 the learner's path over the person's, median 1.17 and 1.20 (provisional bar 1.3); T3 0 illegal; 0.58 at run speed, for information.
+  - Reading the raw state instead of the observed one gives sneak 0.946, but reads a yaw the student cannot see, so the observed state stays.
+- **`skill_dagger_v3 --init-module MODULE.npz`** (`start_module`): a module starts from a trained one on the same trunk, scope and sizes, as the recipe's dependent skill does. The report records it as `init_module`. The fresh default is bit-identical (`test_sa_init_module.py`, 3 passed).
+gate: two passes on a56f434 with holding skills and track, follow and --init-module, and the ModuleBody fix, against the step-9 baseline (6acadad). Pass 1: the baseline's 11 failing names, none new (1,766 passed, 2 xfailed). Pass 2: 1 failing name, a baseline one. Landed on 842180e (the coordinator's 812c2ef..842180e, no shared files but the ledger).
+verdict: COMMITTED; not pushed. Next, for the owner: follow's smoke and run.

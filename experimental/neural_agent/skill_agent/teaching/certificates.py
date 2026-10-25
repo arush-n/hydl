@@ -1,4 +1,4 @@
-"""Teacher certificates: the scripted walk_to, look_at, come_here and track teachers measured against fixed checks.
+"""Teacher certificates: the scripted walk_to, look_at, come_here, track and follow teachers measured against fixed checks.
 
 docs/TRAINING_PLAN.md section 2c defines the certificate. This module measures T1 (success), T2 (efficiency), T3
 (obedience) and a light T7 (failure sorting) on the flat npc_walk environment. T4 (reality), T5 (imitability) and
@@ -34,6 +34,8 @@ import numpy as np
 from experimental.neural_agent.skill_agent.neural_skills.come_here import skill as come_skill
 from experimental.neural_agent.skill_agent.neural_skills.come_here.task import ComeHereTasks
 from experimental.neural_agent.skill_agent.neural_skills.come_here.teacher import come_here_choices
+from experimental.neural_agent.skill_agent.neural_skills.follow.task import FollowTasks, at_speed as follow_at_speed
+from experimental.neural_agent.skill_agent.neural_skills.follow.teacher import follow_choices
 from experimental.neural_agent.skill_agent.neural_skills.look_at.task import LookAtTasks
 from experimental.neural_agent.skill_agent.neural_skills.look_at.teacher import look_at_choices
 from experimental.neural_agent.skill_agent.neural_skills.track import skill as track_skill
@@ -60,7 +62,9 @@ from experimental.neural_agent.skill_agent.tasks.simple_tasks import (
     DEFAULT_SPAWN_XZ,
     NPC_WALK_BASE_SPEED,
     TICKS_PER_SECOND,
+    Mover,
     make_flat_npc_environment,
+    mover_path,
 )
 from experimental.neural_agent.skill_agent.teaching.teachers import TEACHERS, TeacherOutput, state_for
 from hytalegym.jax.combat.observation.v3.policy.layout import ARSENAL_POLICY_ACTION_HEAD_SIZES
@@ -241,6 +245,13 @@ def _placed_other(goals, batch: int):
     return jnp.broadcast_to(jnp.asarray(DEFAULT_OTHER_XYZ, dtype=jnp.float32), (batch, 3))
 
 
+def _spawn_yaw(goals, batch: int):
+    """float32[B]: the learner's spawn yaw: the goals' own where they carry one (follow's learner faces the person), else 0."""
+
+    yaw = getattr(goals, "spawn_yaw", None)
+    return jnp.zeros((batch,), dtype=jnp.float32) if yaw is None else yaw
+
+
 def _run(env, task: _Task, observe, policy, seed: int):
     """Every lane of ``env`` closed loop for the longest horizon in the batch. The goals come from ``seed``."""
 
@@ -253,7 +264,7 @@ def _run(env, task: _Task, observe, policy, seed: int):
     carry = env.reset(
         jax.random.split(reset_key, batch),
         jnp.broadcast_to(jnp.asarray(DEFAULT_SPAWN_XZ, dtype=jnp.float32), (batch, 2)),
-        jnp.zeros((batch,), dtype=jnp.float32),
+        _spawn_yaw(goals, batch),
         _placed_other(goals, batch),
     )
     ticks = int(np.max(np.asarray(goals.horizon_ticks)))
@@ -1021,6 +1032,233 @@ def _track_summary(cert: dict) -> list[str]:
     return lines
 
 
+# ---- follow: the teacher alone; T1 the share in band, T2 the learner's path against the person's (provisional), T3
+# legality (TRAINING.md section 8 of follow: sprint; walk and sneak; runners parked; the owner's ruling of 2026-10-24) ----
+
+FOLLOW_T1_BAR = 0.9
+FOLLOW_T2_BAR = 1.3
+"""Provisional (follow's plan, section 2): the learner's planar path at most this many times the person's, by the median."""
+FOLLOW_RUN_SPEED = float(gait_speed(GAIT_RUN))
+"""Run speed (5 blocks a second): reported for information only, not gated (its region waits for a teacher that keeps up)."""
+
+
+def _follow_gap(combat, goals):
+    """f32[B, 1]: the learner's planar distance to entity 1 now. follow holds where this is inside its band."""
+
+    planar = combat.position[:, AGENT_ENTITY][:, [0, 2]]
+    offset = planar - combat.position[:, TARGET_ENTITY][:, [0, 2]]
+    return jnp.hypot(offset[:, 0], offset[:, 1])[:, None]
+
+
+def _follow_teacher(combat, goals) -> TeacherOutput:
+    return follow_choices(combat, goals.near, goals.far, maximum_turn_degrees=MAXIMUM_TURN_DEGREES)
+
+
+def _follow_sample(key, batch, *, held_out: bool, speed: float | None = None):
+    """follow's goals: a person's path per lane, the learner 3.5 blocks behind it facing it, at the region's speeds or at
+    ``speed``."""
+
+    goals = FollowTasks.sample(key, batch, held_out=held_out)
+    return goals if speed is None else follow_at_speed(goals, speed)
+
+
+def _person_states(goals, ticks: int) -> np.ndarray:
+    """float32[T+1, B, 2]: entity 1's planar place at each state k (the path after k ticks, as the environment places it)."""
+
+    batch = goals.near.shape[0]
+    count = ticks + 1
+    mover = goals.mover
+    tiled = Mover(waypoints=jnp.tile(mover.waypoints, (count, 1, 1)), speed=jnp.tile(mover.speed, (count,)),
+                     loop=jnp.tile(mover.loop, (count,)))
+    xz, _, _ = mover_path(tiled, jnp.repeat(jnp.arange(count, dtype=jnp.int32), batch))
+    return np.asarray(xz).reshape(count, batch, 2)
+
+
+def _path_length(xz: np.ndarray, horizon: np.ndarray) -> np.ndarray:
+    """float64[B]: the planar length of each lane's path over its horizon: the chords between consecutive states, the
+    chord k (state k to k + 1) counted while k is below the lane's horizon."""
+
+    chords = np.hypot(*np.moveaxis(np.diff(xz, axis=0), -1, 0))
+    index = np.arange(chords.shape[0])[:, None]
+    return np.sum(np.where(index < horizon, chords, 0.0), axis=0)
+
+
+def _follow_stats(trace: _Trace, goals) -> dict[str, np.ndarray]:
+    """Per-lane numbers for follow: the states inside a lane's horizon (1 to the horizon) are the counted ticks (follow
+    counts every tick); those inside the band are the share's numerator. The two path lengths are T2's. Legality and tick
+    lengths as the other checks read them."""
+
+    horizon = np.asarray(goals.horizon_ticks)
+    state_index = np.arange(trace.held.shape[0])[:, None]
+    decision_index = np.arange(trace.legal.shape[0])[:, None]
+    inside = (state_index >= 1) & (state_index <= horizon)
+    decision = decision_index < horizon
+    return {
+        "horizon": horizon,
+        "speed": np.asarray(goals.mover.speed),
+        "counted": inside.sum(axis=0),
+        "in_band": (inside & trace.held).sum(axis=0),
+        "learner_path": _path_length(trace.planar, horizon),
+        "person_path": _path_length(_person_states(goals, trace.legal.shape[0]), horizon),
+        "illegal": np.sum(~trace.legal & decision, axis=0),
+        "decisions": np.sum(decision, axis=0),
+        "terminated": np.sum(trace.terminated & decision, axis=0),
+        "seconds_min": np.min(np.where(decision, trace.seconds, np.inf), axis=0),
+        "seconds_max": np.max(np.where(decision, trace.seconds, -np.inf), axis=0),
+    }
+
+
+def _follow_checks(per_seed) -> dict:
+    """T1 (the share in band: the mean over lanes with a counted tick of in-band over counted, pooled over the seeds, against
+    ``FOLLOW_T1_BAR``), T2 (the median over lanes of the learner's path over the person's, against ``FOLLOW_T2_BAR``,
+    provisional), T3 (legality), and each speed class's share for the report."""
+
+    counted, in_band = _pooled(per_seed, "counted"), _pooled(per_seed, "in_band")
+    learner, person = _pooled(per_seed, "learner_path"), _pooled(per_seed, "person_path")
+    speed = _pooled(per_seed, "speed")
+    lanes = counted > 0
+    label = _speed_label(speed)
+    speeds = {}
+    for name in ("walk", "sneak", "held_out_band", "run"):
+        mask = label == name
+        has = mask & lanes
+        speeds[name] = {
+            "lanes": int(mask.sum()),
+            "lanes_counted": int(has.sum()),
+            "share": float((in_band[has] / counted[has]).mean()) if has.any() else None,
+            "pooled_tick_share": float(in_band[mask].sum() / counted[mask].sum()) if counted[mask].sum() else None,
+        }
+    value = float((in_band[lanes] / counted[lanes]).mean()) if lanes.any() else None
+    t1 = {
+        "name": "share in band",
+        "value": value,
+        "pooled_tick_share": float(in_band.sum() / counted.sum()) if counted.sum() else None,
+        "lanes": int(lanes.size),
+        "lanes_counted": int(lanes.sum()),
+        "counted_ticks": int(counted.sum()),
+        "bar": FOLLOW_T1_BAR,
+        "rule": "the share (mean over lanes with a counted tick of ticks in band over counted ticks) >= bar",
+        "pass": bool(value is not None and value >= FOLLOW_T1_BAR),
+    }
+    ratio = learner[person > 0] / person[person > 0]
+    median = _pct(ratio, 50)
+    t2 = {
+        "name": "learner's path against the person's",
+        "value": median,
+        "percentiles": {"p50": median, "p90": _pct(ratio, 90)},
+        "lanes": int(ratio.size),
+        "bar": FOLLOW_T2_BAR,
+        "provisional": True,
+        "rule": "the median over lanes of the learner's planar path over the person's, over the horizon <= bar (provisional)",
+        "pass": bool(median is not None and median <= FOLLOW_T2_BAR),
+    }
+    illegal = _illegal_block(per_seed)
+    return {"T1": t1, "T2": t2, "T3": {"name": "obedience", "illegal_decisions": illegal, "pass": illegal["pass"]},
+            "speeds": speeds}
+
+
+def _follow_runs(seeds, episodes: int, sample, policy):
+    """Every seed's batched closed-loop run of follow's teacher (or ``policy``) on ``sample``'s lanes: (seed, stats)."""
+
+    env = _environment(episodes)
+    task = _Task("follow", sample, FollowTasks.success, _follow_gap, _follow_teacher)
+    observe = jax.jit(functools.partial(_observe, task))
+    run_policy = jax.jit(_follow_teacher if policy is None else policy)
+    per_seed = []
+    for seed in seeds:
+        goals, trace = _run(env, task, observe, run_policy, seed)
+        per_seed.append((seed, _follow_stats(trace, goals)))
+    return per_seed, env
+
+
+def _follow_teacher_block() -> dict:
+    return {
+        "name": "follow",
+        "version": f"walk_to {TEACHERS['walk_to'].version} rule, stop margin {WALK_TO_V3_STOP_MARGIN_BLOCKS} blocks, radius "
+                   "1 block, sprint, 3.5 blocks behind the person (the band's middle)",
+        "state": "observed for the learner (walk_to's registered state); entity 1 is read raw",
+        "kind": "scripted",
+        "verbs": ["follow"],
+        "reads": ["entity 1's position, velocity and yaw", "position", "yaw", "desired_body_yaw (observed)"],
+        "parameters": ["near", "far", "maximum_turn_degrees", "stop_margin_blocks"],
+        "done": "never (a holding skill: its horizon ends it)",
+    }
+
+
+def certify_follow(
+    seeds: Sequence[int],
+    episodes_per_seed: int = 256,
+    *,
+    date: str,
+    out: str | Path | None = None,
+    policy: Callable[[Any, Any], TeacherOutput] | None = None,
+) -> dict:
+    """Certificate for follow on flat npc_walk: the teacher alone on seen speeds (walk and sneak, a person walking its loop)
+    and on held-out speeds (2.0 to 2.3 blocks a second), one batched run per seed in each region. Run speed (5.0) is
+    measured too, for information only. Written to ``out`` when given; ``policy`` has the role it has in
+    ``certify_come_here``."""
+
+    seeds = [int(seed) for seed in seeds]
+    regions, env, seen_per_seed = {}, None, None
+    for name, held_out in (("seen", False), ("held_out", True)):
+        per_seed, env = _follow_runs(seeds, episodes_per_seed, functools.partial(_follow_sample, held_out=held_out), policy)
+        checks = _follow_checks(per_seed)
+        regions[name] = {"checks": {"T1": checks["T1"], "T2": checks["T2"], "T3": checks["T3"]},
+                         "speeds": checks["speeds"],
+                         "overall": {"pass": bool(checks["T1"]["pass"] and checks["T2"]["pass"] and checks["T3"]["pass"])}}
+        if name == "seen":
+            seen_per_seed = per_seed
+    run_per_seed, _ = _follow_runs(seeds, episodes_per_seed,
+                                   functools.partial(_follow_sample, held_out=False, speed=FOLLOW_RUN_SPEED), policy)
+    run = _follow_checks(run_per_seed)
+    cert = {
+        "scope": "follow: T1 (the share in band), T2 (the learner's path against the person's, provisional) and T3 (legality), "
+                 "on seen and held-out speeds; run speed for information only. T4 to T7 are not measured here.",
+        "teacher": _follow_teacher_block(),
+        "policy": "registered" if policy is None else "custom",
+        "date": date,
+        "seeds": seeds,
+        "episodes_per_seed": episodes_per_seed,
+        "env": {**_env_block(env, seen_per_seed),
+                "other_xyz": "per lane: entity 1 on a looped path, its start 3.5 blocks ahead of the learner's spawn"},
+        "regions": regions,
+        "information": {"run_speed": {"speed_blocks_per_second": FOLLOW_RUN_SPEED,
+                                      "checks": {"T1": run["T1"], "T2": run["T2"]}, "speeds": run["speeds"]}},
+        "overall": {"pass": bool(all(row["overall"]["pass"] for row in regions.values())),
+                    "rule": "T1 (share in band) and T2 (provisional) and T3, on seen and on held-out speeds"},
+    }
+    if out is not None:
+        _write(cert, out)
+    return cert
+
+
+def _follow_summary(cert: dict) -> list[str]:
+    lines = [
+        f"follow {cert['teacher']['version']} (teacher alone, {cert['policy']} policy), seeds {cert['seeds']}, "
+        f"{cert['episodes_per_seed']} episodes each per region, date {cert['date']}"
+    ]
+    for region, row in cert["regions"].items():
+        t1, t2, t3 = row["checks"]["T1"], row["checks"]["T2"], row["checks"]["T3"]
+        lines.append(
+            f"[{region}] T1 share in band (2 to 5 blocks): {_fmt(t1['value'])} (pooled ticks {_fmt(t1['pooled_tick_share'])}, "
+            f"{t1['lanes_counted']} of {t1['lanes']} lanes counted), bar >= {t1['bar']}: {_verdict(t1['pass'])}"
+        )
+        lines.append(
+            f"[{region}] T2 learner path / person path: median {_fmt(t2['value'])}, p90 {_fmt(t2['percentiles']['p90'])}, "
+            f"bar <= {t2['bar']} (provisional): {_verdict(t2['pass'])}"
+        )
+        speeds = ", ".join(f"{name} {_fmt(entry['share'])} ({entry['lanes_counted']} lanes)"
+                           for name, entry in row["speeds"].items() if entry["lanes"])
+        lines.append(f"[{region}] by speed: {speeds}")
+        lines.append(f"[{region}] T3 obedience: illegal decisions {t3['illegal_decisions']['value']}: "
+                     f"{_verdict(t3['pass'])}")
+    run = cert["information"]["run_speed"]
+    lines.append(f"information, run speed {run['speed_blocks_per_second']}: share in band "
+                 f"{_fmt(run['checks']['T1']['value'])}, path ratio median {_fmt(run['checks']['T2']['value'])} (not gated)")
+    lines.append(f"overall: {_verdict(cert['overall']['pass'])}")
+    return lines
+
+
 def _verdict(passed) -> str:
     return "not defined" if passed is None else ("PASS" if passed else "FAIL")
 
@@ -1067,6 +1305,8 @@ def summary_lines(cert: dict) -> list[str]:
 
     if cert["teacher"]["name"] == "track":
         return _track_summary(cert)
+    if cert["teacher"]["name"] == "follow":
+        return _follow_summary(cert)
     if "regions" in cert:
         return _come_here_summary(cert)
     checks = cert["checks"]
@@ -1112,7 +1352,7 @@ def summary_lines(cert: dict) -> list[str]:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Teacher certificate: T1 success, T2 efficiency, T3 obedience, T7 failures.")
-    parser.add_argument("--teacher", required=True, choices=sorted((*_TASKS, "track")))
+    parser.add_argument("--teacher", required=True, choices=sorted((*_TASKS, "track", "follow")))
     parser.add_argument("--seeds", required=True, help="comma-separated seeds; 77001 is the report seed")
     parser.add_argument("--episodes", type=int, default=256, help="lanes per seed")
     parser.add_argument("--out", type=Path, default=None, help="write the certificate JSON to this path")
@@ -1130,6 +1370,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         cert = certify_come_here(seeds, args.episodes, date=args.date, out=args.out)
     elif args.teacher == "track":
         cert = certify_track(seeds, args.episodes, date=args.date, out=args.out)
+    elif args.teacher == "follow":
+        cert = certify_follow(seeds, args.episodes, date=args.date, out=args.out)
     else:
         cert = certify_look_at(seeds, args.episodes, date=args.date, out=args.out)
     for line in summary_lines(cert):

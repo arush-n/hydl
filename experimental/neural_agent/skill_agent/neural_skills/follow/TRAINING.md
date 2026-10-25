@@ -1,7 +1,8 @@
 # follow: training plan
 
 **Status (2026-10-19): proposed, not approved.** No stage runs before the owner approves it
-(`../../docs/TRAINING_PLAN.md`, staged approval).
+(`../../docs/TRAINING_PLAN.md`, staged approval). **Stage 1 built (2026-10-24, no training):** the teacher passes T1
+to T3 (`README.md`); stage 2 waits on the owner.
 
 ## 1. What it does
 

@@ -49,6 +49,7 @@ from experimental.neural_agent.skill_agent.model.skill_module import (
     SkillModule,
     Trunk,
     init_module,
+    load_module,
     load_trunk,
     module_outputs,
     save_module,
@@ -420,13 +421,29 @@ def _stored_bytes(data: Decisions) -> int:
     return int(sum(array.nbytes for array in arrays))
 
 
-def train(strategy: Strategy, trunk: Trunk, *, storage: str = STORAGE) -> TrainResult:
+def start_module(strategy: Strategy, trunk: Trunk, init_key: jax.Array, init_params: Any = None) -> SkillModule:
+    """The module training starts from: a fresh one, or one whose parameters start from ``init_params`` (a trained
+    module of the same configuration, such as a prerequisite skill's: come_here from walk_to's). Those parameters must
+    have the fresh module's structure and shapes."""
+
+    module = init_module(init_key, strategy.spec, strategy.beside, trunk, strategy.config.module)
+    if init_params is None:
+        return module
+    fresh, given = jax.tree_util.tree_structure(module.params), jax.tree_util.tree_structure(init_params)
+    shapes = [jnp.shape(leaf) for leaf in jax.tree_util.tree_leaves(module.params)]
+    if fresh != given or shapes != [jnp.shape(leaf) for leaf in jax.tree_util.tree_leaves(init_params)]:
+        raise ValueError("init_params must have the module's structure and shapes")
+    return module._replace(params=init_params)
+
+
+def train(strategy: Strategy, trunk: Trunk, *, storage: str = STORAGE, init_params: Any = None) -> TrainResult:
     """Iterate DAgger for ``strategy.spec``: collect with ``beta`` (the teacher's share of lanes; 1, then halving), add
-    the decisions to the dataset, then ``steps`` Adam steps on the module alone, per iteration."""
+    the decisions to the dataset, then ``steps`` Adam steps on the module alone, per iteration. ``init_params`` starts
+    the module from a trained one (:func:`start_module`); None starts it fresh, as before."""
 
     config = strategy.config
     key, init_key = jax.random.split(jax.random.key(config.seed))
-    module = init_module(init_key, strategy.spec, strategy.beside, trunk, config.module)
+    module = start_module(strategy, trunk, init_key, init_params)
     kernels = make_kernels(strategy, trunk, module.known)
     optimizer = optax.adam(config.learning_rate)
     params = module.params
@@ -526,6 +543,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=defaults.seed)
     parser.add_argument("--eval-seed", type=int, default=77001)
     parser.add_argument("--eval-lanes", type=int, default=256)
+    parser.add_argument("--init-module", type=Path, default=None,
+                        help="start from this trained module (.npz with its .json) on the same trunk, scope and sizes")
     args = parser.parse_args(argv)
     for path in (args.out, args.module_out):
         if path.exists():
@@ -538,9 +557,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         config = dataclasses.replace(config, iterations=1, steps=200)
     strategy = _strategy(args.skill, config)
     trunk = load_trunk(args.trunk)
+    source = None if args.init_module is None else load_module(args.init_module, trunk)  # checks the trunk
+    if source is not None and (source.scope != strategy.spec.scope or source.config != config.module):
+        parser.error(f"{args.init_module} is a {source.scope} module of another size; it cannot start {args.skill}")
     record = blocks.provenance()
     started = time.perf_counter()
-    result = train(strategy, trunk)
+    result = train(strategy, trunk, init_params=None if source is None else source.params)
     args.module_out.parent.mkdir(parents=True, exist_ok=True)
     save_module(args.module_out, result.module)
     evaluation = {
@@ -560,6 +582,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "smoke": args.smoke,
         "trunk_sha256": trunk.sha256,
         "module_sha256": params_sha256(result.module.params),
+        "init_module": None if source is None else {"path": str(args.init_module), "skill": source.skill,
+                                                    "params_sha256": params_sha256(source.params)},
         "known_verbs": list(result.module.known),
         "training": {"iterations": result.iterations, "dataset_size": len(result.dataset.labels),
                      "stored_bytes": _stored_bytes(result.dataset)},

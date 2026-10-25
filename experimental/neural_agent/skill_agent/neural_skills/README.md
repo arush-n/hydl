@@ -53,7 +53,7 @@ name to `spec.py`'s `VERBS` (its verb id; append only) and starts from walk_to's
 | [look_at](look_at/README.md) | its strategy is built; its module is not trained yet. In the joint reference network it passes every bar (run C') | v2, certified |
 | [come_here](come_here/README.md) | built and trained (2026-10-24): the teacher passes T1 to T3; the module passes alone, not yet beside look_at (`../docs/TRAINING_PLAN.md` 8.12) | walk_to v3 aimed at an entity |
 | [track](track/README.md) | built, not trained (2026-10-24): gaze only, scored within reach (the owner's ruling, TRAINING.md 8); the smoke and the run wait on the owner | look_at v2 aimed at an entity, no lead |
-| [follow](follow/README.md) | planned; the moving person is built and its teacher measured (2026-10-24); sprint, walking and sneaking people (RULED, TRAINING.md 8) | walk_to v3 behind the person |
+| [follow](follow/README.md) | built, not trained (2026-10-24): sprint, walk and sneak trained, 2.0 to 2.3 held out, runners parked (TRAINING.md 8); the smoke and the run wait on the owner | walk_to v3 behind the person, sprinting |
 | [step_and_hop](step_and_hop/README.md) | planned; needs a terrain world and geometry tokens | walk_to v3 plus a jump rule |
 | [go_around](go_around/README.md) | planned; needs the 0.7.2 library swap, geometry tokens, step_and_hop | A* plus walk_to v3 |
 
