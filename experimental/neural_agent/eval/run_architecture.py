@@ -79,6 +79,8 @@ from hytalegym.jax.combat.types import AGENT_ENTITY  # noqa: E402
 
 VERB_INDEX = {verb: index for index, verb in enumerate(VERBS)}
 """The skill layer's verb vocabulary (``neural_skills/spec.py``), which the state layer's outcome columns read."""
+GOAL_VERBS = ("walk_to", "look_at")
+"""The verbs this decision layer issues (the vocabulary above grows as the skill layer adds skills)."""
 REQUEST_SLACK_TICKS = 30
 """A request expires this many ticks after its goal's time is up; the decision layer withdraws it first."""
 
@@ -197,9 +199,9 @@ class GoalDecider:
                       "look_at": np.asarray(episode.look.horizon_ticks) + blocks.HOLD_TICKS - 1}
         self.ground_y = ground_y
         batch = self.walk_target.shape[0]
-        self.streak = {verb: np.zeros(batch, np.int64) for verb in VERB_INDEX}
-        self.done_tick = {verb: np.full(batch, -1, np.int64) for verb in VERB_INDEX}
-        self.timed_out = {verb: np.zeros(batch, bool) for verb in VERB_INDEX}
+        self.streak = {verb: np.zeros(batch, np.int64) for verb in GOAL_VERBS}
+        self.done_tick = {verb: np.full(batch, -1, np.int64) for verb in GOAL_VERBS}
+        self.timed_out = {verb: np.zeros(batch, bool) for verb in GOAL_VERBS}
         self.walk_reward = np.zeros(batch, np.float64)
         self.live: dict[tuple[int, str], ActionRequest] = {}
         self._next_id = np.ones(batch, np.int64)
@@ -217,7 +219,7 @@ class GoalDecider:
         """Issue every active goal's request."""
 
         for lane in range(self.walk_target.shape[0]):
-            for verb in VERB_INDEX:
+            for verb in GOAL_VERBS:
                 if self.active[verb][lane]:
                     self._issue(lane, verb, tick)
 
@@ -263,7 +265,7 @@ class GoalDecider:
 
     def report(self) -> dict:
         out = {}
-        for verb in VERB_INDEX:
+        for verb in GOAL_VERBS:
             active = self.active[verb]
             count = int(active.sum())
             done = (self.done_tick[verb] >= 0) & active
