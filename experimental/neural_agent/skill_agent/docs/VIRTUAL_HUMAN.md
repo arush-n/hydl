@@ -3043,6 +3043,63 @@ type.
 
 **Gate:** two passes on dc9037a with all six of 2026-10-24, against the step-9 baseline (6acadad). Pass 1: the baseline's 11 failing names and 18 more, each explained. `test_sa_export_v1.py`'s 11 and `test_sa_integration_gen7.py`'s 5 were this lane's (the export rebuilt V1's configuration with `sound`; the check's capture under the compiled tick), fixed and re-run: export 11 passed, integration 5 passed and 1 strict xfail (the Region carries no construct since 6d9307f). `test_sa_drives.py`'s real-simulator clock test (2) fails on a clean dc9037a too, bisected to the coordinator's 6d9307f, now a strict xfail (drives 20 passed, 2 xfailed). 1,693 passed. Pass 2: 1 failing name, a baseline one (29 of the baseline's 30 now pass). Only their own tests import the two files fixed after the gate. Landed on e826fa7 (the coordinator's live hearing; no shared files).
 
+## 29. Everything together on gen 7: the integration check (2026-10-24)
+
+**The ruling.** The owner, 2026-10-24: "start finalizing everything as you complete most of the work, ensuring that
+everything works with one another".
+
+**What it runs.** `bench/integration_gen7.py`, built by a Haiku subagent from a written spec, checked here, with its
+slow test `test_sa_integration_gen7.py`. It runs the whole neural layer on the real gen-7 simulator, with the agent's
+three constructs on: `perception_v2`, `game_clock` and `hearing`. Every tick, for 300 ticks at batch 2:
+- the state layer and the trunk with memory, through `state_tick.step_lanes`;
+- the decision layer's writes at tick 10 (a `remember` tag and a relationship entry);
+- the generalist head with a walk_to request.
+
+It then checks the views, saving and loading, and determinism.
+
+**What it found when built** (on 1636891, on the Region; the duel's findings are below):
+- **Passes:**
+  - token widths and finite values;
+  - the trunk and the head finite, and the memory moving every tick;
+  - the clock advancing one game second a tick;
+  - sleep pressure to its formula (1.4e-6 relative);
+  - the writes applied and visible in the views and on the entity token;
+  - the views serialisable, with the clock and the opponent in the words;
+  - two runs bit-identical.
+- **Fixed here, three defects:**
+  - **Save then load was not bit-identical.** `contract/variables.remap` multiplied by its 0/1 map even when nothing was
+    renamed, so a `-0.0` in the Region's memory came back `0.0`. A rename or reorder now copies.
+  - **`state_tick.step_lanes` ran eagerly,** at about 1 s a tick. It now compiles `tick`: 20.6 ms a tick at batch 2,
+    equal to the eager tick to float32 rounding (`test_sa_step_lanes_jit.py`).
+  - **Old trunks crashed on new tokens:** the encoder refused a token type a trunk did not configure. That is the
+    hearing slice's `sound` (28.8). It now ignores such a type, so V1's trunk runs unchanged.
+
+**What the combined gate found** (dc9037a with everything of 2026-10-24 on it). Each piece had passed its own tests;
+together, three more defects of this lane's showed, all fixed:
+- **The trained bodies' export** rebuilt V1's configuration from today's schema, `sound` included, and could no longer
+  load V1's runs. It now uses V1's configuration as trained (`export_v1.as_trained`, TRAINING_PLAN.md 8.11).
+- **This check's own capture** read the tokens through a wrapper inside `tick`, which a compiled tick traces once and
+  hides. Its captured ticks now run eagerly (`jax.disable_jit` inside `Capture`), as the check was built; the compiled
+  tick is checked against the eager one by `test_sa_step_lanes_jit.py`.
+- **Its hunger checks were D1's** (a rate a game hour), which 20.9 replaced, so they would have crashed once the clock
+  ran. They now check Minecraft's model on every world, since hunger needs no clock: food and saturation in range,
+  exhaustion stored in [0, 4), and the exhaustion spent at least what the sprint and swim counters account for (jumps
+  and hits are not counters, so it is a bound).
+
+**The coordinator's** (the messages were held and expired; the ledger carries them):
+- the multi-actor duel carries none of the three constructs: its encoder is not hooked;
+- `heard_sounds` breaks a jitted reset (a cached table leaks a tracer);
+- no stepped world makes a sound (the Region's floor is silent). Hearing was proven on a single simulator observation
+  (28.8), not over time;
+- **since 6d9307f (jar 14) no construct reaches the observation:** on dc9037a the Region carries none of the three
+  (at 1636891 it carried all three), and the flat world's clock bisects to 6d9307f, though the render reports the hooks
+  applied. Until it is fixed, the clock and hearing checks do not run on any world. The test asserts that the Region
+  carries every construct, as a strict xfail citing 6d9307f, as does `test_sa_drives.py`'s real-simulator clock test.
+
+**On dc9037a now:** 5 passed and 1 xfailed (2026-10-24, 33 minutes). Every check that runs passes on both worlds. With no construct on either observation, the clock and hearing checks do not run. The hunger checks pass: food 20, and the exhaustion spent (0.75 on the Region, 2.05 to 2.8 in the duel, from jumps and hits) is at least the counters' 0.
+
+**Gate:** the combined gate of 2026-10-24 (the ledger's entries for these commits): two passes on dc9037a with all six of 2026-10-24, against the step-9 baseline (6acadad). Pass 1: the baseline's 11 failing names and 18 more, each explained. `test_sa_export_v1.py`'s 11 and `test_sa_integration_gen7.py`'s 5 were this lane's (the export rebuilt V1's configuration with `sound`; the check's capture under the compiled tick), fixed and re-run: export 11 passed, integration 5 passed and 1 strict xfail (the Region carries no construct since 6d9307f). `test_sa_drives.py`'s real-simulator clock test (2) fails on a clean dc9037a too, bisected to the coordinator's 6d9307f, now a strict xfail (drives 20 passed, 2 xfailed). 1,693 passed. Pass 2: 1 failing name, a baseline one (29 of the baseline's 30 now pass). Only their own tests import the two files fixed after the gate. Landed on e826fa7 (the coordinator's live hearing; no shared files).
+
 ## Sources
 
 - Steel, P. (2007). The nature of procrastination. Psychological Bulletin 133(1), 65-94.
