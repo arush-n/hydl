@@ -133,6 +133,19 @@ def request(goals: LookAtGoals, pose: Pose, ticks: jax.Array, *, direction: bool
                       entity_pointer=none, cell_pointer=none)
 
 
+def lowering(incoming: Any, pose: Pose, tick: int) -> tuple[np.ndarray, np.ndarray]:
+    """look_at's request arguments for one middle-layer request (``runtime/state_tick.Lowering``): the target is the
+    request's position and the tolerance its scalar; the pose and tick are the agent's own. The args and presence are
+    :func:`request`'s row with the direction to the target in the head's frame (``direction=True``, ``frame="head"``),
+    which ``training/distill.build_requests`` builds for look_at with run C''s options."""
+
+    goals = LookAtGoals(target_xyz=jnp.asarray([incoming.args.position], dtype=jnp.float32),
+                        tolerance_degrees=jnp.asarray([incoming.args.scalars[0]], dtype=jnp.float32),
+                        horizon_ticks=jnp.zeros((1,), dtype=jnp.int32))
+    row = request(goals, pose, jnp.float32(tick), direction=True, frame="head")
+    return np.asarray(row.args[0]), np.asarray(row.present[0])
+
+
 def sample(key: jax.Array, batch: int, spawn_yaw: jax.Array, *, held_out: bool) -> LookAtGoals:
     """Look-only goals (``LookAtTasks.sample`` around the spawn body), redrawn until every point is in the held-out left
     band (``held_out=True``) or outside it (``held_out=False``)."""
@@ -176,6 +189,7 @@ __all__ = [
     "beside_walk",
     "in_look_held_out",
     "look_offset",
+    "lowering",
     "place_beside_walk",
     "request",
     "request_args",

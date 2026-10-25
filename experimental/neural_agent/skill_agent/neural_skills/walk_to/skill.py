@@ -75,6 +75,22 @@ def request(goals: WalkToGoals, pose: Pose, ticks: jax.Array) -> RequestRow:
                       entity_pointer=none, cell_pointer=none)
 
 
+def lowering(incoming: Any, pose: Pose, tick: int) -> tuple[np.ndarray, np.ndarray]:
+    """walk_to's request arguments for one middle-layer request (``runtime/state_tick.Lowering``): the goal is the
+    request's position (x and z) and its scalars (radius, then pace, the gait); the pose and tick are the agent's own.
+    The args and presence are :func:`request`'s row, which ``training/distill.build_requests`` builds for walk_to (walk_to's
+    stop margin is the teacher's, not the request's)."""
+
+    x, _, z = incoming.args.position
+    radius, pace = incoming.args.scalars[0], incoming.args.scalars[1]
+    goals = WalkToGoals(target_xz=jnp.asarray([[x, z]], dtype=jnp.float32),
+                        radius=jnp.asarray([radius], dtype=jnp.float32),
+                        gait=jnp.asarray([int(round(pace))], dtype=jnp.int32),
+                        horizon_ticks=jnp.zeros((1,), dtype=jnp.int32))
+    row = request(goals, pose, jnp.float32(tick))
+    return np.asarray(row.args[0]), np.asarray(row.present[0])
+
+
 def sample(key: jax.Array, batch: int, spawn_yaw: jax.Array, *, held_out: bool) -> WalkToGoals:
     """Goals 3 to 15 blocks from the spawn (``WalkToTasks.sample``), redrawn until every target is in the rear-left
     quadrant of the spawn body (``held_out=True``) or outside it (``held_out=False``)."""
@@ -166,6 +182,7 @@ __all__ = [
     "PRESENT",
     "REAR_LEFT_DEGREES",
     "in_rear_left",
+    "lowering",
     "metrics",
     "pace",
     "radius_kept",

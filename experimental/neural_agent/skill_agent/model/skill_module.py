@@ -126,6 +126,13 @@ def _config_dict(config: Any) -> dict:
     return {name: getattr(config, name) for name in config.__dataclass_fields__}
 
 
+def _tupled(value: Any) -> Any:
+    """JSON's lists as tuples, recursively: the config's tuple fields (``token_types`` as (name, width) pairs, and the
+    type names of ``condition_types`` and ``object_types``), so a loaded config equals the arm's and hashes."""
+
+    return tuple(_tupled(item) for item in value) if isinstance(value, list) else value
+
+
 def save_trunk(path: Path, trunk: Trunk, layout: Mapping[str, Sequence[str]] | None = None) -> None:
     """``path`` (.npz) and its .json sidecar: the encoder's sizes and the SHA-256, and ``layout`` ({type: feature
     names}, ``encoder.token_layout``) with its fingerprint when given, so a later schema can migrate the trunk by name
@@ -149,9 +156,7 @@ def load_trunk(path: Path, layout: Mapping[str, Sequence[str]] | None = None, *,
     without a layout must have its widths."""
 
     meta = json.loads(Path(path).with_suffix(".json").read_text())
-    raw = meta["config"]
-    config = EncoderConfig(**{**raw, "token_types": tuple(tuple(entry) for entry in raw["token_types"]),
-                              "condition_types": tuple(raw.get("condition_types", ()))})
+    config = EncoderConfig(**{name: _tupled(value) for name, value in meta["config"].items()})
     trunk = make_trunk(load_params(path, init_encoder(jax.random.key(0), config)), config)
     if trunk.sha256 != meta["sha256"]:
         raise ValueError(f"{path}: the parameters' SHA-256 differs from the sidecar's")

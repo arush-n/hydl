@@ -63,7 +63,7 @@ walk_to's stop at the radius; not checked.
 |---|---|
 | `teacher.py` | `look_at_choices`: aim the head at the target within the 45-degree window around the body |
 | `task.py` | `LookAtGoals`, `LookAtTasks` (`sample`, `success`) and the episode ranges |
-| `skill.py` | look_at as the training blocks see it (`spec()`): its request, its sampler and held-out region, its teacher binding |
+| `skill.py` | look_at as the training blocks see it (`spec()`): its request, its sampler and held-out region, its teacher binding; `lowering(request, pose, tick)` (2026-10-24) builds one middle-layer request's args for `ModuleBody` (direction in the head's frame), as `training/distill.build_requests` does |
 | `train.py` | **its training strategy**: DAgger from v2, the direction in the head's frame, walk_to beside it in half the lanes, the left band held out, A2's sizes |
 | `train.sh` | runs `train.py` into `agent_skills/training_runs/skill_modules/look_at/NAME/` |
 | `certify.sh` | the teacher certificate, T1 to T3, on the four certificate seeds |

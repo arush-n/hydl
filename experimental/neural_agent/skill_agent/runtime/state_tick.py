@@ -25,7 +25,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from experimental.neural_agent.skill_agent.contract.surface import SCOPE_NAMES, head_layout, scope_of
+from experimental.neural_agent.skill_agent.contract.surface import SCOPE_NAMES, scope_of
 from experimental.neural_agent.skill_agent.model.encoder import (
     EncoderOutput,
     apply_encoder,
@@ -33,6 +33,7 @@ from experimental.neural_agent.skill_agent.model.encoder import (
     initial_memory,
 )
 from experimental.neural_agent.skill_agent.model.generalist import ARG_GROUPS, GeneralistRequests
+from experimental.neural_agent.skill_agent.neural_skills.spec import Pose
 from experimental.neural_agent.skill_agent.model.skill_module import SkillModule, Trunk, check_trunk, module_outputs
 from experimental.neural_agent.skill_agent.runtime.combiner import AgentContext, BodyStep
 from experimental.neural_agent.skill_agent.contract.tokens_v3 import CAPACITIES_V3, EntityTokenV3
@@ -208,8 +209,45 @@ def step_lanes(trunk: Trunk, state: layer.AgentState, observation: Any, *, last_
             raise ValueError(f"write_lists needs one list per lane ({state.entity_ids.shape[0]}), "
                              f"got {len(write_lists)}")
         writes, reasons = lower(write_lists)
-    view, state = tick(trunk, state, observation, last_action=last_action, reset=reset, writes=writes, **step)
+    static = {name: _frozen(value) for name, value in step.items() if _is_static(value)}
+    arrays = {name: value for name, value in step.items() if not _is_static(value)}
+    program = _tick_program(trunk.config, tuple(sorted(static.items())))
+    view, state = program(trunk.params, state, observation, last_action, reset, writes, arrays)
     return view, state, reasons
+
+
+def _is_static(value: Any) -> bool:
+    """A keyword that fixes the program rather than feeding it: a plain number, string, None, or a mapping of them
+    (``tick_seconds``, ``capacities``)."""
+
+    if isinstance(value, Mapping):
+        return all(_is_static(item) for item in value.values())
+    return value is None or isinstance(value, (bool, int, float, str))
+
+
+class _Frozen(NamedTuple):
+    """A mapping keyword, hashable for the program cache."""
+
+    items: tuple
+
+
+def _frozen(value: Any) -> Any:
+    return _Frozen(tuple(sorted(value.items()))) if isinstance(value, Mapping) else value
+
+
+@functools.lru_cache(maxsize=None)
+def _tick_program(config: Any, static: tuple) -> Callable[..., Any]:
+    """:func:`tick` compiled once per trunk config and set of fixed keywords, so a host loop does not run it eagerly
+    (about 1 s a tick at batch 2 eagerly: the gen-7 integration check, 2026-10-24). A frozen mapping comes back as a
+    dict."""
+
+    fixed = {name: dict(value.items) if isinstance(value, _Frozen) else value for name, value in static}
+
+    def run(params, state, observation, last_action, reset, writes, arrays):
+        return tick(Trunk(config, params, ""), state, observation, last_action=last_action, reset=reset,
+                    writes=writes, **arrays, **fixed)
+
+    return jax.jit(run)
 
 
 def _carried(held: jax.Array | None, initial: jax.Array | None, reset: jax.Array | None) -> jax.Array | None:
@@ -275,35 +313,51 @@ def module_factors(module: SkillModule, trunk: Trunk, view: StateView, requests:
 
 
 class AgentView(NamedTuple):
-    """One agent's row of a tick, as a combiner body receives it in ``AgentContext.observation_tokens``."""
+    """One agent's row of a tick, as a combiner body receives it in ``AgentContext.observation_tokens``: the tick's token
+    sets and the row; the agent's pose (a ``neural_skills.spec.Pose`` with leading dimension 1: world blocks and degrees,
+    as ``distill.build_requests`` reads them from ``combat``), its decision tick, and its legal action mask (bool[124],
+    the env's), which the body's masked argmax reads."""
 
     view: StateView
     row: int
+    pose: Pose
+    tick: int
+    action_mask: Any
 
 
-def encode_contexts(view: StateView, contexts: Mapping[int, AgentContext], agents: Sequence[int]
-                    ) -> dict[int, AgentContext]:
-    """Agent -> its context with its row of ``view`` (``agents[i]`` is row i) and every entity it knows: those it
-    knew, and those its entity rows hold, perceived or remembered."""
+def encode_contexts(view: StateView, contexts: Mapping[int, AgentContext], agents: Sequence[int], *, poses: Pose,
+                    ticks: int | Sequence[int], action_masks: Any) -> dict[int, AgentContext]:
+    """Agent -> its context with its row of ``view`` (``agents[i]`` is row i), its pose, decision tick and legal mask
+    (row i of ``poses`` with leading dimension B, of ``ticks`` (one tick, or one per row) and of ``action_masks``
+    bool[B, 124]: the caller's, as ``distill.build_requests``' inputs are), and every entity it knows: those it knew,
+    and those its entity rows hold, perceived or remembered."""
 
     ids = np.asarray(view.entity_ids)
+    tick_rows = np.broadcast_to(np.asarray(ticks), (len(agents),))
+    masks = np.asarray(action_masks)
     out = dict(contexts)
     for row, agent in enumerate(agents):
         held = frozenset(int(value) for value in ids[row] if value >= 0)
-        out[agent] = replace(contexts[agent], observation_tokens=AgentView(view, row),
+        pose = Pose(*(leaf[row:row + 1] for leaf in poses))
+        out[agent] = replace(contexts[agent],
+                             observation_tokens=AgentView(view, row, pose, int(tick_rows[row]), masks[row]),
                              known_entities=contexts[agent].known_entities | held)
     return out
 
 
-Lowering = Callable[[Any], tuple[np.ndarray, np.ndarray]]
-"""A skill's own lowering of a request: ``request -> (args float32[15], present bool[6])`` (``ARG_GROUPS``)."""
+Lowering = Callable[[Any, Pose, int], tuple[np.ndarray, np.ndarray]]
+"""A skill's lowering of a request: ``(request, pose, tick) -> (args float32[15], present bool[6])`` (``ARG_GROUPS``),
+the request's arguments as the skill's trainer builds them (``neural_skills/<skill>/skill.py``'s ``lowering``), from the
+agent's pose (leading dimension 1) and its decision tick."""
 
 
 @dataclass(frozen=True)
 class ModuleBody:
     """A skill module as a combiner body on the v3 path: its request in slot 0 (the entity pointer resolved from the
-    request's entity handle), the argmax of each head of its scope. It never reports done; the middle layer withdraws
-    the request."""
+    request's entity handle), and the masked argmax of each head of its scope among the heads it was trained on
+    (``training/blocks.HEAD_NAMES``); the other gen-7 heads are left out, so the combiner keeps them neutral. The
+    mask is the agent's legal action mask (``AgentView.action_mask``), as ``module_factors`` and
+    ``distill_v3._student`` take it. It never reports done; the middle layer withdraws the request."""
 
     module: SkillModule
     trunk: Trunk
@@ -312,9 +366,9 @@ class ModuleBody:
     def __call__(self, request: Any, ticks_since_start: int, observation_tokens: Any, belief_tokens: Any) -> BodyStep:
         if not isinstance(observation_tokens, AgentView):
             raise TypeError("a v3 module body reads an AgentView (runtime/state_tick.py encode_contexts)")
-        view, row = observation_tokens
+        view, row, pose, tick, action_mask = observation_tokens
         one = jax.tree_util.tree_map(lambda leaf: leaf[row:row + 1], view)
-        args, present = self.lower(request)
+        args, present = self.lower(request, pose, tick)
         slots = self.module.config.max_requests
         handle = -1 if request.args.entity is None else int(request.args.entity)
         requests = GeneralistRequests(
@@ -329,8 +383,15 @@ class ModuleBody:
         out = _module_program(self.module.config, self.module.known, self.module.verb)(
             self.module.params, one.encoded, one.masks, requests)
         host = jax.device_get(out.head_logits)
-        return BodyStep({head.name: int(np.argmax(host[head.name][0])) for head in head_layout("gen7")
-                         if scope_of(head.name) == self.module.scope})
+        legal = np.asarray(action_mask, bool)
+        choices: dict[str, int] = {}
+        for index, name in enumerate(HEAD_NAMES):
+            if scope_of(name) != self.module.scope:
+                continue
+            start, size = HEAD_STARTS[index], HEAD_SIZES[index]
+            logits = np.where(legal[start:start + size], np.asarray(host[name][0]), -np.inf)
+            choices[name] = int(np.argmax(logits))
+        return BodyStep(choices)
 
 
 __all__ = ["AgentView", "Lowering", "ModuleBody", "OwnPose", "StateView", "encode_contexts", "entity_rows",
