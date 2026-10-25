@@ -565,8 +565,8 @@ approach. Missing:
 | 3 | Fixed rules on game time: alarm and startle, sleep pressure and fatigue, hunger and the other drives; then lifecycle under normal death, and provenance. DESIGNED and APPROVED 2026-10-22; BUILT: startle, respawn, provenance (section 20.7); sleep pressure and hunger on the game clock (20.8, 2026-10-24); hunger on Minecraft's model, without a clock (20.9, 2026-10-24) | 10.5, 10.7, 10.8, 16.1, 16.2, 16.5, 20 |
 | 4 | The event log and its tokens; the activity counters and levels. DESIGNED and APPROVED 2026-10-22; BUILT (section 21.6; the event tokens built with step 7, 24.7) | 10.6, 11.1, 16.6, 21 |
 | 5 | The long-term spatial memory: places, routes, coordinates. DESIGNED and APPROVED 2026-10-22; BUILT (section 22.7; the place tokens built with step 7, 24.7) | 10.11, 16.4, 22 |
-| 6 | Hearing: the sound registry, the hearing rule, heard entries in the stores, the orienting reflex (the token reads zero until S12). DESIGNED and APPROVED 2026-10-23 for today's inputs (section 28); the sound registry BUILT (28.7); the rest when positional sounds are published (S12) | 17, 28 |
-| 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry (with it the status token's identity: which effect, its source entity, its damage cause, all in the observation and dropped today; `PERCEPTION.md` section 10.5), places, the proficiencies. First part DESIGNED and APPROVED 2026-10-22; BUILT (section 24.7: status identity, places, events). The rest waits: sound on S12 (step 6); the trimmed emotion token (11.2) on 26.5 item 1, which keeps the rule's feelings, marked provisional, for now; the proficiencies on their learning constants (16.6, future) | 11.1 to 11.4, 11.6, 16.6, 17.8, 24 |
+| 6 | Hearing: the sound registry, the hearing rule, heard entries in the stores, the orienting reflex (the token reads zero until S12). DESIGNED and APPROVED 2026-10-23 for today's inputs (section 28); the sound registry BUILT (28.7); the first slice BUILT on S12's positional sounds (28.8, 2026-10-24: the rule, the `sound` token, the views); heard entries in the stores and the orienting reflex later | 17, 28 |
+| 7 | Encoder: the new tokens (sound among them), the trimmed emotion token, the effects registry (with it the status token's identity: which effect, its source entity, its damage cause, all in the observation and dropped today; `PERCEPTION.md` section 10.5), places, the proficiencies. First part DESIGNED and APPROVED 2026-10-22; BUILT (section 24.7: status identity, places, events). The `sound` token BUILT with step 6 (28.8, 2026-10-24). The rest waits: the trimmed emotion token (11.2) on 26.5 item 1, which keeps the rule's feelings, marked provisional, for now; the proficiencies on their learning constants (16.6, future) | 11.1 to 11.4, 11.6, 16.6, 17.8, 24 |
 | 8 | The formatted views (typed facts, words) and the recording. DESIGNED and APPROVED 2026-10-22; BUILT (section 25.6: the facts, the words, the recording) | 10.3, 10.9, 25 |
 | 9 | The social section (approved, 15.3). DESIGNED and APPROVED 2026-10-22 (section 26, with the rulings of 26.5); BUILT 2026-10-23 (section 26.7: the relationship the decision layer writes, the interaction facts, `spared`, personal space, the people in the views and the recording) | 12, 15.3, 26 |
 | T | The world's tick length: every state-layer constant in seconds, one tick length per world (found by the coordinator, 2026-10-23). DESIGNED and APPROVED 2026-10-23 (section 27); BUILT 2026-10-23 (section 27.7: `state/clock.py`, `tick_seconds` on `layer.step` and `state_tick.tick`; gen 5 unchanged column for column) | 27 |
@@ -2979,6 +2979,69 @@ effects test, 16 passed. Nothing reads the registry yet: the hearing rule waits 
   described the same way an item, a creature and an effect are.
 - Section 17's psychoacoustics (Mills 1958; Zahorik, Brungart and Bronkhorst 2005; Sokolov's orienting response) apply
   to the parts that wait.
+
+### 28.8 Built (2026-10-24): hearing, the first slice
+
+**The trigger.** The coordinator's 46a793e publishes positional sounds: the construct `hearing`, opt in, a
+`heard_sounds` field. They are footsteps of every body within each sound's `MaxDistance`, up to 16 a tick, the sound
+picked by the block under the walker's feet. 28.5 RULED: build "the rest when positional sounds are published". This
+slice builds 17.2 (the rule), 17.8 (the token) and the views, by a Haiku subagent from a written spec, checked here.
+Heard entries in the stores (17.5), the orienting reflex (17.4) and the agent's own noise (17.6) are later slices.
+
+**The rule** (`state/hearing.py`; every constant a named module constant, [E] where it is an estimate):
+- **Threshold:** heard if the gain is at least 0.01 [E] (-40 dB). Alarm and fatigue move it only through a regulator,
+  which is future (17.3).
+- **Masking:** not heard if a sound within 30 degrees [E] is more than 10 times [E] louder.
+- **Kind:** the sound registry's row (28.7), by `semantic_id`: its 64-number description and category one-hot. When
+  no tables are passed, the registry loads once from the private folder, or reads unknown if it is absent.
+- **Direction:**
+  - the azimuth in the body frame, blurred with a spread of 1 degree straight ahead rising to 3 at the side. That is
+    Mills 1958's minimum audible angle and a 2021 replication's 1.1 and 3.1, used here as the blur [E];
+  - the elevation blurred by 10 degrees [E];
+  - the blur is deterministic per lane, tick, slot and sound, so a replay repeats it.
+- **Judged distance:** 1.3 x distance^0.39. This is Zahorik 2002, JASA 111(4), 1832-1846: the exponent averaging 0.39
+  and the multiplier 1.3, as quoted by arXiv 1704.06008, read 2026-10-24. Zahorik, Brungart and Bronkhorst 2005's
+  cross-study average is not yet read. So a footstep 10 blocks away is judged at about 3.2. The token and the views
+  carry the judged distance and the loudness, never the true distance.
+- **Who:** known, with the entity's id, only when the simulator marks the source perceptible (`source_entity_id >=
+  0`).
+- **Repeats** merge into one entry when all three hold:
+  - the same sound;
+  - the same source: the same entity, or a bearing within 20 degrees [E];
+  - heard within 2 s [E].
+
+  The rate is the repeats over the time they span, `(count - 1) / span`. Footsteps once a second read 1.0.
+- **The ring:** 16 entries; an entry is dropped after 10 s [E] unheard; a reset or a respawn clears it.
+- **Anchoring:** when the agent's pose is known (a perception or own-pose channel), each entry keeps its judged
+  position in world axes and is re-projected into the current body frame every tick. Turning 90 degrees moves a
+  heard sound's bearing by 90, and a repeat after the turn merges.
+- **The caveat:** the judged distance is compressed. After the agent walks far, the bearing to a remembered point can
+  drift from the bearing to the source, so a repeat can open a second entry. It is recorded, not yet fixed.
+
+**The token** (`contract/tokens_v3.py`): `sound`, 16 slots, 192 columns:
+- the `where` block of the judged position;
+- the description;
+- the 112-category one-hot;
+- loudness, age, rate, known and confidence;
+- `marked`.
+
+It is appended after `event`, so no other type moves. The encoder now ignores a schema type that a trunk does not
+configure, so a trunk trained before `sound`, such as V1's, runs on the new tokens unchanged (checked: the same outputs
+as with the sound set removed). `training/blocks.load_params(new_from=)` loads an old trunk into a config with the new
+type.
+
+**Checked:**
+- `test_sa_hearing.py`, 41 passed. They cover the threshold, masking, the blur's spread and determinism, the judged
+  distance, who, repeats and rate, the ring, anchoring through a turn, the default registry, the views, old weights,
+  and an old trunk on the new tokens.
+- **The real simulator** (on 46a793e: since 6d9307f no construct reaches the observation, 29). On a gen-7 render with
+  `hearing`, a body walking on bush is heard by the other as
+  `SFX_Bush_MoveIn`: known, from entity 1, judged at 2.0 blocks against a true 3.0.
+- **The column probe:** with nothing heard, every existing token column is bit-identical over 20 duel ticks.
+- **Regressions:** the state, social, drives, tokens, encoder and state_tick tests, 252 passed and 1 xfailed, as
+  before.
+
+**Gate:** two passes on dc9037a with all six of 2026-10-24, against the step-9 baseline (6acadad). Pass 1: the baseline's 11 failing names and 18 more, each explained. `test_sa_export_v1.py`'s 11 and `test_sa_integration_gen7.py`'s 5 were this lane's (the export rebuilt V1's configuration with `sound`; the check's capture under the compiled tick), fixed and re-run: export 11 passed, integration 5 passed and 1 strict xfail (the Region carries no construct since 6d9307f). `test_sa_drives.py`'s real-simulator clock test (2) fails on a clean dc9037a too, bisected to the coordinator's 6d9307f, now a strict xfail (drives 20 passed, 2 xfailed). 1,693 passed. Pass 2: 1 failing name, a baseline one (29 of the baseline's 30 now pass). Only their own tests import the two files fixed after the gate. Landed on e826fa7 (the coordinator's live hearing; no shared files).
 
 ## Sources
 

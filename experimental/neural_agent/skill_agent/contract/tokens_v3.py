@@ -275,6 +275,50 @@ class EventTokenV3:
                 "other_known", "where_known", *_RESERVE, "marked")
 
 
+SOUND_CATEGORIES: tuple[str, ...] = (
+    "AudioCat_Abilities", "AudioCat_Ambient", "AudioCat_Battleaxe", "AudioCat_BlockSounds", "AudioCat_Daggers",
+    "AudioCat_Discovery", "AudioCat_Footsteps", "AudioCat_Hand_Crossbow", "AudioCat_Inventory", "AudioCat_Mace",
+    "AudioCat_Magic_Staff", "AudioCat_Music_In_Game", "AudioCat_NPC_Antelope", "AudioCat_NPC_Bat",
+    "AudioCat_NPC_Bear_Grizzly", "AudioCat_NPC_Bison", "AudioCat_NPC_Boar", "AudioCat_NPC_Bunny",
+    "AudioCat_NPC_Calf", "AudioCat_NPC_Camel", "AudioCat_NPC_Chick", "AudioCat_NPC_Chicken", "AudioCat_NPC_Cow",
+    "AudioCat_NPC_Crawler_Void", "AudioCat_NPC_Crocodile", "AudioCat_NPC_Crow", "AudioCat_NPC_Deer",
+    "AudioCat_NPC_Dragon", "AudioCat_NPC_Duck", "AudioCat_NPC_Emberwulf", "AudioCat_NPC_Eye_Void",
+    "AudioCat_NPC_Fen_Stalker", "AudioCat_NPC_Feran", "AudioCat_NPC_Fish", "AudioCat_NPC_Flamingo", "AudioCat_NPC_Fox",
+    "AudioCat_NPC_Frog", "AudioCat_NPC_Gecko", "AudioCat_NPC_Goat", "AudioCat_NPC_Goblin",
+    "AudioCat_NPC_Goblin_Burner", "AudioCat_NPC_Goblin_Feastmaster", "AudioCat_NPC_Goblin_Gobliterator",
+    "AudioCat_NPC_Goblin_Gobliterator_Attack", "AudioCat_NPC_Goblin_Gobliterator_Idle",
+    "AudioCat_NPC_Goblin_Gobliterator_Locomotion", "AudioCat_NPC_Goblin_Guardian", "AudioCat_NPC_Goblin_Lobber",
+    "AudioCat_NPC_Goblin_Makinomagistra", "AudioCat_NPC_Goblin_Miner", "AudioCat_NPC_Goblin_Scrapper",
+    "AudioCat_NPC_Golem_Earth", "AudioCat_NPC_Golem_Firesteel", "AudioCat_NPC_Golem_Frost", "AudioCat_NPC_Golem_Sand",
+    "AudioCat_NPC_Hedera", "AudioCat_NPC_Horse", "AudioCat_NPC_Hyena", "AudioCat_NPC_Klops", "AudioCat_NPC_Lamb",
+    "AudioCat_NPC_Larva", "AudioCat_NPC_Leopard_Snow", "AudioCat_NPC_Meerkat", "AudioCat_NPC_Moose_Bull",
+    "AudioCat_NPC_Mouflon", "AudioCat_NPC_Mouse", "AudioCat_NPC_Outlander", "AudioCat_NPC_Owl", "AudioCat_NPC_Pig",
+    "AudioCat_NPC_Pigeon", "AudioCat_NPC_Piglet", "AudioCat_NPC_Rabbit", "AudioCat_NPC_Ram", "AudioCat_NPC_Raptor_Cave",
+    "AudioCat_NPC_Rat", "AudioCat_NPC_Raven", "AudioCat_NPC_Rex", "AudioCat_NPC_Scarak", "AudioCat_NPC_Scorpion",
+    "AudioCat_NPC_Shark", "AudioCat_NPC_Sheep", "AudioCat_NPC_Skeleton", "AudioCat_NPC_Skeleton_Elite",
+    "AudioCat_NPC_Skeleton_Praetorian", "AudioCat_NPC_Snake", "AudioCat_NPC_Spark_Living", "AudioCat_NPC_Sparrow",
+    "AudioCat_NPC_Spawn_Void", "AudioCat_NPC_Spider", "AudioCat_NPC_Spirit_Root", "AudioCat_NPC_Squirrel",
+    "AudioCat_NPC_Tentacle_Void", "AudioCat_NPC_Tetrabird", "AudioCat_NPC_Tiger_Sabertooth", "AudioCat_NPC_Toad_Rhino",
+    "AudioCat_NPC_Toad_Rhino_Magma", "AudioCat_NPC_Trork", "AudioCat_NPC_Trork_Chieftain", "AudioCat_NPC_Turkey",
+    "AudioCat_NPC_Vulture", "AudioCat_NPC_Warthog", "AudioCat_NPC_Wolf", "AudioCat_NPC_Woodpecker", "AudioCat_NPC_Yeti",
+    "AudioCat_NPC_Zombie", "AudioCat_SFX", "AudioCat_Shield", "AudioCat_Shortbow", "AudioCat_Sword", "AudioCat_UI",
+    "AudioCat_UI_Sleep", "AudioCat_Weapons",
+)
+"""The sound registry's ``AudioCategory`` values, sorted as ``perception/sounds.py`` builds them (the 0.7.2 archive: 112).
+The ``sound`` token's category one-hot is over these names. ``state/hearing.tables_for`` refuses a registry whose list
+differs, since a changed list would shift the columns silently."""
+
+
+class SoundTokenV3:
+    """One heard sound (``state/hearing.py``, S12-a; ``docs/VIRTUAL_HUMAN.md`` section 17.8): where it was heard, judged (the
+    blurred bearing and the compressed distance, in the body frame), its description and category (the registry's, zeros
+    for a sound the registry does not hold), its loudness (the linear gain), its age and its rate (per second), whether its
+    source is a perceived entity (``known``), and how far above the hearing threshold it was (``confidence``)."""
+
+    FEATURES = (*WHERE_FEATURES, *_DESCRIPTION, *(f"category_{name}" for name in SOUND_CATEGORIES),
+                "loudness", "age", "rate", "known", "confidence", "marked")
+
+
 TOKEN_TYPES_V3: Mapping[str, type] = {
     "self": SelfTokenV3,
     "act": ActTokenV3,
@@ -291,9 +335,10 @@ TOKEN_TYPES_V3: Mapping[str, type] = {
     "affect": AffectTokenV3,
     "place": PlaceTokenV3,
     "event": EventTokenV3,
+    "sound": SoundTokenV3,
 }
-"""Token type name -> its feature list under ``skill_tokens_v3``. The places and events come last, so no type's
-position changes (``docs/VIRTUAL_HUMAN.md`` section 14)."""
+"""Token type name -> its feature list under ``skill_tokens_v3``. The places and events came last, and the heard sounds
+(S12-a) after them, so no type's position changes (``docs/VIRTUAL_HUMAN.md`` section 14)."""
 
 TRUNK_TYPE_NAMES_V3: tuple[str, ...] = tuple(TOKEN_TYPES_V3)
 """The token types the trunk reads under v3, in its sequence order."""
@@ -305,14 +350,14 @@ section 18; 84 until 2026-10-22)."""
 CAPACITIES_V3: Mapping[str, int] = {
     "self": 1, "act": len(ActTokenV3.HEADS), "kit": ABILITY_SLOTS, "status": 8, "entity": 16, "projectile": 16,
     "hazard": 8, "geometry": WORLD_GEOMETRY_TOKEN_CAPACITY + REMEMBERED_GEOMETRY_CELLS, "block_candidate": 16 + 16,
-    "inventory_slot": 76, "recipe": 16, "persona": 1, "affect": 1, "place": 8, "event": 8,
+    "inventory_slot": 76, "recipe": 16, "persona": 1, "affect": 1, "place": 8, "event": 8, "sound": 16,
 }
 """Default capacities. Geometry and block candidates hold this tick's plus remembered ones. This tick's geometry is the
 gym's world-geometry capacity for the server line (``WORLD_GEOMETRY_TOKEN_CAPACITY``: 96 on 0.7.2 since 04c3b18, from
 a 20-seed census, ``docs/VIRTUAL_HUMAN.md`` 18.4; 44 on 0.5.7), read at import like the gym's own; block candidates
 are 16. The remembered ones are ``REMEMBERED_GEOMETRY_CELLS`` and 16. Entities hold perceived and remembered together.
-The body reads 8 places and the last 8 events (``docs/VIRTUAL_HUMAN.md`` section 24). A capacity is a configuration:
-the trunk's parameters never depend on it."""
+The body reads 8 places and the last 8 events (``docs/VIRTUAL_HUMAN.md`` section 24); the heard sounds hold 16 (the
+ring of ``state/hearing.py``, S12-a). A capacity is a configuration: the trunk's parameters never depend on it."""
 
 assert RESOURCE_COUNT == len(RESOURCES)
 assert all(cls.FEATURES[-1] == "marked" for cls in TOKEN_TYPES_V3.values())
@@ -322,8 +367,8 @@ __all__ = ["ABILITY_SLOTS", "AFFECT_FEATURES", "AFFORDANCES", "CAPACITIES_V3", "
            "EVENT_KINDS", "FEELINGS", "GATHER_BITS", "GEOMETRY_BOXES", "GEOMETRY_BOX_FIELDS", "GEOMETRY_EDGES",
            "GEOMETRY_EDGE_FIELDS", "GEOMETRY_FLAGS", "HOLD_THRESHOLDS", "ITEM_PROPERTIES_V3", "MEMORY_FEATURES",
            "PERSONA_FEATURES", "PLACE_KINDS", "RECIPE_WIDTH", "REMEMBERED_GEOMETRY_CELLS", "RELATION_FEATURES",
-           "RESERVE_WIDTH", "RESOURCES",
+           "RESERVE_WIDTH", "RESOURCES", "SOUND_CATEGORIES",
            "STATUS_FIELDS", "STATUS_FLAGS", "TOKEN_SCHEMA_V3", "TOKEN_TYPES_V3", "TRUNK_TYPE_NAMES_V3",
            "WHERE_FEATURES", "ActTokenV3", "AffectTokenV3", "BlockCandidateTokenV3", "EntityTokenV3", "EventTokenV3",
            "GeometryTokenV3", "HazardTokenV3", "InventorySlotTokenV3", "KitTokenV3", "PersonaTokenV3", "PlaceTokenV3",
-           "ProjectileTokenV3", "RecipeTokenV3", "SelfTokenV3", "StatusTokenV3"]
+           "ProjectileTokenV3", "RecipeTokenV3", "SelfTokenV3", "SoundTokenV3", "StatusTokenV3"]

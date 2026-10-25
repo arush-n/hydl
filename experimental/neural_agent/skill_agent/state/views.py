@@ -2,7 +2,7 @@
 facts, and as the words the LLM is told. Both run on the host, off the tick.
 
 :func:`facts` reads one lane into a JSON-safe dict: the persona's traits, the feelings, the counters, the clock and the
-drives (``state/drives.py``); what the agent knows of others (``runtime/state_tick.known_entities``, by the ids the
+drives (``state/drives.py``); the sounds it heard (``state/hearing.py``, newest first); what the agent knows of others (``runtime/state_tick.known_entities``, by the ids the
 layer perceives); the people it has met, each with the relationship the decision layer wrote about it and its
 interaction facts (``state/social.py``, section 26);
 where it has been (the long-term places and routes, each place with its distance and bearing from the agent now); what
@@ -25,8 +25,9 @@ from typing import Any, Mapping
 import numpy as np
 
 from experimental.neural_agent.skill_agent.contract import variables
+from experimental.neural_agent.skill_agent.perception import sounds as sound_registry
 from experimental.neural_agent.skill_agent.state import affect as feeling
-from experimental.neural_agent.skill_agent.state import clock, drives, events, layer, registry, social, written
+from experimental.neural_agent.skill_agent.state import clock, drives, events, hearing, layer, registry, social, written
 from experimental.neural_agent.skill_agent.state.frames import world_to_body
 from experimental.neural_agent.skill_agent.state.places import PLACE_KINDS
 
@@ -152,8 +153,48 @@ def _people(state: layer.AgentState, lane: int, here: Any, yaw: Any, clock: int,
     return people
 
 
+def _sound_names(sounds: sound_registry.SoundRegistry | None, row: int) -> tuple[str | None, str | None]:
+    """The asset id and the category of a sound's registry row (table row ``row``; 0 is the unknown row), or Nones."""
+
+    if sounds is None or row == 0:
+        return None, None
+    columns = np.asarray(sounds.sound_features)[row - 1, len(sound_registry.SOUND_FEATURES):]
+    category = sounds.manifest["categories"][int(np.argmax(columns))] if columns.any() else None
+    return sounds.sound_ids[row - 1], category
+
+
+def _heard(state: layer.AgentState, lane: int, dt_seconds: float, sounds: sound_registry.SoundRegistry | None
+           ) -> list[dict[str, Any]]:
+    """The heard ring of one lane (``state/hearing.py``, S12-a), newest first: each sound's asset id and category (None
+    without the registry, or for an unknown sound), its judged bearing (body frame, degrees, positive right) and distance,
+    its loudness, its age and its rate, and its source: whether it is a perceived entity, and that entity's id. The ages
+    are ticks times ``dt_seconds``, as the other facts' are."""
+
+    ring = state.hearing
+    if ring is None:
+        return []
+    valid = np.asarray(ring.valid)[lane]
+    now = int(np.asarray(ring.now)[lane])
+    field = {name: np.asarray(getattr(ring, name))[lane]
+             for name in ("body", "gain", "first", "last", "count", "known", "entity", "row")}
+    out = []
+    for slot in sorted(np.flatnonzero(valid), key=lambda index: -int(field["last"][index])):
+        body = field["body"][slot]
+        asset, category = _sound_names(sounds, int(field["row"][slot]))
+        rate = float(hearing.rate_of(field["count"][slot], field["first"][slot], field["last"][slot], dt_seconds))
+        known = bool(field["known"][slot])
+        out.append({
+            "sound": asset, "category": category,
+            "bearing_degrees": float(np.degrees(np.arctan2(body[1], body[0]))), "distance": float(np.linalg.norm(body)),
+            "loudness": float(field["gain"][slot]), "age_s": float((now - int(field["last"][slot])) * dt_seconds),
+            "rate": rate, "known": known,
+            "entity_id": int(field["entity"][slot]) if known else None})
+    return out
+
+
 def facts(state: layer.AgentState, lane: int, *, own_position: Any = None, body_yaw_degrees: Any = None,
-          dt_seconds: float = clock.DEFAULT_TICK_SECONDS) -> dict[str, Any]:
+          dt_seconds: float = clock.DEFAULT_TICK_SECONDS, sounds: sound_registry.SoundRegistry | None = None
+          ) -> dict[str, Any]:
     """One lane's state as facts (the module docstring), JSON-safe.
 
     Args:
@@ -247,6 +288,7 @@ def facts(state: layer.AgentState, lane: int, *, own_position: Any = None, body_
                                place=True),
         },
         "people": _people(state, lane, here, yaw, clock, clock_written, dt_seconds),
+        "heard": _heard(state, lane, dt_seconds, sounds),
         "drives": {"time_of_day_hours": time_of_day / drives.UNITS_PER_GAME_HOUR if clocked else None,
                    "is_day": drives.is_day(time_of_day) if clocked else None,
                    "sleep_pressure": read("sleep_pressure"), "food": food, "saturation": saturation,
@@ -316,6 +358,26 @@ def _place_line(place: Mapping[str, Any]) -> str:
                      f"{_number(abs(right))} to the {'right' if right >= 0 else 'left'}")
     times = "time" if place["visits"] == 1 else "times"
     return f"{label} (strength {place['strength']:.1f}){where}; visited {place['visits']} {times}."
+
+
+def _heard_line(entry: Mapping[str, Any]) -> str:
+    """A heard sound as one sentence, e.g. ``Heard: footsteps (SFX Bush MoveIn) 20 degrees right, about 3 blocks, twice a
+    second, unseen.``: the kind (its category's words, the asset's words in brackets), the judged bearing, the judged
+    distance, the rate and the source."""
+
+    kind = (entry["category"] or "").removeprefix("AudioCat_").replace("_", " ").lower() or "sound"
+    what = f"{kind} ({entry['sound'].replace('_', ' ')})" if entry["sound"] else kind
+    bearing = entry["bearing_degrees"]
+    degrees = round(abs(bearing))
+    where = "ahead" if degrees == 0 else f"{degrees} degrees {'right' if bearing > 0 else 'left'}"
+    blocks = round(entry["distance"])
+    place = "here" if blocks == 0 else f"about {blocks} block{'' if blocks == 1 else 's'}"
+    rate = round(entry["rate"], 1)  # 0 until a repeat: then no tempo clause
+    tempo = "" if rate <= 0 else "twice a second" if rate == 2 else "once a second" if rate == 1 else (
+        f"{_number(rate)} times a second")
+    who = "unseen" if not entry["known"] else f"from entity {entry['entity_id']}"
+    clauses = [where, place, *([tempo] if tempo else []), who]
+    return f"Heard: {what} {', '.join(clauses)}."
 
 
 def _event_line(event: Mapping[str, Any]) -> str:
@@ -405,6 +467,8 @@ def _ranked(facts: Mapping[str, Any]) -> list[str]:
     for place in facts["places"]:
         importance = place["strength"] + (1.0 if place["marked"] else 0.0)
         items.append((_place_line(place), -place["since_s"], importance, _near(place["distance"])))
+    for entry in facts.get("heard", []):
+        items.append((_heard_line(entry), -entry["age_s"], entry["loudness"], _near(entry["distance"])))
     for event in facts["events"]:
         items.append((_event_line(event), -event["age_s"], event["amount"], 0.0))
     if not items:

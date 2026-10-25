@@ -468,9 +468,11 @@ def apply_encoder(params: EncoderParams, batch: Mapping[str, tuple[Any, Any]], c
     """
 
     names = [name for name, _ in config.token_types]
-    unknown = sorted(set(batch) - set(names))
+    # A schema type the config does not configure (one added later, such as ``sound``) is ignored, as a configured type
+    # missing from the batch counts as empty; a name the schema does not have is still an error (S12-a).
+    unknown = sorted(set(batch) - set(names) - set(TOKEN_TYPES_V3))
     if unknown:
-        raise ValueError(f"the batch names token types {unknown} that the config does not have")
+        raise ValueError(f"the batch names token types {unknown} that neither the config nor the schema has")
     present = [name for name in names if name in batch]
     if not present:
         raise ValueError("the batch has no token set")

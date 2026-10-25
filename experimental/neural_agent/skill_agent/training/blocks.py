@@ -223,14 +223,19 @@ def save_params(path: Path, params: Any) -> None:
     np.savez(path, **flat)
 
 
-def load_params(path: Path, template: Any) -> Any:
+def load_params(path: Path, template: Any, *, new_from: Any = None) -> Any:
     """Parameters saved by :func:`save_params`, in the structure of ``template`` (an initialised tree of the same
-    configuration). Every leaf of the template must be in the file."""
+    configuration). Every leaf of the template must be in the file, unless ``new_from`` (an initialised tree of the same
+    configuration) is given: a leaf the file lacks, such as a token type added since the file was saved, then takes its
+    value from ``new_from`` (S12-a: the ``sound`` type's parameters start at their initial values)."""
 
     stored = np.load(path)
+    fresh = {} if new_from is None else {path_name(entries): leaf for entries, leaf in
+                                         jax.tree_util.tree_flatten_with_path(new_from)[0]}
     leaves = jax.tree_util.tree_flatten_with_path(template)[0]
-    return jax.tree_util.tree_unflatten(jax.tree_util.tree_structure(template),
-                                        [jnp.asarray(stored[path_name(entries)]) for entries, _ in leaves])
+    values = [jnp.asarray(stored[name] if name in stored.files or new_from is None else fresh[name])
+              for name in (path_name(entries) for entries, _ in leaves)]
+    return jax.tree_util.tree_unflatten(jax.tree_util.tree_structure(template), values)
 
 
 def json_default(value: Any) -> Any:

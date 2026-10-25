@@ -26,7 +26,8 @@ stores it). One tick, :func:`step`:
    ``role_*``, ``space_target``; section 26);
 10. everything is packed into the ``skill_tokens_v3`` token sets the trunk reads, with the persona and affect
     tokens, whose columns are the body-read variables (``tokens_v3.PERSONA_FEATURES``, ``AFFECT_FEATURES``), and the
-    place and event tokens, read from the places and the event log the steps above updated (sections 22, 21 and 24).
+    place and event tokens, read from the places and the event log the steps above updated (sections 22, 21 and 24), and
+    the sound tokens, read from the heard ring (``state/hearing.py``, S12-a: this tick's heard sounds, section 17).
 
 :func:`save` and :func:`load` write and read a state as one ``.npz`` (memory "stored as well", owner 2026-10-20 night),
 with the variables' names and the token layout, so a save migrates by name to a later registry or schema
@@ -48,8 +49,10 @@ from experimental.neural_agent.skill_agent.contract import tokens_v3 as v3
 from experimental.neural_agent.skill_agent.contract import variables
 from experimental.neural_agent.skill_agent.contract.surface import ITEM_PROPERTIES
 from experimental.neural_agent.skill_agent.perception.adapter import lookup
+from experimental.neural_agent.skill_agent.perception.sounds import SoundTables
 from experimental.neural_agent.skill_agent.state import clock
 from experimental.neural_agent.skill_agent.state import drives
+from experimental.neural_agent.skill_agent.state import hearing
 from experimental.neural_agent.skill_agent.state import registry
 from experimental.neural_agent.skill_agent.state import affect as feeling
 from experimental.neural_agent.skill_agent.state import events
@@ -100,6 +103,7 @@ class AgentState(NamedTuple):
     places: places.PlaceState | None = None  # the long-term spatial memory (state/places.py, section 22)
     social: social.SocialState | None = None  # the people's interaction facts (state/social.py, section 26)
     drives: drives.DriveState | None = None  # sleep pressure, hunger and the clock's last reading (state/drives.py)
+    hearing: hearing.HearingState | None = None  # the heard sounds ring (state/hearing.py, S12-a, section 17)
 
 
 def initial_state(batch: int, latent: jax.Array | None = None, persona: jax.Array | None = None,
@@ -121,7 +125,7 @@ def initial_state(batch: int, latent: jax.Array | None = None, persona: jax.Arra
                       events=events.initial_events(batch, entities=capacities["entity"],
                                                    slots=capacities["inventory_slot"], outcomes=events.OUTCOME_SLOTS),
                       places=places.initial_places(batch), social=social.initial_social(batch),
-                      drives=drives.initial(batch))
+                      drives=drives.initial(batch), hearing=hearing.initial(batch))
 
 
 def _restarts(reset: jax.Array | None, respawn: jax.Array | None) -> jax.Array | None:
@@ -263,7 +267,7 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
              reset: jax.Array | None = None, respawn: jax.Array | None = None, writes: written.Writes | None = None,
              capacities: Mapping[str, int] = v3.CAPACITIES_V3, outcomes: jax.Array | None = None,
              outcome_verbs: jax.Array | None = None, tick_seconds: float = clock.DEFAULT_TICK_SECONDS,
-             **adapter: Any
+             sound_tables: SoundTables | None = None, **adapter: Any
              ) -> tuple[dict[str, tuple[jax.Array, jax.Array]], AgentState]:
     """One tick (module docstring): the token sets and the next state.
 
@@ -285,6 +289,9 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
         tick_seconds: The world's tick length in seconds (section 27, the state layer's one clock): gen 7's 1/30 s by
             default; a gen-5 world passes ``clock.GEN5_TICK_SECONDS``, and live its measured mean. Every rule's window
             and fade is in seconds and is turned into ticks from it.
+        sound_tables: The sound registry's tables (``hearing.tables_for``). None: the private registry's
+            (``hearing.default_tables``) when the observation has a heard field, else the unknown row (a heard sound is
+            still heard with no kind, section 17.2 item 3).
         **adapter: Passed to ``senses.perceive_rows``: ``body_yaw_degrees``, ``tables`` (the content registry),
             ``action_surface``, ``block_reach_blocks``, ``light``, ``view_half_angle_degrees``, and ``effects`` (the
             status-effect registry's tables, ``perception/effects.effect_tables``; None reads the effect columns as
@@ -309,6 +316,12 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
                             asleep=own[:, _SELF["moving_sleeping"]] > 0.5,
                             activity=drives.activity(logged, state.events.counters, history, reset))
     values = registry.put(values, drives.NAMES, jnp.stack([dynamic.sleep_pressure, dynamic.hunger], axis=-1))
+    heard_field = getattr(observation, "heard_sounds", None)
+    kinds = sound_tables if sound_tables is not None or heard_field is None else hearing.default_tables()
+    heard = hearing.update(
+        state.hearing if state.hearing is not None else hearing.initial(observation.base.self_f32.shape[0]),
+        heard_field, body_yaw=perceived.pose.body_yaw, position=perceived.pose.position, tables=kinds,
+        tick_seconds=tick_seconds, reset=reset, respawn=respawn)
     record = written.apply(state.written, writes, reset)
     memory = stores.update(state.memory, perceived, written.tags(record), reset, tick_seconds=tick_seconds)
     placed = places.update(
@@ -329,6 +342,7 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
     remembered = stores.read(memory, perceived.pose, tick_seconds=tick_seconds)
     rows = dict(perceived.rows)
     rows["act"] = (act_features(history, tick_seconds), jnp.ones(history.last_choice.shape, jnp.bool_))
+    rows["sound"] = hearing.rows(heard, perceived.pose, kinds, tick_seconds=tick_seconds)
     entity_ids = perceived.entity_ids[:, :rows["entity"][0].shape[1]]
     if remembered is not None:
         for name in ("entity", "geometry", "block_candidate"):
@@ -353,7 +367,8 @@ def step(observation: Any, state: AgentState, *, last_action: jax.Array,
     ids = fit_ids(entity_ids, valid, capacities["entity"])  # aligned with tokens["entity"], perceived and remembered
     slots = stores.object_slots(memory, tokens, ids, perceived.pose)
     return tokens, AgentState(history, memory, state.latent, values, affect, ids, slots, state.background,
-                              written=record, events=logged, places=placed, social=socialed, drives=dynamic)
+                              written=record, events=logged, places=placed, social=socialed, drives=dynamic,
+                              hearing=heard)
 
 
 def _present_first(present: jax.Array, count: int, *columns: tuple[jax.Array, Any]) -> list[jax.Array]:
