@@ -12,7 +12,6 @@ from __future__ import annotations
 import threading
 import numpy as np
 
-from hytalegym.jax.combat.contracts.semantic import semantic_id
 from hytalegym.utils.connection import BridgeConnection
 
 BLOCK_TYPE_TABLE_SCHEMA = "hytalerl_block_type_table_v1"
@@ -56,6 +55,10 @@ def build_semantic_table(entries: list[tuple[int, str]]) -> np.ndarray:
 
     Runtime id 0 is air and maps to 0. Ids absent from the table map to 0.
     """
+
+    # Imported here: ``import hytalegym`` must not load ``hytalegym.jax``, or a gen-7 render's hooks read the
+    # profile before a launcher can switch constructs on (tests/sim/test_import_order.py).
+    from hytalegym.jax.combat.contracts.semantic import semantic_id
 
     size = max((runtime_id for runtime_id, _ in entries), default=0) + 1
     table = np.zeros(size, dtype=np.int32)
