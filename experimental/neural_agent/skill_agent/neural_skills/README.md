@@ -51,7 +51,7 @@ name to `spec.py`'s `VERBS` (its verb id; append only) and starts from walk_to's
 |---|---|---|
 | [walk_to](walk_to/README.md) | its strategy is built; its module is not trained yet. In the joint reference network it passes every bar (run C') | v3, certified |
 | [look_at](look_at/README.md) | its strategy is built; its module is not trained yet. In the joint reference network it passes every bar (run C') | v2, certified |
-| [come_here](come_here/README.md) | planned; next, as it needs no new mechanic | walk_to v3 aimed at an entity |
+| [come_here](come_here/README.md) | built and trained (2026-10-24): the teacher passes T1 to T3; the module passes alone, not yet beside look_at (`../docs/TRAINING_PLAN.md` 8.12) | walk_to v3 aimed at an entity |
 | [track](track/README.md) | planned; needs a moving entity | look_at v2 aimed at an entity |
 | [follow](follow/README.md) | planned; needs come_here and a moving person | walk_to v3 behind the person |
 | [step_and_hop](step_and_hop/README.md) | planned; needs a terrain world and geometry tokens | walk_to v3 plus a jump rule |

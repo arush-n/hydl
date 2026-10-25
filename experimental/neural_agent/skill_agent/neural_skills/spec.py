@@ -19,7 +19,7 @@ import jax
 
 from experimental.neural_agent.skill_agent.contract.surface import SCOPE_NAMES
 
-VERBS: tuple[str, ...] = ("walk_to", "look_at")
+VERBS: tuple[str, ...] = ("walk_to", "look_at", "come_here")
 """A skill's verb id is its index here, in every module's verb vocabulary. Append only: an id is baked into the trained
 weights of every module that has seen it."""
 

@@ -2,6 +2,8 @@
 
 **Status (2026-10-19): proposed, not approved.** No stage runs before the owner approves it
 (`../../docs/TRAINING_PLAN.md`, staged approval). This is the next skill that needs no new simulator mechanic.
+**Stage 1 built (2026-10-24, no training):** the teacher passes T1 to T3 (`README.md`). Stages 2 and 3 ran the same
+night (owner: "go ahead"; `../../docs/TRAINING_PLAN.md` 8.12): the module passes alone, not yet beside look_at.
 
 ## 1. What it does
 
@@ -51,7 +53,7 @@ module never changes.
 
 ## 7. Waits on
 
-Training to reopen, and the owner's approval of stage 1.
+The owner's approval of stages 2 and 3 (stage 1 is built, 2026-10-24).
 
 ## 8. If it fails
 

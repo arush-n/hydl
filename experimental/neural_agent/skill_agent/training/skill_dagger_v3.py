@@ -80,6 +80,7 @@ class Kernels(NamedTuple):
     trunk: Callable[..., Any]  # (trunk params, tokens, state, reset) -> (StateView, state)
     student: Callable[..., Any]  # (module params, action mask, encoded, masks, requests, active) -> (factors, logits)
     success: Callable[..., jax.Array]
+    points: Callable[..., GeneralistRequests]  # (view, requests) -> requests with each entity handle as its token row
 
 
 class Decisions(NamedTuple):
@@ -146,7 +147,18 @@ def make_kernels(strategy: Strategy, trunk: Trunk, known: tuple[int, ...]) -> Ke
         student=jax.jit(student),
         success=jax.jit(lambda combat, lanes: jnp.stack(
             [skill.success(combat, goals) for skill, goals in zip(skills, lanes.goals)], axis=1)),
+        points=jax.jit(lambda view, requests: state_tick.point(view, requests, requests.entity_pointer)),
     )
+
+
+def placed_other(lanes: Lanes, batch: int) -> jax.Array:
+    """float32[B, 3]: entity 1 at reset, per lane. The trained skill's goals place it where they carry ``other_xyz``
+    (come_here's do); otherwise it stands at ``blocks.OTHER_XYZ``, where every other skill spawns it."""
+
+    placed = getattr(lanes.goals[0], "other_xyz", None)
+    if placed is None:
+        return jnp.broadcast_to(jnp.asarray(blocks.OTHER_XYZ, dtype=jnp.float32), (batch, 3))
+    return jnp.asarray(placed, dtype=jnp.float32)
 
 
 def _pack(features: np.ndarray, valid: np.ndarray, dtype: np.dtype) -> PackedRows:
@@ -206,9 +218,10 @@ def rollout(strategy: Strategy, trunk: Trunk, module_params: Any, lanes: Lanes, 
             kernels: Kernels, key: jax.Array, *, record: bool, storage: str = STORAGE,
             keep_logits: bool = False) -> Trace:
     """``skill_dagger.rollout`` on v3: every lane runs its horizon, one decision per tick. The trained skill acts by its
-    teacher where ``use_teacher`` (bool[B]) and by its module elsewhere; the skills beside it by their teachers. With
-    ``record`` the decisions inside the horizons are stored (``Decisions``); with ``keep_logits`` so are the module's
-    logits there."""
+    teacher where ``use_teacher`` (bool[B]) and by its module elsewhere; the skills beside it by their teachers. Entity 1
+    starts where the trained skill's goals place it (:func:`placed_other`), and each request's entity handle is resolved
+    to its token row every decision. With ``record`` the decisions inside the horizons are stored (``Decisions``); with
+    ``keep_logits`` so are the module's logits there."""
 
     env = blocks.environment(int(lanes.kind.shape[0]), strategy.config.maximum_turn_degrees)
     batch = env.batch
@@ -216,8 +229,7 @@ def rollout(strategy: Strategy, trunk: Trunk, module_params: Any, lanes: Lanes, 
     ticks = int(horizon.max())
     keys = jax.random.split(key, ticks + 2)
     spawn = jnp.broadcast_to(jnp.asarray(blocks.SPAWN_XZ, dtype=jnp.float32), (batch, 2))
-    other = jnp.broadcast_to(jnp.asarray(blocks.OTHER_XYZ, dtype=jnp.float32), (batch, 3))
-    carry = env.reset(jax.random.split(keys[0], batch), spawn, lanes.spawn_yaw, other)
+    carry = env.reset(jax.random.split(keys[0], batch), spawn, lanes.spawn_yaw, placed_other(lanes, batch))
     neutral = jnp.broadcast_to(jnp.asarray(blocks.NEUTRAL, dtype=jnp.int32), (batch, blocks.HEAD_COUNT))
     carry, observation, _ = env.step(carry, neutral, jax.random.split(keys[1], batch))
     layer_step = v3._layer_program(v3._world_tick(carry.runtime.combat))
@@ -254,6 +266,7 @@ def rollout(strategy: Strategy, trunk: Trunk, module_params: Any, lanes: Lanes, 
         reset = jnp.full((batch,), index == 0)
         tokens, after = layer_step(state, observation, position, yaw, last_action, reset)
         view, state = kernels.trunk(trunk.params, tokens, after, reset)
+        requests = kernels.points(view, requests)  # each entity handle to the token row holding that entity (-1: none)
         student, logits = kernels.student(module_params, carry.action_mask, view.encoded, view.masks, requests,
                                           lanes.active[:, 0])
         own = jnp.where(use_teacher[:, None], taught.labels, student)

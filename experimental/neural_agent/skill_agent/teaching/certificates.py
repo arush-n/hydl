@@ -1,4 +1,4 @@
-"""Teacher certificates: the scripted walk_to and look_at teachers measured against fixed checks.
+"""Teacher certificates: the scripted walk_to, look_at and come_here teachers measured against fixed checks.
 
 docs/TRAINING_PLAN.md section 2c defines the certificate. This module measures T1 (success), T2 (efficiency), T3
 (obedience) and a light T7 (failure sorting) on the flat npc_walk environment. T4 (reality), T5 (imitability) and
@@ -31,10 +31,20 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from experimental.neural_agent.skill_agent.neural_skills.come_here import skill as come_skill
+from experimental.neural_agent.skill_agent.neural_skills.come_here.task import ComeHereTasks
+from experimental.neural_agent.skill_agent.neural_skills.come_here.teacher import come_here_choices
 from experimental.neural_agent.skill_agent.neural_skills.look_at.task import LookAtTasks
 from experimental.neural_agent.skill_agent.neural_skills.look_at.teacher import look_at_choices
+from experimental.neural_agent.skill_agent.neural_skills.walk_to import skill as walk_skill
 from experimental.neural_agent.skill_agent.neural_skills.walk_to.task import WalkToTasks
-from experimental.neural_agent.skill_agent.neural_skills.walk_to.teacher import walk_to_choices, walk_to_version
+from experimental.neural_agent.skill_agent.neural_skills.walk_to.teacher import (
+    WALK_TO_V3_STOP_MARGIN_BLOCKS,
+    walk_to_choices,
+    walk_to_version,
+)
+from experimental.neural_agent.skill_agent.training.bars import E4_SHARE
+from experimental.neural_agent.skill_agent.training.blocks import HOLD_TICKS
 from experimental.neural_agent.skill_agent.tasks.simple_tasks import (
     AGENT_EYE_HEIGHT,
     DEFAULT_LOADOUT,
@@ -52,6 +62,7 @@ from hytalegym.jax.combat.types import (
     GAIT_SNEAK,
     GAIT_WALK,
     PLAYER_GAIT_FORWARD_SPEED_MULTIPLIERS,
+    TARGET_ENTITY,
 )
 
 MAXIMUM_TURN_DEGREES = 45.0
@@ -73,6 +84,9 @@ Z_95 = 1.959963984540054
 GAIT_NAMES = {GAIT_WALK: "walk", GAIT_RUN: "run", GAIT_SNEAK: "sneak"}
 WALK_CLASSES = ("stuck", "timeout_far", "timeout_near")
 LOOK_CLASSES = ("timeout_yaw", "timeout_pitch", "timeout_yaw_and_pitch")
+#: The tasks whose certificate reads walk's checks: T2 on the time ratio, and the walk failure classes. come_here's T3
+#: is walk_to's E4 (pace and radius, shares at ``E4_SHARE``) instead of walk_to's zero-tolerance checks.
+WALK_TASKS = ("walk_to", "come_here")
 
 
 def wilson_interval(successes: int, trials: int, z: float = Z_95) -> tuple[float, float]:
@@ -133,6 +147,24 @@ def _look_teacher(combat, goals) -> TeacherOutput:
     )
 
 
+def _come_gap(combat, goals):
+    """f32[B, 1]: the learner's planar distance to entity 1 now. come_here succeeds where this is <= radius."""
+
+    planar = combat.position[:, AGENT_ENTITY][:, [0, 2]]
+    offset = planar - combat.position[:, TARGET_ENTITY][:, [0, 2]]
+    return jnp.hypot(offset[:, 0], offset[:, 1])[:, None]
+
+
+def _come_teacher(combat, goals) -> TeacherOutput:
+    return come_here_choices(combat, goals.radius, goals.gait, maximum_turn_degrees=MAXIMUM_TURN_DEGREES)
+
+
+def _come_here_sample(key, batch, *, held_out: bool):
+    """come_here's goals on the default spawn (yaw 0): entity 1 placed, in the rear-left region if ``held_out``."""
+
+    return come_skill.sample(key, batch, jnp.zeros((batch,), dtype=jnp.float32), held_out=held_out)
+
+
 class _Task(NamedTuple):
     name: str
     sample: Callable[[jax.Array, int], Any]
@@ -144,6 +176,8 @@ class _Task(NamedTuple):
 _TASKS = {
     "walk_to": _Task("walk_to", WalkToTasks.sample, WalkToTasks.success, _walk_gap, _walk_teacher),
     "look_at": _Task("look_at", LookAtTasks.sample, LookAtTasks.success, _look_gap, _look_teacher),
+    "come_here": _Task("come_here", functools.partial(_come_here_sample, held_out=False), ComeHereTasks.success,
+                       _come_gap, _come_teacher),
 }
 
 _HEAD_SIZES = np.asarray(ARSENAL_POLICY_ACTION_HEAD_SIZES, dtype=np.int32)
@@ -160,9 +194,10 @@ def _legal(mask: jax.Array, factors: jax.Array) -> jax.Array:
 
 
 def _observe(task: _Task, combat, goals):
-    """The environment's own success, the task's gap and the planar position, at one state."""
+    """The environment's own success, the task's gap, the planar position and the body yaw, at one state."""
 
-    return task.success(combat, goals), task.gap(combat, goals), combat.position[:, AGENT_ENTITY][:, [0, 2]]
+    return (task.success(combat, goals), task.gap(combat, goals), combat.position[:, AGENT_ENTITY][:, [0, 2]],
+            combat.yaw[:, AGENT_ENTITY])
 
 
 @functools.lru_cache(maxsize=4)
@@ -181,10 +216,21 @@ class _Trace(NamedTuple):
     held: np.ndarray  # bool[T+1, B]: the environment's success holds at state k
     gap: np.ndarray  # f32[T+1, B, K]: the gap the checks read at state k
     planar: np.ndarray  # f32[T+1, B, 2]: planar position (x, z) at state k
+    yaw: np.ndarray  # f32[T+1, B]: the body yaw at state k, degrees (walk_to's E4 pace reads it)
     done: np.ndarray  # bool[T, B]: the teacher's done at decision k
     legal: np.ndarray  # bool[T, B]: every factor of decision k is inside carry.action_mask
     seconds: np.ndarray  # f32[T, B]: the motion delta of the tick decision k executed
     terminated: np.ndarray  # bool[T, B]: the environment's terminated flag after decision k
+
+
+def _placed_other(goals, batch: int):
+    """float32[B, 3]: entity 1 at reset: the goals' place where they carry one (come_here's ``other_xyz``), else the
+    default every other task spawns it at."""
+
+    placed = getattr(goals, "other_xyz", None)
+    if placed is not None:
+        return placed
+    return jnp.broadcast_to(jnp.asarray(DEFAULT_OTHER_XYZ, dtype=jnp.float32), (batch, 3))
 
 
 def _run(env, task: _Task, observe, policy, seed: int):
@@ -197,17 +243,18 @@ def _run(env, task: _Task, observe, policy, seed: int):
         jax.random.split(reset_key, batch),
         jnp.broadcast_to(jnp.asarray(DEFAULT_SPAWN_XZ, dtype=jnp.float32), (batch, 2)),
         jnp.zeros((batch,), dtype=jnp.float32),
-        jnp.broadcast_to(jnp.asarray(DEFAULT_OTHER_XYZ, dtype=jnp.float32), (batch, 3)),
+        _placed_other(goals, batch),
     )
     ticks = int(np.max(np.asarray(goals.horizon_ticks)))
     step_keys = jax.random.split(step_key, ticks)
     rows: dict[str, list] = {field: [] for field in _Trace._fields}
     for tick in range(ticks + 1):
         combat = carry.runtime.combat
-        held, gap, planar = observe(combat, goals)
+        held, gap, planar, yaw = observe(combat, goals)
         rows["held"].append(held)
         rows["gap"].append(gap)
         rows["planar"].append(planar)
+        rows["yaw"].append(yaw)
         if tick == ticks:
             break
         out = policy(combat, goals)
@@ -274,7 +321,7 @@ def _lane_stats(name: str, trace: _Trace, goals) -> dict[str, np.ndarray]:
         "seconds_min": np.min(np.where(decision, trace.seconds, np.inf), axis=0),
         "seconds_max": np.max(np.where(decision, trace.seconds, -np.inf), axis=0),
     }
-    if name == "walk_to":
+    if name in WALK_TASKS:
         radius = np.asarray(goals.radius)
         gait = np.asarray(goals.gait)
         target = np.asarray(goals.target_xz)
@@ -311,9 +358,31 @@ def _lane_stats(name: str, trace: _Trace, goals) -> dict[str, np.ndarray]:
             yaw_out=np.abs(yaw[horizon, lanes]) > tolerance,
             pitch_out=np.abs(pitch[horizon, lanes]) > tolerance,
         )
+    if name == "come_here":
+        # The trainer's held success: a hold of HOLD_TICKS on-target ticks whose first tick is inside the horizon
+        # (``training/blocks.hold_update``), with the states counted from 1 as the trainer counts them.
+        held_end = _run_end(trace.held & (state_index >= 1), HOLD_TICKS)
+        stats["held"] = (held_end >= 0) & (held_end <= horizon + HOLD_TICKS - 1)
+        stats["e4"] = _e4_counts(goals, trace, success_at)
     # The gap formulas must agree with the environment's success on every state inside a lane's horizon.
     stats["gap_disagreements"] = np.sum((trace.held != within) & inside, axis=0)
     return stats
+
+
+def _e4_counts(goals, trace: _Trace, hit: np.ndarray) -> dict:
+    """walk_to's E4 for one seed, from walk_to's own pace and radius measures (``walk_to/skill.py``): the steady lanes
+    whose mean speed is within 5 % of the gait's, and the lanes whose radius holds at the first success. As counts, so
+    the seeds pool."""
+
+    active = np.ones(hit.shape, dtype=bool)
+    pace = walk_skill.pace(goals, active, trace.planar, trace.yaw, trace.seconds)
+    radius = walk_skill.radius_kept(goals, active, trace.planar, hit)
+    return {
+        "pace_lanes": pace["steady_lanes"],
+        "pace_within": round(pace["within_5_percent"] * pace["steady_lanes"]) if pace["steady_lanes"] else 0,
+        "radius_lanes": radius["successes"],
+        "radius_within": round(radius["within_radius"] * radius["successes"]) if radius["successes"] else 0,
+    }
 
 
 def _outcomes(name: str, stats: dict[str, np.ndarray]) -> np.ndarray:
@@ -323,7 +392,7 @@ def _outcomes(name: str, stats: dict[str, np.ndarray]) -> np.ndarray:
     labels = np.full(success.shape, "unclassified", dtype=object)
     labels[success] = "success"
     failed = ~success
-    if name == "walk_to":
+    if name in WALK_TASKS:
         stuck = failed & (stats["stuck_ticks"] > STUCK_TICKS)
         far = failed & ~stuck & (stats["final_distance"] > STEADY_RADII * stats["radius"])
         near = failed & ~stuck & ~far
@@ -346,10 +415,10 @@ def _pct(values: np.ndarray, q: float) -> float | None:
     return None if values.size == 0 else float(np.percentile(values, q))
 
 
-def _t1(per_seed) -> dict:
+def _t1(per_seed, key: str = "success") -> dict:
     rows = []
     for seed, stats in per_seed:
-        successes, episodes = int(stats["success"].sum()), int(stats["success"].size)
+        successes, episodes = int(stats[key].sum()), int(stats[key].size)
         rows.append(
             {
                 "seed": seed,
@@ -364,7 +433,7 @@ def _t1(per_seed) -> dict:
     rate = successes / episodes
     low, high = wilson_interval(successes, episodes)
     return {
-        "name": "success",
+        "name": "held success" if key == "held" else "success",
         "per_seed": rows,
         "pooled": {"successes": successes, "episodes": episodes, "rate": rate, "wilson_95": [low, high]},
         "value": rate,
@@ -471,6 +540,40 @@ def _t3_walk(per_seed) -> dict:
     }
 
 
+def _t3_come_here(per_seed) -> dict:
+    """come_here's obedience: legality, and walk_to's E4 on the pace over the steady lanes and on the radius at the
+    first success, each as a share pooled over the seeds and held to ``E4_SHARE``."""
+
+    pace_lanes = sum(stats["e4"]["pace_lanes"] for _, stats in per_seed)
+    pace_within = sum(stats["e4"]["pace_within"] for _, stats in per_seed)
+    radius_lanes = sum(stats["e4"]["radius_lanes"] for _, stats in per_seed)
+    radius_within = sum(stats["e4"]["radius_within"] for _, stats in per_seed)
+    pace_share = pace_within / pace_lanes if pace_lanes else None
+    radius_share = radius_within / radius_lanes if radius_lanes else None
+    pace = {
+        "value": pace_share,
+        "steady_lanes": pace_lanes,
+        "bar": E4_SHARE,
+        "rule": f"walk_to's E4 pace: within {SPEED_BAND:.0%} of v on at least {E4_SHARE:.0%} of the steady lanes",
+        "pass": bool(pace_share is not None and pace_share >= E4_SHARE),
+    }
+    radius = {
+        "value": radius_share,
+        "successes": radius_lanes,
+        "bar": E4_SHARE,
+        "rule": f"walk_to's E4 radius: kept at the first success on at least {E4_SHARE:.0%} of the successes",
+        "pass": bool(radius_share is not None and radius_share >= E4_SHARE),
+    }
+    illegal = _illegal_block(per_seed)
+    return {
+        "name": "obedience",
+        "pace": pace,
+        "radius": radius,
+        "illegal_decisions": illegal,
+        "pass": bool(pace["pass"] and radius["pass"] and illegal["pass"]),
+    }
+
+
 def _t3_look(per_seed) -> dict:
     done = _pooled(per_seed, "first_done") >= 0
     outside = done & ~_pooled(per_seed, "done_ok")
@@ -511,7 +614,7 @@ def _done_signal(per_seed) -> dict:
 
 
 def _failure_classes(name: str, per_seed) -> dict:
-    classes = WALK_CLASSES if name == "walk_to" else LOOK_CLASSES
+    classes = WALK_CLASSES if name in WALK_TASKS else LOOK_CLASSES
     labels_checked = (*classes, "unclassified")
     rows = []
     for seed, stats in per_seed:
@@ -548,28 +651,42 @@ def _env_block(env, per_seed) -> dict:
 def _certificate(
     name: str, seeds, episodes: int, *, date: str, policy_name: str, env, per_seed, stop_margin_blocks: float = 0.0
 ) -> dict:
-    spec = TEACHERS[name]
-    t1 = _t1(per_seed)
-    if name == "walk_to":
-        t2, t3 = _t2_walk(per_seed), _t3_walk(per_seed)
+    come = name == "come_here"
+    t1 = _t1(per_seed, "held" if come else "success")
+    if name in WALK_TASKS:
+        t2 = _t2_walk(per_seed)
+        t3 = _t3_come_here(per_seed) if come else _t3_walk(per_seed)
         overall = bool(t1["pass"] and t2["pass"] and t3["pass"])
         overall_rule = "T1 and T2 and T3"
     else:
         t2, t3 = _t2_look(per_seed), _t3_look(per_seed)
         overall = bool(t1["pass"] and t3["pass"])
         overall_rule = "T1 and T3 (T2 has no bar for look_at)"
-    teacher = {
-        "name": name,
-        "version": spec.version,
-        "state": spec.state,
-        "kind": spec.kind,
-        "verbs": list(spec.verbs),
-        "reads": list(spec.reads),
-        "parameters": list(spec.parameters),
-    }
-    if name == "walk_to":
-        teacher["version"] = walk_to_version(stop_margin_blocks)
-        teacher["stop_margin_blocks"] = stop_margin_blocks
+    if come:  # the registry has no come_here entry: its teacher is walk_to's rule (v3) toward entity 1
+        teacher = {
+            "name": name,
+            "version": walk_to_version(WALK_TO_V3_STOP_MARGIN_BLOCKS),
+            "state": "observed",
+            "kind": "scripted",
+            "verbs": ["come_here"],
+            "reads": ["position", "yaw", "entity 1's position"],
+            "parameters": ["radius", "gait", "maximum_turn_degrees"],
+            "stop_margin_blocks": WALK_TO_V3_STOP_MARGIN_BLOCKS,
+        }
+    else:
+        spec = TEACHERS[name]
+        teacher = {
+            "name": name,
+            "version": spec.version,
+            "state": spec.state,
+            "kind": spec.kind,
+            "verbs": list(spec.verbs),
+            "reads": list(spec.reads),
+            "parameters": list(spec.parameters),
+        }
+        if name == "walk_to":
+            teacher["version"] = walk_to_version(stop_margin_blocks)
+            teacher["stop_margin_blocks"] = stop_margin_blocks
     return {
         "scope": "T1, T2, T3 and T7 (light). T4, T5 and T6 are not measured here.",
         "teacher": teacher,
@@ -592,12 +709,15 @@ def _write(cert: dict, out) -> None:
     path.write_text(json.dumps(cert, indent=2, allow_nan=False) + "\n")
 
 
-def _certify(name: str, seeds, episodes: int, *, date: str, out, policy, stop_margin_blocks: float = 0.0) -> dict:
+def _certify(name: str, seeds, episodes: int, *, date: str, out, policy, stop_margin_blocks: float = 0.0,
+             held_out: bool = False) -> dict:
     if name == "look_at" and stop_margin_blocks != 0:
         raise ValueError("stop_margin_blocks is a walk_to option; look_at has no stop margin")
     if policy is not None and stop_margin_blocks != 0:
         raise ValueError("stop_margin_blocks runs the registered walk_to teacher; a custom policy replaces it")
     task = _TASKS[name]
+    if name == "come_here":  # come_here's lanes: entity 1 in the rear-left region when held_out
+        task = task._replace(sample=functools.partial(_come_here_sample, held_out=held_out))
     seeds = [int(seed) for seed in seeds]
     env = _environment(episodes)
     observe = jax.jit(functools.partial(_observe, task))
@@ -663,6 +783,43 @@ def certify_look_at(
     return _certify("look_at", seeds, episodes_per_seed, date=date, out=out, policy=policy)
 
 
+def certify_come_here(
+    seeds: Sequence[int],
+    episodes_per_seed: int = 256,
+    *,
+    date: str,
+    out: str | Path | None = None,
+    policy: Callable[[Any, Any], TeacherOutput] | None = None,
+) -> dict:
+    """Certificate for come_here on flat npc_walk: the teacher alone, on seen lanes and on held-out lanes (entity 1's
+    bearing in walk_to's rear-left region), one batched run per seed in each region; written to ``out`` when given.
+
+    The checks are T1 (held success, the trainer's hold), T2 (walk_to's time ratio), and T3 (legality, and walk_to's E4
+    pace and radius). Each region has its own checks; the certificate passes when both do. ``policy`` has the same role
+    as in ``certify_walk_to``.
+    """
+
+    regions = {
+        region: _certify("come_here", seeds, episodes_per_seed, date=date, out=None, policy=policy,
+                         held_out=held_out)
+        for region, held_out in (("seen", False), ("held_out", True))
+    }
+    seen = regions["seen"]
+    cert = {key: seen[key] for key in ("scope", "teacher", "policy", "date", "seeds", "episodes_per_seed", "env")}
+    cert["env"]["other_xyz"] = "per lane: entity 1 at 3 to 15 blocks from the spawn (come_here's goals)"
+    cert["regions"] = {
+        region: {key: row[key] for key in ("checks", "failure_classes", "done_signal", "sanity", "overall")}
+        for region, row in regions.items()
+    }
+    cert["overall"] = {
+        "pass": bool(all(row["overall"]["pass"] for row in regions.values())),
+        "rule": "T1 (held success), T2 and T3, on seen and on held-out lanes",
+    }
+    if out is not None:
+        _write(cert, out)
+    return cert
+
+
 def _verdict(passed) -> str:
     return "not defined" if passed is None else ("PASS" if passed else "FAIL")
 
@@ -671,9 +828,44 @@ def _fmt(value) -> str:
     return "none" if value is None else f"{value:.4g}"
 
 
+def _come_here_summary(cert: dict) -> list[str]:
+    """come_here's summary: one line per check, for each region."""
+
+    lines = [
+        f"come_here {cert['teacher']['version']} (teacher alone, {cert['policy']} policy), seeds {cert['seeds']}, "
+        f"{cert['episodes_per_seed']} episodes each per region, date {cert['date']}"
+    ]
+    for region, row in cert["regions"].items():
+        checks = row["checks"]
+        t1, t2, t3 = checks["T1"], checks["T2"], checks["T3"]
+        p = t2["percentiles"]
+        lines.append(
+            f"[{region}] T1 held success: pooled {t1['value']:.4f} ({t1['pooled']['successes']}/"
+            f"{t1['pooled']['episodes']}), Wilson 95% [{t1['interval'][0]:.4f}, {t1['interval'][1]:.4f}], "
+            f"bar >= {t1['bar']}: {_verdict(t1['pass'])}"
+        )
+        lines.append(
+            f"[{region}] T2 efficiency: median ratio {_fmt(p['p50'])}, p90 {_fmt(p['p90'])}, "
+            f"bar <= {t2['bar']}: {_verdict(t2['pass'])}"
+        )
+        lines.append(
+            f"[{region}] T3 obedience: pace within {SPEED_BAND:.0%} on {_fmt(t3['pace']['value'])} of "
+            f"{t3['pace']['steady_lanes']} steady lanes, radius kept on {_fmt(t3['radius']['value'])} of "
+            f"{t3['radius']['successes']} successes (bar >= {E4_SHARE}), illegal decisions "
+            f"{t3['illegal_decisions']['value']}: {_verdict(t3['pass'])}"
+        )
+        failures = row["failure_classes"]["pooled"]
+        counts = ", ".join(f"{label} {count}" for label, count in failures["counts"].items())
+        lines.append(f"[{region}] T7 failures {failures['failures']}: {counts}")
+    lines.append(f"overall: {_verdict(cert['overall']['pass'])}")
+    return lines
+
+
 def summary_lines(cert: dict) -> list[str]:
     """A short human-readable summary of a certificate, one line per check."""
 
+    if "regions" in cert:
+        return _come_here_summary(cert)
     checks = cert["checks"]
     t1, t2, t3 = checks["T1"], checks["T2"], checks["T3"]
     lines = [
@@ -725,12 +917,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--walk-stop-margin", type=float, default=0.0,
                         help="walk_to only: stop this many blocks inside the radius (v3; 0.25 is the A2 margin)")
     args = parser.parse_args(argv)
-    if args.teacher == "look_at" and args.walk_stop_margin != 0:
+    if args.teacher != "walk_to" and args.walk_stop_margin != 0:
         parser.error("--walk-stop-margin is for walk_to only")
     seeds = [int(seed) for seed in args.seeds.split(",")]
     if args.teacher == "walk_to":
         cert = certify_walk_to(seeds, args.episodes, date=args.date, out=args.out,
                                stop_margin_blocks=args.walk_stop_margin)
+    elif args.teacher == "come_here":
+        cert = certify_come_here(seeds, args.episodes, date=args.date, out=args.out)
     else:
         cert = certify_look_at(seeds, args.episodes, date=args.date, out=args.out)
     for line in summary_lines(cert):
