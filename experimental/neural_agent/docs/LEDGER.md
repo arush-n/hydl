@@ -1780,3 +1780,22 @@ result:
 - **Stale worldgen test (cause found, not changed):** `test_region_traversal_identity.py::test_current_v3_graph_library_replays_with_separate_provenance` compares the 0.5.7 traversal library's recorded bridge (5A54A8F5) with `current_native_evidence_jar_sha256()`, which reads the default line (0.7.2 since a49d001). Even on 0.5.7 the line's constant is 7700D112 (879321e), so that library was never recertified on the current 0.5 bridge. Gen 5 is deprecated; left as is.
 gate: Java 489 -> 491 passed (fresh); rebuilding HEAD unchanged reproduces 49CDB408. Pin test set (server versions, recapture identity, reference modes, entity profiles, contract publication, native world recordings, Region public benchmark): jar-16 baseline 77 passed + 10 errors (the old v6 drift); after the re-pin 13 more failed (9 recordings, 2 v8, 2 stamp) until the promotion, the re-freeze and the stamp; now back to the baseline (75 + the 12 publication tests, the same 10 v6 errors). tests/sim import order, fixture_blocks, live heard sounds 23 passed; adk test_bridge_client 6 passed.
 verdict: COMMITTED (7885b6c, b12eec8); not pushed. Next: the opt-in entry-timed footsteps (`hearing_entry`, lane tmp/lane_movein_timing; full tests/sim 693/8/3 on its first version; being reworked so the switch-off state carries no extra leaves: +0.7 s compile measured with three always-present leaves).
+## 2026-10-25 — skill_agent: walk_to's pace counts only the decisions inside each lane's horizon
+command: the owner, 2026-10-25: "Fix pace to in-episode ticks, keep B opt-in". The trainer speed probe found that pace counted a lane's steady walk after its horizon, which the rollout still runs but nothing else scores.
+result: Built by a Haiku subagent from a written spec, checked here.
+- **`neural_skills/walk_to/skill.py`:** decision `t` counts toward pace only when `t < horizon_ticks`, the window the trainers' success and hold already use. One function serves every caller: walk_to's `metrics`, come_here's (through walk_to's), `teaching/certificates.py`'s E4 and `training/distill.py`'s walk pace. The walk_to README has a "Pace (E4)" row.
+- **The saved modules, re-scored** (evaluation only, seed 77001, 256 lanes; the old definition reproduces every stored report value exactly). Within-5% share, module (steady lanes), bar 0.95:
+
+| Module | Region | Old | New |
+|---|---|---|---|
+| V2 walk_to (6x500) | seen | 0.9777 (224) | 0.9777 (224) |
+| V2 walk_to (6x500) | held out | 1.0000 (226) | 1.0000 (226) |
+| come_here 6x2000 | seen | 0.8990 (208) | 0.8990 (208) |
+| come_here 6x2000 | held out | 0.8621 (203) | 0.8663 (202) |
+| come_here from walk_to | seen | 0.8877 (187) | 0.8877 (187) |
+| come_here from walk_to | held out | 0.8607 (201) | 0.8650 (200) |
+
+  No E4 verdict flips (24 rows scanned); the teacher rows are unchanged. Pace numbers in stored reports keep the old definition and are not rewritten.
+- **Tests (local):** `test_pace_counts_only_the_decisions_inside_the_horizon` (a lane that stops at its horizon is within 5% only when in-episode decisions count). `test_sa_come_here.py`'s pinned walk_to evaluation digest moved 332077327b5cfed8 → cb15ef1471e0d967; with the old pace patched in, the old digest is reproduced, so the move is the pace alone.
+gate: two passes, sharded, on 7a41487 with the pace fix, the trainer speed, the batched lowering and the path teacher: pass 1 the step-9 baseline's 11 failing names and one more, test_sa_gen7.py's launcher test, which failed only because the gate ran with HYTALEGYM_RENDER_CACHE set (since 7a41487 the launcher then mounts the cached render; the local test now clears it, and passes with and without it); the integration shard 7 passed; pass 2 1 failing name, a baseline one. Landed on 8012119, after the coordinator's b12eec8, 2c5f1d3 and 8012119. They share the ledger, and 8012119's architecture test calls ModuleBatch, which the batched lowering changes. On the rebased tree, its stack arm (V1 bodies, 32 held-out lanes, seed 77001) gives the same report batched and per agent in every non-timing field (combiner and bodies 21.5 -> 10.2 ms a tick), and test_sa_region_tasks.py and test_sa_path_teacher.py pass (14, after b12eec8's v8 re-freeze).
+verdict: COMMITTED; not pushed.

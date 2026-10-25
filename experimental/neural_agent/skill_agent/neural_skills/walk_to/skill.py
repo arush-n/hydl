@@ -107,7 +107,13 @@ def pace(goals: WalkToGoals, active: np.ndarray, positions: np.ndarray, yaws: np
     still well short of its target and its body points at the target to within ``STEADY_HEADING_DEGREES``. A steady
     lane's mean planar speed (over its steady decisions) must sit within 5% of the requested gait's forward speed.
     ``positions`` is float32[T+1, B, 2] and ``yaws`` float32[T+1, B] (before each decision, and after the last);
-    ``seconds`` is float32[T, B]."""
+    ``seconds`` is float32[T, B].
+
+    Only decisions inside each lane's episode count: decision ``t`` is in it when ``t < goals.horizon_ticks``, the
+    window the trainers' success and hold use (``skill_dagger.summarise``, ``blocks.hold_update``). Until 2026-10-25
+    the steady decisions ran over all T ticks, so a lane's walk after its horizon, which the rollout still runs, was
+    measured; the owner ruled that out (in-episode ticks only). Callers: ``metrics`` (walk_to, and come_here through
+    ``come_here/skill.py``), ``training/distill.py``'s walk pace, and ``teaching/certificates.py``'s E4."""
 
     target = np.asarray(goals.target_xz, dtype=np.float64)
     radius = np.asarray(goals.radius, dtype=np.float64)
@@ -121,8 +127,10 @@ def pace(goals: WalkToGoals, active: np.ndarray, positions: np.ndarray, yaws: np
     distance = np.hypot(offset[..., 0], offset[..., 1])
     heading = wrap_degrees_np(np.degrees(np.arctan2(-offset[..., 0], -offset[..., 1])) - yaws[:-1])
     decision = np.arange(seconds.shape[0])[:, None]
+    inside = decision < np.asarray(goals.horizon_ticks)[None, :]
     steady = (
         (decision >= STEADY_FIRST_DECISION)
+        & inside
         & (distance > radius[None] + STEADY_CLEARANCE_BLOCKS)
         & (np.abs(heading) <= STEADY_HEADING_DEGREES)
         & walk_active[None]

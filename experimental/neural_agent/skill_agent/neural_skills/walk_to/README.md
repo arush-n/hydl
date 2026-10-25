@@ -15,6 +15,7 @@ holds everything specific to walk_to (`../README.md`).
 | Episodes | targets 3 to 15 blocks from the spawn, radius 0.5 to 1.5 blocks, gait walk, run or sneak; horizon: the time at the gait's speed x 1.5, plus 30 ticks |
 | Held out | targets at bearings 180 to 270 degrees, clockwise from the spawn body's forward (the rear left) |
 | World | flat, with the `npc_walk` body the game server's NPC uses (owner, 2026-10-18; `../../tasks/simple_tasks.py`) |
+| Pace (E4) | the steady decisions inside each lane's horizon only (decision `t` counts when `t` < `horizon_ticks`, the success window the trainers use; owner, 2026-10-25): a steady decision walks, is still more than the radius plus 2 blocks from the target, and heads at it within 10 degrees, from decision 10 on; a lane with 10 of them is steady, and its mean speed must sit within 5 % of the gait's speed (`skill.py`, `pace`). Before 2026-10-25 the steady decisions ran over every tick the rollout ran, past the horizon too. Re-scored on the saved modules, the pass verdicts did not change (`training/README.md`) |
 
 ## Status (2026-10-19): its own module is not trained yet; in the joint reference network every walk_to bar passes
 
