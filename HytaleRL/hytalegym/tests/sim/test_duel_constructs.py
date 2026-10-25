@@ -181,7 +181,7 @@ def test_the_encoder_wrappers_set_wrapped_and_the_bare_encoder_does_not() -> Non
     for module in (game_clock, heard_sounds, perception_v2):
         construct = module.construct
         profile = SimpleNamespace(
-            constructs=SimpleNamespace(game_clock=True, hearing=True, perception_v2=True),
+            constructs=SimpleNamespace(game_clock=True, hearing=True, hearing_entry=False, perception_v2=True),
             step_duration=SimpleNamespace(nominal_seconds=1 / 30),
         )
         assert hasattr(construct(bare, profile), "__wrapped__"), module.__name__

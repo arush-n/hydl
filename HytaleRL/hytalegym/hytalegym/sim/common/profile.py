@@ -182,6 +182,10 @@ class Constructs:
     # Heard sounds (S12, opt-in): the learner observation carries a heard_sounds field, the footsteps of every body in the
     # batch within each sound's MaxDistance (K = 16). False in gen 5 and gen 7. Owner: sim/gen7/mechanics/heard_sounds.py.
     hearing: bool = False
+    # Entry-timed footsteps (gen 7, opt-in; needs hearing on): MoveIn on a change of the feet cell and a 0.5-1.5 s repeat while
+    # moving, from three per-entity state leaves (the native TickMovementAudio rule). False keeps the stateless 30-tick cadence.
+    # Owner: sim/gen7/mechanics/movein_timing.py.
+    hearing_entry: bool = False
     # NPC sprint is run (row 1a, owner ruling 2026-10-21): on npc_walk a sprint request runs at the run gait, with no
     # stamina drain or regen block (the live NPC body cannot exceed its MaxSpeed). Owner: sim/gen7/mechanics/npc_sprint.py.
     npc_walk_sprint_as_run: bool = False

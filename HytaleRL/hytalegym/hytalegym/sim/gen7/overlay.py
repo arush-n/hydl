@@ -1590,13 +1590,37 @@ HOOKS = (
          "The producer is mechanics/feet_block.py, attached on the dense path by the block_under_feet_dense Patch; Region stays None"),
 )
 
+# Entry-timed footsteps (switch hearing_entry, sim/gen7/mechanics/movein_timing.py): one optional CombatState field (None
+# without the switch, so the switch-off state has no extra leaves), set by a reset hook and carried by a step hook.
+_MOVEIN_TEST = "tests/sim/test_movein_timing.py: the entry, the repeat window, standing still, leaving the bush, the switch-off identity"
+MOVEIN_PATCHES = (
+    Patch("movein_field", "combat/types.py",
+          "    agent_locomotion_stamina_regen_delay: Array\n\n\nclass CombatInfo(NamedTuple):\n",
+          "    agent_locomotion_stamina_regen_delay: Array\n"
+          "    # Gen 7 (movein timing, hearing_entry): the footstep state (movein_timing.FootstepState) or None. Last of the\n"
+          "    # fields: it has a default, and it is applied before the diagram fields, which land ahead of it.\n"
+          "    footstep: object = None\n\n\nclass CombatInfo(NamedTuple):\n",
+          "S12", _MOVEIN_TEST, "the optional footstep field movein_timing.py reads and writes (None without the switch)"),
+)
+MOVEIN_HOOKS = (
+    Hook("movein_reset", "combat/arsenal/runtime.py", "reset_arsenal_batch",
+         f"{_MECHANICS}.movein_timing:construct_reset", "hearing_entry", "active",
+         differential="tests/sim/test_movein_timing.py: the switch-off state has footstep None; the on state starts at air",
+         note="sets CombatState.footstep to the initial footstep state after the reset; gen 5 and the switch off return the original"),
+    Hook("movein_step", "combat/arsenal/runtime.py", "step_arsenal_batch",
+         f"{_MECHANICS}.movein_timing:construct_step", "hearing_entry", "active",
+         differential="tests/sim/test_movein_timing.py: entry, repeat window, standing still, leaving the bush, switch-off identity",
+         note="after the step: the footstep state follows the native rule (change arms, 0.5-1.5 s repeat while moving); "
+         "the heard encoder reads footstep.emit when hearing_entry is on"),
+)
+
 OVERLAY = Overlay(
     generation="gen7",
     profile="hytalegym.sim.gen7.profile:PROFILE",
     modules=("combat/",),
     redirects=STEP_CLOCK + CONTENT_LOCOMOTION + CONTENT_VALUES + CONTENT_TODO,
-    hooks=HOOKS,
-    patches=PATCHES,
+    hooks=HOOKS + MOVEIN_HOOKS,
+    patches=MOVEIN_PATCHES + PATCHES,
     audit=(
         ("step_duration_sites", STEP_CLOCK_SITES),
         ("swap_plan_rows", len(CONTENT_TODO)),

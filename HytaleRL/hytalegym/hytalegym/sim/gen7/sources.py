@@ -911,6 +911,16 @@ DECLARATIONS = {
         "construct (S12): the footstep MoveIn content is read at run time from Assets.zip by jax/world/audio/hearing.py; "
         "its differential is in the Hook row"
     ),
+    "movein_field": Derived(
+        "structural edit (S12, hearing_entry): one optional CombatState field, None without the switch; its differential is "
+        "tests/sim/test_movein_timing.py"
+    ),
+    "movein_reset": Derived(
+        "construct (S12, hearing_entry): its differential is in the Hook row (tests/sim/test_movein_timing.py)"
+    ),
+    "movein_step": Derived(
+        "construct (S12, hearing_entry): its differential is in the Hook row (tests/sim/test_movein_timing.py)"
+    ),
     "cascade_support_faces": Derived(
         "patch (break, owner yes 2026-10-23): the Region block catalog carries each entry's rotated support faces; the faces "
         "come from Assets.zip Support/MaxSupportDistance through worldgen/block_support.support_face_geometry; its differential "

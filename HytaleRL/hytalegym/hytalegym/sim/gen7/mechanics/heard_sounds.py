@@ -10,7 +10,9 @@ slots are the sources it can hear. A row never hears another row: each row's lis
 
 Approximations (each is a cost, stated here so the skill layer can judge them):
 
-- Emission is stateless. Each entity emits MoveIn of the block in its feet cell on ticks where ``tick_count % 30 == 0``
+- Switch ``hearing_entry`` (on): the footsteps are movein_timing.py's, the native entry and 0.5-1.5 s repeat, read from
+  ``state.combat.footstep.emit``; the stateless cadence below is then unused. The text below describes the switch-off path.
+- Emission is stateless (switch off). Each entity emits MoveIn of the block in its feet cell on ticks where ``tick_count % 30 == 0``
   while it moves horizontally (30 ticks = 1.0 s, the midpoint of the engine's repeat range; [E] in hearing.py). The phase is
   shared by every entity. Cost: no MoveOut and no entry burst on a block change, because the policy state carries the
   previous block nowhere; the first footstep can come up to 1 s late.
@@ -85,24 +87,36 @@ def _lookup(keys, query, table):
     return jnp.where(found, table[index], 0), found, index
 
 
-def heard_sounds_fields(state, world_capabilities, tables: FootstepTables) -> HeardSounds:
-    """The heard list of each arena row's entity 0, from this tick's footsteps of the row's entities (E sources)."""
+def heard_sounds_fields(state, world_capabilities, tables: FootstepTables, *, entry_timed: bool = False) -> HeardSounds:
+    """The heard list of each arena row's entity 0, from this tick's footsteps of the row's entities (E sources).
+
+    ``entry_timed`` (switch hearing_entry): the footsteps are the ones movein_timing.py stored this step in
+    ``state.combat.footstep.emit``; off, the stateless 30-tick cadence below.
+    """
 
     position = state.combat.position.astype(jnp.float32)  # [B, E, 3]
-    velocity = state.combat.velocity.astype(jnp.float32)
     batch, entities = position.shape[0], position.shape[1]
-    tick = state.combat.tick_count.astype(jnp.int32)  # [B]
+    if entry_timed:
+        footstep = state.combat.footstep  # movein_timing.FootstepState; None only for a state the reset hook did not make
+        if footstep is None:
+            sound_id = jnp.zeros((batch, entities), dtype=jnp.int32)
+        else:
+            sound_id = footstep.emit.astype(jnp.int32)  # [B, E], 0 for no footstep this step
+        emits = sound_id != 0
+    else:
+        velocity = state.combat.velocity.astype(jnp.float32)
+        tick = state.combat.tick_count.astype(jnp.int32)  # [B]
 
-    block = getattr(world_capabilities, "block_under_feet", None)
-    if block is None:
-        block = jnp.full((batch, entities), semantic_id(FLOOR_BLOCK), dtype=jnp.int32)
-    block = block.astype(jnp.int32)  # [B, E]
-    horizontal = jnp.sqrt(velocity[..., 0] ** 2 + velocity[..., 2] ** 2)
-    moving = horizontal > MOVING_SPEED
-    repeat_due = ((tick % REPEAT_TICKS) == 0)[:, None]
-    block_in, block_known, _ = _lookup(tables.block_keys, block, tables.move_in)
-    emits = moving & repeat_due & block_known & (block_in != 0)
-    sound_id = jnp.where(emits, block_in, 0).astype(jnp.int32)  # [B, E]
+        block = getattr(world_capabilities, "block_under_feet", None)
+        if block is None:
+            block = jnp.full((batch, entities), semantic_id(FLOOR_BLOCK), dtype=jnp.int32)
+        block = block.astype(jnp.int32)  # [B, E]
+        horizontal = jnp.sqrt(velocity[..., 0] ** 2 + velocity[..., 2] ** 2)
+        moving = horizontal > MOVING_SPEED
+        repeat_due = ((tick % REPEAT_TICKS) == 0)[:, None]
+        block_in, block_known, _ = _lookup(tables.block_keys, block, tables.move_in)
+        emits = moving & repeat_due & block_known & (block_in != 0)
+        sound_id = jnp.where(emits, block_in, 0).astype(jnp.int32)  # [B, E]
 
     sound_index = jnp.clip(jnp.searchsorted(tables.sound_keys, sound_id), 0, tables.sound_keys.shape[0] - 1)
     sound_known = (tables.sound_keys[sound_index] == sound_id) & emits
@@ -168,12 +182,18 @@ def construct(original, profile):
     if value is not True:
         raise ValueError(f"hearing must be a bool, got {value!r}")
 
+    entry_timed = profile.constructs.hearing_entry
+    if entry_timed is not True and entry_timed is not False:
+        raise ValueError(f"hearing_entry must be a bool, got {entry_timed!r}")
+
     @wraps(original)  # perception_v2 unwraps the encoder it receives to find the rendered package
     def encode_with_heard_sounds(state, params, world_features, world_capabilities, config, *, world_geometry=None):
         observation = original(
             state, params, world_features, world_capabilities, config, world_geometry=world_geometry
         )
-        heard = heard_sounds_fields(state, world_capabilities, footstep_tables_from_env())
+        heard = heard_sounds_fields(
+            state, world_capabilities, footstep_tables_from_env(), entry_timed=entry_timed
+        )
         return observation_type(type(observation))(*observation, heard)
 
     return encode_with_heard_sounds
