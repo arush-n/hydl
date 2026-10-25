@@ -1093,6 +1093,53 @@ PATCHES = (
           "S12", "tests/sim/test_hearing_channel.py: the render test reads block_under_feet from a dense geometry",
           "geometry_arsenal_world_capabilities: fills block_under_feet from the dense identity grid (mechanics/feet_block.py); "
           "Region and grid-less geometry stay None"),
+    # Held charge (row 5f, live jar 3865F45F): while a charge is held, live reports the charging slot as active from the press
+    # tick (thrust_lunge_*_jar14_{edge,hold10,hold30}.json: slot 3 from r+0). The sim's charge stage keeps the slot in
+    # ability_hold_slot and leaves active_ability_slot -1 until the child is admitted, so the observation reports the held
+    # slot. Legality is untouched: the legal mask reads the state's own active slot.
+    Patch("held_charge_reports_active_slot", "combat/observation/v3/encoding/encoder.py",
+          "    observable_active_slot = project_observable_active_slot(\n"
+          "        loadout,\n"
+          "        observable_arsenal.active_ability_slot,\n"
+          "        observable_arsenal.active_ability_root_slot,\n"
+          "    )\n",
+          "    observable_active_slot = project_observable_active_slot(\n"
+          "        loadout,\n"
+          "        observable_arsenal.active_ability_slot,\n"
+          "        observable_arsenal.active_ability_root_slot,\n"
+          "    )\n"
+          "    # Gen 7 (row 5f): a held charge reports its slot as active from the press, as the live bridge does: while it is\n"
+          "    # held (ability_hold_slot), and on the tick its child waits in the start queue (live never re-queues a charging\n"
+          "    # root, so its slot stays active through the release).\n"
+          "    raw_root = state.arsenal.active_ability_root_slot\n"
+          "    queued_charge = (\n"
+          "        (observable_active_slot < 0)\n"
+          "        & (state.arsenal.active_ability_slot >= 0)\n"
+          "        & (raw_root >= 0)\n"
+          "        & (\n"
+          "            jnp.take_along_axis(\n"
+          "                loadout.ability_hold_count,\n"
+          "                jnp.clip(raw_root, 0, loadout.ability_hold_count.shape[2] - 1)[..., None],\n"
+          "                axis=2,\n"
+          "            )[..., 0]\n"
+          "            > 0\n"
+          "        )\n"
+          "    )\n"
+          "    observable_active_slot = jnp.where(\n"
+          "        queued_charge,\n"
+          "        project_observable_active_slot(loadout, state.arsenal.active_ability_slot, raw_root),\n"
+          "        observable_active_slot,\n"
+          "    )\n"
+          "    observable_active_slot = jnp.where(\n"
+          "        (observable_active_slot < 0) & (state.arsenal.ability_hold_slot >= 0),\n"
+          "        state.arsenal.ability_hold_slot,\n"
+          "        observable_active_slot,\n"
+          "    )\n",
+          "5f", "tests/sim/test_held_charge_active_slot.py: slot 3 held on steps 1..30 reads active from step 1 on gen 7 "
+          "(gen 5 keeps -1 until the thrust is admitted); the legal mask keeps the held slot open",
+          "encoder: observable_active_slot takes ability_hold_slot while held and the queued charged child's slot on its "
+          "start-queue tick; feeds the agent attack compatibility, the active one-hot and the weapon_i32 slot column, as "
+          "the live active slot does"),
     # Block breaking (owner yes 2026-10-23): the Region removal certificate refuses a break only when a neighbour actually
     # rests on the target (0.7.2 testBlockPhysicsAtPosition reads only its support keys' cells), or is chain-capable,
     # protruding or unknown. The catalog must carry the faces, so both defaults flip; gen 5 keeps the any-neighbour rule.

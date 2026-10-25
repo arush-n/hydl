@@ -925,6 +925,11 @@ DECLARATIONS = {
         "patch (break, owner yes 2026-10-23): the catalog builder's default matches the executor's, so every gen-7 "
         "catalog carries the support faces from Assets.zip; its differential is tests/sim/test_break_cascade_rule.py"
     ),
+    "held_charge_reports_active_slot": Derived(
+        "patch (row 5f): the live bridge reports a held charge's slot as active from the press (jar 3865F45F receipts "
+        "gen7_probes/thrust_lunge/thrust_lunge_Kweebec_Razorleaf_jar14_{edge,hold10,hold30}.json, slot 3 from r+0); "
+        "its differential is tests/sim/test_held_charge_active_slot.py"
+    ),
     "game_clock": (
         # S14 (owner 2026-10-23): the 0.7.2 day and night lengths; SECONDS_PER_DAY 86400 and the 0.6 day split are
         # WorldTimeResource constants (javap), checked by tests/sim/test_game_clock.py.
