@@ -56,6 +56,7 @@ from experimental.neural_agent.session import (
     _percentile,
 )
 from experimental.neural_agent.shared_state import SharedState
+from experimental.neural_agent.skill_agent.contract.protocol import check
 from experimental.neural_agent.skill_agent.runtime import state_tick
 from experimental.neural_agent.skill_agent.runtime.combiner import AgentContext, CombinedStep, Combiner
 from experimental.neural_agent.skill_agent.runtime.scratchpad import combine_from_scratchpad
@@ -213,7 +214,9 @@ def run_gen7_session(
     facts = world.reset()
     for tick in range(config.ticks):
         started = time.perf_counter()
-        binding.on_tick(document, tick - 1, False, transition_of(facts))
+        # The statuses of the previous tick reach the state layer now; the first tick has none, and a record's tick
+        # must not be negative (shared_state's AgentEntities), so it is tagged 0.
+        binding.on_tick(document, max(tick - 1, 0), False, transition_of(facts))
         if binding.view is not None:
             jax.block_until_ready(binding.view.encoded)
         clock["state_tick"] += time.perf_counter() - started
@@ -253,6 +256,14 @@ def run_gen7_session(
             for agent in agents:
                 for request in document.requests.for_agent(agent):
                     verb = verb_of(request)
+                    # Batch only what the combiner will accept (its own check); a body lowers a request it is handed,
+                    # and a malformed one (a walk with no point) would raise. A request left out is computed per
+                    # agent if it is granted after all, so the batch never changes a choice.
+                    context = ctx[agent]
+                    if check(request, combiner.specs.get(verb), tick=tick, world_bounds=context.world_bounds,
+                             known_entities=context.known_entities, legal_scopes=context.legal_scopes,
+                             done_ids=()) is not None:
+                        continue
                     if verb in live.setdefault(agent, {}):
                         raise RuntimeError(f"agent {agent} has two live {verb} requests; a batch holds one")
                     live[agent][verb] = request

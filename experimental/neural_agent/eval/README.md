@@ -217,3 +217,19 @@ is 0.031):
   has no "withdrawn as complete".
 - Not tested: `session.run_session` itself. Its in-graph actor runs only array bodies (`runtime/granted_actor.py`), so a
   host `ModuleBody` cannot act through it; this harness is the host loop for now.
+
+## The decision layer's programs on gen 7 (2026-10-25; `run_gen7_programs.py`)
+
+The real decision layer (`jev/programs.py` `ProgramExecutor`, unchanged) drives the trained walk_to and look_at bodies through the
+gen-7 host session runner (`session_gen7.run_gen7_session`) via `jev/gen7_decider.py` `Gen7ProgramDecider`: every tick the shared
+belief (`belief/core.py`, legal observation only) advances on the gen-7 learner observation with the real elapsed seconds; on the
+executor's cadence (0.5 s = 15 ticks) the adapter hands the executor stand-ins for the ADK fields it reads (listed in the module
+docstring), applies the returned goal where the ADK seam would (commitment), and gives walk_to and look_at their point from the agent's
+known-entity record in S_t (walk_to at the entity's feet, look_at at its eye, +1.0 block). Idle and point-less requests are withheld.
+Emergency is all False (the gen-7 belief has no events yet).
+
+Run (16 lanes, 300 ticks, seed 77001, a fixed executive with one goal, the program walk_to the other entity then look_at it; bodies
+`v1_bodies/memory_s0`, the architecture test's world): 16/16 programs finished, 0 illegal actions, 16/16 within the walk radius,
+look facing 13/16 at the other entity's eye (pitch 0 deg), decisions p50 0.52 ms / p95 2.07 ms against a 20 ms budget, host 63 ms a
+tick (state tick 47). The 16 lanes are replicas of one scene. Requests are re-issued each cadence with new ids (the executor's request
+lifetime is one cadence), so a body's request restarts every 0.5 s; the walk completed regardless.
