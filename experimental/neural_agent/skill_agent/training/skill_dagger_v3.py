@@ -223,16 +223,96 @@ def _join(parts: Sequence[Decisions]) -> Decisions:
     )
 
 
+SLOT_BUCKET = 8
+"""The token-slot cut's bucket (``slot_cut``): each token type's kept slots are a multiple of this. They grow when a
+decision fills more and are never fewer within a rollout, so the trunk compiles for a few shapes only."""
+
+LANE_BUCKET = 16
+"""Lane compaction's bucket (``compact_lanes``): the lanes run each tick are a multiple of this, padded with
+indices past the batch, which are dropped on the way back."""
+
+
+@jax.jit
+def _take(tree: Any, pick: jax.Array) -> Any:
+    """Each array's lanes at ``pick`` (int32[K], along the first axis). A pad index past the batch reads the last
+    lane. Jitted: the state is hundreds of small arrays, and eager gathers would dispatch one by one each tick."""
+
+    return jax.tree_util.tree_map(lambda leaf: jnp.take(leaf, pick, axis=0, mode="clip"), tree)
+
+
+@jax.jit
+def _put(tree: Any, pick: jax.Array, part: Any) -> Any:
+    """``tree`` with its lanes at ``pick`` replaced by ``part`` (indices past the batch are dropped)."""
+
+    return jax.tree_util.tree_map(lambda full, sub: full.at[pick].set(sub, mode="drop"), tree, part)
+
+
+def _live_pick(index: int, horizon: np.ndarray, batch: int) -> tuple[np.ndarray, np.ndarray]:
+    """The lanes run at decision ``index`` under ``compact_lanes``: those whose decision still counts, inside the
+    horizon or in the hold after it (``blocks.HOLD_TICKS``), padded to LANE_BUCKET with indices past the batch.
+    Returns the pick int32[K] and the real bool[K]."""
+
+    live = np.flatnonzero(index < horizon + blocks.HOLD_TICKS)
+    size = min(batch, max(LANE_BUCKET, -(-len(live) // LANE_BUCKET) * LANE_BUCKET))
+    pick = np.full(size, batch, dtype=np.int32)
+    pick[:len(live)] = live
+    return pick, pick < batch
+
+
+def _kept_slots(tokens: dict, cell_pointer: jax.Array, kept: dict[str, int]) -> dict[str, int]:
+    """Each token type's kept slots for this decision: through the last valid row any lane holds (and past the block
+    candidate a request points at), rounded up to SLOT_BUCKET, and never fewer than ``kept`` had."""
+
+    last = {name: jnp.max(jnp.where(valid, jnp.arange(1, valid.shape[1] + 1), 0))
+            for name, (_, valid) in tokens.items()}
+    host = jax.device_get({**last, "pointer": jnp.max(cell_pointer) + 1})
+    grown = {}
+    for name, (_, valid) in tokens.items():
+        need = int(host[name])
+        if name == "block_candidate":
+            need = max(need, int(host["pointer"]))
+        rounded = -(-max(need, 1) // SLOT_BUCKET) * SLOT_BUCKET
+        grown[name] = min(valid.shape[1], max(kept.get(name, 0), rounded))
+    return grown
+
+
+def _cut_trunk(kernels: Kernels, params: Any, tokens: dict, state: Any, reset: jax.Array,
+               kept: dict[str, int]) -> tuple[Any, Any]:
+    """The trunk on each token type's first ``kept`` slots and on those slots' object slots, as ``distill_v3._batch``
+    cuts a batch. The state comes back with its object slots at full width."""
+
+    cut = {name: (features[:, :kept[name]], valid[:, :kept[name]]) for name, (features, valid) in tokens.items()}
+    slots = state.object_slots
+    short = {name: value[:, :kept.get(name, value.shape[1])] for name, value in slots.items()}
+    view, new = kernels.trunk(params, cut, state._replace(object_slots=short), reset)
+    return view, new._replace(object_slots=slots)
+
+
 def rollout(strategy: Strategy, trunk: Trunk, module_params: Any, lanes: Lanes, use_teacher: jax.Array,
             kernels: Kernels, key: jax.Array, *, record: bool, storage: str = STORAGE,
-            keep_logits: bool = False) -> Trace:
+            keep_logits: bool = False, shortcut: bool = True, slot_cut: bool = True,
+            compact_lanes: bool = False) -> Trace:
     """``skill_dagger.rollout`` on v3: every lane runs its horizon, one decision per tick. The trained skill acts by its
     teacher where ``use_teacher`` (bool[B]) and by its module elsewhere; the skills beside it by their teachers. Entity 1
     starts where the trained skill's goals place it (:func:`placed_other`), and each request's entity handle is resolved
     to its token row every decision. With ``record`` the decisions inside the horizons are stored (``Decisions``); with
     ``keep_logits`` so are the module's logits there. If the trained skill's goals carry a ``mover`` (track), the
-    environment moves entity 1 along that path, and it starts at the path's first point."""
+    environment moves entity 1 along that path, and it starts at the path's first point.
 
+    ``shortcut`` (default) skips work no output reads: with every lane on its teacher the module is not run, and with
+    nothing recorded or logged the trunk, the layer and the requests are not run either. The executed actions, and so
+    the trace, are those of ``shortcut=False``, which runs every kernel (the reference the tests compare with).
+
+    ``slot_cut`` (on by default since 2026-10-25, the owner's ruling; ``slot_cut=False`` is the exact path of earlier
+    runs) runs the trunk on each token type's filled slots only (:func:`_kept_slots`, as ``distill_v3`` cuts its
+    batches), so the token rows the trunk sees are fewer, and its float32 rounding may differ. ``compact_lanes`` (off by
+    default) runs the layer, trunk, requests and module only on the lanes whose
+    decisions still count (inside their horizon or the hold after it, ``blocks.HOLD_TICKS``); the other lanes act by
+    their teachers, and the environment still steps every lane. A lane's actions after its hold, and so the trace's
+    ``positions`` after it, differ from ``compact_lanes=False``; the decisions stored and the counts do not."""
+
+    if compact_lanes and keep_logits:
+        raise ValueError("compact_lanes does not keep the module's logits")
     env = blocks.environment(int(lanes.kind.shape[0]), strategy.config.maximum_turn_degrees)
     mover = getattr(lanes.goals[0], "mover", None)
     if mover is not None:
@@ -269,33 +349,83 @@ def rollout(strategy: Strategy, trunk: Trunk, module_params: Any, lanes: Lanes, 
         positions[index] = np.asarray(combat.position[:, AGENT_ENTITY][:, [0, 2]])
         yaws[index] = np.asarray(combat.yaw[:, AGENT_ENTITY])
 
+    all_teacher = bool(np.asarray(use_teacher).all())
+    teacher_only = shortcut and all_teacher and not record and not keep_logits  # no trunk output is read
+    student_idle = shortcut and all_teacher and not keep_logits  # the module's action is never executed
+    kept: dict[str, int] = {}
     record_instant(0, carry.runtime.combat)
     last = neutral
     for index in range(ticks):
         combat = carry.runtime.combat
-        position = combat.position[:, AGENT_ENTITY]
-        yaw = combat.yaw[:, AGENT_ENTITY]
-        pose = Pose(position, yaw, combat.agent_head_yaw, combat.agent_head_pitch)
-        requests = kernels.requests(lanes, pose, jnp.float32(index))
         taught = kernels.teachers(combat, lanes)
-        _, last_action, _, _ = state_tick.host_inputs(observation, last, jnp.zeros((batch,), jnp.bool_))
-        reset = jnp.full((batch,), index == 0)
-        tokens, after = layer_step(state, observation, position, yaw, last_action, reset)
-        view, state = kernels.trunk(trunk.params, tokens, after, reset)
-        requests = kernels.points(view, requests)  # each entity handle to the token row holding that entity (-1: none)
-        student, logits = kernels.student(module_params, carry.action_mask, view.encoded, view.masks, requests,
-                                          lanes.active[:, 0])
-        own = jnp.where(use_teacher[:, None], taught.labels, student)
-        executed = merge(own, taught.beside, strategy.spec, lanes.active[:, 0])
         teacher_executed = merge(taught.labels, taught.beside, strategy.spec, lanes.active[:, 0])
-
         keep = index < horizon
+        stored = None
+        if teacher_only:
+            view = requests = logits = None
+            executed = teacher_executed
+        elif compact_lanes:
+            pick_host, real = _live_pick(index, horizon, batch)
+            pick = jnp.asarray(pick_host)
+            position = combat.position[:, AGENT_ENTITY]
+            yaw = combat.yaw[:, AGENT_ENTITY]
+            pose = Pose(position, yaw, combat.agent_head_yaw, combat.agent_head_pitch)
+            requests = kernels.requests(lanes, pose, jnp.float32(index))
+            _, last_action, _, _ = state_tick.host_inputs(observation, last, jnp.zeros((batch,), jnp.bool_))
+            sub_reset = jnp.full((len(pick_host),), index == 0)
+            tokens, after = layer_step(_take(state, pick), _take(observation, pick), _take(position, pick),
+                                       _take(yaw, pick), _take(last_action, pick), sub_reset)
+            requests = _take(requests, pick)
+            if slot_cut:
+                kept = _kept_slots(tokens, requests.cell_pointer, kept)
+                view, sub_state = _cut_trunk(kernels, trunk.params, tokens, after, sub_reset, kept)
+            else:
+                view, sub_state = kernels.trunk(trunk.params, tokens, after, sub_reset)
+            state = _put(state, pick, sub_state)
+            requests = kernels.points(view, requests)
+            sub_taught = _take(taught, pick)
+            sub_active = _take(lanes.active[:, 0], pick)
+            if student_idle:
+                own = sub_taught.labels
+            else:
+                student, _ = kernels.student(module_params, _take(carry.action_mask, pick), view.encoded,
+                                             view.masks, requests, sub_active)
+                own = jnp.where(_take(use_teacher, pick)[:, None], sub_taught.labels, student)
+            executed = teacher_executed.at[pick].set(merge(own, sub_taught.beside, strategy.spec, sub_active),
+                                                     mode="drop")
+            if record:
+                stored = _store(view, requests, sub_taught, real & keep[np.minimum(pick_host, batch - 1)], dtype)
+        else:
+            position = combat.position[:, AGENT_ENTITY]
+            yaw = combat.yaw[:, AGENT_ENTITY]
+            pose = Pose(position, yaw, combat.agent_head_yaw, combat.agent_head_pitch)
+            requests = kernels.requests(lanes, pose, jnp.float32(index))
+            _, last_action, _, _ = state_tick.host_inputs(observation, last, jnp.zeros((batch,), jnp.bool_))
+            reset = jnp.full((batch,), index == 0)
+            tokens, after = layer_step(state, observation, position, yaw, last_action, reset)
+            if slot_cut:
+                kept = _kept_slots(tokens, requests.cell_pointer, kept)
+                view, state = _cut_trunk(kernels, trunk.params, tokens, after, reset, kept)
+            else:
+                view, state = kernels.trunk(trunk.params, tokens, after, reset)
+            # each entity handle to the token row holding that entity (-1: none)
+            requests = kernels.points(view, requests)
+            if student_idle:
+                own, logits = taught.labels, None  # every lane is on its teacher: where() would pick these labels
+            else:
+                student, logits = kernels.student(module_params, carry.action_mask, view.encoded, view.masks, requests,
+                                                  lanes.active[:, 0])
+                own = jnp.where(use_teacher[:, None], taught.labels, student)
+            executed = merge(own, taught.beside, strategy.spec, lanes.active[:, 0])
+            if record:
+                stored = _store(view, requests, taught, keep, dtype)
+
         mask = np.asarray(carry.action_mask)
         decisions += int(keep.sum())
         illegal += int(np.sum(keep & ~blocks.legal_rows(mask, np.asarray(executed))))
         teacher_illegal += int(np.sum(keep & ~blocks.legal_rows(mask, np.asarray(teacher_executed))))
         if record:
-            chunks.append(_store(view, requests, taught, keep, dtype))
+            chunks.append(stored)
         if keep_logits:
             logit_parts.append({name: np.asarray(value)[keep] for name, value in logits.items()})
 
@@ -436,10 +566,12 @@ def start_module(strategy: Strategy, trunk: Trunk, init_key: jax.Array, init_par
     return module._replace(params=init_params)
 
 
-def train(strategy: Strategy, trunk: Trunk, *, storage: str = STORAGE, init_params: Any = None) -> TrainResult:
+def train(strategy: Strategy, trunk: Trunk, *, storage: str = STORAGE, init_params: Any = None,
+          shortcut: bool = True, slot_cut: bool = True, compact_lanes: bool = False) -> TrainResult:
     """Iterate DAgger for ``strategy.spec``: collect with ``beta`` (the teacher's share of lanes; 1, then halving), add
     the decisions to the dataset, then ``steps`` Adam steps on the module alone, per iteration. ``init_params`` starts
-    the module from a trained one (:func:`start_module`); None starts it fresh, as before."""
+    the module from a trained one (:func:`start_module`); None starts it fresh, as before. ``shortcut``, ``slot_cut``
+    and ``compact_lanes`` are :func:`rollout`'s."""
 
     config = strategy.config
     key, init_key = jax.random.split(jax.random.key(config.seed))
@@ -460,7 +592,7 @@ def train(strategy: Strategy, trunk: Trunk, *, storage: str = STORAGE, init_para
         lanes = strategy.episodes(key_lanes, kind, False)
         use_teacher = jax.random.uniform(key_mix, (config.lanes,)) < beta
         trace = rollout(strategy, trunk, params, lanes, use_teacher, kernels, key_rollout, record=True,
-                        storage=storage)
+                        storage=storage, shortcut=shortcut, slot_cut=slot_cut, compact_lanes=compact_lanes)
         parts.append(trace.samples)
         data = _join(parts)
         collected = time.perf_counter()
@@ -503,19 +635,24 @@ def train(strategy: Strategy, trunk: Trunk, *, storage: str = STORAGE, init_para
 
 
 def evaluate(strategy: Strategy, trunk: Trunk, module_params: Any, *, seed: int, lanes: int, held_out: bool,
-             policy: str = "module") -> dict:
+             policy: str = "module", kernels: Kernels | None = None, shortcut: bool = True, slot_cut: bool = True,
+             compact_lanes: bool = False) -> dict:
     """Run the trained skill by its module (``policy="module"``) or its teacher (``"teacher"``) on fresh v3 lanes, the
-    kinds taken round-robin (``skill_dagger.evaluate``'s report). The same ``seed`` gives the same lanes."""
+    kinds taken round-robin (``skill_dagger.evaluate``'s report). The same ``seed`` gives the same lanes. ``kernels``
+    (:func:`make_kernels` for this strategy and trunk) may be shared by several calls, which then compile once; None
+    makes a set. ``shortcut``, ``slot_cut`` and ``compact_lanes`` are :func:`rollout`'s."""
 
     if policy not in ("module", "teacher"):
         raise ValueError(f"policy must be 'module' or 'teacher', got {policy!r}")
-    known = tuple(sorted({spec.verb for spec in strategy.skills}))
-    kernels = make_kernels(strategy, trunk, known)
+    if kernels is None:
+        known = tuple(sorted({spec.verb for spec in strategy.skills}))
+        kernels = make_kernels(strategy, trunk, known)
     kind = jnp.asarray(np.arange(lanes) % len(strategy.kinds), dtype=jnp.int32)
     key_lanes, key_rollout = jax.random.split(jax.random.key(seed))
     episode = strategy.episodes(key_lanes, kind, held_out)
     use_teacher = jnp.full((lanes,), policy == "teacher")
-    trace = rollout(strategy, trunk, module_params, episode, use_teacher, kernels, key_rollout, record=False)
+    trace = rollout(strategy, trunk, module_params, episode, use_teacher, kernels, key_rollout, record=False,
+                    shortcut=shortcut, slot_cut=slot_cut, compact_lanes=compact_lanes)
     return {"policy": policy, "held_out": held_out, "seed": seed, "lanes": lanes,
             **summarise(strategy, episode, trace)}
 
@@ -543,6 +680,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=defaults.seed)
     parser.add_argument("--eval-seed", type=int, default=77001)
     parser.add_argument("--eval-lanes", type=int, default=256)
+    parser.add_argument("--no-slot-cut", action="store_true",
+                        help="run the trunk on every token slot, as earlier runs did (the slot cut is the default)")
+    parser.add_argument("--compact-lanes", action="store_true",
+                        help="opt-in (not bit-exact): the trunk, layer and module run only on lanes still inside their "
+                             "horizon or hold")
     parser.add_argument("--init-module", type=Path, default=None,
                         help="start from this trained module (.npz with its .json) on the same trunk, scope and sizes")
     args = parser.parse_args(argv)
@@ -562,15 +704,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error(f"{args.init_module} is a {source.scope} module of another size; it cannot start {args.skill}")
     record = blocks.provenance()
     started = time.perf_counter()
-    result = train(strategy, trunk, init_params=None if source is None else source.params)
+    slot_cut = not args.no_slot_cut
+    result = train(strategy, trunk, init_params=None if source is None else source.params, slot_cut=slot_cut,
+                   compact_lanes=args.compact_lanes)
     args.module_out.parent.mkdir(parents=True, exist_ok=True)
     save_module(args.module_out, result.module)
+    known = tuple(sorted({spec.verb for spec in strategy.skills}))
+    kernels = make_kernels(strategy, trunk, known)  # the four evaluations share one set of compiled kernels
     evaluation = {
         region: {policy: evaluate(strategy, trunk, result.module.params, seed=args.eval_seed, lanes=args.eval_lanes,
-                                  held_out=held_out, policy=policy) for policy in ("module", "teacher")}
+                                  held_out=held_out, policy=policy, kernels=kernels, slot_cut=slot_cut,
+                                  compact_lanes=args.compact_lanes)
+                 for policy in ("module", "teacher")}
         for region, held_out in (("seen", False), ("held_out", True))
     }
     record["load_average"]["end"] = list(os.getloadavg())
+    speed = {"slot_cut": slot_cut, "compact_lanes": args.compact_lanes}
     report = {
         "schema": "skill_module_v1",
         "skill": strategy.spec.name,
@@ -591,6 +740,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "seconds": round(time.perf_counter() - started, 1),
         "provenance": record,
     }
+    if slot_cut or args.compact_lanes:  # not the exact path of earlier runs: the report says which path made it
+        report["speed"] = speed
     text = json.dumps(report, indent=1, default=blocks.json_default)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(text + "\n")
