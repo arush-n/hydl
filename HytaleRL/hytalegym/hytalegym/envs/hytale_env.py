@@ -22,6 +22,7 @@ from hytalegym.combat.telemetry import (
 from hytalegym.geometry import geometry_space, parse_geometry
 from hytalegym.rulesets import load_combat_ruleset
 from hytalegym.envs.block_type_table import BlockTypeIdLoader, fetch_block_type_table
+from hytalegym.envs.sound_event_table import SoundEventTableLoader
 from hytalegym.utils.connection import BridgeConnection
 
 # Observation dimensions
@@ -122,6 +123,9 @@ class HytaleEnv(gym.Env):
         learner_game_clock: Append the S14 ``game_clock`` field to the
             learner-v3 observation, from the bridge's ``time_of_day``
             (``envs/live_game_clock.py``). Needs ``learner_v3_profile``.
+        learner_heard_sounds: Append the S12 ``heard_sounds`` field last, built
+            from the bridge's 3-D footstep audio (``envs/live_heard_sounds.py``).
+            Needs ``learner_v3_profile`` and ``HYTALE_ASSETS_ZIP``.
     """
 
     metadata = {"render_modes": ["human"], "render_fps": 20}
@@ -150,6 +154,7 @@ class HytaleEnv(gym.Env):
         native_time_dilation: float = 1.0,
         block_type_ids: bool = False,
         learner_game_clock: bool = False,
+        learner_heard_sounds: bool = False,
     ):
         super().__init__()
         self.task = task
@@ -217,6 +222,17 @@ class HytaleEnv(gym.Env):
             from hytalegym.envs.live_game_clock import LiveGameClock
 
             self._live_game_clock = LiveGameClock()
+        self._sound_event_loader: SoundEventTableLoader | None = None
+        if not isinstance(learner_heard_sounds, bool):
+            raise TypeError("learner_heard_sounds must be bool")
+        if learner_heard_sounds and learner_v3_profile is None:
+            raise ValueError("learner_heard_sounds needs the learner-v3 observation (learner_v3_profile)")
+        self.learner_heard_sounds = learner_heard_sounds
+        self._footstep_tables: Any | None = None
+        if learner_heard_sounds:
+            from hytalegym.sim.gen7.mechanics.heard_sounds import footstep_tables_from_env
+
+            self._footstep_tables = footstep_tables_from_env()
         self._step_count = 0
         self._native_actor_assembler: Any | None = None
         self._native_actor_assembly: Any | None = None
@@ -483,6 +499,8 @@ class HytaleEnv(gym.Env):
         self._require_observation(response)
         if self.block_type_ids:
             self._start_block_type_loader()
+        if self.learner_heard_sounds:
+            self._start_sound_event_loader()
         if self._live_game_clock is not None:
             self._live_game_clock.reset()
 
@@ -503,6 +521,36 @@ class HytaleEnv(gym.Env):
         if self._block_type_loader is None:
             self._block_type_loader = BlockTypeIdLoader(self.host, self.port)
         self._block_type_loader.start()
+
+    def _start_sound_event_loader(self) -> None:
+        if self._sound_event_loader is None:
+            self._sound_event_loader = SoundEventTableLoader(self.host, self.port)
+        self._sound_event_loader.start()
+
+    @staticmethod
+    def _target_perceptible(raw_wire: Mapping[str, Any]) -> bool:
+        """The bridge's perception of the target (the flag the native evidence reads as target_perceptible)."""
+
+        from hytalegym.jax.combat.types import TARGET_ENTITY
+
+        target = raw_wire["actors"][TARGET_ENTITY]
+        return bool(target["present"] and target["perceptible"])
+
+    def _with_live_heard_sounds(self, assembly: Any, audio: Mapping[str, Any]) -> Any:
+        """``assembly`` with the S12 heard list appended to its learner observation as ``heard_sounds``, built from this
+        step's 3-D audio (``envs/live_heard_sounds.py``). Before the sound table arrives every slot is invalid."""
+
+        from hytalegym.envs.live_heard_sounds import live_heard_sounds
+        from hytalegym.sim.gen7.mechanics.heard_sounds import observation_type
+
+        table = self._sound_event_loader.asset_ids if self._sound_event_loader is not None else {}
+        heard = live_heard_sounds(
+            audio, table, self._footstep_tables, HytaleEnv._target_perceptible(assembly.raw_wire)
+        )
+        observation = assembly.observation
+        return dataclasses.replace(
+            assembly, observation=observation_type(type(observation))(*observation, heard)
+        )
 
     def fetch_block_type_table(self) -> list[tuple[int, str]]:
         """Fetch the server's block-type table over a new connection."""
@@ -724,6 +772,8 @@ class HytaleEnv(gym.Env):
             )
         if self._live_game_clock is not None:
             assembly = self._with_live_game_clock(assembly, raw_observation)
+        if self.learner_heard_sounds:
+            assembly = self._with_live_heard_sounds(assembly, observation["audio"])
         self._native_actor_assembly = assembly
         info.update(
             {

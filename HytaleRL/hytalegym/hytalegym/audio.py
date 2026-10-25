@@ -11,6 +11,9 @@ from gymnasium import spaces
 
 AUDIO_SCHEMA = "hytalerl_audio_frame_v1"
 AUDIO_VERSION = 1
+#: Version 2 adds ``source_slot`` (the 11th column) to each event; version 1 frames stay accepted.
+AUDIO_VERSION_V2 = 2
+AUDIO_SUPPORTED_VERSIONS = (AUDIO_VERSION, AUDIO_VERSION_V2)
 AUDIO_MAX_EVENTS = 16
 
 AUDIO_KIND_2D = 0
@@ -19,6 +22,11 @@ AUDIO_KIND_ENTITY = 2
 AUDIO_KIND_COUNT = 3
 AUDIO_CATEGORY_NONE = -1
 AUDIO_EVENT_WIRE_WIDTH = 10
+AUDIO_EVENT_WIRE_WIDTH_V2 = 11
+#: Owner slot of a 3-D event: 0 the learner body, 1 the target, -1 anything else (v1 frames carry none).
+AUDIO_SOURCE_SLOT_LEARNER = 0
+AUDIO_SOURCE_SLOT_TARGET = 1
+AUDIO_SOURCE_SLOT_OTHER = -1
 
 
 def audio_space() -> spaces.Dict:
@@ -72,6 +80,12 @@ def audio_space() -> spaces.Dict:
                 shape=(AUDIO_MAX_EVENTS,),
                 dtype=np.float32,
             ),
+            "source_slot": spaces.Box(
+                AUDIO_SOURCE_SLOT_OTHER,
+                AUDIO_SOURCE_SLOT_TARGET,
+                shape=(AUDIO_MAX_EVENTS,),
+                dtype=np.int8,
+            ),
         }
     )
 
@@ -98,6 +112,11 @@ def empty_audio() -> dict[str, Any]:
         "volume_modifier": np.zeros(AUDIO_MAX_EVENTS, dtype=np.float32),
         "pitch_modifier": np.zeros(AUDIO_MAX_EVENTS, dtype=np.float32),
         "age_seconds": np.zeros(AUDIO_MAX_EVENTS, dtype=np.float32),
+        "source_slot": np.full(
+            AUDIO_MAX_EVENTS,
+            AUDIO_SOURCE_SLOT_OTHER,
+            dtype=np.int8,
+        ),
     }
 
 
@@ -118,8 +137,10 @@ def parse_audio(
         return result
     if not isinstance(raw, dict):
         raise ValueError("audio payload must be an object or null")
-    if raw.get("schema") != AUDIO_SCHEMA or raw.get("version") != AUDIO_VERSION:
+    version = raw.get("version")
+    if raw.get("schema") != AUDIO_SCHEMA or not _is_supported_version(version):
         raise ValueError("unsupported or missing audio schema/version")
+    wire_width = AUDIO_EVENT_WIRE_WIDTH_V2 if version == AUDIO_VERSION_V2 else AUDIO_EVENT_WIRE_WIDTH
 
     available = _boolean(raw.get("available"), "audio.available")
     capture_raw = raw.get("capture_mask")
@@ -160,9 +181,9 @@ def parse_audio(
     offset = AUDIO_MAX_EVENTS - len(events)
     previous_age = np.inf
     for event_index, event in enumerate(events):
-        if not isinstance(event, (list, tuple)) or len(event) != AUDIO_EVENT_WIRE_WIDTH:
+        if not isinstance(event, (list, tuple)) or len(event) != wire_width:
             raise ValueError(
-                f"audio event must use the {AUDIO_EVENT_WIRE_WIDTH}-field layout"
+                f"audio event must use the {wire_width}-field layout"
             )
         kind = _integer(event[0], "audio event kind")
         sound_index = _integer(event[1], "audio sound-event index")
@@ -171,10 +192,15 @@ def parse_audio(
         numeric = np.asarray(
             [
                 _finite_number(value, f"audio event field {field_index}")
-                for field_index, value in enumerate(event[4:], start=4)
+                for field_index, value in enumerate(event[4:10], start=4)
             ],
             dtype=np.float64,
         )
+        source_slot = AUDIO_SOURCE_SLOT_OTHER
+        if wire_width == AUDIO_EVENT_WIRE_WIDTH_V2:
+            source_slot = _integer(event[10], "audio source slot")
+            if source_slot not in (AUDIO_SOURCE_SLOT_OTHER, AUDIO_SOURCE_SLOT_LEARNER, AUDIO_SOURCE_SLOT_TARGET):
+                raise ValueError("audio source slot must be -1, 0 or 1")
         rel_x, rel_y, rel_z, volume, pitch, age = numeric.tolist()
 
         if kind < AUDIO_KIND_2D or kind > AUDIO_KIND_ENTITY:
@@ -211,7 +237,12 @@ def parse_audio(
         result["volume_modifier"][target] = volume
         result["pitch_modifier"][target] = pitch
         result["age_seconds"][target] = age
+        result["source_slot"][target] = source_slot
     return result
+
+
+def _is_supported_version(value: Any) -> bool:
+    return not isinstance(value, bool) and value in AUDIO_SUPPORTED_VERSIONS
 
 
 def _boolean(value: Any, label: str) -> bool:
@@ -247,13 +278,19 @@ def _finite_number(value: Any, label: str) -> float:
 __all__ = [
     "AUDIO_CATEGORY_NONE",
     "AUDIO_EVENT_WIRE_WIDTH",
+    "AUDIO_EVENT_WIRE_WIDTH_V2",
     "AUDIO_KIND_2D",
     "AUDIO_KIND_3D",
     "AUDIO_KIND_COUNT",
     "AUDIO_KIND_ENTITY",
     "AUDIO_MAX_EVENTS",
     "AUDIO_SCHEMA",
+    "AUDIO_SOURCE_SLOT_LEARNER",
+    "AUDIO_SOURCE_SLOT_OTHER",
+    "AUDIO_SOURCE_SLOT_TARGET",
+    "AUDIO_SUPPORTED_VERSIONS",
     "AUDIO_VERSION",
+    "AUDIO_VERSION_V2",
     "audio_space",
     "empty_audio",
     "parse_audio",

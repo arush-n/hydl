@@ -117,6 +117,38 @@ def _interrupt(signum: int, frame: Any) -> None:
     raise KeyboardInterrupt(f"signal {signum}")
 
 
+def build_server_command(
+    java: str,
+    server_jar: Path,
+    assets: Path,
+    universe: Path,
+    bridge_port: int,
+    game_port: int,
+    early_plugins: Path | None = None,
+) -> list[str]:
+    """The server command line. ``early_plugins`` adds the early-plugin flags (the sound probe); absent, nothing changes."""
+
+    command = [
+        java,
+        "-Xshare:off",
+        f"-D{BRIDGE_PORT_PROPERTY}={bridge_port}",
+        "-jar",
+        str(server_jar),
+        "--assets",
+        str(assets),
+        "--disable-sentry",
+        "--auth-mode",
+        "offline",
+        "--bind",
+        f"127.0.0.1:{game_port}",
+        "--universe",
+        str(universe),
+    ]
+    if early_plugins is not None:
+        command += ["--accept-early-plugins", f"--early-plugins={early_plugins}"]
+    return command
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Launch a bridge-only Hytale 0.7.2 server.")
     parser.add_argument("--install", type=Path, default=DEFAULT_INSTALL)
@@ -129,12 +161,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--then", dest="then_command", default=None,
                         help="shell-style command run after ready; the server is stopped after it exits")
     parser.add_argument("--then-timeout", type=float, default=1800.0)
+    parser.add_argument("--sound-probe-jar", type=Path, default=None,
+                        help="optional early-plugin jar (HytaleRLSoundProbe); copied to <run-dir>/earlyplugins")
     args = parser.parse_args(argv)
 
     install = args.install.resolve()
     server_jar = install / "Server" / "HytaleServer.jar"
     assets = install / "Assets.zip"
-    for required in (server_jar, assets, args.jar):
+    required_files = [server_jar, assets, args.jar]
+    if args.sound_probe_jar is not None:
+        required_files.append(args.sound_probe_jar)
+    for required in required_files:
         if not required.is_file():
             parser.error(f"missing file: {required}")
     java = shutil.which(args.java)
@@ -150,23 +187,15 @@ def main(argv: list[str] | None = None) -> int:
     (run_dir / "mods").mkdir(parents=True, exist_ok=True)
     (run_dir / "universe").mkdir(exist_ok=True)
     shutil.copy2(args.jar, run_dir / "mods" / args.jar.name)
+    early_plugins = None
+    if args.sound_probe_jar is not None:
+        early_plugins = run_dir / "earlyplugins"
+        early_plugins.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(args.sound_probe_jar, early_plugins / args.sound_probe_jar.name)
 
-    command = [
-        java,
-        "-Xshare:off",
-        f"-D{BRIDGE_PORT_PROPERTY}={args.bridge_port}",
-        "-jar",
-        str(server_jar),
-        "--assets",
-        str(assets),
-        "--disable-sentry",
-        "--auth-mode",
-        "offline",
-        "--bind",
-        f"127.0.0.1:{args.game_port}",
-        "--universe",
-        str(run_dir / "universe"),
-    ]
+    command = build_server_command(
+        java, server_jar, assets, run_dir / "universe", args.bridge_port, args.game_port, early_plugins
+    )
     log_path = run_dir / "server.log"
     report: dict[str, Any] = {
         "run_dir": str(run_dir),

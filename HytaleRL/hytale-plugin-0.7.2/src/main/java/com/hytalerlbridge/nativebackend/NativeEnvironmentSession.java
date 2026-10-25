@@ -481,6 +481,8 @@ final class NativeEnvironmentSession
     private volatile World world;
     private volatile Ref<EntityStore> agentRef;
     private volatile Ref<EntityStore> targetRef;
+    /** Live 3-D sound probe; null when no early plugin is installed. */
+    private NativeSoundProbeBridge soundProbe;
     private volatile PlayerRef tickAnchor;
     private volatile PlayerRef syntheticPlayerRef;
     private final PlayerRef[] syntheticPlayerRefsByActor = new PlayerRef[
@@ -773,7 +775,7 @@ final class NativeEnvironmentSession
         done = false;
         initialized = true;
         lastResult = new StepResult(
-            snapshot.observation().withAudio(AudioFrame.headlessPartial(List.of())),
+            snapshot.observation().withAudio(emptyAudioFrame()),
             0.0,
             false,
             false,
@@ -2556,6 +2558,9 @@ final class NativeEnvironmentSession
                 fallingBlockRef = null;
             }
             updateTargetCombatTelemetry(store);
+            if (soundProbe != null) {
+                soundProbe.captureTick(step.audio, step.simulatedSeconds, store, agentRef, targetRef);
+            }
             step.executedTicks++;
             if (Float.isFinite(deltaTime) && deltaTime >= 0.0f) {
                 step.simulatedSeconds += deltaTime;
@@ -2627,6 +2632,10 @@ final class NativeEnvironmentSession
         }
         clearSyntheticWorldInteractionRun();
         fallingBlockRef = null;
+        if (soundProbe != null) {
+            soundProbe.detach();
+            soundProbe = null;
+        }
 
         World closingWorld = world;
         if (closingWorld != null && closingWorld.isAlive()) {
@@ -2906,6 +2915,15 @@ final class NativeEnvironmentSession
             new ChunkTracker()
         );
         runOnWorld(() -> world.trackPlayerRef(tickAnchor), INITIALIZATION_TIMEOUT);
+        if (soundProbe != null) soundProbe.detach();
+        soundProbe = NativeSoundProbeBridge.attach().orElse(null);
+    }
+
+    /** The no-step observation: v1 when no probe, otherwise a 3-D-capturing frame with no events. */
+    private AudioFrame emptyAudioFrame() {
+        return soundProbe == null
+            ? AudioFrame.headlessPartial(List.of())
+            : AudioFrame.headlessSpatial(List.of());
     }
 
     private void captureHeadlessPacket(ToClientPacket packet) {
@@ -6386,6 +6404,7 @@ final class NativeEnvironmentSession
             WorldVerbTelemetry.Execution.unrequested();
         step.syntheticWorldInteraction =
             syntheticWorldInteractionEvidence(actions.primaryAction());
+        if (soundProbe != null) step.audio.markSpatialCaptured();
         if (!pending.compareAndSet(null, step)) {
             throw new IllegalStateException("A native step is already in progress");
         }
@@ -6430,7 +6449,7 @@ final class NativeEnvironmentSession
         lastSnapshot = snapshot;
         AudioFrame audio = step.episodeStep
             ? step.audio.finish(step.simulatedSeconds)
-            : AudioFrame.headlessPartial(List.of());
+            : emptyAudioFrame();
         Observation observation = snapshot.observation().withAudio(audio);
         if (!step.episodeStep) {
             StepResult warmup = new StepResult(

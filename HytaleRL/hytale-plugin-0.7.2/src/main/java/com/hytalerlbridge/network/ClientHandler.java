@@ -9,6 +9,7 @@ import com.hytalerlbridge.entity.PrivilegedEntityQuery;
 import com.hytalerlbridge.entity.PrivilegedNpcSnapshot;
 import com.hytalerlbridge.entity.PrivilegedNpcUuidQuery;
 import com.hytalerlbridge.network.codec.BlockTypeTableCodec;
+import com.hytalerlbridge.network.codec.SoundEventTableCodec;
 import com.hytalerlbridge.network.codec.ResourceOverrideCodec;
 import com.hytalerlbridge.observation.NativeActorEvidenceRequest;
 import com.hytalerlbridge.worldgen.WorldgenStructureMarkerQuery;
@@ -187,6 +188,13 @@ public final class ClientHandler implements Runnable {
                 BlockTypeTableCodec.sendBlockTypeTable(
                     output,
                     BlockTypeTableCodec.liveEntries()
+                );
+                yield true;
+            }
+            case "sound_event_table" -> {
+                SoundEventTableCodec.sendSoundEventTable(
+                    output,
+                    SoundEventTableCodec.liveEntries()
                 );
                 yield true;
             }

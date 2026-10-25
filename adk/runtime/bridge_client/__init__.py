@@ -76,6 +76,9 @@ HYTALE_ENV_PARAMETER_BINDINGS = MappingProxyType(
         # observation, from the bridge's time_of_day (envs/live_game_clock.py).
         # The Gym's own default is False, so forwarding it changes no behaviour.
         "learner_game_clock": "learner_game_clock",
+        # Added by the Gym on 2026-10-24: the S12 heard sounds on the learner-v3 observation, from the bridge's 3-D
+        # footstep audio (envs/live_heard_sounds.py). The Gym's own default is False, so forwarding it changes no behaviour.
+        "learner_heard_sounds": "learner_heard_sounds",
     }
 )
 
@@ -292,6 +295,7 @@ class NativeBridgeSession:
         render_mode: str | None = None,
         block_type_ids: bool = False,
         learner_game_clock: bool = False,
+        learner_heard_sounds: bool = False,
     ) -> None:
         if not isinstance(spec, AgentSpec):
             raise TypeError("spec must be an AgentSpec")
@@ -361,6 +365,8 @@ class NativeBridgeSession:
             raise TypeError("block_type_ids must be bool")
         if not isinstance(learner_game_clock, bool):
             raise TypeError("learner_game_clock must be bool")
+        if not isinstance(learner_heard_sounds, bool):
+            raise TypeError("learner_heard_sounds must be bool")
         if not isinstance(target_profile, str):
             raise TypeError("target_profile must be a string")
         if (
@@ -403,6 +409,7 @@ class NativeBridgeSession:
         self.combat_target_active = combat_target_active
         self.block_type_ids = block_type_ids
         self.learner_game_clock = learner_game_clock
+        self.learner_heard_sounds = learner_heard_sounds
         self.fidelity_fixture = fidelity_fixture
         self._lease: NativeEvidenceLease | None = None
         self._environment: HytaleEnv | None = None
@@ -523,6 +530,7 @@ class NativeBridgeSession:
                 render_mode=self.render_mode,
                 block_type_ids=self.block_type_ids,
                 learner_game_clock=self.learner_game_clock,
+                learner_heard_sounds=self.learner_heard_sounds,
             )
         except Exception:
             lease.close()

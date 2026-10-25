@@ -20,7 +20,16 @@ public record AudioFrame(
 ) {
     public static final String SCHEMA = "hytalerl_audio_frame_v1";
     public static final int VERSION = 1;
+    /** Wire version when the frame captures 3-D sounds; adds the eleventh event column. */
+    public static final int VERSION_SPATIAL = 2;
     public static final int MAX_EVENTS = 16;
+
+    /** Event source slot: the learner body. */
+    public static final int SOURCE_LEARNER = 0;
+    /** Event source slot: the target body. */
+    public static final int SOURCE_TARGET = 1;
+    /** Event source slot: anything else, or unknown. */
+    public static final int SOURCE_UNKNOWN = -1;
 
     public static final int KIND_2D = 0;
     public static final int KIND_3D = 1;
@@ -62,6 +71,11 @@ public record AudioFrame(
         return new AudioFrame(true, true, false, true, events);
     }
 
+    /** A frame that also captured 3-D sounds (the live sound probe is attached). */
+    public static AudioFrame headlessSpatial(List<Event> events) {
+        return new AudioFrame(true, true, true, true, events);
+    }
+
     public record Event(
         int kind,
         int soundEventIndex,
@@ -72,9 +86,46 @@ public record AudioFrame(
         double relativeZ,
         double volumeModifier,
         double pitchModifier,
-        double ageSeconds
+        double ageSeconds,
+        /** {@link #SOURCE_LEARNER}, {@link #SOURCE_TARGET} or {@link #SOURCE_UNKNOWN}. */
+        int sourceSlot
     ) {
+        /** Pre-spatial constructor: the source slot is unknown. */
+        public Event(
+            int kind,
+            int soundEventIndex,
+            int category,
+            boolean spatial,
+            double relativeX,
+            double relativeY,
+            double relativeZ,
+            double volumeModifier,
+            double pitchModifier,
+            double ageSeconds
+        ) {
+            this(
+                kind,
+                soundEventIndex,
+                category,
+                spatial,
+                relativeX,
+                relativeY,
+                relativeZ,
+                volumeModifier,
+                pitchModifier,
+                ageSeconds,
+                SOURCE_UNKNOWN
+            );
+        }
+
         public Event {
+            if (
+                sourceSlot != SOURCE_LEARNER
+                    && sourceSlot != SOURCE_TARGET
+                    && sourceSlot != SOURCE_UNKNOWN
+            ) {
+                throw new IllegalArgumentException("Audio source slot is out of range");
+            }
             if (kind < KIND_2D || kind > KIND_ENTITY) {
                 throw new IllegalArgumentException("Unknown audio event kind");
             }
@@ -132,6 +183,64 @@ public record AudioFrame(
         private int overwrittenCount;
         private int invalidCount;
         private double lastOffsetSeconds = Double.NEGATIVE_INFINITY;
+        private boolean spatialCaptured;
+
+        /** Marks the frame as capturing 3-D sounds, so {@link #captureSpatial} is accepted. */
+        public synchronized void markSpatialCaptured() {
+            spatialCaptured = true;
+        }
+
+        public synchronized void captureSpatial(
+            int soundEventIndex,
+            int category,
+            double relativeX,
+            double relativeY,
+            double relativeZ,
+            float volumeModifier,
+            float pitchModifier,
+            int sourceSlot,
+            double offsetSeconds
+        ) {
+            boolean categoryValid = category >= 0 && category <= 3;
+            if (
+                !spatialCaptured
+                    || soundEventIndex <= 0
+                    || !categoryValid
+                    || sourceSlot < SOURCE_UNKNOWN
+                    || sourceSlot > SOURCE_TARGET
+                    || !Double.isFinite(relativeX)
+                    || !Double.isFinite(relativeY)
+                    || !Double.isFinite(relativeZ)
+                    || !Float.isFinite(volumeModifier)
+                    || !Float.isFinite(pitchModifier)
+                    || !Double.isFinite(offsetSeconds)
+                    || offsetSeconds < 0.0
+                    || offsetSeconds < lastOffsetSeconds
+            ) {
+                invalidCount++;
+                return;
+            }
+            lastOffsetSeconds = offsetSeconds;
+            if (events.size() == MAX_EVENTS) {
+                events.removeFirst();
+                overwrittenCount++;
+            }
+            events.addLast(
+                new CapturedEvent(
+                    KIND_3D,
+                    soundEventIndex,
+                    category,
+                    true,
+                    relativeX,
+                    relativeY,
+                    relativeZ,
+                    sourceSlot,
+                    volumeModifier,
+                    pitchModifier,
+                    offsetSeconds
+                )
+            );
+        }
 
         public synchronized void captureNonSpatial(
             int kind,
@@ -168,6 +277,11 @@ public record AudioFrame(
                     kind,
                     soundEventIndex,
                     category,
+                    false,
+                    0.0,
+                    0.0,
+                    0.0,
+                    SOURCE_UNKNOWN,
                     volumeModifier,
                     pitchModifier,
                     offsetSeconds
@@ -192,17 +306,18 @@ public record AudioFrame(
                         captured.kind(),
                         captured.soundEventIndex(),
                         captured.category(),
-                        false,
-                        0.0,
-                        0.0,
-                        0.0,
+                        captured.spatial(),
+                        captured.relativeX(),
+                        captured.relativeY(),
+                        captured.relativeZ(),
                         captured.volumeModifier(),
                         captured.pitchModifier(),
-                        durationSeconds - captured.offsetSeconds()
+                        durationSeconds - captured.offsetSeconds(),
+                        captured.sourceSlot()
                     )
                 );
             }
-            return headlessPartial(finalized);
+            return new AudioFrame(true, true, spatialCaptured, true, finalized);
         }
 
         public synchronized int overwrittenCount() {
@@ -221,6 +336,11 @@ public record AudioFrame(
             int kind,
             int soundEventIndex,
             int category,
+            boolean spatial,
+            double relativeX,
+            double relativeY,
+            double relativeZ,
+            int sourceSlot,
             float volumeModifier,
             float pitchModifier,
             double offsetSeconds

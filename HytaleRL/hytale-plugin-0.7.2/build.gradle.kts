@@ -26,9 +26,17 @@ val hytaleServerOverride = providers.gradleProperty("hytaleServerJar").orNull
 val hytaleServer: Any = hytaleServerOverride?.let { path -> files(path) }
     ?: "com.hypixel.hytale:Server:0.7.2"
 
+// Early-plugin probe (HytaleRLSoundProbe072 jar): records 3-D sound calls for live hearing.
+// Separate source set so the bridge jar (tasks.jar) keeps its inputs.
+// Default layout: src/soundprobe/java and src/soundprobe/resources.
+sourceSets {
+    create("soundprobe")
+}
+
 dependencies {
     // Hytale Server API
     compileOnly(hytaleServer)
+    "soundprobeCompileOnly"(hytaleServer)
 
     // MessagePack for fast binary serialization
     implementation("org.msgpack:msgpack-core:0.9.8")
@@ -41,6 +49,7 @@ dependencies {
     testCompileOnly(hytaleServer)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testRuntimeOnly(hytaleServer)
+    testImplementation(sourceSets["soundprobe"].output)
 }
 
 tasks.test {
@@ -72,4 +81,17 @@ tasks.processResources {
         include("**/*.json")
         includeEmptyDirs = false
     }
+}
+
+tasks.register<Jar>("soundProbeJar") {
+    group = "build"
+    description = "Early-plugin ClassTransformer that records SoundUtil 3-D sound calls"
+    archiveBaseName.set("HytaleRLSoundProbe072")
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
+    from(sourceSets["soundprobe"].output)
+}
+
+tasks.named("assemble") {
+    dependsOn("soundProbeJar")
 }

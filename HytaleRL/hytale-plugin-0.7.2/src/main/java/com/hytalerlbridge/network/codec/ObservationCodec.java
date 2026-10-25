@@ -435,11 +435,17 @@ public final class ObservationCodec {
         MessagePacker packer,
         com.hytalerlbridge.observation.AudioFrame audio
     ) throws IOException {
+        // v2 (3-D captured) appends source_slot; v1 bytes are unchanged.
+        boolean spatial = audio.captures3d();
         packer.packMapHeader(5);
         packer.packString("schema");
         packer.packString(com.hytalerlbridge.observation.AudioFrame.SCHEMA);
         packer.packString("version");
-        packer.packInt(com.hytalerlbridge.observation.AudioFrame.VERSION);
+        packer.packInt(
+            spatial
+                ? com.hytalerlbridge.observation.AudioFrame.VERSION_SPATIAL
+                : com.hytalerlbridge.observation.AudioFrame.VERSION
+        );
         packer.packString("available");
         packer.packBoolean(audio.available());
 
@@ -453,7 +459,7 @@ public final class ObservationCodec {
         packer.packArrayHeader(audio.events().size());
         for (var event : audio.events()) {
             // Positional layout is versioned in protocol/messages.md.
-            packer.packArrayHeader(10);
+            packer.packArrayHeader(spatial ? 11 : 10);
             packer.packInt(event.kind());
             packer.packInt(event.soundEventIndex());
             packer.packInt(event.category());
@@ -464,6 +470,7 @@ public final class ObservationCodec {
             packer.packDouble(event.volumeModifier());
             packer.packDouble(event.pitchModifier());
             packer.packDouble(event.ageSeconds());
+            if (spatial) packer.packInt(event.sourceSlot());
         }
     }
 

@@ -570,6 +570,24 @@ Warmup and fixture-setup events are discarded before the reset observation.
 Repeated `observe` calls return the same immutable frame and do not drain a
 live queue.
 
+### Audio v2 (live 3-D sound probe)
+
+When the bridge has the `SoundProbe` early plugin attached, the frame captures
+3-D sounds: `capture_mask` is `[true, true, true]` and `version` is `2`. Each
+event then has eleven columns, the ten v1 columns followed by `source_slot`:
+
+```text
+[kind, sound_event_index, category, spatial_valid,
+ relative_x, relative_y, relative_z,
+ volume_modifier, pitch_modifier, age_seconds, source_slot]
+```
+
+`source_slot` is `0` for the learner body, `1` for the target body, and `-1`
+for any other or unknown emitter. 3-D events are the 3-D sounds the server
+plays within the sound's max distance of the learner; `relative_*` is the
+event position minus the learner position. Without the probe the frame is v1
+with ten columns, byte for byte as before. A v2 parser must accept both.
+
 ### Geometry v5
 
 Every observation carries `obs.geometry`. Legacy responses that omit it are

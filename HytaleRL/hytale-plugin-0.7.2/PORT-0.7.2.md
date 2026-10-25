@@ -274,6 +274,36 @@ Caveat: `geometry/GeometryFrame.java` maps runtime ids through the plugin's own
 enum `world/BlockType.fromId`, not the asset map. This request does not change
 that path.
 
+## Live 3-D sounds (probe) and sound-event table (2026-10-24)
+
+0.7.2 sends `PlaySoundEvent3D` (footsteps among them) only to `Player` entities,
+so a headless bridge hears none of them. An early-plugin transformer adds
+`public static volatile Consumer hytalerl$soundProbe` to `SoundUtil` and calls
+it on every `playSoundEvent3d` (Revision 1 in the live-hearing design: the
+server's TransformingClassLoader cannot see early-plugin classes, so the hook is
+JDK-typed). `nativebackend/NativeSoundProbeBridge.java` owns the bounded ring
+(256, drop oldest, `dropped()` counts) and the owner read from
+`MovementAudioComponent$ShouldHearPredicate.owner`.
+
+- Attach: at each `reset`, the bridge sets the field to its own consumer. If the
+  field is absent, the probe is absent and nothing changes. `close()` detaches,
+  clearing the field only while it still holds this bridge's consumer.
+- Per native tick, before the tick's simulated time advances, the bridge drains
+  the ring. It keeps each sound within `SoundEvent.getMaxDistance()` of the
+  learner's `TransformComponent` and maps the owner `Ref` to a slot: 0 learner,
+  1 target, -1 other. Refs have no `equals` override (javap), so they match by
+  store and index.
+- Per tick, not per step: the event age is then measured the same way as the
+  packet capture (`step.simulatedSeconds` at the tick).
+- Wire v2, only when the probe is attached: `capture_mask` `[true, true, true]`,
+  `version` 2, and eleven columns per event with `source_slot` last. See
+  `protocol/messages.md` ("Audio v2"). Probe absent: v1, ten columns, the same
+  bytes as before (a golden test pins them).
+- `sound_event_table` (no environment needed): `{type, schema:
+  "hytalerl_sound_event_table_v1", version: 1, count, entries: [[index,
+  asset_id], ...]}`, index = `SoundEvent.getAssetMap().getIndex(assetId)`.
+  Codec: `network/codec/SoundEventTableCodec.java`.
+
 ## Outside this folder
 
 Done (see `TRAINING-0.7.2.md`): `hytalegym/hytalegym/server_versions/` keys the
