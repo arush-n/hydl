@@ -431,6 +431,11 @@ class HytaleEnv(gym.Env):
     def reset(
         self, *, seed: int | None = None, options: dict[str, Any] | None = None
     ) -> tuple[dict | np.ndarray, dict]:
+        if options is not None and "fixture_blocks" in options:
+            options = {
+                **options,
+                "fixture_blocks": _validated_fixture_blocks(options["fixture_blocks"]),
+            }
         super().reset(seed=seed)
         self._step_count = 0
         self._native_actor_assembly = None
@@ -1233,3 +1238,22 @@ def _exact_int32(value: Any, label: str) -> int:
     if not np.iinfo(np.int32).min <= result <= np.iinfo(np.int32).max:
         raise ValueError(f"{label} exceeds int32")
     return result
+
+
+def _validated_fixture_blocks(value: Any) -> list[list[Any]]:
+    """Shape check for the reset option fixture_blocks: [x, y, z, "AssetId"] entries.
+
+    Returns plain ints and strings so msgpack can send them; the bridge checks the ranges and the asset ids.
+    """
+    if not isinstance(value, (list, tuple)):
+        raise ValueError("fixture_blocks must be a list of [x, y, z, asset_id] entries")
+    blocks: list[list[Any]] = []
+    for entry in value:
+        if not isinstance(entry, (list, tuple)) or len(entry) != 4:
+            raise ValueError("fixture_blocks entries must be [x, y, z, asset_id]")
+        if any(isinstance(c, bool) or not isinstance(c, (int, np.integer)) for c in entry[:3]):
+            raise ValueError("fixture_blocks coordinates must be integers")
+        if not isinstance(entry[3], str) or not entry[3]:
+            raise ValueError("fixture_blocks asset ids must be non-empty strings")
+        blocks.append([int(entry[0]), int(entry[1]), int(entry[2]), entry[3]])
+    return blocks

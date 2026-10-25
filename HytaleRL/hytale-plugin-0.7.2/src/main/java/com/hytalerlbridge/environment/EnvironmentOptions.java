@@ -37,8 +37,12 @@ public record EnvironmentOptions(
     String combatTargetRole,
     NativeCraftingOracleFixture craftingOracle,
     boolean waterTickingDisabled,
-    Double spawnYawDegrees
+    Double spawnYawDegrees,
+    java.util.List<FixtureBlock> fixtureBlocks
 ) {
+    /** One fixture_blocks entry: the cell (x, y, z) and the block type asset id placed there. */
+    public record FixtureBlock(int x, int y, int z, String assetId) {}
+
     public static final int DEFAULT_NATIVE_TICK_RATE = 30;
     public static final float DEFAULT_NATIVE_TIME_DILATION = 1.0f;
     public static final String STATIC_REGION_FIXTURE = "static_region";
@@ -66,6 +70,58 @@ public record EnvironmentOptions(
         );
     private static final int MAX_NATIVE_WORLD_HOTBAR_ENTRIES = 16;
     private static final int MAX_NATIVE_WORLD_HOTBAR_SLOT = 31;
+    private static final int MAX_FIXTURE_BLOCKS = 64;
+    private static final int FIXTURE_BLOCK_XZ_LIMIT = 32;
+    private static final int FIXTURE_BLOCK_Y_MIN = 60;
+    private static final int FIXTURE_BLOCK_Y_MAX = 80;
+
+    /** Compatibility constructor for callers predating fixture_blocks: no blocks are placed. */
+    public EnvironmentOptions(
+        String backend,
+        String world,
+        String npcRole,
+        Double spawnX,
+        Double spawnY,
+        Double spawnZ,
+        boolean combatTargetActive,
+        String fidelityFixture,
+        String nativeCombatItemId,
+        String nativeCombatInteractionId,
+        String nativeCombatInteractionType,
+        java.util.List<String> nativeAgentArmorItemIds,
+        boolean nativeNavigationTrace,
+        java.util.List<String> nativeCombatAbilityInteractionIds,
+        java.util.List<String> nativeCombatAbilityInteractionTypes,
+        String nativeGuardInteractionId,
+        String nativeGuardInteractionType,
+        NativeActorEvidenceRequest nativeActorEvidenceRequest,
+        boolean nativeWorldVerbs,
+        java.util.List<Integer> nativeWorldHotbarSlots,
+        java.util.List<String> nativeWorldHotbarItemIds,
+        java.util.List<Integer> nativeWorldHotbarQuantities,
+        String worldgenStructure,
+        java.util.List<NativePolicyCombatBindingSpec> nativePolicyCombatBindings,
+        int nativeTickRate,
+        float nativeTimeDilation,
+        java.util.List<NativeResourceOverride> nativeFidelityResourceOverrides,
+        String combatTargetRole,
+        NativeCraftingOracleFixture craftingOracle,
+        boolean waterTickingDisabled,
+        Double spawnYawDegrees
+    ) {
+        this(
+            backend, world, npcRole, spawnX, spawnY, spawnZ, combatTargetActive,
+            fidelityFixture, nativeCombatItemId, nativeCombatInteractionId,
+            nativeCombatInteractionType, nativeAgentArmorItemIds, nativeNavigationTrace,
+            nativeCombatAbilityInteractionIds, nativeCombatAbilityInteractionTypes,
+            nativeGuardInteractionId, nativeGuardInteractionType, nativeActorEvidenceRequest,
+            nativeWorldVerbs, nativeWorldHotbarSlots, nativeWorldHotbarItemIds,
+            nativeWorldHotbarQuantities, worldgenStructure, nativePolicyCombatBindings,
+            nativeTickRate, nativeTimeDilation, nativeFidelityResourceOverrides,
+            combatTargetRole, craftingOracle, waterTickingDisabled, spawnYawDegrees,
+            java.util.List.of()
+        );
+    }
 
     public static EnvironmentOptions simulator() {
         return new EnvironmentOptions(
@@ -662,6 +718,7 @@ public record EnvironmentOptions(
         if (spawnYawDegrees != null && !Double.isFinite(spawnYawDegrees)) {
             throw new IllegalArgumentException("spawn_yaw must be finite");
         }
+        fixtureBlocks = validatedFixtureBlocks(fixtureBlocks);
         backend = normalized(backend, "simulator");
         world = normalized(world, "flat");
         worldgenStructure = normalized(worldgenStructure, "Default");
@@ -1008,6 +1065,11 @@ public record EnvironmentOptions(
         return spawnYawDegrees != null;
     }
 
+    /** Whether reset places fixture_blocks in the world (opt-in); absent or empty changes nothing. */
+    public boolean hasFixtureBlocks() {
+        return !fixtureBlocks.isEmpty();
+    }
+
     public boolean hasNativeCombatInteraction() {
         return nativeCombatInteractionId != null;
     }
@@ -1084,6 +1146,36 @@ public record EnvironmentOptions(
 
     private static String normalized(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value.trim();
+    }
+
+    private static java.util.List<FixtureBlock> validatedFixtureBlocks(
+        java.util.List<FixtureBlock> blocks
+    ) {
+        if (blocks == null || blocks.isEmpty()) return java.util.List.of();
+        if (blocks.size() > MAX_FIXTURE_BLOCKS) {
+            throw new IllegalArgumentException(
+                "fixture_blocks allows at most " + MAX_FIXTURE_BLOCKS + " entries"
+            );
+        }
+        for (FixtureBlock block : blocks) {
+            if (
+                block.x() < -FIXTURE_BLOCK_XZ_LIMIT || block.x() > FIXTURE_BLOCK_XZ_LIMIT
+                    || block.z() < -FIXTURE_BLOCK_XZ_LIMIT || block.z() > FIXTURE_BLOCK_XZ_LIMIT
+            ) {
+                throw new IllegalArgumentException(
+                    "fixture_blocks x and z must be within -32..32"
+                );
+            }
+            if (block.y() < FIXTURE_BLOCK_Y_MIN || block.y() > FIXTURE_BLOCK_Y_MAX) {
+                throw new IllegalArgumentException("fixture_blocks y must be within 60..80");
+            }
+            if (block.assetId() == null || block.assetId().isBlank()) {
+                throw new IllegalArgumentException(
+                    "fixture_blocks asset ids must be non-empty strings"
+                );
+            }
+        }
+        return java.util.List.copyOf(blocks);
     }
 
     private static String optional(String value) {

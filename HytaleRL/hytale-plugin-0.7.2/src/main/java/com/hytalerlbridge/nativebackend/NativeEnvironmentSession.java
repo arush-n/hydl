@@ -724,6 +724,7 @@ final class NativeEnvironmentSession
         loadAndPinSpawnChunks();
         resolveGeneratedSpawnHeight();
         createFidelityFixture();
+        applyFixtureBlocks();
         spawnAgent(npcPlugin);
         provider.attach(world, this);
         attached = true;
@@ -6228,6 +6229,33 @@ final class NativeEnvironmentSession
                 .map(path -> path == null ? "" : path)
                 .toList()
         );
+    }
+
+    /**
+     * Places the reset's fixture_blocks (opt-in) once the fixture is built and before the first observation.
+     * Nothing is cleared on the next reset: each reset creates a new world (createWorld) and ClientHandler
+     * destroys the previous environment first, so no placed cell carries over.
+     */
+    private void applyFixtureBlocks() {
+        if (!options.hasFixtureBlocks()) return;
+        for (EnvironmentOptions.FixtureBlock block : options.fixtureBlocks()) {
+            if (BlockType.getAssetMap().getAsset(block.assetId()) == null) {
+                throw new IllegalArgumentException(
+                    "fixture_blocks asset id is not a block type: " + block.assetId()
+                );
+            }
+        }
+        runOnWorld(() -> {
+            for (EnvironmentOptions.FixtureBlock block : options.fixtureBlocks()) {
+                NativeWorldAccess.setBlock(
+                    world,
+                    block.x(),
+                    block.y(),
+                    block.z(),
+                    block.assetId()
+                );
+            }
+        }, INITIALIZATION_TIMEOUT);
     }
 
     private void createFidelityFixture() {

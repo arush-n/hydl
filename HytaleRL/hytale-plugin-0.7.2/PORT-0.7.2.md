@@ -304,6 +304,30 @@ JDK-typed). `nativebackend/NativeSoundProbeBridge.java` owns the bounded ring
   asset_id], ...]}`, index = `SoundEvent.getAssetMap().getIndex(assetId)`.
   Codec: `network/codec/SoundEventTableCodec.java`.
 
+## Fixture blocks reset option (`fixture_blocks`, 2026-10-24)
+
+Opt-in reset option that places named blocks before the first observation, for live
+probes such as a body walking through `Plant_Bush` or `Deco_SpiderWeb_Flat` (their
+MoveIn/MoveOut sounds feed the hearing pipeline). `options["fixture_blocks"]` is a
+list of `[x, y, z, "AssetId"]`: integer cells, `|x|`, `|z|` <= 32, `60 <= y <= 80`,
+at most 64 entries, non-blank asset ids. Absent or empty changes nothing. Parse
+(`network/codec/FixtureBlocksCodec.java`) and the record's compact constructor
+(`environment/EnvironmentOptions.java`) refuse a bad reset; an id that is not a block
+type fails the reset in `NativeEnvironmentSession.applyFixtureBlocks()`, which runs
+after `createFidelityFixture()` and before the warmup. Python checks the shape in
+`HytaleEnv.reset` (`_validated_fixture_blocks`) before connecting.
+
+Nothing is cleared on a later reset: each reset builds a new world (`createWorld`,
+a fresh UUID, empty chunk storage) and `ClientHandler` destroys the previous
+environment first, so a placed cell cannot carry over.
+
+Jar 16 (`49CDB408`, pinned 2026-10-24; jar 15 `626B10D2` plus this option). Live with the sound probe
+(`gen7_probes/hearing_footstep_live_candidate49CDB408.json` and `..._approach.json`): the learner running into a
+line of `Plant_Bush` hears its own `SFX_Bush_MoveIn` on entering the first bush cell (source slot 0, 0.13 blocks);
+running backward through a band of bushes with the active Trork chasing, its own MoveIn arrives at tick 8 (slot 0) and
+the Trork's at tick 61 (slot 1, 3.77 blocks), both in `heard_sounds` with those sources. Impact sounds carry no
+footstep predicate, so their source stays -1.
+
 ## Outside this folder
 
 Done (see `TRAINING-0.7.2.md`): `hytalegym/hytalegym/server_versions/` keys the

@@ -11,6 +11,7 @@ import com.hytalerlbridge.entity.PrivilegedNpcUuidQuery;
 import com.hytalerlbridge.network.codec.BlockTypeTableCodec;
 import com.hytalerlbridge.network.codec.SoundEventTableCodec;
 import com.hytalerlbridge.network.codec.ResourceOverrideCodec;
+import com.hytalerlbridge.network.codec.FixtureBlocksCodec;
 import com.hytalerlbridge.observation.NativeActorEvidenceRequest;
 import com.hytalerlbridge.worldgen.WorldgenStructureMarkerQuery;
 import java.io.BufferedInputStream;
@@ -390,7 +391,8 @@ public final class ClientHandler implements Runnable {
             getStringField(options, "combat_target_role"),
             CraftingOracleOptions.decode(options),
             getBooleanField(options, "water_ticking_disabled", false),
-            getOptionalDoubleField(options, "spawn_yaw")
+            getOptionalDoubleField(options, "spawn_yaw"),
+            FixtureBlocksCodec.decode(options)
         );
 
         environmentManager.destroy(environmentId);
