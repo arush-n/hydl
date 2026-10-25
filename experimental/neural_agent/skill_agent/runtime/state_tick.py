@@ -13,13 +13,16 @@ perceived or remembered. The v1 path is unchanged (``model/freezing.py`` ``encod
   elsewhere, as the skill trainers' student rule.
 - :func:`encode_contexts` and :class:`ModuleBody`: the same for the combiner. Each agent's context carries its row of
   the tick and every entity it knows, perceived or remembered, so a request may name a remembered entity.
+- :class:`ModuleBatch` and :func:`run_module_batches` (2026-10-25): one batched pass per skill module per tick over the
+  agents of its verb, equal to their per-agent :class:`ModuleBody` calls; ``ModuleBody.batch_results`` returns the stored
+  step for a (row, tick) the host has batched (opt-in: without it a body computes as before).
 """
 
 from __future__ import annotations
 
 import functools
 import importlib
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Mapping, NamedTuple, Sequence
 
 import jax
@@ -407,6 +410,74 @@ def _unjoin(observation_tokens: Any) -> tuple[AgentView, Mapping[str, Any]]:
     raise TypeError("a v3 module body reads an AgentView or a JointView (runtime/state_tick.py encode_contexts)")
 
 
+def _check_layout(module: SkillModule, layout: tuple[str, ...] | None) -> None:
+    """A layout holds the module's own skill once, and only verbs the module knows, within its request slots."""
+
+    if layout is None:
+        return
+    if module.skill not in layout:
+        raise ValueError(f"layout {layout} does not hold the module's own skill {module.skill!r}")
+    if len(set(layout)) != len(layout) or len(layout) > module.config.max_requests:
+        raise ValueError(f"layout {layout} repeats a verb or has more slots than the module's "
+                         f"{module.config.max_requests}")
+    for name in layout:
+        if name not in VERBS or VERBS.index(name) not in module.known:
+            raise ValueError(f"layout names {name!r}, a verb the module does not know (known {module.known})")
+
+
+class _Slots(NamedTuple):
+    """One agent's request slots as numpy arrays, with no agent axis (:func:`_requests` stacks the agents')."""
+
+    verb: np.ndarray  # int32[S]
+    scope: np.ndarray  # int32[S]
+    valid: np.ndarray  # bool[S]
+    args: np.ndarray  # float32[S, ARG_FEATURES]
+    present: np.ndarray  # bool[S, len(ARG_GROUPS)]
+    handles: np.ndarray  # int32[S]: each slot's entity handle, -1 for none
+
+
+def _slots(module: SkillModule, layout: tuple[str, ...] | None, lower: Lowering, request: Any,
+           observation_tokens: Any) -> tuple[AgentView, _Slots]:
+    """One agent's request slots, as ``layout`` names them (see :class:`ModuleBody`)."""
+
+    agent, live = _unjoin(observation_tokens)
+    slots = module.config.max_requests
+    names = layout or (module.skill,)
+    # with no layout, every slot names the module's own verb and scope, as before; with one, an empty slot names verb
+    # 0 and scope 0, as the trainers' build_requests do (an invalid slot's verb and scope never reach the outputs)
+    rest_verb, rest_scope = (module.verb, SCOPE_NAMES.index(module.scope)) if layout is None else (0, 0)
+    verb = np.full(slots, rest_verb, np.int32)
+    scope = np.full(slots, rest_scope, np.int32)
+    valid = np.zeros(slots, bool)
+    args = np.zeros((slots, ARG_FEATURES), np.float32)
+    present = np.zeros((slots, len(ARG_GROUPS)), bool)
+    handles = np.full(slots, -1, np.int32)
+    for slot, name in enumerate(names):
+        if name == module.skill:
+            verb_id, scope_name, own_lower, item = module.verb, module.scope, lower, request
+        else:
+            verb_id, scope_name, own_lower = _skill(name)
+            item = live.get(name)
+        verb[slot], scope[slot] = verb_id, SCOPE_NAMES.index(scope_name)
+        if item is None:
+            continue
+        args[slot], present[slot] = own_lower(item, agent.pose, agent.tick)
+        valid[slot] = True
+        handles[slot] = -1 if item.args.entity is None else int(item.args.entity)
+    return agent, _Slots(verb, scope, valid, args, present, handles)
+
+
+def _requests(slots: Sequence[_Slots], entity_ids: jax.Array) -> GeneralistRequests:
+    """The slots of N agents on a leading axis; ``entity_ids`` int32[N, E] are their rows' entity ids, which resolve each
+    handle to the token row that holds it (:func:`entity_rows`)."""
+
+    verb, scope, valid, args, present, handles = (np.stack(column) for column in zip(*slots))
+    return GeneralistRequests(
+        verb=jnp.asarray(verb), args=jnp.asarray(args), arg_present=jnp.asarray(present),
+        entity_pointer=entity_rows(jnp.asarray(handles), entity_ids),
+        cell_pointer=jnp.full(verb.shape, -1, jnp.int32), scope=jnp.asarray(scope), valid=jnp.asarray(valid))
+
+
 @dataclass(frozen=True)
 class ModuleBody:
     """A skill module as a combiner body on the v3 path, in the request slots it was trained with, and the masked argmax
@@ -423,6 +494,13 @@ class ModuleBody:
 
     ``report_done`` (False: never done, and the middle layer withdraws the request, as before): done when the module's
     own done logit is above 0, that is when its sigmoid, the probability of done, is above 0.5 (``model/skill_module.py``).
+
+    ``batch_results`` (None: every call computes, as before): the host's batch for this tick, ``{(row, tick): BodyStep}``,
+    filled by :class:`ModuleBatch` (or :func:`run_module_batches`) before the combiner runs. A call whose agent's (row,
+    tick) it holds returns the stored step, and any other call computes as before. The intended host loop, once per tick:
+    encode the contexts (:func:`encode_contexts`); for each verb, run one batch over that verb's agents and refill that
+    verb's body's dict (clear it first); then call the combiner. The batch takes the requests the combiner will pass, one
+    per agent and verb: the stored step is for the request the batch was given, whatever request the call passes.
     """
 
     module: SkillModule
@@ -430,55 +508,23 @@ class ModuleBody:
     lower: Lowering
     layout: tuple[str, ...] | None = None
     report_done: bool = False
+    batch_results: dict | None = field(default=None, compare=False)
 
     def __post_init__(self) -> None:
-        if self.layout is None:
-            return
-        if self.module.skill not in self.layout:
-            raise ValueError(f"layout {self.layout} does not hold the module's own skill {self.module.skill!r}")
-        if len(set(self.layout)) != len(self.layout) or len(self.layout) > self.module.config.max_requests:
-            raise ValueError(f"layout {self.layout} repeats a verb or has more slots than the module's "
-                             f"{self.module.config.max_requests}")
-        for name in self.layout:
-            if name not in VERBS or VERBS.index(name) not in self.module.known:
-                raise ValueError(f"layout names {name!r}, a verb the module does not know (known {self.module.known})")
+        _check_layout(self.module, self.layout)
 
     def requests(self, request: Any, observation_tokens: Any) -> GeneralistRequests:
         """The module's request slots for this tick, as its layout names them (see the class docstring)."""
 
-        agent, live = _unjoin(observation_tokens)
-        own = self.module
-        slots = own.config.max_requests
-        names = self.layout or (own.skill,)
-        # with no layout, every slot names the module's own verb and scope, as before; with one, an empty slot names verb
-        # 0 and scope 0, as the trainers' build_requests do (an invalid slot's verb and scope never reach the outputs)
-        rest_verb, rest_scope = (own.verb, SCOPE_NAMES.index(own.scope)) if self.layout is None else (0, 0)
-        verb = np.full(slots, rest_verb, np.int32)
-        scope = np.full(slots, rest_scope, np.int32)
-        valid = np.zeros(slots, bool)
-        args = np.zeros((slots, ARG_FEATURES), np.float32)
-        present = np.zeros((slots, len(ARG_GROUPS)), bool)
-        handles = np.full(slots, -1, np.int32)
-        for slot, name in enumerate(names):
-            if name == own.skill:
-                verb_id, scope_name, lower, item = own.verb, own.scope, self.lower, request
-            else:
-                verb_id, scope_name, lower = _skill(name)
-                item = live.get(name)
-            verb[slot], scope[slot] = verb_id, SCOPE_NAMES.index(scope_name)
-            if item is None:
-                continue
-            args[slot], present[slot] = lower(item, agent.pose, agent.tick)
-            valid[slot] = True
-            handles[slot] = -1 if item.args.entity is None else int(item.args.entity)
-        return GeneralistRequests(
-            verb=jnp.asarray(verb)[None], args=jnp.asarray(args)[None], arg_present=jnp.asarray(present)[None],
-            entity_pointer=entity_rows(jnp.asarray(handles)[None], agent.view.entity_ids[agent.row:agent.row + 1]),
-            cell_pointer=jnp.full((1, slots), -1, jnp.int32), scope=jnp.asarray(scope)[None],
-            valid=jnp.asarray(valid)[None])
+        agent, slots = _slots(self.module, self.layout, self.lower, request, observation_tokens)
+        return _requests([slots], agent.view.entity_ids[agent.row:agent.row + 1])
 
     def __call__(self, request: Any, ticks_since_start: int, observation_tokens: Any, belief_tokens: Any) -> BodyStep:
         agent, _ = _unjoin(observation_tokens)
+        if self.batch_results:
+            stored = self.batch_results.get((agent.row, agent.tick))
+            if stored is not None:
+                return stored
         one = jax.tree_util.tree_map(lambda leaf: leaf[agent.row:agent.row + 1], agent.view)
         requests = self.requests(request, observation_tokens)
         check_trunk(self.module, self.trunk)
@@ -498,6 +544,88 @@ class ModuleBody:
         return BodyStep(choices, done=done)
 
 
-__all__ = ["AgentView", "JointView", "Lowering", "ModuleBody", "OwnPose", "StateView", "V1_LAYOUT", "encode_contexts",
-           "entity_rows", "host_inputs", "known_entities", "module_factors", "own_pose_channel", "point", "step_lanes",
-           "tick", "trunk_step", "v2_layout"]
+_BUCKET = 8
+"""A batch's agent count rounds up to a multiple of this: the rows past the real agents repeat the first agent's, and
+their outputs are dropped. The count changes as agents start and finish a verb, and each count would compile the module
+again, so the buckets keep the compiled programs to a few (the retrace lesson of :func:`_with_pose_channel`)."""
+
+
+@dataclass(frozen=True)
+class ModuleBatch:
+    """A :class:`ModuleBody` for N agents of one verb in one pass (2026-10-25, the speed ask: each per-agent call slices
+    the whole view and fetches its logits, about 35 ms an agent a tick at 32 lanes). The same fields and rules as
+    :class:`ModuleBody`; :meth:`run` gives each agent the step its body would return on the same inputs."""
+
+    module: SkillModule
+    trunk: Trunk
+    lower: Lowering
+    layout: tuple[str, ...] | None = None
+    report_done: bool = False
+
+    def __post_init__(self) -> None:
+        _check_layout(self.module, self.layout)
+
+    def outputs(self, view: StateView, agent_views: Sequence[Any], requests: Sequence[Any]
+                ) -> tuple[dict[str, np.ndarray], np.ndarray]:
+        """Every head's logits (name -> float32[N, size]) and the done logits (float32[N]) of N agents, from one program
+        run over their rows of ``view``. ``agent_views`` are each agent's :class:`AgentView` or :class:`JointView`, as the
+        combiner passes them, and ``requests`` each agent's own request of this module's verb. At least one agent."""
+
+        check_trunk(self.module, self.trunk)
+        found = [_slots(self.module, self.layout, self.lower, request, tokens)
+                 for tokens, request in zip(agent_views, requests)]
+        if any(agent.view is not view for agent, _ in found):
+            raise ValueError("the agent views were encoded from another tick's view: pass the view they were encoded from")
+        count = len(found)
+        pad = -(-count // _BUCKET) * _BUCKET - count
+        rows = np.asarray([agent.row for agent, _ in found] + [found[0][0].row] * pad, np.int32)
+        slots = [part for _, part in found] + [found[0][1]] * pad
+        gathered = jax.tree_util.tree_map(lambda leaf: jnp.take(leaf, rows, axis=0), view)
+        out = _module_program(self.module.config, self.module.known, self.module.verb)(
+            self.module.params, gathered.encoded, gathered.masks, _requests(slots, gathered.entity_ids))
+        heads, done = jax.device_get((out.head_logits, out.done))
+        return {name: np.asarray(logits)[:count] for name, logits in heads.items()}, np.asarray(done)[:count]
+
+    def run(self, view: StateView, agent_views: Sequence[Any], requests: Sequence[Any]) -> list[BodyStep]:
+        """Each agent's step, as :class:`ModuleBody` gives it on the same inputs: the masked argmax on the module's scope's
+        heads among the agent's legal actions, and the done logit when ``report_done``. Empty for no agents."""
+
+        if not agent_views:
+            return []
+        logits, done = self.outputs(view, agent_views, requests)
+        legal = np.stack([np.asarray(_unjoin(tokens)[0].action_mask, bool) for tokens in agent_views])
+        choices: list[dict[str, int]] = [{} for _ in agent_views]
+        for index, name in enumerate(HEAD_NAMES):
+            if scope_of(name) != self.module.scope:
+                continue
+            start, size = HEAD_STARTS[index], HEAD_SIZES[index]
+            picks = np.argmax(np.where(legal[:, start:start + size], logits[name], -np.inf), axis=1)
+            for choice, pick in zip(choices, picks):
+                choice[name] = int(pick)
+        return [BodyStep(choice, done=self.report_done and bool(value > 0.0)) for choice, value in zip(choices, done)]
+
+
+def run_module_batches(view: StateView, contexts: Mapping[int, AgentContext], bodies_by_verb: Mapping[str, ModuleBody],
+                       requests_by_agent: Mapping[int, Mapping[str, Any]]
+                       ) -> dict[str, dict[tuple[int, int], BodyStep]]:
+    """The host's batches for one tick, as :class:`ModuleBody`'s ``batch_results`` documents: for each verb, one
+    :class:`ModuleBatch` over the agents whose live request of that verb is in ``requests_by_agent`` (agent -> verb name ->
+    its request), on ``contexts`` as :func:`encode_contexts` returns them. Returns verb -> {(row, tick): BodyStep}, the
+    dict that verb's body reads. An agent with no live request of a verb has no entry for it."""
+
+    results: dict[str, dict[tuple[int, int], BodyStep]] = {}
+    for verb, body in bodies_by_verb.items():
+        agents = [agent for agent in sorted(contexts) if verb in requests_by_agent.get(agent, {})]
+        tokens = [contexts[agent].observation_tokens for agent in agents]
+        batch = ModuleBatch(body.module, body.trunk, body.lower, body.layout, body.report_done)
+        steps = batch.run(view, tokens, [requests_by_agent[agent][verb] for agent in agents])
+        results[verb] = {}
+        for item, step in zip(tokens, steps):
+            agent_view = _unjoin(item)[0]
+            results[verb][(agent_view.row, agent_view.tick)] = step
+    return results
+
+
+__all__ = ["AgentView", "JointView", "Lowering", "ModuleBatch", "ModuleBody", "OwnPose", "StateView", "V1_LAYOUT",
+           "encode_contexts", "entity_rows", "host_inputs", "known_entities", "module_factors", "own_pose_channel", "point",
+           "run_module_batches", "step_lanes", "tick", "trunk_step", "v2_layout"]

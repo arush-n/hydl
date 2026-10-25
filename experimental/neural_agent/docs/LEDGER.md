@@ -1737,3 +1737,18 @@ result: Built by a Haiku subagent from a written spec, checked here.
 gate: its files are new, and only its own test imports them; that test passed (7) on ec8c28b, and again on 842180e with the four commits above (7 passed, with HYTALEGYM_LOS_EARLY_EXIT and the Region digest cache on). The rest of the tree is as gated for the commits above.
 - **Terrain for a walker, as surveyed 2026-10-25:** the traversal graph per world (`worldgen/region/traversal.py`; edges walk, climb up to 1.3 and drop up to 5; costs horizontal), a jit-able A* that returns paths (`jax/world/navigation/__init__.py:211-392`), and npc_walk's jump, which rises only 0.41 blocks (`jax/combat/types.py:589-597`), so it climbs nothing.
 verdict: COMMITTED; not pushed. Open for the owner: the obstacle-profile work, and whether step_and_hop and go_around train on the frozen V1 trunk, whose geometry weights are at their initial values (it never saw terrain), or on a trunk trained with terrain.
+
+## 2026-10-25 — skill_agent: ModuleBatch, one skill module run across agents per verb (speed)
+command: owner, 2026-10-25: "also try to optimize or tell the other agent to optimize and increase speed"; the coordinator's profile of the architecture loop (2bd831c): the cost is inside `ModuleBody.__call__`. Each call slices the whole StateView, about 21 ms; fetches its logits, 14 ms; and lowers its request eagerly, 7 ms.
+result: Built by a Haiku subagent from a written spec, checked here.
+- **`runtime/state_tick.ModuleBatch(module, trunk, lower, layout, report_done).run(view, agent_views, requests)`** runs one module for N agents.
+  - It does one indexed take of their rows, one batched module pass (bucketed by 8) and one `device_get`, with the same slots as `ModuleBody.requests()` (now shared helpers).
+  - `run_module_batches(...)` runs every verb.
+  - `ModuleBody(batch_results=...)` returns the stored step for its agent's (row, tick); without it, the per-agent path is unchanged.
+- **Equality:** V1 and V2 bodies, walk_to and look_at, N = 1, 8 and 32, plus 192 agent-verb steps at N = 96. Every choice and done equals the per-agent call, with no flips; the largest logit difference is 1.5e-5 (float32, batch shape).
+- **Timing** (one flat-world tick, load about 25): both verbs 312 to 124 ms at N = 32 (2.5x), and 3,400 to 941 ms at N = 96 (3.6x).
+- **What remains** is the per-agent lowering, now nearly all of the batch time (walk_to's `lowering` builds one jnp request per agent). A batched lowering in the skill folders is next.
+- **For the coordinator:** the architecture loop gains once the harness runs `run_module_batches` each tick and passes `batch_results`. The per-call costs in 2bd831c (45 ms) did not reproduce here (5 ms at N = 32, load 25); the loop's own views or load may explain it.
+- **Tests:** `test_sa_module_batch.py` (local) 17 passed; module_body_joint, state_tick and export_v1 as before.
+gate: two passes, sharded (the same names and totals as the serial gate, validated 2026-10-25), on 99c404e with ModuleBatch, the integration clock fix and the cached render: pass 1 the step-9 baseline's 11 failing names, none new (the integration shard 7 passed, no xfail); pass 2 1 failing name, a baseline one. Landed on 7885b6c (the coordinator's jar 17; no shared files but the ledger).
+verdict: COMMITTED; not pushed.
