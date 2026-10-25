@@ -66,6 +66,16 @@ def body_vector(vector: jax.Array, yaw_degrees: jax.Array) -> jax.Array:
     return jnp.stack([forward, right, y], axis=1)
 
 
+def body_vector_np(vector: np.ndarray, yaw_degrees: np.ndarray) -> np.ndarray:
+    """:func:`body_vector` for N world vectors [N, 3] in numpy: (forward, right, up) in each body frame."""
+
+    yaw = np.deg2rad(yaw_degrees)
+    x, y, z = vector[:, 0], vector[:, 1], vector[:, 2]
+    forward = -np.sin(yaw) * x - np.cos(yaw) * z
+    right = np.cos(yaw) * x - np.sin(yaw) * z
+    return np.stack([forward, right, y], axis=1)
+
+
 def head_vector(vector: jax.Array, head_yaw_degrees: jax.Array, head_pitch_degrees: jax.Array) -> jax.Array:
     """A world vector [B, 3] as (forward, right, up) in the head frame: ``body_vector`` at the head's yaw, then pitched
     about the right axis, positive pitch up. The head's forward is the gaze, so a target the head faces is (1, 0, 0)."""
@@ -77,6 +87,17 @@ def head_vector(vector: jax.Array, head_yaw_degrees: jax.Array, head_pitch_degre
         [jnp.cos(pitch) * forward + jnp.sin(pitch) * up, right, -jnp.sin(pitch) * forward + jnp.cos(pitch) * up],
         axis=1,
     )
+
+
+def head_vector_np(vector: np.ndarray, head_yaw_degrees: np.ndarray, head_pitch_degrees: np.ndarray) -> np.ndarray:
+    """:func:`head_vector` for N world vectors [N, 3] in numpy: the body frame at the head's yaw, pitched about the
+    right axis (positive pitch up)."""
+
+    body = body_vector_np(vector, head_yaw_degrees)
+    pitch = np.deg2rad(head_pitch_degrees)
+    forward, right, up = body[:, 0], body[:, 1], body[:, 2]
+    return np.stack([np.cos(pitch) * forward + np.sin(pitch) * up, right,
+                     -np.sin(pitch) * forward + np.cos(pitch) * up], axis=1)
 
 
 def planar(xz: jax.Array) -> jax.Array:
@@ -122,6 +143,20 @@ def argument_row(position: jax.Array, scalars: jax.Array, ticks: jax.Array,
 @functools.lru_cache(maxsize=None)
 def environment(batch: int, maximum_turn_degrees: float) -> st.FlatTaskEnvironment:
     return st.make_flat_npc_environment(batch, maximum_turn_degrees=maximum_turn_degrees)
+
+
+def argument_row_np(position: np.ndarray, scalars: np.ndarray, ticks: np.ndarray,
+                    direction: np.ndarray | None = None) -> np.ndarray:
+    """:func:`argument_row` for N rows in numpy: position, direction (zeros unless given), scalars, mode, urgency and age.
+    A numpy twin, so the batched lowering runs no eager jnp."""
+
+    rows = position.shape[0]
+    if direction is None:
+        direction = np.zeros((rows, 3), np.float32)
+    mode = np.broadcast_to(np.asarray(MODE_PARALLEL, np.float32), (rows, 3))
+    urgency = np.full((rows, 1), URGENCY, np.float32)
+    age = (np.asarray(ticks, np.float32) / AGE_SCALE)[:, None]
+    return np.concatenate([position, direction, scalars, mode, urgency, age], axis=1)
 
 
 @functools.lru_cache(maxsize=None)

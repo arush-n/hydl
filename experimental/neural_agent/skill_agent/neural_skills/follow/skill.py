@@ -19,7 +19,7 @@ import numpy as np
 from experimental.neural_agent.skill_agent.neural_skills.follow.task import FollowGoals, FollowTasks
 from experimental.neural_agent.skill_agent.neural_skills.follow.teacher import follow_choices
 from experimental.neural_agent.skill_agent.neural_skills.spec import Pose, RequestRow, SkillSpec
-from experimental.neural_agent.skill_agent.training.blocks import argument_row
+from experimental.neural_agent.skill_agent.training.blocks import argument_row, argument_row_np
 from hytalegym.jax.combat.types import TARGET_ENTITY
 
 PRESENT = np.asarray([False, False, True, True, True, True])
@@ -60,6 +60,19 @@ def lowering(incoming: Any, pose: Pose, tick: int) -> tuple[np.ndarray, np.ndarr
     return np.asarray(row.args[0]), np.asarray(row.present[0])
 
 
+def lowering_batch(incomings: list[Any], poses: Pose, ticks: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """:func:`lowering` for N requests at once: the numpy twin of :func:`request_args` (the position and direction groups
+    are zero; the band's near and far edges are the scalars), in the same float32 steps. ``poses`` is unused, as in
+    :func:`lowering`; ``ticks`` is int[N]. Returns args float32[N, 15] and present bool[N, 6]."""
+
+    count = len(incomings)
+    near = np.asarray([item.args.scalars[0] for item in incomings], np.float32)
+    far = np.asarray([item.args.scalars[1] for item in incomings], np.float32)
+    zeros = np.zeros(count, np.float32)
+    scalars = np.stack([near, far, zeros, zeros], axis=1)
+    return argument_row_np(np.zeros((count, 3), np.float32), scalars, ticks), np.tile(PRESENT, (count, 1))
+
+
 def sample(key: jax.Array, batch: int, spawn_yaw: jax.Array, *, held_out: bool) -> FollowGoals:
     """The goals of ``FollowTasks.sample`` (the SkillSpec signature). ``spawn_yaw`` is not used: the learner faces the person,
     so its spawn yaw is the goals' own (``FollowGoals.spawn_yaw``), and the trainer and the certificate read it from there."""
@@ -83,6 +96,7 @@ def spec(*, maximum_turn_degrees: float = 45.0) -> SkillSpec:
 __all__ = [
     "PRESENT",
     "lowering",
+    "lowering_batch",
     "request",
     "request_args",
     "sample",

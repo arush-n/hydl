@@ -15,7 +15,8 @@ perceived or remembered. The v1 path is unchanged (``model/freezing.py`` ``encod
   the tick and every entity it knows, perceived or remembered, so a request may name a remembered entity.
 - :class:`ModuleBatch` and :func:`run_module_batches` (2026-10-25): one batched pass per skill module per tick over the
   agents of its verb, equal to their per-agent :class:`ModuleBody` calls; ``ModuleBody.batch_results`` returns the stored
-  step for a (row, tick) the host has batched (opt-in: without it a body computes as before).
+  step for a (row, tick) the host has batched (opt-in: without it a body computes as before). Each verb's requests are
+  lowered in one numpy batch by its skill's ``lowering_batch`` where it has one (2026-10-25, B5).
 """
 
 from __future__ import annotations
@@ -399,6 +400,15 @@ def _skill(verb: str) -> tuple[int, str, Lowering]:
     return spec.verb, spec.scope, skill.lowering
 
 
+@functools.lru_cache(maxsize=None)
+def _skill_lowering_batch(verb: str) -> Callable[[list[Any], Pose, np.ndarray], tuple[np.ndarray, np.ndarray]] | None:
+    """A verb's batched lowering (``lowering_batch`` in its skill folder, the same values as its ``lowering`` row by row),
+    or None when the folder has none."""
+
+    skill = importlib.import_module(f"experimental.neural_agent.skill_agent.neural_skills.{verb}.skill")
+    return getattr(skill, "lowering_batch", None)
+
+
 def _unjoin(observation_tokens: Any) -> tuple[AgentView, Mapping[str, Any]]:
     """A body's tokens as its agent view and its live requests: a :class:`JointView`'s, or an :class:`AgentView`'s with
     none."""
@@ -436,35 +446,66 @@ class _Slots(NamedTuple):
     handles: np.ndarray  # int32[S]: each slot's entity handle, -1 for none
 
 
-def _slots(module: SkillModule, layout: tuple[str, ...] | None, lower: Lowering, request: Any,
-           observation_tokens: Any) -> tuple[AgentView, _Slots]:
-    """One agent's request slots, as ``layout`` names them (see :class:`ModuleBody`)."""
+def _slots_rows(module: SkillModule, layout: tuple[str, ...] | None, lower: Lowering, requests: Sequence[Any],
+                agent_views: Sequence[Any], *, batched: bool) -> list[_Slots]:
+    """The request slots of N agents, one :class:`_Slots` per agent, as ``layout`` names them (see :class:`ModuleBody`).
+    Each verb's requests are lowered by its skill's own lowering, per agent. With ``batched``, each verb's requests are
+    lowered in one call by its skill's ``lowering_batch`` where the folder has one: the module's own verb only when
+    ``lower`` is that folder's lowering, so a caller's own lowering is never replaced."""
 
-    agent, live = _unjoin(observation_tokens)
+    unpacked = [_unjoin(tokens) for tokens in agent_views]
+    agents = [agent for agent, _ in unpacked]
+    lives = [live for _, live in unpacked]
+    count = len(agents)
     slots = module.config.max_requests
     names = layout or (module.skill,)
     # with no layout, every slot names the module's own verb and scope, as before; with one, an empty slot names verb
     # 0 and scope 0, as the trainers' build_requests do (an invalid slot's verb and scope never reach the outputs)
     rest_verb, rest_scope = (module.verb, SCOPE_NAMES.index(module.scope)) if layout is None else (0, 0)
-    verb = np.full(slots, rest_verb, np.int32)
-    scope = np.full(slots, rest_scope, np.int32)
-    valid = np.zeros(slots, bool)
-    args = np.zeros((slots, ARG_FEATURES), np.float32)
-    present = np.zeros((slots, len(ARG_GROUPS)), bool)
-    handles = np.full(slots, -1, np.int32)
+    verb = np.full((count, slots), rest_verb, np.int32)
+    scope = np.full((count, slots), rest_scope, np.int32)
+    valid = np.zeros((count, slots), bool)
+    args = np.zeros((count, slots, ARG_FEATURES), np.float32)
+    present = np.zeros((count, slots, len(ARG_GROUPS)), bool)
+    handles = np.full((count, slots), -1, np.int32)
+    poses = (Pose(*(np.concatenate([np.asarray(getattr(agent.pose, field), np.float32) for agent in agents])
+                    for field in Pose._fields)) if batched and agents else None)
+    ticks = np.asarray([agent.tick for agent in agents], np.int64)
     for slot, name in enumerate(names):
         if name == module.skill:
-            verb_id, scope_name, own_lower, item = module.verb, module.scope, lower, request
+            verb_id, scope_name, own_lower = module.verb, module.scope, lower
+            items = list(requests)
+            batch_lower = _skill_lowering_batch(name) if batched and lower is _skill(name)[2] else None
         else:
             verb_id, scope_name, own_lower = _skill(name)
-            item = live.get(name)
-        verb[slot], scope[slot] = verb_id, SCOPE_NAMES.index(scope_name)
-        if item is None:
+            items = [live.get(name) for live in lives]
+            batch_lower = _skill_lowering_batch(name) if batched else None
+        verb[:, slot], scope[:, slot] = verb_id, SCOPE_NAMES.index(scope_name)
+        picked = [index for index, item in enumerate(items) if item is not None]
+        if not picked:
             continue
-        args[slot], present[slot] = own_lower(item, agent.pose, agent.tick)
-        valid[slot] = True
-        handles[slot] = -1 if item.args.entity is None else int(item.args.entity)
-    return agent, _Slots(verb, scope, valid, args, present, handles)
+        rows = np.asarray(picked)
+        if batch_lower is None:
+            lowered = [own_lower(items[i], agents[i].pose, agents[i].tick) for i in picked]
+            got_args = np.stack([pair[0] for pair in lowered])
+            got_present = np.stack([pair[1] for pair in lowered])
+        else:
+            got_args, got_present = batch_lower([items[i] for i in picked], Pose(*(leaf[rows] for leaf in poses)),
+                                                ticks[rows])
+        args[rows, slot] = got_args
+        present[rows, slot] = got_present
+        valid[rows, slot] = True
+        for i in picked:
+            handles[i, slot] = -1 if items[i].args.entity is None else int(items[i].args.entity)
+    return [_Slots(verb[i], scope[i], valid[i], args[i], present[i], handles[i]) for i in range(count)]
+
+
+def _slots(module: SkillModule, layout: tuple[str, ...] | None, lower: Lowering, request: Any,
+           observation_tokens: Any) -> tuple[AgentView, _Slots]:
+    """One agent's request slots, as ``layout`` names them, each verb lowered per agent (see :class:`ModuleBody`)."""
+
+    agent, _ = _unjoin(observation_tokens)
+    return agent, _slots_rows(module, layout, lower, [request], [observation_tokens], batched=False)[0]
 
 
 def _requests(slots: Sequence[_Slots], entity_ids: jax.Array) -> GeneralistRequests:
@@ -572,14 +613,16 @@ class ModuleBatch:
         combiner passes them, and ``requests`` each agent's own request of this module's verb. At least one agent."""
 
         check_trunk(self.module, self.trunk)
-        found = [_slots(self.module, self.layout, self.lower, request, tokens)
-                 for tokens, request in zip(agent_views, requests)]
-        if any(agent.view is not view for agent, _ in found):
+        if len(requests) != len(agent_views):
+            raise ValueError(f"one request per agent view: got {len(requests)} requests for {len(agent_views)} views")
+        agents = [_unjoin(tokens)[0] for tokens in agent_views]
+        if any(agent.view is not view for agent in agents):
             raise ValueError("the agent views were encoded from another tick's view: pass the view they were encoded from")
+        found = _slots_rows(self.module, self.layout, self.lower, requests, agent_views, batched=True)
         count = len(found)
         pad = -(-count // _BUCKET) * _BUCKET - count
-        rows = np.asarray([agent.row for agent, _ in found] + [found[0][0].row] * pad, np.int32)
-        slots = [part for _, part in found] + [found[0][1]] * pad
+        rows = np.asarray([agent.row for agent in agents] + [agents[0].row] * pad, np.int32)
+        slots = found + [found[0]] * pad
         gathered = jax.tree_util.tree_map(lambda leaf: jnp.take(leaf, rows, axis=0), view)
         out = _module_program(self.module.config, self.module.known, self.module.verb)(
             self.module.params, gathered.encoded, gathered.masks, _requests(slots, gathered.entity_ids))

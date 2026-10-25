@@ -57,7 +57,7 @@ and promoting v3 waits on its T4 live replay (`TRAINING.md`).
 |---|---|
 | `teacher.py` | `walk_to_choices` (v2 at margin 0, v3 above), `walk_to_version`, the v3 margin |
 | `task.py` | `WalkToGoals`, `WalkToTasks` (`sample`, `success`) and the episode ranges |
-| `skill.py` | walk_to as the training blocks see it (`spec()`): its request, its sampler and held-out region, its teacher binding; `lowering(request, pose, tick)` (2026-10-24) builds one middle-layer request's args for `ModuleBody`, as `training/distill.build_requests` does |
+| `skill.py` | walk_to as the training blocks see it (`spec()`): its request, its sampler and held-out region, its teacher binding; `lowering(request, pose, tick)` (2026-10-24) builds one middle-layer request's args for `ModuleBody`, as `training/distill.build_requests` does; `lowering_batch(requests, poses, ticks)` (2026-10-25, B5) is its numpy batch, equal row by row |
 | `train.py` | **its training strategy**: DAgger from v3, look_at beside it in half the lanes, rear-left targets held out, A2's sizes |
 | `train.sh` | runs `train.py` into `agent_skills/training_runs/skill_modules/walk_to/NAME/` |
 | `certify.sh` | the teacher certificate, T1 to T3, on the four certificate seeds (v3 by default) |

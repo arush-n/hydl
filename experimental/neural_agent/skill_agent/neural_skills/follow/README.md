@@ -10,7 +10,7 @@ The build follows track's files, on the trainer's holding-skill support and its 
 
 | File | What it is |
 |---|---|
-| `skill.py` | the spec: the request (entity 1 by its handle, the band's near and far edges as the two scalars, no position), the success test, the lowering, and the teacher binding (holding; every tick counts) |
+| `skill.py` | the spec: the request (entity 1 by its handle, the band's near and far edges as the two scalars, no position), the success test, the lowering, and the teacher binding (holding; every tick counts); `lowering_batch` (2026-10-25, B5) is the numpy batch of the lowering, equal row by row |
 | `task.py` | the person: a looped random walk of 8 waypoints within 8 blocks (`bench/mover_checks`' path), walking 1.5 or sneaking 2.75 blocks a second (held out: 2.0 to 2.3); each lane's path is translated so the learner spawns 3.5 blocks behind the person's start, facing it; 300 ticks |
 | `teacher.py` | walk_to v3's rule toward the band's middle (3.5 blocks) behind the person, along their velocity (their yaw when standing), radius 1, sprint, idle inside the stop radius; never done |
 | `train.py` | its strategy: follow alone, or with track beside it in half the lanes (track by its own teacher, so the module watches the person while it follows) |

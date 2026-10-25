@@ -22,7 +22,7 @@ from experimental.neural_agent.skill_agent.neural_skills.spec import Pose, Reque
 from experimental.neural_agent.skill_agent.neural_skills.track.task import TrackGoals, TrackTasks
 from experimental.neural_agent.skill_agent.neural_skills.track.teacher import track_choices
 from experimental.neural_agent.skill_agent.tasks import simple_tasks as st
-from experimental.neural_agent.skill_agent.training.blocks import argument_row
+from experimental.neural_agent.skill_agent.training.blocks import argument_row, argument_row_np
 from hytalegym.jax.combat.types import AGENT_ENTITY, TARGET_ENTITY, CombatState
 
 PRESENT = np.asarray([False, False, True, True, True, True])
@@ -59,6 +59,18 @@ def lowering(incoming: Any, pose: Pose, tick: int) -> tuple[np.ndarray, np.ndarr
                        horizon_ticks=jnp.zeros((1,), dtype=jnp.int32), mover=None)
     row = request(goals, pose, jnp.float32(tick))
     return np.asarray(row.args[0]), np.asarray(row.present[0])
+
+
+def lowering_batch(incomings: list[Any], poses: Pose, ticks: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """:func:`lowering` for N requests at once: the numpy twin of :func:`request_args` (the position and direction groups
+    are zero), in the same float32 steps. ``poses`` is unused, as in :func:`lowering`; ``ticks`` is int[N]. Returns args
+    float32[N, 15] and present bool[N, 6]."""
+
+    count = len(incomings)
+    tolerance = np.asarray([item.args.scalars[0] for item in incomings], np.float32)
+    zeros = np.zeros(count, np.float32)
+    scalars = np.stack([tolerance / TOLERANCE_SCALE, zeros, zeros, zeros], axis=1)
+    return argument_row_np(np.zeros((count, 3), np.float32), scalars, ticks), np.tile(PRESENT, (count, 1))
 
 
 def sample(key: jax.Array, batch: int, spawn_yaw: jax.Array, *, held_out: bool) -> TrackGoals:
@@ -99,6 +111,7 @@ __all__ = [
     "PRESENT",
     "in_reach",
     "lowering",
+    "lowering_batch",
     "request",
     "request_args",
     "sample",

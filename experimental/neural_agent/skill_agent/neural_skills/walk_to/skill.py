@@ -27,7 +27,9 @@ from experimental.neural_agent.skill_agent.training.blocks import (
     POSITION_SCALE,
     SPAWN_XZ,
     argument_row,
+    argument_row_np,
     body_vector,
+    body_vector_np,
     planar,
     resample,
     wrap_degrees_np,
@@ -89,6 +91,24 @@ def lowering(incoming: Any, pose: Pose, tick: int) -> tuple[np.ndarray, np.ndarr
                         horizon_ticks=jnp.zeros((1,), dtype=jnp.int32))
     row = request(goals, pose, jnp.float32(tick))
     return np.asarray(row.args[0]), np.asarray(row.present[0])
+
+
+def lowering_batch(incomings: list[Any], poses: Pose, ticks: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """:func:`lowering` for N requests at once (``runtime/state_tick.py`` lowers a verb's requests in one call): the numpy
+    twin of :func:`request_args`, in the same float32 steps, so its rows equal :func:`lowering`'s. ``poses`` has leading
+    dimension N and ``ticks`` is int[N]; returns args float32[N, 15] and present bool[N, 6]."""
+
+    count = len(incomings)
+    target = np.asarray([[item.args.position[0], item.args.position[2]] for item in incomings], np.float32)
+    radius = np.asarray([item.args.scalars[0] for item in incomings], np.float32)
+    gait = np.rint(np.asarray([item.args.scalars[1] for item in incomings], np.float64)).astype(np.float32)
+    position = np.asarray(poses.position, np.float32)
+    to_walk = target - position[:, [0, 2]]
+    flat = np.stack([to_walk[:, 0], np.zeros(count, np.float32), to_walk[:, 1]], axis=1)
+    body = body_vector_np(flat, np.asarray(poses.yaw, np.float32)) / POSITION_SCALE
+    zeros = np.zeros(count, np.float32)
+    scalars = np.stack([gait / GAIT_SCALE, radius, zeros, zeros], axis=1)
+    return argument_row_np(body, scalars, ticks), np.tile(PRESENT, (count, 1))
 
 
 def sample(key: jax.Array, batch: int, spawn_yaw: jax.Array, *, held_out: bool) -> WalkToGoals:
@@ -191,6 +211,7 @@ __all__ = [
     "REAR_LEFT_DEGREES",
     "in_rear_left",
     "lowering",
+    "lowering_batch",
     "metrics",
     "pace",
     "radius_kept",

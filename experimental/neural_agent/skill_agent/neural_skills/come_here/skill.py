@@ -20,7 +20,7 @@ from experimental.neural_agent.skill_agent.neural_skills.come_here.teacher impor
 from experimental.neural_agent.skill_agent.neural_skills.spec import Pose, RequestRow, SkillSpec
 from experimental.neural_agent.skill_agent.neural_skills.walk_to import skill as walk_skill
 from experimental.neural_agent.skill_agent.neural_skills.walk_to.teacher import WALK_TO_V3_STOP_MARGIN_BLOCKS
-from experimental.neural_agent.skill_agent.training.blocks import argument_row, resample
+from experimental.neural_agent.skill_agent.training.blocks import argument_row, argument_row_np, resample
 from hytalegym.jax.combat.types import TARGET_ENTITY
 
 GAIT_SCALE = 4.0
@@ -65,6 +65,19 @@ def lowering(incoming: Any, pose: Pose, tick: int) -> tuple[np.ndarray, np.ndarr
     return np.asarray(row.args[0]), np.asarray(row.present[0])
 
 
+def lowering_batch(incomings: list[Any], poses: Pose, ticks: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """:func:`lowering` for N requests at once: the numpy twin of :func:`request_args` (the position group is zero, as the
+    entity's token holds the place), in the same float32 steps. ``poses`` is unused, as in :func:`lowering`; ``ticks`` is
+    int[N]. Returns args float32[N, 15] and present bool[N, 6]."""
+
+    count = len(incomings)
+    radius = np.asarray([item.args.scalars[0] for item in incomings], np.float32)
+    gait = np.rint(np.asarray([item.args.scalars[1] for item in incomings], np.float64)).astype(np.float32)
+    zeros = np.zeros(count, np.float32)
+    scalars = np.stack([gait / GAIT_SCALE, radius, zeros, zeros], axis=1)
+    return argument_row_np(np.zeros((count, 3), np.float32), scalars, ticks), np.tile(PRESENT, (count, 1))
+
+
 def sample(key: jax.Array, batch: int, spawn_yaw: jax.Array, *, held_out: bool) -> ComeHereGoals:
     """Goals with entity 1 placed (``ComeHereTasks.sample``), redrawn until its bearing from the spawn body is in the
     rear-left quadrant (``held_out=True``) or outside it (``held_out=False``), as walk_to's targets are."""
@@ -93,6 +106,7 @@ __all__ = [
     "GAIT_SCALE",
     "PRESENT",
     "lowering",
+    "lowering_batch",
     "request",
     "request_args",
     "sample",

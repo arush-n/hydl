@@ -11,7 +11,7 @@ built on the same trainer features.
 
 | File | What it is |
 |---|---|
-| `skill.py` | the spec: the request (entity 1 by handle, look_at's tolerance scalar, the horizon as the time), the success test, `in_reach` (the share's counted ticks: mover_checks' ceiling rule) and the teacher binding |
+| `skill.py` | the spec: the request (entity 1 by handle, look_at's tolerance scalar, the horizon as the time), the success test, `in_reach` (the share's counted ticks: mover_checks' ceiling rule) and the teacher binding; `lowering_batch` (2026-10-25, B5) is the numpy batch of its `lowering`, equal row by row |
 | `task.py` | the goals: a person on a straight path crossing in front of the spawn at 3 to 10 blocks, walk or sneak (trained) or 2.0 to 2.3 blocks a second (held out); the horizon is the path's duration, capped at 300 ticks |
 | `teacher.py` | look_at v2 aimed at entity 1 each tick, no lead, never done |
 | `train.py` | its strategy: track alone, or with walk_to beside it in half the lanes |

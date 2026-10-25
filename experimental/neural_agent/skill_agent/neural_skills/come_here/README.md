@@ -8,7 +8,7 @@ the handle to the token row that holds the entity.
 approved): what it does, its teacher, world, strategy, bars, stages and what it waits on. The build:
 
 - `skill.py`: the request (no position; the entity handle; the gait and radius), the held-out region, the success test
-  (planar distance to entity 1 within the radius), the metrics (walk_to's pace and radius), the spec, and the lowering.
+  (planar distance to entity 1 within the radius), the metrics (walk_to's pace and radius), the spec, and the lowering (`lowering_batch`, 2026-10-25, B5: its numpy batch, equal row by row).
   The verb `come_here` is appended to `../spec.py`'s `VERBS` (id 2).
 - `task.py`: entity 1 placed 3 to 15 blocks from the spawn at any bearing (walk_to's range), at the floor's height; the
   held-out lanes place it at bearings 180 to 270 degrees from the spawn body.

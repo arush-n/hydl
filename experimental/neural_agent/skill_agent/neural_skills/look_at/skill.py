@@ -28,9 +28,12 @@ from experimental.neural_agent.skill_agent.training.blocks import (
     EYE_XYZ,
     POSITION_SCALE,
     argument_row,
+    argument_row_np,
     body_vector,
+    body_vector_np,
     facing_degrees,
     head_vector,
+    head_vector_np,
     resample,
     wrap_degrees,
 )
@@ -146,6 +149,28 @@ def lowering(incoming: Any, pose: Pose, tick: int) -> tuple[np.ndarray, np.ndarr
     return np.asarray(row.args[0]), np.asarray(row.present[0])
 
 
+def lowering_batch(incomings: list[Any], poses: Pose, ticks: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """:func:`lowering` for N requests at once: the numpy twin of :func:`request_args` with ``direction=True`` and
+    ``frame="head"`` (the options :func:`lowering` builds), in the same float32 steps. ``poses`` has leading dimension N
+    and ``ticks`` is int[N]; returns args float32[N, 15] and present bool[N, 6]."""
+
+    count = len(incomings)
+    target = np.asarray([item.args.position for item in incomings], np.float32)
+    tolerance = np.asarray([item.args.scalars[0] for item in incomings], np.float32)
+    position = np.asarray(poses.position, np.float32)
+    eye = np.asarray([0.0, st.AGENT_EYE_HEIGHT, 0.0], np.float32)
+    to_look = target - (position + eye)
+    look_body = body_vector_np(to_look, np.asarray(poses.yaw, np.float32))
+    look_from = head_vector_np(to_look, np.asarray(poses.head_yaw, np.float32),
+                                np.asarray(poses.head_pitch, np.float32))
+    unit = look_from / np.maximum(np.linalg.norm(look_from, axis=1, keepdims=True), 1e-6)
+    zeros = np.zeros(count, np.float32)
+    scalars = np.stack([tolerance / TOLERANCE_SCALE, zeros, zeros, zeros], axis=1)
+    present = np.asarray(PRESENT).copy()
+    present[DIRECTION_GROUP] = True
+    return argument_row_np(look_body / POSITION_SCALE, scalars, ticks, unit), np.tile(present, (count, 1))
+
+
 def sample(key: jax.Array, batch: int, spawn_yaw: jax.Array, *, held_out: bool) -> LookAtGoals:
     """Look-only goals (``LookAtTasks.sample`` around the spawn body), redrawn until every point is in the held-out left
     band (``held_out=True``) or outside it (``held_out=False``)."""
@@ -190,6 +215,7 @@ __all__ = [
     "in_look_held_out",
     "look_offset",
     "lowering",
+    "lowering_batch",
     "place_beside_walk",
     "request",
     "request_args",
