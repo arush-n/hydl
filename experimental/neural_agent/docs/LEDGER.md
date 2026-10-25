@@ -1861,3 +1861,25 @@ result:
 - **Docs:** FIDELITY-0.7.2.md (ax) "Open" carries the MoveIn rule and the switch; sim/gen7/SKILL.md (local) the pattern for construct state (one optional field, None when off) and the load-independent cost check (compare the lowered StableHLO).
 gate: hearing_entry: tests/sim 693/8/3 sharded (the change committed in a worktree), its own and the hearing/duel/render/registry files 71 passed on main after landing; the switch-off StableHLO identity above. Runner: test_na_session_gen7.py (local, 8) and test_na_session.py 25 passed; the report identities above; a smoke on main. 8012119: report identity above.
 verdict: COMMITTED (6d23006, 8012119, 4aac973); not pushed. Next on this side: a gen-7 decision layer for the runner beyond the architecture test's goal decider (the JEV programs read ADK state today), and the open fidelity items (crossbow load cycle, the support-drop mechanism, the placing fixture, the water-off 3a recapture).
+
+## 2026-10-25 — skill_agent: the people trunk's trainer (trunk_v3.py) and the entity probe as a repo tool (no training)
+command: the owner, 2026-10-25: "People trunk now, terrain later". The ground is the P2 probe: the frozen V1 trunk's entity row carries a person's body-frame position at forward R² 0.63, 0.46 and 0.84 (fixed, placed, moving; ridge), against at least 0.998 from the raw token.
+result: Built by a Haiku subagent from a written spec, reviewed here.
+- **`training/trunk_v3.py`** (550 lines): V1's method (`distill_v3`'s sequences, burn-in, loss, slot cut and DAgger, imported), on lanes from the skills' V2 strategies (walk_to, look_at, come_here, track by default).
+  - Entity 1 is placed per lane in every skill's lanes (`--fixed-other` keeps V1's spot), and moves in track's.
+  - Entity handles are resolved to token rows every decision.
+  - Every active skill's teacher labels its own scope.
+  - The generalist is sized for every verb (`MODULE_CONFIG`).
+  - The report carries A2's evaluation (V1's bars), the generalist on come_here's and track's lanes against their teachers, and each skill's teacher-lane success.
+  - `--trunk-out` exports the trunk for `skill_dagger_v3 --trunk`.
+- **`bench/entity_probe.py`** (329 lines): P2's ridge probe. It reproduces P2's 72 trunk and raw rows exactly (largest R² difference 0.0).
+- **Checks (local `test_sa_trunk_v3.py` 11 passed, `test_sa_entity_probe.py` 2 passed):**
+  - on the same A2 episodes, the generalised rollout records exactly what `distill_v3._rollout` does (every token, label, mask and request field);
+  - pointers resolve to entity 1's row; labels are the teachers' on the active scopes;
+  - the unrolled trunk equals the rollout's;
+  - `distill_v3`, `skill_dagger_v3`, come_here's and track's tests are unchanged.
+  - Teachers only, 256 lanes: the person placed anywhere costs walk_to and look_at nothing (identical success, hold, pace and path).
+- **Cost** (load 21 to 65): a 128-lane collection takes about 109 s; a step 0.44 to 0.79 s; a 6 x 500 run about 33 to 50 minutes plus evaluation.
+- **Not done:** `bars.py` scores only the A2 v2 schema, and V1-style reports lack the teachers' rates. The run is scored as 8.10 scored V1, against run C''s teacher seen rates; a reference option for `bars.py` is a follow-up.
+gate: two passes, sharded, on 989a0e1 with the people-trunk trainer and the probe tool: pass 1 the step-9 baseline's 11 failing names, none new; the integration shard 7 passed; pass 2 1 failing name, a baseline one.
+verdict: COMMITTED; not pushed.

@@ -8,6 +8,7 @@ layer's encoding carry the information the agent needs, in the simulator and on 
 
 | Module | Lines | What it times |
 |---|---:|---|
+| `entity_probe.py` | 329 | The P2 probe as a repo tool (TRAINING_PLAN.md 8.3, stage PT1; 2026-10-25, no training): a trunk's entity row against entity 1's body-frame place on walk_to (entity 1 fixed), come_here (placed) and track (moving) lanes, with ridge read-outs within and across sets. `--trunk TRUNK.npz --lanes 256 --seed 9301 --json OUT`. It reproduces P2's trunk and raw R² on the V1 trunk (`test_sa_entity_probe.py`, slow, gated by `SA_P2_TRUNK` and `SA_P2_RESULTS`). |
 | `bench_tick.py` | 334 | The resolver, the combiner and the encoder at batch 1, 8 and 64. |
 | `bench_bodies.py` | 254 | Trained-shape bodies: the trunk inside every call against the trunk once per tick, and two batched layouts. |
 | `bench_generalist.py` | 194 | The generalist: the trunk once for all agents, then one generalist forward (proof A1). |
