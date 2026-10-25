@@ -1681,3 +1681,31 @@ result: Built by a Haiku subagent from a written spec, checked here. The API, fo
   On this side: a sharded test gate, the trainer's bit-exact speedups, and ModuleBody batched across agents per verb.
 gate: two passes on a56f434 with holding skills and track, follow and --init-module, and the ModuleBody fix, against the step-9 baseline (6acadad). Pass 1: the baseline's 11 failing names, none new (1,766 passed, 2 xfailed). Pass 2: 1 failing name, a baseline one. Landed on 842180e (the coordinator's 812c2ef..842180e, no shared files but the ledger).
 verdict: COMMITTED; not pushed.
+
+## 2026-10-25 — skill_agent: look_at's longer schedule passes; come_here's, track's and follow's runs; the V2 bodies (`skill_agent/docs/TRAINING_PLAN.md` 8.12)
+command: owner, 2026-10-24: "go ahead" (come_here's smoke and run; the longer look_at schedule), then "Start from walk_to's module".
+result:
+- **look_at at 6 x 2,000** passes every bar on both seeds: while walking, held out over seen 0.913 and 0.947 (bar 0.90), T5 +0.8 and +2.3.
+- **come_here** (smoke, 6 x 500, 6 x 2,000, and 6 x 2,000 from walk_to's module):
+  - **Alone it passes T5 and held out** (0.906 to 0.922 seen, 0.938 to 0.953 held out, against the teacher's 1.000).
+  - **Beside look_at it misses** by 13 to 21 points, and pace by 5 to 6.
+  - The pointer is used: cleared, success falls to 0.
+  - The failed lanes stop short and stay: 1.5 blocks out alone, 3 to 4 blocks out beside look_at. Three ablations
+    (head bearing, head pitch, look_at's position) each hurt, so it is not one misread cue. The module has not learned
+    the composed case: its target arrives through head-frame token columns that move as look_at turns the head, which
+    is inferred.
+  - Options, none run: more composed lanes, a larger module, or lowering the perceived body-frame position into the
+    request.
+- **track and follow** (6 x 2,000, after their smokes):
+  - share, module against teacher: track 0.24 vs 0.93 alone and 0.12 vs 0.52 beside walk_to; follow 0.57 vs 0.94 alone and
+    0.79 vs 0.93 beside track. T5 fails, held out passes, 0 illegal.
+  - All three entity skills fall short while the request-argument skills pass. The frozen V1 trunk saw entity 1 only
+    inert at one spot, so its entity encoding likely cannot represent people elsewhere or moving (inferred). The
+    planned new trunk should train on such people as well as terrain.
+  - track's teacher beside walk_to holds only 0.52 and needs work.
+- **The V2 bodies** drive 32 of 32 lanes for both skills, seen and held out, through ModuleBody.
+- **A precision to 8.11:** its 32 + 32 check ran on the control arm. The memory arm holds 31 of 32 held-out lanes per skill, eager or compiled, within its own rates.
+
+Runs and modules are in the session scratchpad (`v3_runs/`, `v2_bodies/`).
+gate: two passes on a56f434 with holding skills and track, follow and --init-module, and the ModuleBody fix, against the step-9 baseline (6acadad). Pass 1: the baseline's 11 failing names, none new (1,766 passed, 2 xfailed). Pass 2: 1 failing name, a baseline one. Landed on 842180e (the coordinator's 812c2ef..842180e, no shared files but the ledger).
+verdict: COMMITTED; not pushed. Open for the owner: come_here beside look_at (accept alone-only for now, or more diagnosis).

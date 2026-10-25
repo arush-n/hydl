@@ -410,7 +410,7 @@ Console replays of the mace fights: 20261020T062617Z-11750ee7 (scripted), 202610
 - A self-play league can cycle, or collapse onto one strategy (Balduzzi et al. 2019). The scripted styles stay in the
   pool as anchors, as AlphaStar kept its exploiters (Vinyals et al. 2019).
 
-## 8. Training on v3: the state layer and the trunk's memory (PROPOSED 2026-10-23; V0 APPROVED the same day, 8.4; the sequence machinery BUILT, 8.7; V1 built, smoke and short pass run, 8.8 and 8.9; V1 PASSES, 8.10; V2 run, 8.11)
+## 8. Training on v3: the state layer and the trunk's memory (PROPOSED 2026-10-23; V0 APPROVED the same day, 8.4; the sequence machinery BUILT, 8.7; V1 built, smoke and short pass run, 8.8 and 8.9; V1 PASSES, 8.10; V2 run, 8.11; the longer look_at schedule and come_here's runs, 8.12)
 
 `VIRTUAL_HUMAN.md` section 13: "Moving the trainers onto `runtime/state_tick.py` is the first task when training
 resumes." The encoder and the state layer are now built through step 9 (with the tick fix and S5), so this section says
@@ -897,6 +897,166 @@ ledger on 2026-10-24 (two messages expired undelivered). The skill side's pieces
 - `step_lanes`, compiled at 20.6 ms a tick (29).
 
 **Gate:** two passes on dc9037a with all six of 2026-10-24, against the step-9 baseline (6acadad). Pass 1: the baseline's 11 failing names and 18 more, each explained. `test_sa_export_v1.py`'s 11 and `test_sa_integration_gen7.py`'s 5 were this lane's (the export rebuilt V1's configuration with `sound`; the check's capture under the compiled tick), fixed and re-run: export 11 passed, integration 5 passed and 1 strict xfail (the Region carries no construct since 6d9307f). `test_sa_drives.py`'s real-simulator clock test (2) fails on a clean dc9037a too, bisected to the coordinator's 6d9307f, now a strict xfail (drives 20 passed, 2 xfailed). 1,693 passed. Pass 2: 1 failing name, a baseline one (29 of the baseline's 30 now pass). Only their own tests import the two files fixed after the gate. Landed on e826fa7 (the coordinator's live hearing; no shared files).
+
+### 8.12 The longer look_at schedule, come_here's, track's and follow's first runs, and the V2 bodies (2026-10-24 and 25, night)
+
+**The rulings.** The owner, 2026-10-24, on the asks of 8.11: "go ahead", taken as:
+- come_here's smoke, then its run;
+- the longer look_at schedule, on both seeds.
+
+The same night they ruled track (gaze only, scored within the head's reach on paths that cross in front) and follow
+(sprint; trained on walking and sneaking people; runners parked). Both are in their TRAINING.md section 8.
+
+All runs use the frozen V1 trunk `memory_s1` (sha e6800023cca5) at 128 lanes. They are evaluated on seed 77001, 256
+lanes per region. The trainer is `training/skill_dagger_v3.py`, unchanged from 8.11 except come_here's two gaps
+(entity 1 placed per lane, the pointer resolved per decision).
+
+**look_at at 6 x 2,000 steps** (4 times 8.11's schedule, A2's length; 78 minutes each at load 85 to 120). **Every bar
+passes, on both seeds:**
+
+| Held success, module (teacher) | Seed 0 | Seed 1 |
+|---|---|---|
+| alone, seen / held out | 1.000 / 0.992 (1.000 / 1.000) | 0.992 / 1.000 (1.000 / 1.000) |
+| while walking, seen / held out | 0.898 / 0.820 (0.906 / 0.859) | 0.883 / 0.836 (0.906 / 0.859) |
+| T5 while walking (bar 10 points) | +0.8 | +2.3 |
+| held out / seen while walking (bar 0.90) | 0.913 | 0.947 |
+| walk_to beside it | 1.000 | 1.000 |
+
+The held-out ratio that failed by 0.003 at 6 x 500 (0.897 on both seeds) passes once trained longer. As 8.11 inferred,
+the gap was undertraining, not the method.
+
+**come_here.**
+- **The smoke** (one iteration of 200 steps, 21 minutes): end to end, 0 illegal decisions. The module held 0.03, as
+  walk_to's smoke held 0.06 at the same size.
+- **The short pass** (6 x 500, 50 minutes) **does not pass:**
+
+| Held success, module (teacher) | Seen | Held out |
+|---|---|---|
+| alone | 0.828 (1.000) | 0.906 (1.000) |
+| beside look_at | 0.727 (1.000) | 0.758 (1.000) |
+
+  - T5 fails by 17 and 27 points, against a bar of 10.
+  - E4 pace is 87%, against 95%.
+  - Held out over seen passes (1.09 and 1.04), and there are 0 illegal decisions.
+  - Its final loss rose across iterations (0.068 to 0.087) while walk_to's fell to about 0.02, which suggests
+    undertraining.
+- **The pointer ablation** (come_here's plan, section 8: clear the pointer and evaluate again).
+  - As trained, the evaluation reproduces the report exactly (0.828 / 0.727 seen, 0.906 / 0.758 held out).
+  - With the pointer cleared (-1 every decision), come_here's held success falls to 0.000 alone and 0.008 beside look_at,
+    seen and held out.
+
+  So the module finds its target through the pointer, as designed. The miss is not the pointer: it is undertraining,
+  as look_at's was.
+- **The run at 6 x 2,000** (A2's size, as the owner's approval of the run allows; 49 minutes at load 60 to 80). Much
+  better, but not every bar:
+
+| Held success, module (teacher) | Seen | Held out | T5 (bar 10 points) | Held out / seen |
+|---|---|---|---|---|
+| alone | 0.922 (1.000) | 0.938 (1.000) | +7.8 pass | 1.017 pass |
+| beside look_at | 0.867 (1.000) | 0.812 (1.000) | +13.3 FAIL | 0.937 pass |
+
+  - E4 pace 89.9%, against 95%: fails. The radius is kept on every success, and there are 0 illegal decisions.
+  - look_at beside it held 0.844 seen and 0.891 held out, against 0.844 and 0.867 beside the teacher.
+  - Its final loss settled at about 0.045, against walk_to's 0.02.
+  - So come_here alone passes T5 and the held-out bar, but not beside look_at, and not pace.
+  - **The next lever was the recipe's own rule:** a dependent skill starts from its prerequisite.
+- **From walk_to's V2 module** (owner, 2026-10-24: "Start from walk_to's module"; `--init-module`, built for it, see
+  `training/README.md`; 6 x 2,000, 33 minutes). It does not help:
+
+| Held success, module (teacher) | Seen | Held out | T5 | Held out / seen |
+|---|---|---|---|---|
+| alone | 0.906 (1.000) | 0.953 (1.000) | +9.4 pass | 1.052 pass |
+| beside look_at | 0.789 (1.000) | 0.766 (1.000) | +21.1 FAIL | 0.970 pass |
+
+  - Pace 88.8%.
+  - The loss starts lower (0.013 after the first iteration) but rises to 0.055 by the last.
+  - With three schedules and two starts, come_here alone passes T5 and held out. Beside look_at it misses by 13 to 21
+    points, and pace by 5 to 6.
+  - The cause is not the pointer (cleared, success falls to 0) and not plain undertraining (4 times the steps closed
+    look_at's gap, not this one).
+  - The entity token's position is in the body frame (`state/frames.py`), so a head that turns does not move the
+    target's position columns. It does move the token's head-bearing columns.
+  - **A diagnostic:** those columns set to the body bearing at evaluation, on the 6 x 2,000 module from scratch.
+    - Alone, held out falls from 0.938 to 0.781; beside look_at, seen falls from 0.867 to 0.734 (held out 0.812 to
+      0.781).
+    - So the module uses the head-bearing columns, and removing them hurts. The miss beside look_at is not a
+      head-frame shortcut that removing them would fix.
+  - **How the failed lanes end** (the same module, the report's lanes). Every failed lane stopped short and stayed:
+    - it never came within the radius, and its closest point was its last;
+    - in the last second its median speed is 0 and it made no progress (0 to 3 lanes per group still moving).
+
+    Alone it stops about 1.5 blocks from the person, just outside the radius. Beside look_at it stops 3.3 to 4.1
+    blocks short. So the module decides it has arrived too early, and much earlier when look_at moves the head.
+  - **A second diagnostic** (the entity's head elevation recomputed with the head level, everything else as observed).
+    - Alone it is unchanged (0.922 and 0.938), as it should be: the head is level there.
+    - Beside look_at it falls (seen 0.867 to 0.664, held out 0.812 to 0.625).
+    - So the module reads the pitched elevation correctly, and that is not the cause either.
+  - **A third diagnostic** (look_at's request position and direction hidden from come_here's module only; look_at's
+    teacher unchanged). Beside look_at it falls (seen 0.867 to 0.734, held out 0.812 to 0.672). The module uses
+    look_at's target as a helpful cue, since it lies near the person's bearing; it does not mistake it for its own.
+  - **Reading the three together:** every cue removed hurts, so the miss is not one misread input. The module has not
+    learned the composed case well enough.
+    - The likely reason is that come_here's target arrives through the entity token, whose head-frame columns move
+      whenever look_at turns the head.
+    - walk_to's target arrives as a body-frame position in its request, which head motion does not touch. That would
+      be why walk_to composes and come_here does not. This is inferred, not proven.
+  - **Options, none run:**
+    - more composed lanes in training;
+    - a larger module;
+    - lowering the person's body-frame position into come_here's request at runtime from the agent's own perception,
+      which makes come_here walk_to with a perceived target, a design change.
+
+    The owner (2026-10-25): use come_here alone for now.
+
+**track and follow** (owner, 2026-10-25: "yes for them all": their smokes, then runs; the holding-skill trainer, its
+share bars, and track's and follow's builds are in `training/README.md` and their TRAINING.md section 8).
+- **The smokes** (one iteration of 200 steps) ran end to end with 0 illegal decisions.
+- **The runs** (6 x 2,000, 67 and 59 minutes) do not pass:
+
+| Share in view / in band, module (teacher) | Seen | Held out | T5 | Held out / seen |
+|---|---|---|---|---|
+| track alone | 0.239 (0.933) | 0.255 (0.933) | +69 FAIL | 1.07 pass |
+| track beside walk_to | 0.121 (0.516) | 0.119 (0.507) | +40 FAIL | 0.98 pass |
+| follow alone | 0.565 (0.935) | 0.547 (0.945) | +37 FAIL | 0.97 pass |
+| follow beside track | 0.790 (0.930) | 0.815 (0.943) | +14 FAIL | 1.03 pass |
+
+- Final losses: track 0.18, follow 0.24, against walk_to's 0.02.
+- track's teacher beside walk_to holds only 0.52: when walk_to turns the body, the gaze teacher keeps the person in
+  view about half the reachable time. That teacher needs work regardless of the student.
+- **A pattern across the three entity skills** (inferred, not proven). come_here, track and follow take their target
+  from the entity token, and all three fall well short. walk_to and look_at take theirs from the request's arguments,
+  and pass.
+  - The frozen V1 trunk was trained with entity 1 inert at one fixed spot (`blocks.OTHER_XYZ`), so its entity
+    encoding has never seen a person who is placed elsewhere or who moves. Its geometry weights are likewise at their
+    initial values: it never saw terrain.
+  - follow does better beside track, whose teacher keeps the head on the person, than alone. That fits a trunk whose
+    entity cues are clean only when looked at.
+  - **If it holds,** the new trunk the owner approved (teachers first, then a terrain trunk) should be trained on
+    people who stand anywhere and move (come_here, track, follow lanes) as well as on terrain, before the entity skills
+    are trained again.
+  - A cheap check, not yet run: fit a linear read-out from the trunk's entity rows to the person's true position, for
+    a person at the fixed spot against one placed or moving elsewhere.
+
+**The V2 bodies** (`scratchpad/v2_bodies/memory_s1/`: V1's trunk, V2's walk_to module, and a V2 look_at module).
+They were driven through `state_tick.ModuleBody` as 8.11's check drives V1's, on 32 seen and 32 held-out lanes per
+skill.
+- With look_at's 6 x 500 seed-1 module:
+  - both skills succeed and hold on every lane, seen and held out;
+  - 0 illegal actions;
+  - the production lowering checked on every decision.
+- With the 6 x 2,000 seed-1 module, which the folder now holds: the same.
+  - Every lane succeeds and holds, seen and held out, for both skills.
+  - The median first success is tick 8 seen and 16 held out for look_at, and 102 and 92 for walk_to.
+  - 0 illegal actions; the lowering checked on all 10,018 and 9,112 decisions.
+- **A precision to 8.11.** Its 32 + 32 lane check, where every lane succeeds and holds, with first successes equal to
+  V1's own student on all 32, ran on the control arm's bodies, which `test_sa_export_v1.py`'s export fixture exports.
+  Re-run on today's code (2026-10-24), it holds exactly. The memory arm was checked there on two lanes.
+  - Run the same way on 32 + 32, the memory arm's bodies (`v1_bodies/memory_s1`, the trunk V2 builds on) hold on
+    every seen lane and on 31 of 32 held-out lanes per skill.
+  - The same holds with the tick run eagerly as before its compile (so the compile is not the cause). It is within
+    that arm's own held-out rates (0.94 to 0.99, 8.10).
+
+**Gate:** two passes on a56f434 with holding skills and track, follow and --init-module, and the ModuleBody fix, against the step-9 baseline (6acadad). Pass 1: the baseline's 11 failing names, none new (1,766 passed, 2 xfailed). Pass 2: 1 failing name, a baseline one. Landed on 842180e (the coordinator's 812c2ef..842180e, no shared files but the ledger).
 
 ## References
 

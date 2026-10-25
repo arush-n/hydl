@@ -2,7 +2,8 @@
 
 **Status (2026-10-19): proposed, not approved.** No stage runs before the owner approves it
 (`../../docs/TRAINING_PLAN.md`, staged approval). **Stage 1 built (2026-10-24, no training):** the teacher passes T1
-to T3 (`README.md`); stage 2 waits on the owner.
+to T3 (`README.md`); stages 2 and 3 ran (owner: "yes for them all"; `../../docs/TRAINING_PLAN.md` 8.12): the
+module falls short of its teacher on the frozen V1 trunk.
 
 ## 1. What it does
 
