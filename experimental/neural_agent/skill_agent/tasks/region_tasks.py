@@ -55,6 +55,8 @@ from hytalegym.jax.combat.observation.v3.tokens.world import (
     normalize_world_geometry_policy_config,
 )
 from hytalegym.jax.combat.types import AGENT_ENTITY, default_combat_params
+from hytalegym.jax.world.region.library import REGION_ARTIFACT_USAGE_TRAINING, region_environments_from_artifact_manifest
+from hytalegym.worldgen.region import CHUNK_SIZE
 from worlds import libraries
 from worlds import region as world_region
 
@@ -83,6 +85,29 @@ class TaskPlacements(NamedTuple):
     other_xyz: jax.Array  # float32[B, 3]
 
 
+class RegionTraversal(NamedTuple):
+    """The working set's traversal graphs as host arrays, with each lane's world and its start and goal nodes.
+
+    Read from the selection the fixture itself makes (``region_environments_from_artifact_manifest``, the same keys), so
+    the world slots and node ids index the padded atlas tables of ``jax/world/region/types.py``. ``edge_kind`` is 1 walk,
+    2 climb or 3 drop (``worldgen/region/traversal.py``). ``edge_cost`` is the graph's own cost, which on the pilot library
+    is the horizontal length of each edge (1 or sqrt 2 for every kind; checked 2026-10-25).
+    """
+
+    environment_world_id: np.ndarray  # int32[B], the fixture's world slot of each lane
+    start_node: np.ndarray  # int32[B], the node at the start placement's feet
+    goal_node: np.ndarray  # int32[B], the node at the goal placement
+    node_mask: np.ndarray  # bool[R, N]
+    node_position: np.ndarray  # float32[R, N, 3]
+    edge_mask: np.ndarray  # bool[R, N, 12]
+    edge_destination: np.ndarray  # int32[R, N, 12]
+    edge_cost: np.ndarray  # float32[R, N, 12]
+    edge_kind: np.ndarray  # uint8[R, N, 12]
+    column_node_start: np.ndarray  # int32[R, C, C], the first node of each block column (-1 where none)
+    column_node_count: np.ndarray  # int32[R, C, C]
+    column_origin: np.ndarray  # int32[R, 2], the block x and z of column [0, 0] (the capture's origin)
+
+
 @dataclass(frozen=True)
 class RegionTaskEnvironment:
     """One compiled Region environment whose reset takes the lanes' placements."""
@@ -96,6 +121,8 @@ class RegionTaskEnvironment:
     floor_y: jax.Array  # float32[B]
     _reset: Callable[..., ArsenalEnvironmentCarry]
     _step: Callable[..., Any]
+    #: The traversal graphs and lane nodes, when the environment was built with ``traversal=True``.
+    traversal: RegionTraversal | None = None
 
     def reset(
         self,
@@ -169,6 +196,65 @@ def _load_fixture(library: str, batch: int, params, config, separation_range, se
     )
 
 
+def _lane_nodes(node_mask: np.ndarray, position: np.ndarray, world: np.ndarray, xyz: np.ndarray, label: str) -> np.ndarray:
+    """Each lane's node at ``xyz`` in its own world, by exact float32 match; refuses unless exactly one matches."""
+
+    nodes = np.empty(world.shape[0], dtype=np.int32)
+    target = np.asarray(xyz, dtype=np.float32)
+    for lane, slot in enumerate(world):
+        matches = np.flatnonzero(node_mask[slot] & np.all(position[slot] == target[lane], axis=1))
+        if matches.size != 1:
+            raise ValueError(f"lane {lane}'s {label} is not one node of its world ({matches.size} exact matches)")
+        nodes[lane] = matches[0]
+    return nodes
+
+
+def _traversal(
+    library: str,
+    batch: int,
+    working_set: int,
+    start_xyz: np.ndarray,
+    placements: TaskPlacements,
+    environment_world_id: np.ndarray,
+) -> RegionTraversal:
+    """The working set's traversal graphs, from the selection the fixture makes (the same call and keys)."""
+
+    region_manifest, traversal_manifest, _block_semantics = world_region._library_manifests(libraries.get(library).path)
+    selection = region_environments_from_artifact_manifest(
+        region_manifest,
+        usage=REGION_ARTIFACT_USAGE_TRAINING,
+        expected_library_semantic_sha256=world_region._identity(region_manifest),
+        working_set_capacity=working_set,
+        environment_count=batch,
+        selection_key=world_region.SELECTION_KEY,
+        assignment_key=world_region.ASSIGNMENT_KEY,
+        traversal_manifest_path=traversal_manifest,
+        expected_traversal_library_semantic_sha256=world_region._identity(traversal_manifest),
+    )
+    if not np.array_equal(np.asarray(selection.environment_world_id), environment_world_id):
+        raise ValueError("the traversal selection assigns different worlds than the fixture")
+    atlas = selection.traversal_atlas
+    if atlas is None:
+        raise RuntimeError("Region selection lacks its traversal graph")
+    node_mask = np.asarray(atlas.node_mask)
+    position = np.asarray(atlas.node_position)
+    world = np.asarray(environment_world_id, dtype=np.int32)
+    return RegionTraversal(
+        environment_world_id=world,
+        start_node=_lane_nodes(node_mask, position, world, start_xyz, "start"),
+        goal_node=_lane_nodes(node_mask, position, world, placements.goal_xyz, "goal"),
+        node_mask=node_mask,
+        node_position=position,
+        edge_mask=np.asarray(atlas.edge_mask),
+        edge_destination=np.asarray(atlas.edge_destination, dtype=np.int32),
+        edge_cost=np.asarray(atlas.edge_cost, dtype=np.float32),
+        edge_kind=np.asarray(atlas.edge_kind, dtype=np.uint8),
+        column_node_start=np.asarray(atlas.column_node_start, dtype=np.int32),
+        column_node_count=np.asarray(atlas.column_node_count, dtype=np.int32),
+        column_origin=((np.asarray(atlas.core_min_chunk_xz, dtype=np.int32) - 1) * CHUNK_SIZE).astype(np.int32),
+    )
+
+
 def make_region_task_environment(
     batch: int,
     maximum_turn_degrees: float,
@@ -177,11 +263,13 @@ def make_region_task_environment(
     seed: int = 0,
     library: str = LIBRARY,
     working_set_capacity: int = WORKING_SET_CAPACITY,
+    traversal: bool = False,
 ) -> RegionTaskEnvironment:
     """Build the npc_walk Region environment with ``batch`` lanes, one placement each, from ``seed``.
 
     ``separation_range`` is the band of start-to-goal distances in blocks. ``seed`` picks the placements (the fixture's
-    node seed) and ``library`` the terrain.
+    node seed) and ``library`` the terrain. ``traversal=True`` also reads the working set's traversal graphs (``.traversal``,
+    about 13 s more on the pilot library at batch 32).
     """
 
     if isinstance(batch, bool) or not isinstance(batch, int) or batch < 1:
@@ -301,6 +389,12 @@ def make_region_task_environment(
         runtime = runtime._replace(combat=runtime.combat._replace(agent_head_yaw=agent_yaw))
         return carry_from_runtime(runtime)
 
+    graphs = None
+    if traversal:
+        graphs = _traversal(
+            library, batch, working_set_capacity, np.asarray(agent_xyz), placements,
+            np.asarray(fixture.metadata["environment_world_id"]),
+        )
     return RegionTaskEnvironment(
         batch=batch,
         params=fixture.params,
@@ -310,6 +404,7 @@ def make_region_task_environment(
         floor_y=floor_y,
         _reset=jax.jit(reset_impl),
         _step=jax.jit(environment.step_factors),
+        traversal=graphs,
     )
 
 
@@ -317,6 +412,7 @@ __all__ = [
     "DEFAULT_SEPARATION_RANGE",
     "LIBRARY",
     "RegionTaskEnvironment",
+    "RegionTraversal",
     "TaskPlacements",
     "make_region_task_environment",
 ]
