@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from typing import NamedTuple
 
 import jax
@@ -358,12 +359,20 @@ def _geometry_line_of_sight_result(
             next_done,
         )
 
-    _, _, blocked, complete, done = jax.lax.fori_loop(
-        0,
-        steps,
-        visit,
-        initial,
-    )
+    # HYTALEGYM_LOS_EARLY_EXIT=1 stops once every row is done; a done row is a fixed point of visit, so the outputs match.
+    if os.environ.get("HYTALEGYM_LOS_EARLY_EXIT") == "1":
+        _, (_, _, blocked, complete, done) = jax.lax.while_loop(
+            lambda carry: (carry[0] < steps) & ~jnp.all(carry[1][4]),
+            lambda carry: (carry[0] + 1, visit(carry[0], carry[1])),
+            (jnp.int32(0), initial),
+        )
+    else:
+        _, _, blocked, complete, done = jax.lax.fori_loop(
+            0,
+            steps,
+            visit,
+            initial,
+        )
     walk_complete = done & ~capacity_exceeded & ~invalid
     clear = walk_complete & ~blocked
     if not hitbox:
