@@ -868,6 +868,9 @@ DECLARATIONS = {
     "shortbow_reset_ammo": Derived(
         "construct (fidelity row 5f): its differential is in the Hook row"
     ),
+    "crossbow_reset_ammo": Derived(
+        "construct (fidelity section (ax)): its differential is in the Hook row"
+    ),
     "shield_bash_root": Derived(
         "construct (fidelity row 5d): its differential is in the Hook row"
     ),

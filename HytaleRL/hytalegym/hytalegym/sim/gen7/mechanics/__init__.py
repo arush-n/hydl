@@ -53,6 +53,7 @@ CONSTRUCT_MODULES = {
     "ability_ground_continuation": "ability_ground_continuation",
     "status_clock": "status_clock",
     "shortbow_reset_ammo": "shortbow_reset_ammo",
+    "crossbow_reset_ammo": "crossbow_reset_ammo",
     "shield_bash_root": "shield_bash_fork",
     "reset_head_heading": "reset_head_heading",
     "npc_walk_sprint_as_run": "npc_sprint",

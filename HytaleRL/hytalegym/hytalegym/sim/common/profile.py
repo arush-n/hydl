@@ -155,6 +155,9 @@ class Constructs:
     # Shortbow reset ammo: "loadout_one" (HEAD: RESOURCE_AMMO starts at 1) or "native_zero" (gen 7: starts at 0). Owner:
     # sim/gen7/mechanics/shortbow_reset_ammo.py (row 5f, timing lane).
     shortbow_reset_ammo: str = "loadout_one"
+    # Crossbow reset ammo: "loadout_six" (HEAD: RESOURCE_AMMO starts at 6) or "native_zero" (gen 7: starts at 0, so the first
+    # Primary press runs the reload). Owner: sim/gen7/mechanics/crossbow_reset_ammo.py (FIDELITY section (ax)).
+    crossbow_reset_ammo: str = "loadout_six"
     # Shield bash (Weapon_Shield_Secondary_Guard_Bash) offer: "plain_root" (gen 5: the stock fork gate, which admits the
     # bash from the first held tick) or "held_guard_fork" (gen 7: legal and admissible only while the guard is held and
     # active, FIDELITY section (x)). Owner: sim/gen7/mechanics/shield_bash_fork.py (row 5d).

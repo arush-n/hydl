@@ -23,7 +23,7 @@ from hytalegym.sim.common import bench
 from hytalegym.sim.common.overlay import HeadSource
 from hytalegym.sim.common.profile import Constructs
 from hytalegym.sim.gen5.profile import PROFILE as GEN5
-from hytalegym.sim.gen7.mechanics import ability_start_split, guard_cooldown, shortbow_reset_ammo
+from hytalegym.sim.gen7.mechanics import ability_start_split, crossbow_reset_ammo, guard_cooldown, shortbow_reset_ammo
 from hytalegym.sim.gen7.overlay import OVERLAY as GEN7_OVERLAY
 from hytalegym.sim.gen7.profile import PROFILE as GEN7
 from .support import render_for_test
@@ -56,6 +56,7 @@ def test_gen5_profile_keeps_every_timing_switch_at_its_default() -> None:
     assert GEN5.constructs.guard_reentry_cooldown == "none"
     assert GEN5.constructs.ability_start_split == "claim_tick"
     assert GEN5.constructs.shortbow_reset_ammo == "loadout_one"
+    assert GEN5.constructs.crossbow_reset_ammo == "loadout_six"
     assert Constructs().guard_reentry_cooldown == "none"
 
 
@@ -63,6 +64,7 @@ def test_gen7_profile_sets_the_timing_switches() -> None:
     assert GEN7.constructs.guard_reentry_cooldown == "claim_0_35s"
     assert GEN7.constructs.ability_start_split == "next_drain"
     assert GEN7.constructs.shortbow_reset_ammo == "native_zero"
+    assert GEN7.constructs.crossbow_reset_ammo == "native_zero"
 
 
 @pytest.mark.parametrize(
@@ -71,6 +73,7 @@ def test_gen7_profile_sets_the_timing_switches() -> None:
         (guard_cooldown, "guard_reentry_cooldown"),
         (ability_start_split, "ability_start_split"),
         (shortbow_reset_ammo, "shortbow_reset_ammo"),
+        (crossbow_reset_ammo, "crossbow_reset_ammo"),
     ),
 )
 def test_gen5_returns_the_original_function(module, switch) -> None:
@@ -92,6 +95,8 @@ def test_an_unknown_switch_value_fails_closed() -> None:
         ability_start_split.construct(original, _profile(GEN5, ability_start_split="typo"))
     with pytest.raises(ValueError):
         shortbow_reset_ammo.construct(original, _profile(GEN5, shortbow_reset_ammo="typo"))
+    with pytest.raises(ValueError):
+        crossbow_reset_ammo.construct(original, _profile(GEN5, crossbow_reset_ammo="typo"))
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -235,6 +240,21 @@ def test_the_shortbow_wrapper_zeroes_only_the_shortbow_agent() -> None:
     assert float(out.resource_initial[1, AGENT_ENTITY, RESOURCE_AMMO]) == 1.0
     assert float(out.resource_initial[0, AGENT_ENTITY, 4]) == 1.0
     assert float(out.resource_initial[0, 1, RESOURCE_AMMO]) == 1.0
+
+
+def test_the_crossbow_wrapper_zeroes_only_the_iron_crossbow_agent() -> None:
+    Loadout = namedtuple("Loadout", "resource_initial")
+    initial = jnp.ones((2, 2, 6), dtype=jnp.float32) * 6.0
+
+    def build(agent_profiles, *, target_profiles=None):
+        return Loadout(resource_initial=initial)
+
+    wrapped = crossbow_reset_ammo.construct(build, _profile(GEN7))
+    out = wrapped(["iron_crossbow", "iron_sword"])
+    assert float(out.resource_initial[0, AGENT_ENTITY, RESOURCE_AMMO]) == 0.0
+    assert float(out.resource_initial[1, AGENT_ENTITY, RESOURCE_AMMO]) == 6.0
+    assert float(out.resource_initial[0, AGENT_ENTITY, 4]) == 6.0
+    assert float(out.resource_initial[0, 1, RESOURCE_AMMO]) == 6.0
 
 
 def test_the_recorded_shortbow_reset_row_matches_the_native_receipts() -> None:

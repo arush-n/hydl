@@ -1531,6 +1531,13 @@ HOOKS = (
          "mismatch on the reset row only",
          "the shortbow's initial RESOURCE_AMMO is 0 (the gen-5 phase already gives 0 on tick 1 and 1 from tick 2); gen 5 "
          "returns the original"),
+    Hook("crossbow_reset_ammo", "combat/arsenal/profiles/hytale_0_5_7.py", "hytale_0_5_7_loadouts",
+         f"{_MECHANICS}.crossbow_reset_ammo:construct", "crossbow_reset_ammo", "active", "(ax)",
+         "section (ax) crossbow receipts (jar 3865F45F, slot 0, one Weapon_Arrow_Crude in slot 1): Ammo 0 at the first press "
+         "(tick 55), 1 at tick 91, the second press (tick 105) fires; tests/sim/test_crossbow_reset_ammo.py replays the "
+         "sequence on the gen-7 render",
+         "the iron crossbow's initial RESOURCE_AMMO is 0, so the first Primary press routes to the reload (one bolt, +36 ticks); "
+         "gen 5 returns the original"),
     Hook("shield_bash_root", "combat/arsenal/programs/ability.py", "_ability_root_admission_mask",
          f"{_MECHANICS}.shield_bash_fork:root_admission", "shield_bash_root", "active", "5d",
          "section (x) and its addendum: the bash advertised on ticks 3 to 12 of a 12-tick hold and on no other tick "

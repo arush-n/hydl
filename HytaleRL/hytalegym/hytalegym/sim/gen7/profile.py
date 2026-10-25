@@ -83,6 +83,8 @@ PROFILE = SimProfile(
         # NPC sprint is run (row 1a): under npc_walk a sprint request runs as a run (the live NPC body measures 5.0, not 6.37).
         npc_walk_sprint_as_run=True,
         shortbow_reset_ammo="native_zero",
+        # Crossbow reset ammo (FIDELITY section (ax)): the iron crossbow starts empty and the first press loads one bolt.
+        crossbow_reset_ammo="native_zero",
         # Shield bash offer (section (x), row 5d): the 0.7.2 fork of the held guard is legal only while the guard is active.
         shield_bash_root="held_guard_fork",
         # Head yaw at reset (section (ak), row 5g): both heads start on their body headings when the reset gets entity_yaw.
