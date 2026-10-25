@@ -406,7 +406,18 @@ class NativeRegionSnapshot:
         return destination
 
     @classmethod
-    def load(cls, path: str | Path) -> "NativeRegionSnapshot":
+    def load(
+        cls,
+        path: str | Path,
+        *,
+        semantic_digest: str | None = None,
+    ) -> "NativeRegionSnapshot":
+        """Load a snapshot; ``semantic_digest`` is the caller's known digest of this file.
+
+        When given, it is compared with the declared digest in place of computing
+        :meth:`semantic_digest`. Callers must only pass a value known for these
+        exact bytes (for example a cached digest keyed by the file's SHA-256).
+        """
         with np.load(Path(path), allow_pickle=False) as archive:
             actual = set(archive.files)
             allowed = _SNAPSHOT_KEYS | _OPTIONAL_SNAPSHOT_KEYS
@@ -449,11 +460,14 @@ class NativeRegionSnapshot:
                 ),
             )
         declared_digest = snapshot.metadata.get("region_semantic_sha256")
-        if (
-            declared_digest is not None
-            and snapshot.semantic_digest() != declared_digest
-        ):
-            raise ValueError("region snapshot semantic SHA-256 mismatch")
+        if declared_digest is not None:
+            actual_digest = (
+                snapshot.semantic_digest()
+                if semantic_digest is None
+                else semantic_digest
+            )
+            if actual_digest != declared_digest:
+                raise ValueError("region snapshot semantic SHA-256 mismatch")
         return snapshot
 
     def section_semantic_digest(

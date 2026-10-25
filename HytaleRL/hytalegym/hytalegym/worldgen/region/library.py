@@ -12,6 +12,9 @@ from pathlib import Path, PurePosixPath
 import tempfile
 from typing import Any, Mapping, Sequence
 
+from hytalegym.geometry import contract as geometry_contract_module
+from hytalegym.worldgen.region import contract as region_contract_module
+from hytalegym.worldgen.region import snapshot as snapshot_module
 from hytalegym.worldgen.region.contract import certified_chunk_api_manifest
 from hytalegym.worldgen.region.native import REGION_STABILITY_PASSES
 from hytalegym.worldgen.region.snapshot import (
@@ -27,6 +30,9 @@ REGION_ARTIFACT_SPLIT_METHOD = "sha256_rank_v1"
 REGION_ARTIFACT_INHERITED_SPLIT_METHOD = "inherited_seed_labels_v1"
 REGION_ARTIFACT_AUTHORITY = "exact_frozen_native_artifact"
 REGION_ARTIFACT_RUNTIME_SOURCE = "artifact_only_no_seed_regeneration"
+REGION_DIGEST_CACHE_ENV = "HYTALEGYM_REGION_DIGEST_CACHE"
+_DIGEST_CACHE_MEMORY: dict[str, str] = {}
+_DIGEST_CODE_SHA256: str | None = None
 
 _SPLITS = frozenset({"train", "heldout"})
 _MANIFEST_FIELDS = frozenset(
@@ -284,10 +290,21 @@ class RegionArtifactLibrary:
     ) -> NativeRegionSnapshot:
         root = self.manifest_path.parent.resolve()
         path = _artifact_path(root, entry.path)
-        if _file_sha256(path) != entry.file_sha256:
+        file_sha256 = _file_sha256(path)
+        if file_sha256 != entry.file_sha256:
             raise ValueError(f"Region artifact file SHA-256 mismatch: {entry.path}")
-        snapshot = NativeRegionSnapshot.load(path)
-        _validate_snapshot(snapshot, entry, capture)
+        cache = _digest_cache_directory()
+        key = None
+        cached = None
+        if cache is not None:
+            key = f"{file_sha256}-{_digest_code_sha256()[:16]}"
+            cached = _read_digest_cache(cache, key)
+            if cached != entry.semantic_sha256:
+                cached = None
+        snapshot = NativeRegionSnapshot.load(path, semantic_digest=cached)
+        digest = _validate_snapshot(snapshot, entry, capture, semantic_digest=cached)
+        if cache is not None and cached is None:
+            _write_digest_cache(cache, key, digest)
         return snapshot
 
 
@@ -519,16 +536,90 @@ def _validate_snapshot(
     snapshot: NativeRegionSnapshot,
     entry: RegionArtifactEntry,
     capture: Mapping[str, Any],
-) -> None:
+    *,
+    semantic_digest: str | None = None,
+) -> str:
     if _capture_contract(snapshot) != capture:
         raise ValueError(f"Region artifact capture contract changed: {entry.path}")
-    if snapshot.semantic_artifact_digest() != entry.semantic_sha256:
+    digest = (
+        snapshot.semantic_artifact_digest()
+        if semantic_digest is None
+        else semantic_digest
+    )
+    if digest != entry.semantic_sha256:
         raise ValueError(f"Region artifact semantic SHA-256 mismatch: {entry.path}")
     if snapshot.metadata.get("seed") != entry.seed:
         raise ValueError(f"Region artifact seed changed: {entry.path}")
     actual_core = tuple(int(value) for value in snapshot.core_min_chunk_xz)
     if actual_core != entry.core_min_chunk_xz:
         raise ValueError(f"Region artifact core changed: {entry.path}")
+    return digest
+
+
+def _digest_cache_directory() -> Path | None:
+    value = os.environ.get(REGION_DIGEST_CACHE_ENV)
+    return Path(value) if value else None
+
+
+def _digest_code_sha256() -> str:
+    """Hash of every module the semantic digest reads: snapshot, region and geometry contracts."""
+    global _DIGEST_CODE_SHA256
+    if _DIGEST_CODE_SHA256 is None:
+        _DIGEST_CODE_SHA256 = _hash_sources(
+            Path(module.__file__).read_bytes()
+            for module in (
+                snapshot_module,
+                region_contract_module,
+                geometry_contract_module,
+            )
+        )
+    return _DIGEST_CODE_SHA256
+
+
+def _hash_sources(sources) -> str:
+    digest = hashlib.sha256()
+    for source in sources:
+        digest.update(str(len(source)).encode("ascii") + b"\n")
+        digest.update(source)
+    return digest.hexdigest()
+
+
+def _read_digest_cache(directory: Path, key: str) -> str | None:
+    """The cached 64-hex digest for ``key``, or None when absent or malformed."""
+
+    location = str(directory / key)
+    if location in _DIGEST_CACHE_MEMORY:
+        return _DIGEST_CACHE_MEMORY[location]
+    try:
+        value = (directory / key).read_text(encoding="ascii").strip()
+    except (OSError, UnicodeDecodeError):
+        return None
+    if len(value) != 64 or any(c not in "0123456789abcdef" for c in value):
+        return None
+    _DIGEST_CACHE_MEMORY[location] = value
+    return value
+
+
+def _write_digest_cache(directory: Path, key: str, digest: str) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    destination = directory / key
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="ascii",
+            prefix=f".{key}.",
+            suffix=".tmp",
+            dir=directory,
+            delete=False,
+        ) as output:
+            temporary = Path(output.name)
+            output.write(digest + "\n")
+        os.replace(temporary, destination)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    _DIGEST_CACHE_MEMORY[str(destination)] = digest
 
 
 def _parse_entry(value: Any) -> RegionArtifactEntry:
