@@ -1058,6 +1058,64 @@ skill.
 
 **Gate:** two passes on a56f434 with holding skills and track, follow and --init-module, and the ModuleBody fix, against the step-9 baseline (6acadad). Pass 1: the baseline's 11 failing names, none new (1,766 passed, 2 xfailed). Pass 2: 1 failing name, a baseline one. Landed on 842180e (the coordinator's 812c2ef..842180e, no shared files but the ledger).
 
+### 8.13 The trainer's default path, pace in-episode, and the first terrain teacher (2026-10-25; no training)
+
+**The rulings.** The owner, 2026-10-25:
+- on speed, "Both, slot cut first", then "Make A the default";
+- on pace, "Fix pace to in-episode ticks, keep B opt-in";
+- on terrain, "Teachers first, then a terrain trunk".
+
+**The V2 trainer's default path changed** (`training/skill_dagger_v3.py`; its README row has the details).
+- **The slot cut is now the default.** The trunk runs on each token type's filled slots: 39 of 356 on the flat world,
+  as V1's own trainer cuts its batches.
+- **Bit-exact shortcuts skip what no output reads:**
+  - the trunk and module on teacher-only evaluations;
+  - the module on iteration 0's collection.
+- **The runs of 8.11 and 8.12 used the exact path,** which `--no-slot-cut` keeps. A re-run at the default differs from
+  them by float32 rounding: stored trunk outputs within 1e-5, with no executed action and no evaluation number changed on
+  the walk_to and track probes.
+- **Measured:**
+  - end to end, 817 s to 591 s from the bit-exact part alone (walk_to and track, 1 x 50 steps, loaded machine);
+  - per batch, collecting 128 lanes 115 s to 38 s and evaluating 256 lanes 161 s to 75 s with the cut.
+- **Lane compaction** (`--compact-lanes`) stays opt-in.
+
+**Pace (E4) counts only decisions inside each lane's horizon.** Before, a lane's walk after its horizon, which the rollout
+still runs, was scored. Re-scored, no saved module's verdict changes:
+- V2 walk_to: 0.978 and 1.000;
+- come_here: 0.899 and 0.866, still failing as in 8.12.
+
+**The skill bodies, batched.** Each skill lowers its agents' requests in one numpy call (`lowering_batch`). With
+`ModuleBatch` (f4d1c4f), one tick of both verbs is 7 ms for 32 agents and 13 ms for 96, against 150 to 640 ms per agent
+before. Choices and done are equal to the per-agent bodies.
+
+**The first terrain teacher** (`teaching/path_teacher.py`, bench `bench/region_path_teacher.py`). It follows the shortest
+path on the Region's traversal graph: walk, climb up to 1.3 blocks, drop up to 3.0.
+
+| Reach, batch 32, 20 s | 3 to 6 blocks | 6 to 10 | 10 to 15 |
+|---|---|---|---|
+| straight teacher, gen 5 | 65.6% | 46.9% | 28.1% |
+| straight teacher, gen 7 | 78.1% | 81.3% | 59.4% |
+| path teacher, gen 7 | 84.4% | 81.3% | 65.6% |
+
+- Gen 7's step-up is most of the gain. The path teacher adds 0 to 2 lanes, within noise.
+- Most gen-7 failures stop at rest on flat ground or at a drop lip, not at a climb, and none leaves the graph.
+- **So no terrain teacher is certified yet.** The stalls are being diagnosed (stage T2): a teacher deadlock, body
+  contact or the engine. That comes before a terrain trunk is planned.
+- **The frozen trunk's entity row, probed** (stage P2; a linear read-out of entity 1's body-frame position, 256 lanes per
+  set, split by lane; measured). The raw entity token gives test R² of at least 0.998 for the forward and right
+  offsets on every set, and the trunk's row much less:
+
+| Lane set | Forward R², trunk row | Right R², trunk row |
+|---|---|---|
+| A: the person at the fixed spot (walk_to's lanes) | 0.63 | 0.90 |
+| B: placed per lane (come_here's) | 0.46 | 0.23 |
+| C: moving (track's) | 0.84 | 0.81 |
+
+  A read-out fitted on A fails on B (R² below 0) and transfers only partly to C (0.30 and 0.20), while the raw token
+  transfers fully. This supports 8.12's inference: the next trunk should train on placed and moving people. The deficit
+  is already there on A, so placement alone may not be enough (inferred). A nonlinear probe, still running, will show
+  whether the position is there but not linearly readable.
+
 ## References
 
 - Agarwal, R., et al. (2021). Deep reinforcement learning at the edge of the statistical precipice. NeurIPS.
