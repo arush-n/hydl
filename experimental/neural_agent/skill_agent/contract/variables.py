@@ -194,10 +194,17 @@ def transfer(old: Sequence[str], new: Sequence[str], maps: Mapping[str, Mapping[
 def remap(values: Any, old: Sequence[str], new: Sequence[str], maps: Mapping[str, Mapping[str, float]] | None = None,
           dropped: Sequence[str] = (), fill: Any = 0.0) -> np.ndarray:
     """float32[..., len(new)]: ``values`` [..., len(old)] carried to the new columns by :func:`transfer`'s forward
-    map; a new column with no source takes ``fill`` (a scalar, or one value per new column)."""
+    map; a new column with no source takes ``fill`` (a scalar, or one value per new column).
+
+    When every new column copies at most one old column unchanged (a rename, a reorder, a dropped or added column),
+    the values are copied, not multiplied, so they come back bit for bit: a product would turn ``-0.0`` into ``0.0``,
+    and a saved state would no longer reload exactly (found by the gen-7 integration check, 2026-10-24)."""
 
     forward, _ = transfer(old, new, maps, dropped)
-    moved = np.asarray(values, np.float64) @ forward.T
+    if np.all((forward == 0.0) | (forward == 1.0)) and np.all(forward.sum(axis=1) <= 1.0):
+        moved = np.take(np.asarray(values, np.float32), np.argmax(forward, axis=1), axis=-1)
+    else:
+        moved = np.asarray(values, np.float64) @ forward.T
     return np.where(forward.any(axis=1), moved, fill).astype(np.float32)
 
 
