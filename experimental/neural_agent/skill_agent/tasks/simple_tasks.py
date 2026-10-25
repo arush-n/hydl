@@ -6,7 +6,8 @@ Each skill's goals and success test are in its own folder: ``neural_skills/walk_
 The world is a flat floor at ``params.floor_y`` with no geometry provider. The learner is
 entity 0 and moves under the simulator's ``npc_walk`` motion model, the body the game
 server's NPC uses. Entity 1 is inert (``target_active=False``, no loadout) and only holds
-a point. Every lane is an independent episode.
+a point, unless ``make_flat_npc_environment(..., mover=...)`` walks it along a scripted ``Mover`` path. Every lane is
+an independent episode.
 
 Units: positions in blocks, angles in degrees, time in decision ticks. With the motion
 timing profile pinned to 0 one tick is 1/30 s.
@@ -15,7 +16,7 @@ timing profile pinned to 0 one tick is 1/30 s.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import NamedTuple
 
 import jax
@@ -50,6 +51,8 @@ from hytalegym.jax.combat.observation.v3.tokens.world import (
 )
 from hytalegym.jax.combat.types import (
     AGENT_ENTITY,
+    PLAYER_GAIT_FORWARD_SPEED_MULTIPLIERS,
+    TARGET_ENTITY,
     CombatParams,
     CombatState,
     default_combat_params,
@@ -66,6 +69,9 @@ DEFAULT_LOADOUT = "iron_sword"
 DEFAULT_SPAWN_XZ = (0.5, 0.5)
 DEFAULT_OTHER_XYZ = (0.5, 65.0, -2.0)
 DEFAULT_EYE_XYZ = (0.5, 66.0, 0.5)
+#: One tick of the world in seconds: a mover moves ``speed * MOVER_TICK_SECONDS`` blocks a tick.
+MOVER_TICK_SECONDS = 1.0 / TICKS_PER_SECOND
+_MOVER_EPSILON = 1.0e-6
 
 #: The 12 policy factors (``ARSENAL_POLICY_ACTION_HEAD_SIZES``): base, ability, guard, jump,
 #: locomotion, yaw, body yaw, pitch, hotbar, use, block trigger, block candidate. The
@@ -135,6 +141,156 @@ def _carry_from_runtime(runtime, params: CombatParams, config: ArsenalRuntimeCon
     )
 
 
+class Mover(NamedTuple):
+    """A scripted path for entity 1, one per lane: the opt-in mover of ``make_flat_npc_environment``.
+
+    ``waypoints`` is [B, K, 2] in x-z with K >= 2, ``speed`` is [B] in blocks a second, and ``loop`` is [B] bool: True
+    where the path closes from its last point back to its first, False where the person stops at its last point.
+    Entity 1 starts at ``waypoints[:, 0]`` and moves ``speed * MOVER_TICK_SECONDS`` along the path each tick.
+    """
+
+    waypoints: jax.Array
+    speed: jax.Array
+    loop: jax.Array
+
+
+def gait_speed(gait: int) -> float:
+    """A gait's ground speed in blocks a second: the npc_walk base speed times the gait's forward multiplier."""
+
+    return NPC_WALK_BASE_SPEED * PLAYER_GAIT_FORWARD_SPEED_MULTIPLIERS[gait]
+
+
+def gait_band(low_gait: int, high_gait: int | None = None) -> tuple[float, float]:
+    """A speed band in blocks a second: one gait's speed, or the range between two gaits."""
+
+    high_gait = low_gait if high_gait is None else high_gait
+    speeds = (gait_speed(low_gait), gait_speed(high_gait))
+    return min(speeds), max(speeds)
+
+
+def mover_path(mover: Mover, ticks: jax.Array) -> tuple[jax.Array, jax.Array, jax.Array]:
+    """Entity 1's place on each lane's path after ``ticks`` (int [B]): the x-z position [B, 2], the yaw in degrees
+    (the engine's yaw of the direction of travel) and the x-z velocity [B, 2] in blocks a second. A stopped path rests
+    at its last point with zero velocity and keeps its last heading.
+    """
+
+    waypoints = mover.waypoints
+    count = waypoints.shape[1]
+    rows = jnp.arange(waypoints.shape[0])
+    # Each point to the next; the last one closes back to the first (walked only by a loop).
+    delta = jnp.roll(waypoints, -1, axis=1) - waypoints
+    norm = jnp.linalg.norm(delta, axis=2)
+    walked = mover.loop[:, None] | (jnp.arange(count) < count - 1)[None, :]
+    length = jnp.where(walked, norm, 0.0)
+    starts = jnp.cumsum(length, axis=1) - length
+    total = jnp.sum(length, axis=1)
+    travelled = mover.speed * MOVER_TICK_SECONDS * ticks.astype(jnp.float32)
+    along = jnp.where(
+        mover.loop,
+        jnp.mod(travelled, jnp.maximum(total, _MOVER_EPSILON)),
+        jnp.minimum(travelled, total),
+    )
+    # The segment that has started last; a stopped path never walks its closing segment.
+    last_segment = jnp.where(mover.loop, count - 1, count - 2)
+    segment = jnp.clip(jnp.sum(starts <= along[:, None], axis=1) - 1, 0, last_segment)
+    seg_length = length[rows, segment]
+    fraction = jnp.where(
+        seg_length > 0.0,
+        jnp.clip((along - starts[rows, segment]) / jnp.maximum(seg_length, _MOVER_EPSILON), 0.0, 1.0),
+        0.0,
+    )
+    xz = waypoints[rows, segment] + fraction[:, None] * delta[rows, segment]
+    heading = delta[rows, segment] / jnp.maximum(norm[rows, segment], _MOVER_EPSILON)[:, None]
+    yaw = jnp.rad2deg(jnp.arctan2(-heading[:, 0], -heading[:, 1]))
+    stopped = ~mover.loop & (travelled >= total)
+    velocity = jnp.where(stopped[:, None], 0.0, heading * mover.speed[:, None])
+    return xz, yaw, velocity
+
+
+def _place_entity(combat: CombatState, mover: Mover, ticks: jax.Array) -> CombatState:
+    """Put entity 1 where ``mover`` has it after ``ticks``: its x-z position, yaw and velocity. Its height and the rest
+    of the state stay as they are."""
+
+    xz, yaw, velocity = mover_path(mover, ticks)
+    height = combat.position[:, TARGET_ENTITY, 1]
+    position = combat.position.at[:, TARGET_ENTITY].set(jnp.stack((xz[:, 0], height, xz[:, 1]), axis=1))
+    walk = jnp.stack((velocity[:, 0], jnp.zeros_like(height), velocity[:, 1]), axis=1)
+    return combat._replace(
+        position=position,
+        velocity=combat.velocity.at[:, TARGET_ENTITY].set(walk),
+        yaw=combat.yaw.at[:, TARGET_ENTITY].set(yaw),
+    )
+
+
+@jax.jit
+def _move_carry(carry: ArsenalEnvironmentCarry, mover: Mover) -> ArsenalEnvironmentCarry:
+    """The carry with entity 1 moved to its next place, before the step's physics and observation are computed."""
+
+    runtime = carry.runtime
+    combat = _place_entity(runtime.combat, mover, runtime.combat.tick_count + 1)
+    return carry._replace(runtime=runtime._replace(combat=combat))
+
+
+def _check_mover(mover: Mover | None, batch: int) -> None:
+    if mover is None:
+        return
+    waypoints_shape = tuple(jnp.shape(mover.waypoints))
+    if len(waypoints_shape) != 3 or waypoints_shape[0] != batch or waypoints_shape[2] != 2 or waypoints_shape[1] < 2:
+        raise ValueError(f"mover.waypoints must have shape ({batch}, K, 2) with K >= 2, got {waypoints_shape}")
+    if tuple(jnp.shape(mover.speed)) != (batch,) or tuple(jnp.shape(mover.loop)) != (batch,):
+        raise ValueError(f"mover.speed and mover.loop must have shape ({batch},)")
+    if jnp.asarray(mover.loop).dtype != jnp.bool_:
+        raise ValueError("mover.loop must be a bool array")
+
+
+def _draw_speed(key: jax.Array, batch: int, speed_band: tuple[float, float]) -> jax.Array:
+    low, high = float(speed_band[0]), float(speed_band[1])
+    if not 0.0 <= low <= high:
+        raise ValueError(f"speed_band must be (low, high) with 0 <= low <= high, got {speed_band}")
+    return low + (high - low) * jax.random.uniform(key, (batch,), dtype=jnp.float32)
+
+
+def sample_straight_mover(
+    key: jax.Array,
+    batch: int,
+    *,
+    start_xz: tuple[float, float],
+    speed_band: tuple[float, float],
+    length_blocks: float = 60.0,
+) -> Mover:
+    """A straight walk from ``start_xz`` in a random heading, at a speed drawn per lane from ``speed_band``, for
+    ``length_blocks`` and then a stop."""
+
+    key_heading, key_speed = jax.random.split(key)
+    heading = jax.random.uniform(key_heading, (batch,), dtype=jnp.float32, minval=0.0, maxval=2.0 * jnp.pi)
+    direction = jnp.stack((jnp.sin(heading), jnp.cos(heading)), axis=1)
+    start = jnp.broadcast_to(jnp.asarray(start_xz, dtype=jnp.float32), (batch, 2))
+    waypoints = jnp.stack((start, start + length_blocks * direction), axis=1)
+    return Mover(waypoints, _draw_speed(key_speed, batch, speed_band), jnp.zeros((batch,), dtype=jnp.bool_))
+
+
+def sample_random_walk_mover(
+    key: jax.Array,
+    batch: int,
+    *,
+    speed_band: tuple[float, float],
+    spawn_xz: tuple[float, float] = DEFAULT_SPAWN_XZ,
+    waypoints: int = 8,
+    radius: float = 8.0,
+) -> Mover:
+    """``waypoints`` points drawn uniformly in a disc of ``radius`` blocks around ``spawn_xz``, walked in order and
+    looped, at a speed drawn per lane from ``speed_band``."""
+
+    key_radius, key_angle, key_speed = jax.random.split(key, 3)
+    distance = radius * jnp.sqrt(jax.random.uniform(key_radius, (batch, waypoints), dtype=jnp.float32))
+    angle = jax.random.uniform(
+        key_angle, (batch, waypoints), dtype=jnp.float32, minval=0.0, maxval=2.0 * jnp.pi
+    )
+    spawn = jnp.asarray(spawn_xz, dtype=jnp.float32)
+    points = spawn + jnp.stack((distance * jnp.sin(angle), distance * jnp.cos(angle)), axis=2)
+    return Mover(points, _draw_speed(key_speed, batch, speed_band), jnp.ones((batch,), dtype=jnp.bool_))
+
+
 @dataclass(frozen=True)
 class FlatTaskEnvironment:
     """One compiled flat-world environment whose reset takes explicit per-lane spawns."""
@@ -144,6 +300,15 @@ class FlatTaskEnvironment:
     config: ArsenalRuntimeConfig
     environment: ArsenalEnvironment
     _reset: Callable[..., ArsenalEnvironmentCarry]
+    #: Entity 1's scripted path, or None for the inert entity of today's world.
+    mover: Mover | None = None
+
+    def with_mover(self, mover: Mover | None) -> FlatTaskEnvironment:
+        """This environment with another path for entity 1. The compiled reset and step are shared, so a new path
+        costs no compile."""
+
+        _check_mover(mover, self.batch)
+        return replace(self, mover=mover)
 
     def reset(
         self,
@@ -156,7 +321,8 @@ class FlatTaskEnvironment:
 
         ``keys`` is [B] PRNG keys, ``agent_xz`` is [B, 2] blocks, ``agent_yaw`` is [B]
         degrees of body heading, and ``other_xyz`` is [B, 3]. The learner stands on
-        ``params.floor_y``. The other entity starts at full health with yaw 0.
+        ``params.floor_y``. The other entity starts at full health with yaw 0. With a mover, the other entity
+        starts at the path's first point instead (its x-z from the mover; ``other_xyz``'s height is kept).
         """
 
         agent_xz = jnp.asarray(agent_xz, dtype=jnp.float32)
@@ -168,11 +334,16 @@ class FlatTaskEnvironment:
             raise ValueError(f"agent_yaw must have shape ({self.batch},)")
         if other_xyz.shape != (self.batch, 3):
             raise ValueError(f"other_xyz must have shape ({self.batch}, 3)")
-        return self._reset(keys, agent_xz, agent_yaw, other_xyz)
+        return self._reset(keys, agent_xz, agent_yaw, other_xyz, self.mover)
 
     def step(self, carry: ArsenalEnvironmentCarry, factors: jax.Array, keys: jax.Array):
-        """Advance one decision tick with int32[B, 12] factors. Returns (carry, observation, info)."""
+        """Advance one decision tick with int32[B, 12] factors. Returns (carry, observation, info).
 
+        With a mover, entity 1 moves first, so the physics and the returned observation both see its new place.
+        """
+
+        if self.mover is not None:
+            carry = _move_carry(carry, self.mover)
         carry, observation, _reward, _done, info = self.environment.step_factors(
             carry, factors, keys
         )
@@ -186,6 +357,7 @@ def make_flat_npc_environment(
     maximum_turn_degrees: float = 45.0,
     loadout_profile: str = DEFAULT_LOADOUT,
     world_capabilities: str = "open_flat",
+    mover: Mover | None = None,
 ) -> FlatTaskEnvironment:
     """Build the flat npc_walk environment with ``batch`` independent lanes.
 
@@ -193,10 +365,13 @@ def make_flat_npc_environment(
     other entity is perceptible within the sensor range, as in the neural_agent's legal open-flat arena. "fail_closed"
     keeps the environment's default, which denies line of sight, so the legal observation never shows the other
     entity. Field of view is not applied on the two-entity path, a simulator gap reported to its lane.
+
+    ``mover`` (opt-in, None by default) walks entity 1 along a scripted path per lane; None is the inert entity.
     """
 
     if isinstance(batch, bool) or not isinstance(batch, int) or batch < 1:
         raise ValueError(f"batch must be a positive int, got {batch!r}")
+    _check_mover(mover, batch)
     base = default_combat_params(microticks=1, target_active=False, motion_model="npc_walk")
     # The default band samples a motion timing profile from 0..2 at every reset
     # (reset.py:123-127). Profiles 1 and 2 alternate in a 0.045 s loaded tick
@@ -221,9 +396,14 @@ def make_flat_npc_environment(
     )
     plan = plan_arsenal_compilation(params, config)
 
-    def reset_impl(keys, agent_xz, agent_yaw, other_xyz):
+    def reset_impl(keys, agent_xz, agent_yaw, other_xyz, mover):
         agent_y = jnp.full((batch, 1), params.floor_y, dtype=jnp.float32)
         agent_xyz = jnp.concatenate((agent_xz[:, :1], agent_y, agent_xz[:, 1:]), axis=1)
+        other_yaw = jnp.zeros((batch,), dtype=jnp.float32)
+        if mover is not None:
+            # The state is built around the path's start, so the controller memory's home is the path's start too.
+            start_xz, other_yaw, _ = mover_path(mover, jnp.zeros((batch,), dtype=jnp.int32))
+            other_xyz = other_xyz.at[:, 0].set(start_xz[:, 0]).at[:, 2].set(start_xz[:, 1])
         entity_position = jnp.stack((agent_xyz, other_xyz), axis=1)
         entity_health = jnp.stack(
             (
@@ -232,7 +412,7 @@ def make_flat_npc_environment(
             ),
             axis=1,
         )
-        entity_yaw = jnp.stack((agent_yaw, jnp.zeros((batch,), dtype=jnp.float32)), axis=1)
+        entity_yaw = jnp.stack((agent_yaw, other_yaw), axis=1)
         runtime, _ = reset_arsenal_batch(
             keys,
             params,
@@ -244,6 +424,10 @@ def make_flat_npc_environment(
             projectile_capacity=plan.projectile_capacity,
             area_capacity=plan.area_capacity,
         )
+        if mover is not None:
+            runtime = runtime._replace(
+                combat=_place_entity(runtime.combat, mover, runtime.combat.tick_count)
+            )
         return _carry_from_runtime(runtime, params, config, provider)
 
     return FlatTaskEnvironment(
@@ -252,6 +436,7 @@ def make_flat_npc_environment(
         config=config,
         environment=environment,
         _reset=jax.jit(reset_impl),
+        mover=mover,
     )
 
 

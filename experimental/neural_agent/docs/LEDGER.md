@@ -1585,3 +1585,18 @@ result: Built by a Haiku subagent from a written spec, checked here. `neural_ski
     until it is settled; reproduce with `bench/integration_gen7.py` under `runtime/gen7` with the three constructs.
 gate: two passes on e826fa7 with all of 2026-10-24 (958d83f..6413a52), come_here and the mover, against the step-9 baseline (6acadad). Pass 1: the baseline's 11 failing names, none new (1,727 passed, 5 xfailed). Pass 2: 1 failing name, a baseline one. Landed on b343c77 (the coordinator's dbdb7ed..b343c77, no shared files but the ledger).
 verdict: COMMITTED; not pushed. Its smoke and three runs followed the same night (owner: "go ahead", then "Start from walk_to's module"): the module passes alone, not yet beside look_at; numbers in TRAINING_PLAN.md 8.12 (next commit).
+
+## 2026-10-24 — skill_agent: a scripted mover for track and follow, and their teacher checks (`skill_agent/neural_skills/track/TRAINING.md` 8, `follow/TRAINING.md` 8)
+command: owner, 2026-10-24: "we want to get everything done asap so that we can start training the neural polcieis"; the rulings on track and follow (below).
+result: Built by a Haiku subagent from a written spec, checked here.
+- **The mover.** `tasks/simple_tasks.py`: `make_flat_npc_environment(..., mover=)` is opt-in. Entity 1 walks a path per lane (waypoints, speed, loop or stop) at speeds from the agent's own gait table: walk 1.5, sneak 2.75, run 5.0 blocks a second. With no mover the world is bit-identical (reset 344 leaves, 8 steps 3,704 leaves). The agent's own physics is unchanged. Its entity token sees the mover's position (0.1-block rounding) and velocity, not its yaw, and the yaw follows the engine's convention (`step.py:229-232`). The simulator's own target motion was checked and ruled out: `_tick_target_motion` is an opponent controller.
+- **The teacher checks** (`bench/mover_checks.py`):
+  - track's look_at teacher keeps the person in view 25%, 20% and 18% of ticks at walk, sneak and run, against the head's reach ceiling of 26%, 23% and 26% with the body still; a lead hurts.
+  - follow's walk_to-behind teacher stays in the 2-to-5-block band 96% and 94% of ticks behind a walker and a sneaker, and 55% (run) or 64% (sprint) behind a runner.
+- **Ruled by the owner (2026-10-24):**
+  - track is gaze only, scored within the head's reach, on paths that cross in front;
+  - follow sprints, trains on walking and sneaking people with a speed between them held out, and leaves runners for later.
+
+`test_sa_mover.py` (local) 7 passed; the 14 flat-world test files are as before.
+gate: two passes on e826fa7 with all of 2026-10-24 (958d83f..6413a52), come_here and the mover, against the step-9 baseline (6acadad). Pass 1: the baseline's 11 failing names, none new (1,727 passed, 5 xfailed). Pass 2: 1 failing name, a baseline one. Landed on b343c77 (the coordinator's dbdb7ed..b343c77, no shared files but the ledger).
+verdict: COMMITTED; not pushed. Next: track's and follow's builds on these rulings (no training).

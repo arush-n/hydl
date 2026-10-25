@@ -45,3 +45,33 @@ module weights, which first learns the entity argument on a static target; come_
 ## 7. Waits on
 
 come_here (the entity argument), a moving person in the task world, the owner's approval.
+
+## 8. Measured: the world and the teacher (2026-10-24, no training)
+
+The moving person is the scripted mover (`../track/TRAINING.md` section 8).
+
+**The teacher check** (`../../bench/mover_checks.py`):
+- the teacher: walk_to v3 toward a point 3.5 blocks behind the person, radius 1, idle inside its stop radius;
+- the learner starts 3.5 blocks behind the person;
+- 256 lanes for 300 ticks, on seeds 0 and 1.
+
+The share of ticks 2 to 5 blocks from the person:
+
+| Person's speed | Learner runs | Learner sprints |
+|---|---|---|
+| walk 1.5 | 0.961, 0.964 | 0.968, 0.970 |
+| sneak 2.75 | 0.942, 0.936 | 0.949, 0.943 |
+| run 5.0 | 0.548, 0.544 | 0.636, 0.644 |
+
+- At walk and sneak speed the teacher holds the band 94 to 97% of the time.
+- Behind a runner it holds the band 55% of the time at run and 64% at sprint. The sprint (6.4 blocks a second) is
+  barely faster than the runner (5.0), and the person turns.
+
+**RULED (owner, 2026-10-24): sprint; walk and sneak; runners parked.**
+- The teacher sprints when behind.
+- The first run trains on walking and sneaking people (1.5 and 2.75 blocks a second).
+- A speed between them is held out, for the "person speeds not trained" bar.
+- People at run speed wait for a teacher that keeps up (for example, one that cuts corners).
+
+The rejected options: including runners now (T1 would fail on them), and a new gait-by-distance teacher (it needs its
+own certificate first).

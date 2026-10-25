@@ -24,7 +24,8 @@ student, trained without it, lags. Certificate: T1 on the share in view, T3 lega
 
 The flat task world's entity 1 is inert today (`../../tasks/simple_tasks.py`, `target_active=False`). Two options:
 - the simulator's own target motion (entity 1 with `target_active`, `opponents/legacy/motion.py`,
-  `_tick_target_motion`). **Inferred from its names, not checked:** it moves toward the agent, as an opponent;
+  `_tick_target_motion`). **Checked 2026-10-24, ruled out:** it is an opponent controller that chases the agent,
+  holds a distance band and strafes (section 8);
 - a scripted mover for entity 1 (a path or a random walk at a chosen speed), to build.
 
 ## 4. Student
@@ -52,3 +53,36 @@ while walking.
 
 A moving entity in the task world; look_at's release (its held-out look must pass first, README 2.16); the owner's
 approval.
+
+## 8. Measured: the world and the teacher (2026-10-24, no training)
+
+**The world.** Option 2 is built: an opt-in scripted mover for entity 1 (`../../tasks/simple_tasks.py`, `Mover`), a
+path per lane at a speed from the agent's own gait table (walk 1.5, sneak 2.75, run 5.0 blocks a second). With no mover
+the world is bit-identical to before. The entity token carries the mover's position and velocity, but not its yaw.
+
+**The teacher check** (`../../bench/mover_checks.py`). It runs 256 lanes for 300 ticks, with a looped random walk of 8
+waypoints within 8 blocks of the spawn, on seeds 0 and 1. The table gives the share of ticks with the head within
+look_at's 3-degree tolerance:
+
+| Speed | No lead | 3-tick lead | Ceiling (the head's 45 degrees each side, body still) |
+|---|---|---|---|
+| walk 1.5 | 0.254, 0.254 | 0.248, 0.246 | 0.263, 0.262 |
+| sneak 2.75 | 0.204, 0.207 | 0.184, 0.180 | 0.231, 0.236 |
+| run 5.0 | 0.175, 0.192 | 0.121, 0.132 | 0.258, 0.269 |
+
+- **The head's range binds.** With the body still, a person walking around the agent is within the head's reach only
+  about a quarter of the time. Within reach, the teacher keeps them in view 97% (walk), 88% (sneak) and 68% (run) of
+  the time (seed 0).
+- **A lead hurts** at every speed, so the teacher uses none.
+- **Reading lag:** about 3 of run's 8 lost points come from reading success one tick after the aim (0.207 when read
+  before the step, against 0.175).
+
+**RULED (owner, 2026-10-24): gaze only, scored within reach.** A gaze-only teacher cannot pass T1 over every tick on
+this world, so:
+- track stays on look_at's gaze heads (camera yaw and pitch);
+- its success is the share of ticks in view among the ticks the person is within the head's reach;
+- its paths cross in front of the agent.
+
+Turning the body stays with walk_to or the decision layer, so track composes with walk_to (tracking while walking).
+The rejected option: track turns the body at the head's limit. Body yaw would then join its heads, and it would compete
+with walk_to's body yaw when both run.
