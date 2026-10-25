@@ -189,8 +189,10 @@ def teach(skills: tuple[SkillSpec, ...], combat: Any, lanes: Lanes) -> Teach:
     for s in range(1, len(skills)):
         on = lanes.active[:, s, None] & jnp.asarray(scope_heads(skills[s].scope))[None, :]
         beside = jnp.where(on, outputs[s].factors, beside)
-    return Teach(labels=labels.astype(jnp.int32), mask=own_on, done=outputs[0].done & lanes.active[:, 0],
-                 beside=beside.astype(jnp.int32))
+    done = outputs[0].done & lanes.active[:, 0]
+    if skills[0].holding:  # a holding skill has no done: its horizon ends it, not its teacher
+        done = jnp.zeros_like(done)
+    return Teach(labels=labels.astype(jnp.int32), mask=own_on, done=done, beside=beside.astype(jnp.int32))
 
 
 def student_factors(module_params: Any, trunk_params: Any, action_mask: jax.Array, tokens: dict,
@@ -401,6 +403,15 @@ def _share(flags: np.ndarray, lanes: np.ndarray) -> float | None:
     return float(flags[lanes].mean()) if lanes.any() else None
 
 
+def _holding_share(counted: np.ndarray, counted_ok: np.ndarray, lanes: np.ndarray) -> dict:
+    """A holding skill's share: the mean over lanes with at least one counted tick of the counted ticks in view over the
+    counted ticks, and the number of those lanes (``counted_lanes``)."""
+
+    has = lanes & (counted > 0)
+    ratio = counted_ok / np.maximum(counted, 1)
+    return {"share": float(ratio[has].mean()) if has.any() else None, "counted_lanes": int(has.sum())}
+
+
 def summarise(strategy: Strategy, lanes: Lanes, trace: Trace) -> dict:
     """Per lane kind: the trained skill's and each skill beside it's first-hit and held success, and the share of lanes
     where every active skill held. Then legality, and the trained skill's own metrics."""
@@ -417,6 +428,8 @@ def summarise(strategy: Strategy, lanes: Lanes, trace: Trace) -> dict:
             if lanes_s.any():
                 skills[spec.name] = {"lanes": int(lanes_s.sum()), "success": _share(hit[:, s], lanes_s),
                                      "held": _share(held[:, s], lanes_s)}
+                if spec.holding:
+                    skills[spec.name].update(_holding_share(trace.counted[:, s], trace.counted_ok[:, s], lanes_s))
         all_held = np.all(held | ~active, axis=1)
         kinds[name] = {"lanes": int(in_kind.sum()), "skills": skills, "all_held": _share(all_held, in_kind)}
     summary = {"kinds": kinds, "decisions": trace.decisions, "illegal_decisions": trace.illegal,

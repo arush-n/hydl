@@ -81,6 +81,7 @@ class Kernels(NamedTuple):
     student: Callable[..., Any]  # (module params, action mask, encoded, masks, requests, active) -> (factors, logits)
     success: Callable[..., jax.Array]
     points: Callable[..., GeneralistRequests]  # (view, requests) -> requests with each entity handle as its token row
+    counts: Callable[..., jax.Array]  # (combat, lanes) -> bool[B, S]: the ticks each skill's share counts (holding skills)
 
 
 class Decisions(NamedTuple):
@@ -99,7 +100,8 @@ class Decisions(NamedTuple):
 
 class Trace(NamedTuple):
     """One rollout, with the fields ``skill_dagger.summarise`` and the skills' metrics read, the stored decisions
-    (``samples``, when recorded), and the module's logits per head at those decisions (``logits``, when kept)."""
+    (``samples``, when recorded), and the module's logits per head at those decisions (``logits``, when kept). ``counted``
+    and ``counted_ok`` are a holding skill's share: the ticks inside its horizon that count, and those where it succeeded."""
 
     hit: np.ndarray  # int32[B, S]
     held: np.ndarray  # int32[B, S]
@@ -111,6 +113,8 @@ class Trace(NamedTuple):
     teacher_illegal: int
     samples: Decisions | None
     logits: dict | None
+    counted: np.ndarray  # int32[B, S]
+    counted_ok: np.ndarray  # int32[B, S]
 
 
 class TrainResult(NamedTuple):
@@ -148,6 +152,10 @@ def make_kernels(strategy: Strategy, trunk: Trunk, known: tuple[int, ...]) -> Ke
         success=jax.jit(lambda combat, lanes: jnp.stack(
             [skill.success(combat, goals) for skill, goals in zip(skills, lanes.goals)], axis=1)),
         points=jax.jit(lambda view, requests: state_tick.point(view, requests, requests.entity_pointer)),
+        counts=jax.jit(lambda combat, lanes: jnp.stack(
+            [spec.counts(combat, goals) if spec.holding and spec.counts is not None
+             else jnp.ones((combat.position.shape[0],), dtype=jnp.bool_)
+             for spec, goals in zip(skills, lanes.goals)], axis=1)),
     )
 
 
@@ -221,9 +229,13 @@ def rollout(strategy: Strategy, trunk: Trunk, module_params: Any, lanes: Lanes, 
     teacher where ``use_teacher`` (bool[B]) and by its module elsewhere; the skills beside it by their teachers. Entity 1
     starts where the trained skill's goals place it (:func:`placed_other`), and each request's entity handle is resolved
     to its token row every decision. With ``record`` the decisions inside the horizons are stored (``Decisions``); with
-    ``keep_logits`` so are the module's logits there."""
+    ``keep_logits`` so are the module's logits there. If the trained skill's goals carry a ``mover`` (track), the
+    environment moves entity 1 along that path, and it starts at the path's first point."""
 
     env = blocks.environment(int(lanes.kind.shape[0]), strategy.config.maximum_turn_degrees)
+    mover = getattr(lanes.goals[0], "mover", None)
+    if mover is not None:
+        env = env.with_mover(mover)
     batch = env.batch
     horizon = np.asarray(lanes.horizon)
     ticks = int(horizon.max())
@@ -242,6 +254,9 @@ def rollout(strategy: Strategy, trunk: Trunk, module_params: Any, lanes: Lanes, 
     hit = np.full(active.shape, -1, dtype=np.int32)
     held = np.full(active.shape, -1, dtype=np.int32)
     streak = np.zeros(active.shape, dtype=np.int32)
+    counted = np.zeros(active.shape, dtype=np.int32)
+    counted_ok = np.zeros(active.shape, dtype=np.int32)
+    counting = any(spec.holding for spec in skills)
     positions = np.zeros((ticks + 1, batch, 2), dtype=np.float32)
     yaws = np.zeros((ticks + 1, batch), dtype=np.float32)
     seconds = np.zeros((ticks, batch), dtype=np.float32)
@@ -290,6 +305,11 @@ def rollout(strategy: Strategy, trunk: Trunk, module_params: Any, lanes: Lanes, 
         record_instant(done_count, combat)
         seconds[index] = np.asarray(combat.last_motion_delta_seconds)
         ok = np.asarray(kernels.success(combat, lanes))
+        live = (done_count <= limits) & active  # each skill's ticks inside its horizon, on the lanes that run it
+        if counting:
+            live = live & np.asarray(kernels.counts(combat, lanes))
+        counted += live
+        counted_ok += live & ok
         hit = np.where((hit < 0) & active & ok & (done_count <= limits), done_count, hit).astype(np.int32)
         for s in range(len(skills)):
             streak[:, s], held[:, s] = blocks.hold_update(streak[:, s], held[:, s], ok[:, s], done_count,
@@ -299,7 +319,8 @@ def rollout(strategy: Strategy, trunk: Trunk, module_params: Any, lanes: Lanes, 
     module_logits = None
     if keep_logits:
         module_logits = {name: np.concatenate([part[name] for part in logit_parts]) for name in blocks.HEAD_NAMES}
-    return Trace(hit, held, positions, yaws, seconds, decisions, illegal, teacher_illegal, samples, module_logits)
+    return Trace(hit, held, positions, yaws, seconds, decisions, illegal, teacher_illegal, samples, module_logits,
+                 counted, counted_ok)
 
 
 def _filled(data: Decisions) -> dict[str, int]:

@@ -99,9 +99,28 @@ def format_bars(report: dict[str, Any], skill: str | None = None) -> str:
     return "\n".join(lines)
 
 
+def _share_bars(teacher: float | None, module: float | None, held_out: float | None) -> dict[str, Any]:
+    """A holding skill's bars on its share: the teacher's share less the module's, at most ``T5_POINTS``, and the held-out
+    share over the seen one, at least ``HELD_OUT_RATIO``. A lane kind with no counted tick has no share, so it fails."""
+
+    if teacher is None or module is None or held_out is None:
+        return {"t5_gap": None, "t5_pass": False, "held_out_ratio": None, "held_out_pass": False}
+    gap = teacher - module
+    ratio = held_out / module if module else float("nan")
+    return {"t5_gap": gap, "t5_pass": gap <= T5_POINTS, "held_out_ratio": ratio,
+            "held_out_pass": ratio >= HELD_OUT_RATIO}
+
+
+def _figure(value: float | None, signed: bool = False) -> str:
+    if value is None:
+        return "none"
+    return f"{value:+.3f}" if signed else f"{value:.3f}"
+
+
 def score_module(report: dict[str, Any]) -> dict[str, Any]:
     """The bars of one skill module's report (``skill_module_v1``): per lane kind, T5 and held out for the trained skill
-    (held success, the first hit beside), the skills beside it under the module and the teacher, and its metrics."""
+    (held success, the first hit beside; for a holding skill, its share in view), the skills beside it under the module and
+    the teacher, and its metrics."""
 
     if report.get("schema") != "skill_module_v1":
         raise ValueError(f"not a skill module report: schema {report.get('schema')!r}")
@@ -113,12 +132,15 @@ def score_module(report: dict[str, Any]) -> dict[str, Any]:
     for kind, row in seen["kinds"].items():
         own, own_teacher, own_held_out = (row["skills"][skill], teacher["kinds"][kind]["skills"][skill],
                                           held_out["kinds"][kind]["skills"][skill])
-        bars = {}
-        for rule, key in (("held", "held"), ("first", "success")):
-            gap = own_teacher[key] - own[key]
-            ratio = own_held_out[key] / own[key] if own[key] else float("nan")
-            bars[rule] = {"t5_gap": gap, "t5_pass": gap <= T5_POINTS, "held_out_ratio": ratio,
-                          "held_out_pass": ratio >= HELD_OUT_RATIO}
+        if "share" in own:  # a holding skill (track): barred on its share in view within reach, not on held success
+            bars = {"share": _share_bars(own_teacher["share"], own["share"], own_held_out["share"])}
+        else:
+            bars = {}
+            for rule, key in (("held", "held"), ("first", "success")):
+                gap = own_teacher[key] - own[key]
+                ratio = own_held_out[key] / own[key] if own[key] else float("nan")
+                bars[rule] = {"t5_gap": gap, "t5_pass": gap <= T5_POINTS, "held_out_ratio": ratio,
+                              "held_out_pass": ratio >= HELD_OUT_RATIO}
         beside = {name: {"module": rates["held"], "teacher": teacher["kinds"][kind]["skills"][name]["held"]}
                   for name, rates in row["skills"].items() if name != skill}
         kinds[kind] = {"bars": bars, "beside": beside, "all_held": row["all_held"]}
@@ -138,9 +160,15 @@ def format_module(report: dict[str, Any]) -> str:
     lines = [f"{scored['skill']} module | trunk {report['trunk_sha256'][:12]} | module "
              f"{report['module_sha256'][:12]} | beside {report['beside']} | config {report['config']}"]
     for kind, row in scored["kinds"].items():
-        held, first = row["bars"]["held"], row["bars"]["first"]
         beside = "; ".join(f"{name} held {rates['module']:.3f} beside the module, {rates['teacher']:.3f} beside "
                            f"the teacher" for name, rates in row["beside"].items())
+        if "share" in row["bars"]:
+            share = row["bars"]["share"]
+            lines.append(f"  {kind:14s} share T5 {_figure(share['t5_gap'], True)} {_verdict(share['t5_pass'])}; "
+                         f"held out / seen {_figure(share['held_out_ratio'])} {_verdict(share['held_out_pass'])}"
+                         + (f"; {beside}" if beside else ""))
+            continue
+        held, first = row["bars"]["held"], row["bars"]["first"]
         lines.append(f"  {kind:14s} T5 {held['t5_gap']:+.3f} {_verdict(held['t5_pass'])} [{first['t5_gap']:+.3f}]; "
                      f"held out / seen {held['held_out_ratio']:.3f} {_verdict(held['held_out_pass'])} "
                      f"[{first['held_out_ratio']:.3f}]" + (f"; {beside}" if beside else ""))

@@ -19,7 +19,7 @@ import jax
 
 from experimental.neural_agent.skill_agent.contract.surface import SCOPE_NAMES
 
-VERBS: tuple[str, ...] = ("walk_to", "look_at", "come_here")
+VERBS: tuple[str, ...] = ("walk_to", "look_at", "come_here", "track")
 """A skill's verb id is its index here, in every module's verb vocabulary. Append only: an id is baked into the trained
 weights of every module that has seen it."""
 
@@ -58,6 +58,10 @@ class SkillSpec:
         success: ``(combat, goals) -> bool[B]``: the skill's success test.
         metrics: Optional ``(goals, active, trace, hit) -> dict``: the skill's own evaluation numbers (walk_to's pace
             and radius), from the rollout's trace (positions, yaws and tick lengths) and its first-hit ticks.
+        holding: True for a holding skill (track): it has no done, and its score is the share of its counted ticks in
+            view, not a first hit (``training/skill_dagger.summarise``). Default False: the done skills are unchanged.
+        counts: For a holding skill, ``(combat, goals) -> bool[B]``: the ticks that count toward its share (track: entity
+            1 within the head's reach). None counts every tick inside the horizon.
     """
 
     name: str
@@ -67,6 +71,8 @@ class SkillSpec:
     teacher: Callable[..., Any]
     success: Callable[..., jax.Array]
     metrics: Callable[..., dict] | None = None
+    holding: bool = False
+    counts: Callable[..., jax.Array] | None = None
 
     def __post_init__(self) -> None:
         if self.name not in VERBS:

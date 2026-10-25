@@ -1,4 +1,4 @@
-"""Teacher certificates: the scripted walk_to, look_at and come_here teachers measured against fixed checks.
+"""Teacher certificates: the scripted walk_to, look_at, come_here and track teachers measured against fixed checks.
 
 docs/TRAINING_PLAN.md section 2c defines the certificate. This module measures T1 (success), T2 (efficiency), T3
 (obedience) and a light T7 (failure sorting) on the flat npc_walk environment. T4 (reality), T5 (imitability) and
@@ -36,6 +36,14 @@ from experimental.neural_agent.skill_agent.neural_skills.come_here.task import C
 from experimental.neural_agent.skill_agent.neural_skills.come_here.teacher import come_here_choices
 from experimental.neural_agent.skill_agent.neural_skills.look_at.task import LookAtTasks
 from experimental.neural_agent.skill_agent.neural_skills.look_at.teacher import look_at_choices
+from experimental.neural_agent.skill_agent.neural_skills.track import skill as track_skill
+from experimental.neural_agent.skill_agent.neural_skills.track.task import (
+    HELD_OUT_SPEED_BAND,
+    TRAIN_SPEEDS,
+    TrackTasks,
+    at_speed,
+)
+from experimental.neural_agent.skill_agent.neural_skills.track.teacher import track_choices
 from experimental.neural_agent.skill_agent.neural_skills.walk_to import skill as walk_skill
 from experimental.neural_agent.skill_agent.neural_skills.walk_to.task import WalkToTasks
 from experimental.neural_agent.skill_agent.neural_skills.walk_to.teacher import (
@@ -239,6 +247,9 @@ def _run(env, task: _Task, observe, policy, seed: int):
     batch = env.batch
     goal_key, reset_key, step_key = jax.random.split(jax.random.key(seed), 3)
     goals = task.sample(goal_key, batch)
+    mover = getattr(goals, "mover", None)
+    if mover is not None:  # a moving entity 1 (track): the environment places it at the path's start and moves it
+        env = env.with_mover(mover)
     carry = env.reset(
         jax.random.split(reset_key, batch),
         jnp.broadcast_to(jnp.asarray(DEFAULT_SPAWN_XZ, dtype=jnp.float32), (batch, 2)),
@@ -820,6 +831,196 @@ def certify_come_here(
     return cert
 
 
+# ---- track: the teacher alone; T1 is the share in view within reach, T3 legality (owner's ruling, 2026-10-24) ----
+
+TRACK_T1_BAR = 0.9
+TRACK_RUN_SPEED = float(gait_speed(GAIT_RUN))
+"""Run speed (5 blocks a second): reported for information only, it is not a region and not gated."""
+
+
+def _track_gap(combat, goals):
+    """f32[B, 1]: 1 where entity 1 is within the head's reach from the still body, else 0: the states the share counts."""
+
+    return track_skill.in_reach(combat, goals).astype(jnp.float32)[:, None]
+
+
+def _track_teacher(combat, goals) -> TeacherOutput:
+    return track_choices(combat, goals.tolerance_degrees, maximum_turn_degrees=MAXIMUM_TURN_DEGREES)
+
+
+def _track_sample(key, batch, *, held_out: bool, speed: float | None = None):
+    """track's goals on the default spawn (yaw 0): a person crossing in front, at the region's speeds or at ``speed``."""
+
+    goals = TrackTasks.sample(key, batch, jnp.zeros((batch,), dtype=jnp.float32), held_out=held_out)
+    return goals if speed is None else at_speed(goals, speed)
+
+
+def _track_stats(trace: _Trace, goals) -> dict[str, np.ndarray]:
+    """Per-lane numbers for track: the states inside a lane's horizon (1 to the horizon) with entity 1 within the head's
+    reach are the counted ticks; those of them in view (look_at's test) are the share's numerator. Legality and tick
+    lengths as the other checks read them."""
+
+    horizon = np.asarray(goals.horizon_ticks)
+    state_index = np.arange(trace.held.shape[0])[:, None]
+    decision_index = np.arange(trace.legal.shape[0])[:, None]
+    inside = (state_index >= 1) & (state_index <= horizon)
+    counted = inside & (trace.gap[..., 0] > 0.5)
+    decision = decision_index < horizon
+    return {
+        "horizon": horizon,
+        "speed": np.asarray(goals.mover.speed),
+        "counted": counted.sum(axis=0),
+        "in_view": (counted & trace.held).sum(axis=0),
+        "illegal": np.sum(~trace.legal & decision, axis=0),
+        "decisions": np.sum(decision, axis=0),
+        "terminated": np.sum(trace.terminated & decision, axis=0),
+        "seconds_min": np.min(np.where(decision, trace.seconds, np.inf), axis=0),
+        "seconds_max": np.max(np.where(decision, trace.seconds, -np.inf), axis=0),
+    }
+
+
+def _speed_label(speed: np.ndarray) -> np.ndarray:
+    """Each lane's speed class: walk, sneak, the held-out band, run, or other."""
+
+    labels = np.full(speed.shape, "other", dtype=object)
+    labels[np.isclose(speed, TRAIN_SPEEDS[0], atol=1e-4)] = "walk"
+    labels[np.isclose(speed, TRAIN_SPEEDS[1], atol=1e-4)] = "sneak"
+    labels[(speed >= HELD_OUT_SPEED_BAND[0] - 1e-4) & (speed <= HELD_OUT_SPEED_BAND[1] + 1e-4)] = "held_out_band"
+    labels[np.isclose(speed, TRACK_RUN_SPEED, atol=1e-4)] = "run"
+    return labels
+
+
+def _track_checks(per_seed) -> dict:
+    """T1 (the share in view within reach: the mean over lanes with a counted tick of in-view over counted, pooled over
+    the seeds, against ``TRACK_T1_BAR``), T3 (legality), and each speed class's share for the report."""
+
+    counted, in_view = _pooled(per_seed, "counted"), _pooled(per_seed, "in_view")
+    speed = _pooled(per_seed, "speed")
+    lanes = counted > 0
+    label = _speed_label(speed)
+    speeds = {}
+    for name in ("walk", "sneak", "held_out_band", "run"):
+        mask = label == name
+        has = mask & lanes
+        speeds[name] = {
+            "lanes": int(mask.sum()),
+            "lanes_counted": int(has.sum()),
+            "share": float((in_view[has] / counted[has]).mean()) if has.any() else None,
+            "pooled_tick_share": float(in_view[mask].sum() / counted[mask].sum()) if counted[mask].sum() else None,
+        }
+    value = float((in_view[lanes] / counted[lanes]).mean()) if lanes.any() else None
+    t1 = {
+        "name": "share in view within reach",
+        "value": value,
+        "pooled_tick_share": float(in_view.sum() / counted.sum()) if counted.sum() else None,
+        "lanes": int(lanes.size),
+        "lanes_counted": int(lanes.sum()),
+        "counted_ticks": int(counted.sum()),
+        "bar": TRACK_T1_BAR,
+        "rule": "the share (mean over lanes with a counted tick of ticks in view over counted ticks) >= bar",
+        "pass": bool(value is not None and value >= TRACK_T1_BAR),
+    }
+    illegal = _illegal_block(per_seed)
+    return {"T1": t1, "T3": {"name": "obedience", "illegal_decisions": illegal, "pass": illegal["pass"]},
+            "speeds": speeds}
+
+
+def _track_runs(seeds, episodes: int, sample, policy):
+    """Every seed's batched closed-loop run of track's teacher (or ``policy``) on ``sample``'s lanes: (seed, stats)."""
+
+    env = _environment(episodes)
+    task = _Task("track", sample, TrackTasks.success, _track_gap, _track_teacher)
+    observe = jax.jit(functools.partial(_observe, task))
+    run_policy = jax.jit(_track_teacher if policy is None else policy)
+    per_seed = []
+    for seed in seeds:
+        goals, trace = _run(env, task, observe, run_policy, seed)
+        per_seed.append((seed, _track_stats(trace, goals)))
+    return per_seed, env
+
+
+def _track_teacher_block() -> dict:
+    return {
+        "name": "track",
+        "version": f"look_at {TEACHERS['look_at'].version} aimed at entity 1, no lead",
+        "state": "observed",
+        "kind": "scripted",
+        "verbs": ["track"],
+        "reads": ["entity 1's position", "position", "yaw", "agent_head_yaw", "agent_head_pitch"],
+        "parameters": ["tolerance_degrees", "maximum_turn_degrees"],
+        "lead_ticks": 0,
+        "done": "never (a holding skill: its horizon ends it)",
+    }
+
+
+def certify_track(
+    seeds: Sequence[int],
+    episodes_per_seed: int = 256,
+    *,
+    date: str,
+    out: str | Path | None = None,
+    policy: Callable[[Any, Any], TeacherOutput] | None = None,
+) -> dict:
+    """Certificate for track on flat npc_walk: the teacher alone on seen speeds (walk and sneak, a person crossing in
+    front) and on held-out speeds (2.0 to 2.3 blocks a second), one batched run per seed in each region. Run speed (5.0)
+    is measured too, for information only. Written to ``out`` when given; ``policy`` has the role it has in
+    ``certify_come_here``."""
+
+    seeds = [int(seed) for seed in seeds]
+    regions, env = {}, None
+    for name, held_out in (("seen", False), ("held_out", True)):
+        per_seed, env = _track_runs(seeds, episodes_per_seed, functools.partial(_track_sample, held_out=held_out), policy)
+        checks = _track_checks(per_seed)
+        regions[name] = {"checks": {"T1": checks["T1"], "T3": checks["T3"]}, "speeds": checks["speeds"],
+                         "overall": {"pass": bool(checks["T1"]["pass"] and checks["T3"]["pass"])}}
+        if name == "seen":
+            seen_per_seed = per_seed
+    run_per_seed, _ = _track_runs(seeds, episodes_per_seed,
+                                  functools.partial(_track_sample, held_out=False, speed=TRACK_RUN_SPEED), policy)
+    run = _track_checks(run_per_seed)
+    cert = {
+        "scope": "track: T1 (the share in view within reach) and T3 (legality), on seen and held-out speeds; run speed "
+                 "for information only. T2 and T4 to T7 are not measured here.",
+        "teacher": _track_teacher_block(),
+        "policy": "registered" if policy is None else "custom",
+        "date": date,
+        "seeds": seeds,
+        "episodes_per_seed": episodes_per_seed,
+        "env": {**_env_block(env, seen_per_seed), "other_xyz": "per lane: entity 1 on a path crossing in front of the spawn"},
+        "regions": regions,
+        "information": {"run_speed": {"speed_blocks_per_second": TRACK_RUN_SPEED, "checks": {"T1": run["T1"]},
+                                      "speeds": run["speeds"]}},
+        "overall": {"pass": bool(all(row["overall"]["pass"] for row in regions.values())),
+                    "rule": "T1 (share in view within reach) and T3, on seen and on held-out speeds"},
+    }
+    if out is not None:
+        _write(cert, out)
+    return cert
+
+
+def _track_summary(cert: dict) -> list[str]:
+    lines = [
+        f"track {cert['teacher']['version']} (teacher alone, {cert['policy']} policy), seeds {cert['seeds']}, "
+        f"{cert['episodes_per_seed']} episodes each per region, date {cert['date']}"
+    ]
+    for region, row in cert["regions"].items():
+        t1, t3 = row["checks"]["T1"], row["checks"]["T3"]
+        lines.append(
+            f"[{region}] T1 share in view within reach: {_fmt(t1['value'])} (pooled ticks {_fmt(t1['pooled_tick_share'])}, "
+            f"{t1['lanes_counted']} of {t1['lanes']} lanes counted), bar >= {t1['bar']}: {_verdict(t1['pass'])}"
+        )
+        speeds = ", ".join(f"{name} {_fmt(entry['share'])} ({entry['lanes_counted']} lanes)"
+                           for name, entry in row["speeds"].items() if entry["lanes"])
+        lines.append(f"[{region}] by speed: {speeds}")
+        lines.append(f"[{region}] T3 obedience: illegal decisions {t3['illegal_decisions']['value']}: "
+                     f"{_verdict(t3['pass'])}")
+    run = cert["information"]["run_speed"]
+    lines.append(f"information, run speed {run['speed_blocks_per_second']}: share in view within reach "
+                 f"{_fmt(run['checks']['T1']['value'])} (not gated)")
+    lines.append(f"overall: {_verdict(cert['overall']['pass'])}")
+    return lines
+
+
 def _verdict(passed) -> str:
     return "not defined" if passed is None else ("PASS" if passed else "FAIL")
 
@@ -864,6 +1065,8 @@ def _come_here_summary(cert: dict) -> list[str]:
 def summary_lines(cert: dict) -> list[str]:
     """A short human-readable summary of a certificate, one line per check."""
 
+    if cert["teacher"]["name"] == "track":
+        return _track_summary(cert)
     if "regions" in cert:
         return _come_here_summary(cert)
     checks = cert["checks"]
@@ -909,7 +1112,7 @@ def summary_lines(cert: dict) -> list[str]:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Teacher certificate: T1 success, T2 efficiency, T3 obedience, T7 failures.")
-    parser.add_argument("--teacher", required=True, choices=sorted(_TASKS))
+    parser.add_argument("--teacher", required=True, choices=sorted((*_TASKS, "track")))
     parser.add_argument("--seeds", required=True, help="comma-separated seeds; 77001 is the report seed")
     parser.add_argument("--episodes", type=int, default=256, help="lanes per seed")
     parser.add_argument("--out", type=Path, default=None, help="write the certificate JSON to this path")
@@ -925,6 +1128,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                                stop_margin_blocks=args.walk_stop_margin)
     elif args.teacher == "come_here":
         cert = certify_come_here(seeds, args.episodes, date=args.date, out=args.out)
+    elif args.teacher == "track":
+        cert = certify_track(seeds, args.episodes, date=args.date, out=args.out)
     else:
         cert = certify_look_at(seeds, args.episodes, date=args.date, out=args.out)
     for line in summary_lines(cert):
