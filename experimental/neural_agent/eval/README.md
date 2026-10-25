@@ -11,6 +11,7 @@
 | `traces.py` | 302 | The decision-trace dataset of the learned J1 line. |
 | `record_traces.py` | 160 | Record J0 decision traces on an arena and merge them into a J1 training set. |
 | `record_dagger.py` | 736 | DAgger-style relabelling for the learned decider `js1`: the rule labels the learner's own states. |
+| `run_architecture.py` | 493 | The architecture test (2026-10-24): a host loop in which the decision layer's goals become `walk_to`/`look_at` requests in S_t, the combiner grants them to the skill layer's trained bodies (`state_tick.ModuleBody`), and the state tick (`StateTickBinding`) runs the memory trunk; arm `reference` is the trained student as the skill layer evaluates it, on the same episodes. Section "The architecture test" below. |
 
 Gates: `test_na_eval.py`, `test_na_eager_loop.py`, `test_na_record_traces.py`, `test_na_record_dagger.py`.
 The standard comparison every ledger entry since 2026-10-17 uses:
@@ -163,3 +164,53 @@ The command writes `metrics.csv` and `REPORT.md` into `DIR`. The `j1` and `j_lm`
 - Success and pursue-only come from the composition task, as the task defines them. Since 2026-10-17 `combat_open_flat` composes (J0 33/64 at 512 ticks, `docs/LEDGER.md`); of the two earlier arenas, neither composes on its own: `flat_pursuit` has catches and no damage, and `combat_baseline` has damage and no catches (`run_composition.py` docstring). So no episode can be composed unless a damage event is injected on `flat_pursuit`. That injection is an ablation (ADR-001 D5), and the CLI does not apply it.
 - The belief parameters are a random initialization with a fixed seed. The arena publishes no speed scales, so two belief features are unknown.
 - The trace dataset `traces.py` writes is read by `record_traces.py` (2026-10-17), which keeps the `manager_due` rows and adds `num_skills`; `jev/train_j1.py` trained on it and `jev/eval_j1.py` scored it (`docs/LEDGER.md`). Before that date the layout had no reader and was unverified.
+
+## The architecture test (2026-10-24; `run_architecture.py`)
+
+Asked in the skill layer's ledger entry (dc9037a); the owner said go. The question: do the skill layer's trained bodies still
+work when the decision layer drives them through the architecture (goals become typed requests in S_t, the combiner grants
+scopes, each body acts on its granted scope, the state tick runs the memory trunk), rather than in their trainer's loop?
+
+**Method.** One host tick for B lanes: the state tick (`StateTickBinding.on_tick` running `state_tick.step_lanes`: the state
+layer with the agent's own pose, then the memory trunk); the decision layer (`GoalDecider`: each walk goal is a TaskSpec
+`HoldArea` over `blocks.HOLD_TICKS`, scored with `task_spec.hold_step`; each look goal is `LookAtTasks.success` held as long;
+a request is withdrawn when its goal is done or out of time); the combiner on S_t (`combine_from_scratchpad`) with one
+`state_tick.ModuleBody` per verb, lowered by the skill's own `lowering`; the simulator steps on the combined 12 heads. The
+world is the bodies' training world (`training.blocks.environment`: the committed engine, motion timing pinned to 1/30 s).
+The `reference` arm is the trained student as the skill layer evaluates it (`distill_v3.evaluate`: one generalist call a
+tick with both requests, masked argmax) on the same goals, spawns and keys. `--order session` runs the state tick after the
+combiner, as `session.run_session` orders its hook, so bodies read the previous tick's view. `--joint` is a diagnostic:
+`JointModuleBody` gives each module every live request of a verb it was trained beside, as in training.
+
+**Results** (bodies `v1_bodies/memory_s0`, 96 lanes, 32 per mode, seed 77001; `out/architecture_2026-10-24/*.json`; one lane
+is 0.031):
+
+| Episodes | Arm | walk held | look held | both held | look held while walking | pace within 5 % | illegal |
+|---|---|---:|---:|---:|---:|---:|---:|
+| seen | reference | 1.000 | 0.938 | 0.812 | 0.812 | 0.983 | 0 |
+| seen | stack, state tick first | 1.000 | 0.938 | 0.781 | 0.812 | 0.983 | 0 |
+| seen | stack, session order | 1.000 | 0.969 | 0.812 | 0.844 | 0.983 | 0 |
+| seen | stack, joint requests | 1.000 | 0.938 | 0.812 | 0.812 | 0.983 | 0 |
+| held out | reference | 0.938 | 0.969 | 0.906 | 0.906 | 1.000 | 0 |
+| held out | stack, state tick first | 0.938 | 0.969 | 0.750 | 0.781 | 1.000 | 0 |
+| held out | stack, session order | 0.969 | 0.969 | 0.750 | 0.781 | 1.000 | 0 |
+| held out | stack, joint requests | 0.938 | 0.969 | 0.875 | 0.906 | 1.000 | 0 |
+| held out | stack, joint, session order | 0.969 | 0.969 | 0.844 | 0.875 | 1.000 | 0 |
+
+**Reading.**
+- The architecture carries the trained skills: with every live request visible to each body, the stack equals the
+  reference on the seen episodes and is within one lane of it held out; walk-only and look-only match in every arm; no
+  illegal action in any arm. The decision layer ended 61 to 63 of 64 walk goals and 56 to 58 of 64 look goals as done.
+- The one loss is the seam: `ModuleBody` puts only its own request in the module's slots, so a body never sees the other
+  live request it was trained beside. Looking while walking falls from 0.906 to 0.781 held out (5 lanes of 32); joint
+  requests restore it. Fix on the skill side (the module reads the other active requests of skills it was trained beside,
+  `neural_skills/spec.py`).
+- The session's order (bodies read the previous tick's view) costs at most one lane here.
+- Host cost: 300 to 500 ms a tick for 96 agents (the state tick, batched, about 120 ms; the bodies, batch 1 per agent per
+  verb, the rest), so about 3 to 5 ms per agent. 30 Hz with many agents needs the bodies batched across agents by verb.
+- `own_pose_channel` builds a new NamedTuple class each call: called on the host every tick, it made the compiled state tick
+  retrace every tick (6.5 s a tick). The harness keeps one class.
+- Successful goals end in the status stream as `aborted` ("withdrawn"): a `ModuleBody` never reports done, and the protocol
+  has no "withdrawn as complete".
+- Not tested: `session.run_session` itself. Its in-graph actor runs only array bodies (`runtime/granted_actor.py`), so a
+  host `ModuleBody` cannot act through it; this harness is the host loop for now.
