@@ -798,6 +798,17 @@ public final class RegionGeometryCapture {
         );
     }
 
+    /**
+     * Seconds from a block's last damage to the world's game time, clamped at 0. A {@code BlockHealth} starts stamped
+     * {@code Instant.EPOCH} (1970) while a world's game time starts in year 1, so the gap can be about -1969 years;
+     * {@code Duration.toNanos()} overflows past about 292 years and failed the policy capture after a partial break
+     * (live, jar 49CDB408, 2026-10-25). A negative gap returns 0 before converting; any other gap is converted as before.
+     */
+    static double damageAgeSeconds(Instant lastDamage, Instant now) {
+        Duration gap = Duration.between(lastDamage, now);
+        return gap.isNegative() ? 0.0 : gap.toNanos() / 1_000_000_000.0;
+    }
+
     public static NativeMutableBlockEvidence.Row mutableBlockRow(
         NativeCellSemanticsCache nativeCellSemanticsCache,
         World world,
@@ -831,13 +842,7 @@ public final class RegionGeometryCapture {
             : null;
         double age = stored == null
             ? 0.0
-            : Math.max(
-                0.0,
-                Duration.between(
-                    stored.getLastDamageGameTime(),
-                    gameTime
-                ).toNanos() / 1_000_000_000.0
-            );
+            : damageAgeSeconds(stored.getLastDamageGameTime(), gameTime);
         BlockSection section = chunk.getSectionAtBlockY(
             position.y
         );

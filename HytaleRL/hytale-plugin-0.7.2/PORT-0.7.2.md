@@ -328,6 +328,22 @@ running backward through a band of bushes with the active Trork chasing, its own
 the Trork's at tick 61 (slot 1, 3.77 blocks), both in `heard_sounds` with those sources. Impact sounds carry no
 footstep predicate, so their source stays -1.
 
+## Block damage age without overflow (jar 17, 2026-10-25)
+
+`RegionGeometryCapture.mutableBlockRow` reports each mutable cell's seconds since its last damage. It converted
+`Duration.between(lastDamage, gameTime)` with `toNanos()`, which throws `ArithmeticException: long overflow` past about
+292 years. A server `BlockHealth()` starts stamped `Instant.EPOCH` (1970, read from the 0.7.2 class) and a fresh world's
+game time starts in year 1 (`GameTime: 0001-01-01T05:30:00Z` in `server.log`), so once a block was partly broken the
+`policy_world_action_capture` request failed (jar 16, `gen7_probes/break_neighbours_live_jar16_hits.json`: both seeds).
+Which stamp the failing cell carried was not read; any stamp after year 293 overflows the same way.
+`damageAgeSeconds` returns 0 for a negative gap before converting. That is what `Math.max(0, ...)` gave wherever the
+old code did not throw, so every other value is unchanged (`RegionGeometryCaptureDamageAgeTest`, bit-for-bit).
+
+Jar 17 (`F4AA8EBA`, pinned 2026-10-25; jar 16 plus this fix; Java 489 -> 491 passed). Live
+(`gen7_probes/break_neighbours_live_candidateF4AA8EBA.json`, seeds 570057 and 913771): no overflow; the first pickaxe
+hit leaves the `Rock_Stone` cell standing, it reads `Air` from tick 32, the second hit finishes at tick 39, and the
+`Soil_Pebbles` beside and above it stay.
+
 ## Outside this folder
 
 Done (see `TRAINING-0.7.2.md`): `hytalegym/hytalegym/server_versions/` keys the
