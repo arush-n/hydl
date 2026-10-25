@@ -1,5 +1,6 @@
 """Leaf helpers extracted verbatim from geometry.py."""
 
+import os
 from typing import NamedTuple
 import jax
 import jax.numpy as jnp
@@ -15,6 +16,24 @@ Array = jax.Array
 
 
 _FLOAT_EPSILON = jnp.float32(1.0e-7)
+
+
+def _exit_clears(exit: Array, displacement: Array) -> Array:
+    """Whether a box is still ahead of the body along the motion (HYTALEGYM_SWEEP_LEAVING_TOUCH=1, opt-in, read at trace time).
+
+    ``exit`` is the box's exit as a fraction of ``displacement`` ([B] rows, [B, boxes] exits). Unset, or a static query
+    (|displacement| == 0): ``exit >= -_FLOAT_EPSILON``, the HEAD test. Set: the body stays in contact for more than
+    ``_SKIN_DISTANCE`` blocks of travel, ``exit * |displacement| > _SKIN_DISTANCE``. A box the body is leaving at time 0
+    (exit 0, or float residue of it) is not an obstacle or a support. Lane 11 freeze, 2026-10-25 (ledger, TRAINING_PLAN 8.14).
+    """
+
+    head = exit >= -_FLOAT_EPSILON
+    if os.environ.get("HYTALEGYM_SWEEP_LEAVING_TOUCH") != "1":
+        return head
+    length = jnp.sqrt(jnp.sum(displacement * displacement, axis=-1))
+    moving = (length > 0.0)[:, None]
+    travel = exit * length[:, None]
+    return jnp.where(moving, travel > _SKIN_DISTANCE, head)
 
 
 _SKIN_DISTANCE = jnp.float32(1.0e-5)
@@ -513,7 +532,7 @@ def _first_contact_once(
     hit = (
         valid
         & (entry <= exit + _FLOAT_EPSILON)
-        & (exit >= -_FLOAT_EPSILON)
+        & _exit_clears(exit, displacement)
         & (entry >= -_FLOAT_EPSILON)
         & (entry <= 1.0 + _FLOAT_EPSILON)
     )
@@ -790,13 +809,13 @@ def _support_sweep_with_boxes(
             <= jnp.float32(probe_distance) + _FLOAT_EPSILON
         )
         & (interval_start <= interval_end + _FLOAT_EPSILON)
-        & (interval_end >= -_FLOAT_EPSILON)
+        & (_exit_clears(interval_end, displacement))
         & (interval_start <= jnp.float32(1.0) + _FLOAT_EPSILON)
     )
     contains_start = (
         interval_valid
         & (interval_start <= _FLOAT_EPSILON)
-        & (interval_end >= -_FLOAT_EPSILON)
+        & (_exit_clears(interval_end, displacement))
     )
     reach = jnp.max(
         jnp.where(contains_start, interval_end, -jnp.inf),
@@ -809,7 +828,7 @@ def _support_sweep_with_boxes(
         connected = (
             interval_valid
             & (interval_start <= current[:, None] + _FLOAT_EPSILON)
-            & (interval_end >= -_FLOAT_EPSILON)
+            & (_exit_clears(interval_end, displacement))
         )
         extension = jnp.max(
             jnp.where(connected, interval_end, current[:, None]),
