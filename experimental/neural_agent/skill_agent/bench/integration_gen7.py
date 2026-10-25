@@ -144,10 +144,11 @@ class Duel:
     def kw(self) -> dict[str, Any]:
         return {"tables": self.tables, "effects": self.effects}
 
-    def advance(self, factors: jax.Array, tick: int) -> None:
-        keys = jax.random.split(jax.random.key(tick), self.batch)
-        (self.state, self._obs, self._opponent, self._mask, self._opponent_mask, _, _) = self.step(
+    def advance(self, factors: jax.Array, keys: jax.Array) -> jax.Array:
+        """One tick with this tick's step keys; returns each lane's done flag (the step's last output)."""
+        (self.state, self._obs, self._opponent, self._mask, self._opponent_mask, _, done) = self.step(
             self.state, factors, self.chase(self._opponent, self._opponent_mask), keys)
+        return done
 
     def tick_seconds(self) -> float:
         return float(np.asarray(self.state.arsenal.combat.last_motion_delta_seconds).reshape(-1)[0])
@@ -186,9 +187,10 @@ class Region:
                 "action_surface": self.env.action_surface,
                 "block_reach_blocks": float(self.scene.maximum_distance)}
 
-    def advance(self, factors: jax.Array, tick: int) -> None:
-        self.env, self.policy = self.step(self.env, self.policy, factors,
-                                          jax.random.split(jax.random.key(tick), self.batch))[:2]
+    def advance(self, factors: jax.Array, keys: jax.Array) -> jax.Array:
+        """One tick with this tick's step keys; returns each lane's done flag (the PPO step's fourth output)."""
+        self.env, self.policy, _, done, _ = self.step(self.env, self.policy, factors, keys)
+        return done
 
     def tick_seconds(self) -> float:
         return float(np.asarray(self.env.runtime.combat.last_motion_delta_seconds).reshape(-1)[0])
@@ -280,6 +282,13 @@ def head_factors(logits: dict[str, jax.Array], mask: jax.Array, scope: str) -> j
     return jnp.stack(columns, axis=1)
 
 
+def key_table(ticks: int, batch: int) -> jax.Array:
+    """The step keys of every tick, built once per run: row ``t`` is ``jax.random.split(jax.random.key(t), batch)``, the
+    keys each tick used to split for itself."""
+
+    return jax.vmap(lambda tick: jax.random.split(jax.random.key(tick), batch))(jnp.arange(ticks))
+
+
 # -- One run of one world ----------------------------------------------------------------------------------------------
 
 
@@ -295,6 +304,7 @@ class Record:
         self.valid_max: dict[str, int] = {}
         self.memory_changes: list[float] = []
         self.clock: list[np.ndarray] = []
+        self.done: list[np.ndarray] = []
         self.sleeping_ticks = 0
         self.heard: list[np.ndarray] = []
         self.times_ms: list[float] = []
@@ -330,6 +340,7 @@ def run_world(name: str, ticks: int, batch: int, agent: Agent, *, record: bool) 
     target = jnp.asarray(start_position + np.asarray(POINT_OFFSET), jnp.float32)
     state = agent.start()
     factors = neutral_arsenal_policy_action_factors(batch)
+    keys = key_table(ticks, batch)
     rec = Record()
     rec.load_avg_start = os.getloadavg()[0]
     copy = None
@@ -399,7 +410,9 @@ def run_world(name: str, ticks: int, batch: int, agent: Agent, *, record: bool) 
                 "view_mismatches": bit_mismatches(view, view_b),
                 "state_mismatches": bit_mismatches(state, copy)})
             copy = None
-        world.advance(factors, tick)
+        done = world.advance(factors, keys[tick])
+        if record:
+            rec.done.append(np.asarray(done))
         if record and tick % 50 == 0:
             print(f"{name}: tick {tick} of {ticks}, {elapsed:.0f} ms, load {os.getloadavg()[0]:.0f}", flush=True)
     rec.load_avg_end = os.getloadavg()[0]
@@ -454,11 +467,24 @@ def summarize(first: dict[str, Any], second: dict[str, Any]) -> dict[str, Any]:
 
     if clocked and rec.clock:
         readings = np.stack(rec.clock)
-        steps = np.diff(readings, axis=0)
-        checks["clock_advances_one_a_tick"] = _verdict(bool(np.allclose(steps, 1.0, rtol=1e-6)),
-                                                       first_reading=readings[0].tolist(),
-                                                       last_reading=readings[-1].tolist(),
-                                                       step_min=float(steps.min()), step_max=float(steps.max()))
+        steps = np.diff(readings, axis=0)  # steps[t] is the clock's advance in tick t
+        # A lane's episode ends at its first done, and its clock then freezes until the caller resets it. So each lane is
+        # judged on the ticks before its first done (a lane that ends at tick 0 is judged on none).
+        done = np.stack(rec.done)
+        ended = done.any(axis=0)
+        first_done = np.where(ended, done.argmax(axis=0), done.shape[0])
+        alive = np.arange(steps.shape[0])[:, None] < first_done[None, :]
+        judged = steps[alive]
+        lanes = [{"lane": lane, "ended_at_tick": int(first_done[lane]) if ended[lane] else None,
+                  "ticks_checked": int(alive[:, lane].sum()),
+                  "clock_step_at_end": (float(steps[first_done[lane], lane])
+                                        if ended[lane] and first_done[lane] < steps.shape[0] else None)}
+                 for lane in range(readings.shape[1])]
+        checks["clock_advances_one_a_tick"] = _verdict(
+            judged.size > 0 and bool(np.allclose(judged, 1.0, rtol=1e-6)),
+            first_reading=readings[0].tolist(), last_reading=readings[-1].tolist(), lanes=lanes,
+            ticks_checked=int(judged.size), step_min=float(judged.min()) if judged.size else None,
+            step_max=float(judged.max()) if judged.size else None)
         seconds = readings[-1] - readings[0]
         expected = 1.0 - np.exp(-(seconds / 3600.0) / drives.SLEEP_RISE_HOURS)
         actual = np.asarray(state.drives.sleep_pressure)

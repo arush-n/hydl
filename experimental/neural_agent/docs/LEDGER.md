@@ -1752,3 +1752,17 @@ result: Built by a Haiku subagent from a written spec, checked here.
 - **Tests:** `test_sa_module_batch.py` (local) 17 passed; module_body_joint, state_tick and export_v1 as before.
 gate: two passes, sharded (the same names and totals as the serial gate, validated 2026-10-25), on 99c404e with ModuleBatch, the integration clock fix and the cached render: pass 1 the step-9 baseline's 11 failing names, none new (the integration shard 7 passed, no xfail); pass 2 1 failing name, a baseline one. Landed on 7885b6c (the coordinator's jar 17; no shared files but the ledger).
 verdict: COMMITTED; not pushed.
+
+## 2026-10-25 — skill_agent: the integration check judges each lane's clock only while it lives; gen7.py renders through the cache (speed)
+command: the coordinator's answer in 2bd831c: "Region clock pause (not a clock bug)". The stalled lanes had died, and a finished lane freezes until reset. Their speed note: rebuild the per-tick keys once. Their render cache landed in 704151d.
+result: Built by a Haiku subagent from a written spec, checked here.
+- **`bench/integration_gen7.py`:**
+  - `advance` keeps each lane's done (the duel's output 6, the Region's PPO output 3);
+  - `clock_advances_one_a_tick` judges each lane only before its first done, and fails if no tick is judged;
+  - a per-run key table equals `jax.random.split(jax.random.key(t), batch)` for every tick.
+  - **On the Region:** the lanes ended (both died, health 0) at ticks 286 and 250; every judged step is 1.0, and the step that ends a lane still advances. The duel's lane 1 ended at 293, the same unasserted stall, now judged.
+  - The strict xfail is gone: `test_sa_integration_gen7.py` (local) 7 passed.
+  - The stop predicate is death or geometry exhaustion (`arsenal/runtime.py:2379-2392`), not death alone.
+- **`runtime/gen7.py --render`:** with `HYTALEGYM_RENDER_CACHE` set, it renders through `render_cached` and mounts the cached tree (`--engine` unused); unset, it renders as before. Cold 20.2 s, warm 1.7 s; the cached tree is identical to an uncached render (`diff -rq`, 400 files).
+gate: two passes, sharded (the same names and totals as the serial gate, validated 2026-10-25), on 99c404e with ModuleBatch, the integration clock fix and the cached render: pass 1 the step-9 baseline's 11 failing names, none new (the integration shard 7 passed, no xfail); pass 2 1 failing name, a baseline one. Landed on 7885b6c (the coordinator's jar 17; no shared files but the ledger).
+verdict: COMMITTED; not pushed.

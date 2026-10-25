@@ -18,6 +18,8 @@ CLI (from the repo root)::
         -- MODULE_OR_SCRIPT [ARGS...]
 
 ``--render`` (re)renders the gen-7 engine into DIR first (about 10 seconds); without it DIR must hold a render.
+With ``HYTALEGYM_RENDER_CACHE`` set, ``--render`` mounts the shared cached render for the same source and overlay
+(``render.render_cached``: rendered on a miss, read in place on a hit) instead, and DIR is not written.
 ``--construct NAME`` switches one gen-7 construct on in this process only (for example ``perception_v2``, the
 perception channel of ``sim/gen7/PERCEPTION_V2.md``, off by default): the render's hooks read the gen-7 profile when
 the rendered engine is first imported, so the launcher replaces the profile after mounting and before the target runs.
@@ -28,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import os
 import runpy
 import subprocess
 import sys
@@ -36,13 +39,26 @@ from typing import Sequence
 
 REPO = Path(__file__).resolve().parents[4]
 RENDER_PY = REPO / "HytaleRL/hytalegym/hytalegym/sim/common/render.py"
+CACHE_ENV = "HYTALEGYM_RENDER_CACHE"
+"""``render.RENDER_CACHE_ENV``; spelled out here because this module imports no hytalegym code."""
+CACHED_RENDER = "from hytalegym.sim.common import render; print(render.render_cached(render.load_overlay('gen7')))"
 
 
-def render(engine: Path) -> None:
-    """Render the gen-7 engine into ``engine`` from the committed source, in a child process (it imports hytalegym)."""
+def render(engine: Path) -> Path:
+    """Render the gen-7 engine and return the directory to mount.
 
+    Unset ``HYTALEGYM_RENDER_CACHE``: render into ``engine`` from the committed source, in a child process (it imports
+    hytalegym). Set: the shared render for this source and overlay (``render.render_cached``, which renders only on a
+    miss); ``engine`` is not written. The child prints the cached directory as its last line.
+    """
+
+    if os.environ.get(CACHE_ENV):
+        done = subprocess.run([sys.executable, "-c", CACHED_RENDER], check=True, cwd=REPO / "HytaleRL/hytalegym",
+                              stdout=subprocess.PIPE, text=True)
+        return Path(done.stdout.strip().splitlines()[-1])
     subprocess.run([sys.executable, "-m", "hytalegym.sim.common.render", "--generation", "gen7", "--out", str(engine)],
                    check=True, cwd=REPO / "HytaleRL/hytalegym")
+    return engine
 
 
 def mount(engine: Path) -> None:
@@ -71,7 +87,8 @@ def switch_on(constructs: Sequence[str]) -> None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--engine", type=Path, required=True, help="the private render's directory")
+    parser.add_argument("--engine", type=Path, required=True,
+                        help="the private render's directory (not written by --render when HYTALEGYM_RENDER_CACHE is set)")
     parser.add_argument("--render", action="store_true", help="render the gen-7 engine into --engine first")
     parser.add_argument("--construct", action="append", default=[], metavar="NAME",
                         help="switch a gen-7 construct on in this process (repeatable), e.g. perception_v2")
@@ -80,7 +97,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     options = parser.parse_args(argv)
     engine = options.engine.resolve()  # absolute: render() runs in hytalegym's folder
     if options.render:
-        render(engine)
+        engine = render(engine)
     mount(engine)
     switch_on(options.construct)
     sys.argv = [options.target, *[arg for arg in options.args if arg != "--"]]
