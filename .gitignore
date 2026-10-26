@@ -297,3 +297,31 @@ adk/runs/*
 /experimental/worldgen-v2/tools/surrogate_biome_prop_asset_audit.py
 /experimental/worldgen-v2/tools/surrogate_world_offline_smoke.py
 /experimental/worldgen-v2/verification/conftest.py
+
+# --- Private: tracked in the owner's local repository, never published (owner, 2026-10-25) ---
+# tools/publish_public.sh removes every tracked path these rules match from the published tree and appends
+# these rules to the published .gitignore. Local main does not carry them, so new files there stay addable.
+
+# The agent stack: skills, trainers, decision layer, executive, belief.
+/experimental/neural_agent/
+
+# The gen-7 (0.7.2) simulator port and its fidelity work, the 0.7.2 bridge and the JVM agents.
+/HytaleRL/hytalegym/hytalegym/sim/
+/HytaleRL/hytalegym/tests/sim/
+/HytaleRL/hytalegym/tools/
+/HytaleRL/hytale-plugin-0.7.2/
+/experimental/jvm-agent/
+/experimental/jvm-agent-0.7.2/
+
+# The training infrastructure. The root tools/ keeps only the publication check and its README.
+/arena/
+/adk/
+/agents/
+/console/
+/tools/*
+!/tools/check_publication_hygiene.py
+!/tools/README.md
+
+# Design and process documents: every Markdown file except README.md.
+*.md
+!README.md

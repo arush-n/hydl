@@ -1,6 +1,0 @@
-# Run outputs written at package depth would otherwise publish.
-eval/out/
-probes/out/
-*.npz
-*.csv
-__pycache__/

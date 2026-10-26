@@ -197,3 +197,11 @@ out/
 out-hook/
 **/out/
 **/out-hook/
+
+# Private (owner, 2026-10-25; tools/publication_private.gitignore)
+/hytalegym/hytalegym/sim/
+/hytalegym/tests/sim/
+/hytalegym/tools/
+/hytale-plugin-0.7.2/
+*.md
+!README.md

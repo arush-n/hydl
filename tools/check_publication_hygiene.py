@@ -13,6 +13,14 @@ each failed it at once:
   ``docs/``    excluded ~258 documentation files across seven directories
   ``.gitignore`` listed itself, so a fresh clone inherited no rules at all
 
+The private trees (owner, 2026-10-25: the agent stack, the gen-7 simulator port and
+bridge, the training infrastructure, and every Markdown file but README.md) are
+tracked only in the owner's local repository. ``tools/publish_public.sh`` builds the
+published tree without them and appends their rules
+(``tools/publication_private.gitignore``) to the published ``.gitignore``. Run this
+check on the published tree; on the local repository the private trees report as
+leaks by design.
+
 Run: ``python tools/check_publication_hygiene.py``
 Exit code 0 means clean; 1 means at least one assertion failed.
 """
@@ -111,27 +119,39 @@ MUST_BE_IGNORED = (
     "experimental/hierarchical_planner/DESIGN.md",
     "adk/docs/surface-survey-v1.json",
     "adk/docs/surface-survey-geometry-v1.json",
+    # Private trees (owner, 2026-10-25; tools/publication_private.gitignore).
+    "experimental/neural_agent/session.py",
+    "experimental/neural_agent/skill_agent/runtime/state_tick.py",
+    "HytaleRL/hytalegym/hytalegym/sim/common/render.py",
+    "HytaleRL/hytalegym/tests/sim/test_movein_timing.py",
+    "HytaleRL/hytalegym/tools/source_pins/rebaseline.py",
+    "HytaleRL/hytale-plugin-0.7.2/build.gradle.kts",
+    "experimental/jvm-agent/src/com/hytalerlbridge/policy/PolicyAgentPlugin.java",
+    "experimental/jvm-agent-0.7.2/build.gradle.kts",
+    "arena/imitation/native.py",
+    "adk/arena.py",
+    "agents/ppo/__init__.py",
+    "console/package.json",
+    "tools/publish_public.sh",
+    "tools/publication_private.gitignore",
+    "HytaleRL/protocol/messages.md",
+    "some/package/DESIGN-NOTES.md",
 )
 
 # Source and documentation that must survive whatever the ignore rules say.
 MUST_BE_TRACKABLE = (
     ".gitignore",
     "LICENSE",
-    "arena/imitation/native.py",
-    "arena/imitation/contract.py",
-    "adk/arena.py",
-    "adk/docs/README.md",
-    "console/package.json",
     "npc/loop.py",
     "tools/check_publication_hygiene.py",
+    "tools/README.md",
     "README.md",
     "telemetry/README.md",
-    # The two experimental trees that DO publish. Pinned 2026-08-22 so a future
-    # rule broadened to `experimental/` cannot quietly take the live
-    # native-transfer work or the drift-guarded worldgen source with it.
+    # The experimental tree that DOES publish (the JVM agent went private on
+    # 2026-10-25). Pinned 2026-08-22 so a future rule broadened to
+    # `experimental/` cannot quietly take the drift-guarded worldgen source with it.
     "HytaleRL/hytale-plugin/src/main/java/com/hytalerlbridge/HytaleRLBridgePlugin.java",
     "HytaleRL/examples/jax_arsenal_world_benchmark.py",
-    "experimental/jvm-agent/src/com/hytalerlbridge/policy/PolicyAgentPlugin.java",
     "experimental/worldgen-v2/jax_port/worlds/minigame_runtime.py",
     "experimental/worldgen-v2/__init__.py",
 )

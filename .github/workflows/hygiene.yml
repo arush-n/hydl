@@ -51,46 +51,9 @@ jobs:
           fi
           echo "ok: no jars in the index beyond the Gradle wrapper"
 
-  # The gate that was missing. Hygiene and lint both passed while
-  # `pip install -e .` could not be trusted, because nothing here ever built the
-  # distribution -- the `license = "MIT"` / setuptools-floor mismatch was
-  # invisible to both. This builds BOTH distributions and imports the result
-  # from a clean environment, which is the only thing that proves an installable
-  # release.
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install build
-
-      - name: Build the root distribution
-        run: python -m build --wheel --outdir dist/ .
-
-      - name: Build the gym distribution
-        run: python -m build --wheel --outdir dist-gym/ HytaleRL/hytalegym
-
-      # Installed into the runner's environment and imported from a directory
-      # that is NOT the checkout, so a module resolved from the source tree
-      # instead of the wheel cannot pass by accident.
-      - name: Install and import the built wheels
-        run: |
-          pip install dist/*.whl dist-gym/*.whl
-          cd /tmp
-          python -c "import arena, adk, console, npc, worlds, agents; print('packages import from the installed wheels')"
-
-      # The Console's browser UI is 27 non-Python files. A wheel of .py alone
-      # installs a Console whose every page 404s, which no import check sees.
-      - name: The installed Console carries its UI
-        working-directory: /tmp
-        run: >-
-          python -c "import pathlib,console;
-          r=pathlib.Path(console.__file__).parent;
-          m=[n for n in ('static/index.html','static/js/ladder.js') if not (r/n).is_file()];
-          assert not m, f'missing from the wheel: {m}';
-          print('console UI present in the installed package')"
+  # The build-and-import job is not run on the published tree: the agent stack, the training packages
+  # (arena, adk, agents, console) and the gen-7 simulator are private (owner, 2026-10-25), so the published
+  # packages cannot build a working distribution on their own.
 
   lint:
     runs-on: ubuntu-latest
@@ -106,6 +69,5 @@ jobs:
       # declared in `[tool.ruff.lint] select`, and the version is pinned so a
       # rule that fires here is one this repository chose.
       - run: pip install ruff==0.16.4
-      # Keep this list in step with `[tool.ruff] include` in pyproject.toml so
-      # every published Python tree is checked.
-      - run: ruff check arena agents console tools adk npc worlds
+      # The published Python trees (arena, agents, console and adk are private).
+      - run: ruff check tools npc worlds
