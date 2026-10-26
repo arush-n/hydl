@@ -1987,3 +1987,20 @@ result: Built by a Haiku subagent from a written spec, checked here.
   - track beside walk_to is the one weak spot (0.65 against its teacher's 0.87).
 gate: two passes, sharded, on 9fd687d with bench/bodies_check.py: pass 1 the step-9 baseline's 11 failing names, none new; the integration shard 7 passed; pass 2 1 failing name, a baseline one.
 verdict: COMMITTED; not pushed.
+
+## 2026-10-25 — skill_agent docs: TRAINING_PLAN 8.15 (the people trunk's runs; five skills as bodies on one trunk)
+command: the owner, 2026-10-25:
+- "Approve all, modules if probe passes";
+- "Modules on seed 0 + longer trunk";
+- "Cap track only";
+- "Pool over reachable ticks";
+- "Yes: seed-0 trunk, train the three".
+result: 8.15 records the following:
+- **The trunk runs.** Seed 0 passes V1's A2 bars. The probe reads placed people at 0.91 / 0.81 (forward / right) and moving people at 0.93 / 0.91; V1's trunk read 0.46 / 0.23 and 0.84 / 0.81. No trunk passed the 0.9 gate. The ablation shows the come_here and track lanes carry most of the gain.
+- **The entity modules on it, re-scored like for like.** come_here and follow pass every bar, and track passes alone. The cause of 8.12's failures is confirmed: V1's trunk did not encode where the person is.
+- **The long trunk** (6 x 2,000) reads people worse and fails pace.
+- **track's rulings:** the windup cap and the pooled share.
+- **The shared trunk** is the short seed-0 one. walk_to, look_at and track are trained on it: four skills pass every bar, and track misses beside walk_to (0.65 against its teacher's 0.87).
+- **The bodies check:** every skill reproduces its trainer's evaluation exactly as a ModuleBody.
+gate: two passes, sharded, on 9fd687d with bench/bodies_check.py: pass 1 the step-9 baseline's 11 failing names, none new; the integration shard 7 passed; pass 2 1 failing name, a baseline one.
+verdict: COMMITTED; not pushed.

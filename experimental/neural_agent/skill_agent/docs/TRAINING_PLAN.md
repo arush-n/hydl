@@ -1186,6 +1186,143 @@ A training step is 0.44 to 0.79 s, so a 6 x 500 run is about 33 to 50 minutes pl
 - **It is the coordinator's** (the ledger entry carries the repro and two candidate fixes). The terrain teacher's
   certificate waits on that fix; the teachers' 60 to 85% reach on gen 7 is mostly this freeze.
 
+### 8.15 The people trunk's first runs (2026-10-25, night)
+
+**What ran** (8.14's approved plan). Run from a clean worktree at aff0103 on the gen-7 render, at load 18 to 32. The
+reports, parameters and trunks are in the session scratchpad (`pt_runs/`), not in the repo.
+- **The smoke** (1 x 300) ran end to end in 343 s:
+  - 0 illegal decisions;
+  - teacher-lane success walk_to 1.0, look_at 0.94, come_here 1.0, track share 0.88;
+  - track's person moves about 12 m a lane.
+- **Then 6 x 500 at 128 lanes**, 45 minutes each, three in parallel: seeds 0 and 1, and seed 0 with `--fixed-other`.
+
+**V1's A2 bars** (8.10's rules, against run C''s teacher seen rates):
+
+| Run | Walk, seen / held out | Look | Both | Pace | Bars |
+|---|---|---|---|---|---|
+| people, seed 0 | 1.000 / 1.000 | 0.929 / 0.882 | 0.894 / 0.847 | 0.980 | all pass |
+| people, seed 1 | 0.942 / 0.802 | 0.953 / 0.706 | 0.694 / 0.706 | 0.973 | held out (walk 0.85, look 0.74) and T5 both (+0.21) fail |
+| fixed person, seed 0 | 0.953 / 1.000 | 1.000 / 0.800 | 0.812 / 0.835 | 0.973 | held-out look 0.80 fails |
+
+Each skill gets a quarter of the run's 128 lanes, against V1's two modes.
+
+**The probe** (`bench/entity_probe.py`, ridge, test R²; A fixed spot, B placed, C moving):
+
+| Trunk | A fwd | A right | B fwd | B right | C fwd | C right | Gate (B and C ≥ 0.9) |
+|---|---|---|---|---|---|---|---|
+| V1 memory_s1 | 0.63 | 0.91 | 0.46 | 0.23 | 0.84 | 0.81 | fail |
+| people, seed 0 | 0.85 | 0.93 | 0.91 | 0.81 | 0.93 | 0.91 | fail (B right) |
+| people, seed 1 | 0.82 | 0.92 | 0.88 | 0.83 | 0.94 | 0.89 | fail |
+| fixed person, seed 0 | 0.76 | 0.94 | 0.91 | 0.80 | 0.89 | 0.89 | fail |
+
+- The placed person's sideways offset rises from 0.23 to about 0.81, and the forward offset from 0.46 to about 0.9.
+- **Most of the gain comes from the come_here and track lanes:** the ablation, with the person parked in walk_to's and
+  look_at's lanes, reads B as well. Placing the person in those lanes too mainly helps A (0.76 to 0.85).
+- A read-out fitted on A still fails on B (R² below 0, but 0.22 on seed 1). Fixed-spot and placed data still look
+  different to the trunk.
+- No trunk passes the 0.9 gate, so the modules did not start on their own. The owner chose "Modules on seed 0 + longer
+  trunk": come_here's, track's and follow's modules at 6 x 2,000 on the seed-0 trunk, and the people trunk at
+  6 x 2,000 on seed 0, in parallel.
+
+**The entity skills' modules on the seed-0 people trunk** (`training/skill_dagger_v3.py`, 6 x 2,000 as in 8.12; 22 to
+23 minutes each, three in parallel).
+
+**Re-scored like for like.** Re-evaluated with the same code on both trunks, today's simulator, seed 77001, 256 lanes.
+8.12's own numbers differ slightly: follow's teacher scored 0.935 alone there against 0.928 now. That is inferred to be
+the simulator's commits since. The scoring also follows the owner's two rulings below:
+- track's capped teacher;
+- the pooled share.
+
+Held success for come_here, the pooled share in view or in band for track and follow:
+
+| Skill, seen / held out | Module on V1's trunk (8.12's) | Module on the people trunk | Teacher |
+|---|---|---|---|
+| come_here alone | 0.914 / 0.953 | 1.000 / 1.000 | 1.000 / 1.000 |
+| come_here beside look_at | 0.875 / 0.836 | 0.953 / 0.992 | 1.000 / 1.000 |
+| track alone | 0.243 / 0.238 | 0.943 / 0.941 | 0.989 / 0.988 |
+| track beside walk_to | 0.112 / 0.101 | 0.648 / 0.598 | 0.870 / 0.849 |
+| follow alone | 0.503 / 0.505 | 0.852 / 0.862 | 0.928 / 0.937 |
+| follow beside track | 0.802 / 0.818 | 0.848 / 0.855 | 0.923 / 0.936 |
+
+- **On the people trunk:**
+  - come_here passes every bar (T5 0 and 4.7 points), its E4 pace is 97.8% (it failed at 89.9% on V1's trunk), and the
+    held-out ratios pass;
+  - follow passes (T5 7.6 and 7.5);
+  - track passes alone (T5 4.6);
+  - 0 illegal decisions.
+- **The cause is confirmed.** 8.12 inferred it and 8.13's probe measured it: the entity skills failed because V1's trunk
+  did not encode where the person is. The same trainer passes on a trunk trained with people placed and moving.
+- **track beside walk_to** misses by 22 points against its capped teacher. The module was trained on the uncapped one, so
+  retraining with the capped teacher is the next step for it.
+- **One trunk for all bodies.** These modules sit on a different trunk from V2's walk_to and look_at modules, which are on
+  V1's trunk. One set of bodies needs every module on one trunk.
+
+**The owner's rulings on track (2026-10-25).** A teacher-only diagnosis (track's `TRAINING.md` section 9) found command
+windup:
+- the engine integrates the head's yaw command into a commanded heading, while the v2 rule measures each command from
+  the observed head;
+- so a 45-degree command that the head (18 degrees a tick) cannot follow builds a lead, and the lead pins the head at the
+  window's edge with the person inside the window.
+
+On that evidence the owner ruled:
+- **"Cap track only":** track's teacher caps its yaw command at the head's rate, now its registered teacher. The share
+  goes from 0.957 to 0.989 alone and from 0.57 to 0.69 beside walk_to (lane mean, two seeds). look_at keeps its rule:
+  the cap removes its windup but changes its success by at most 1.6 points.
+- **"Pool over reachable ticks":** a holding skill's share is pooled over the lanes' counted ticks, with the old per-lane
+  mean kept beside it. Beside walk_to, 42 of 128 lanes never have the person within reach and 34 have 1 to 10 counted
+  ticks, yet each weighed as much as a long lane.
+
+**The long trunk** (6 x 2,000 on seed 0, 132 minutes, the same trainer). Training longer did not help:
+- **A2's held rates are higher:** walk 1.000 / 0.988, look 1.000 / 0.965, both 0.894 / 0.882.
+- **E4 pace fails:** 87.4% of steady lanes are within 5% (the short run had 98.0%).
+- **The probe reads people worse than the short run's trunk:** placed 0.85 / 0.72, moving 0.89 / 0.88, against 0.91 / 0.81
+  and 0.93 / 0.91.
+
+**The shared trunk** (the owner, 2026-10-25: "Yes: seed-0 trunk, train the three"). The short seed-0 people trunk
+(`pt_runs/people_s0_trunk.npz`) is the one trunk for all five skills' bodies:
+- come_here's and follow's modules above are kept;
+- walk_to (6 x 500, as V2), look_at (6 x 2,000, the schedule that passed both seeds in 8.12) and track (the capped teacher,
+  6 x 2,000) are trained on it;
+- the five are then assembled and checked through `ModuleBody` against the trainer's evaluation
+  (`bench/bodies_check.py`).
+
+**The three modules on the shared trunk** (run from a clean worktree at 66677e7; 8 to 20 minutes each, three in
+parallel; 0 illegal decisions):
+
+| Module, seen / held out | Module | Teacher | Bars |
+|---|---|---|---|
+| walk_to alone | 1.000 / 1.000 | 1.000 / 1.000 | all pass; E4 pace 97.3% |
+| walk_to beside look_at | 1.000 / 0.984 | 1.000 / 1.000 | pass |
+| look_at alone | 1.000 / 1.000 | 1.000 / 1.000 | pass |
+| look_at while walking | 0.906 / 0.852 | 0.914 / 0.906 | pass (T5 +0.8, held out / seen 0.94) |
+| track alone (pooled share) | 0.964 / 0.965 | 0.989 / 0.988 | pass (T5 +2.5) |
+| track beside walk_to | 0.652 / 0.624 | 0.870 / 0.849 | T5 +21.8, fail |
+
+- Four of the five skills pass every bar on the one trunk: walk_to, look_at, come_here and follow. track passes alone.
+- **Track beside walk_to.**
+  - Trained on the capped teacher, it holds 0.65, about what the module trained on the uncapped teacher held (0.648).
+    So the remaining gap is the module's, not the teacher's.
+  - Those lanes give few reachable ticks (3,209 seen), so the module has little of that case to learn from (inferred).
+  - The levers are more composed lanes, as 8.12 listed for come_here, or more weight on them. Not run.
+
+**The five skills as bodies on the one trunk** (`bench/bodies_check.py`; the folder is `scratchpad/people_bodies/s0/`:
+the trunk, the five modules byte-identical to their runs, and a manifest with each run, its hashes and its bars).
+- **Each module is driven as `state_tick.ModuleBody`** on its own skill's lanes (32 seen, 32 held out, seed 77001):
+  - runtime requests lowered by each skill's own `lowering`;
+  - the person's id as the handle;
+  - the skills beside it on their teachers;
+  - the state through `step_lanes` and `encode_contexts`.
+  The trainer's rollout and `evaluate` are the reference.
+- **Every skill reproduces its trainer's evaluation exactly:**
+  - 32 of 32 lanes equal in every field, in both regions, with and without the slot cut;
+  - the trajectories' largest position gap 0.0;
+  - every lowered request equal to the trainer's (over 14,000 to 22,000 per run);
+  - every entity handle resolved;
+  - `ModuleBatch` equal to the per-agent bodies on every sampled lane-tick;
+  - 0 illegal actions.
+- **Not exercised:** the combiner, the middle layer's admission and expiry, and the session. Those are the coordinator's
+  architecture test (`eval/run_architecture.py`, `eval/run_gen7_programs.py`), which can now take this folder.
+
 ## References
 
 - Agarwal, R., et al. (2021). Deep reinforcement learning at the edge of the statistical precipice. NeurIPS.
