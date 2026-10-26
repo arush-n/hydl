@@ -164,7 +164,8 @@ class JointModuleBody:
         return BodyStep(choices)
 
 
-def build_library(trunk: Any, walk: Any, look: Any, *, joint: bool = False, batched: bool = False) -> SkillLibrary:
+def build_library(trunk: Any, walk: Any, look: Any, *, joint: bool = False, batched: bool = False,
+                  own_request: bool = False) -> SkillLibrary:
     """walk_to and look_at registered with their trained bodies and the skills' own lowerings (not from the catalogue,
     which this harness does not read). ``joint`` registers the diagnostic :class:`JointModuleBody` instead. ``batched``
     gives each ``ModuleBody`` an empty ``batch_results`` dict that :func:`run_stack` refills every tick."""
@@ -172,7 +173,10 @@ def build_library(trunk: Any, walk: Any, look: Any, *, joint: bool = False, batc
     def body(module: Any, lowering: Any) -> Any:
         if joint:
             return JointModuleBody(module, trunk)
-        return state_tick.ModuleBody(module, trunk, lowering, batch_results={} if batched else None)
+        # The V1 bodies' slot order (walk_to, look_at): each module reads the agent's live request of the other verb, as it was
+        # trained (the skill layer's 3e65786); ``own_request`` gives it only its own request, the 2026-10-24 arm.
+        layout = None if own_request else state_tick.V1_LAYOUT
+        return state_tick.ModuleBody(module, trunk, lowering, layout=layout, batch_results={} if batched else None)
 
     library = SkillLibrary()
     library.create("walk_to", description="walk to a point at a pace and stop inside a radius", scopes=("locomotion",),
@@ -339,7 +343,7 @@ class _StackDecider:
 
 
 def run_stack(directory: Path, *, seed: int, lanes: int, held_out: bool, order: str, max_ticks: int | None,
-              joint: bool = False, batch: bool = True) -> dict:
+              joint: bool = False, batch: bool = True, own_request: bool = False) -> dict:
     if order != "fresh":
         raise ValueError("run_stack has one order, fresh: the session order is not in the gen-7 runner")
     trunk, walk, look, _ = load_bodies(directory)
@@ -360,7 +364,7 @@ def run_stack(directory: Path, *, seed: int, lanes: int, held_out: bool, order: 
     tick_seconds = distill_v3._world_tick(carry.runtime.combat)
 
     batch = batch and not joint  # the diagnostic joint body has no batch path
-    library = build_library(trunk, walk, look, joint=joint, batched=batch)
+    library = build_library(trunk, walk, look, joint=joint, batched=batch, own_request=own_request)
     combiner = library.combiner(layout="gen7")
     bodies = library.executors()
     document = SharedState()
@@ -412,7 +416,10 @@ def run_stack(directory: Path, *, seed: int, lanes: int, held_out: bool, order: 
         combat = facts.combat
         poses = Pose(combat.position[:, AGENT_ENTITY], combat.yaw[:, AGENT_ENTITY], combat.agent_head_yaw,
                      combat.agent_head_pitch)
-        out = state_tick.encode_contexts(view, base, agents, poses=poses, ticks=tick, action_masks=facts.mask)
+        live = None if (joint or own_request) else {
+            agent: {request.verb: request for request in document.requests.for_agent(agent)} for agent in agents}
+        out = state_tick.encode_contexts(view, base, agents, poses=poses, ticks=tick, action_masks=facts.mask,
+                                         live_requests=live)
         if joint:
             out = {agent: replace(context, observation_tokens=(context.observation_tokens,
                                                               document.requests.for_agent(agent)))
@@ -449,7 +456,7 @@ def run_stack(directory: Path, *, seed: int, lanes: int, held_out: bool, order: 
     rollout = distill.Rollout(walk_hit=walk_hit, look_hit=look_hit, positions=positions, yaws=yaws, seconds=seconds,
                               decisions=decisions, illegal=illegal, teacher_illegal=0, samples=None,
                               walk_held=walk_held, look_held=look_held)
-    report = {"arm": "stack_joint" if joint else "stack", "order": order, "held_out": held_out, "seed": seed, "lanes": lanes, "ticks": ticks,
+    report = {"arm": "stack_joint" if joint else ("stack_own_request" if own_request else "stack"), "order": order, "held_out": held_out, "seed": seed, "lanes": lanes, "ticks": ticks,
               "modes": list(distill.MODES), **distill._summarise(episode, rollout)}
     report["tick_seconds"] = tick_seconds
     report["decision_layer"] = goal.report()
@@ -489,6 +496,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=77001)
     parser.add_argument("--held-out", action="store_true")
     parser.add_argument("--ticks", type=int, default=None, help="cap the stack arm's ticks (a smoke)")
+    parser.add_argument("--own-request", action="store_true",
+                        help="each body reads only its own request (the 2026-10-24 arm); default: its trained layout's live requests")
     parser.add_argument("--joint", action="store_true",
                         help="the stack arm's bodies read every live request (diagnostic JointModuleBody)")
     parser.add_argument("--per-agent", action="store_true",
@@ -518,10 +527,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         for order in orders:
             started = time.perf_counter()
             report = run_stack(args.bodies, seed=args.seed, lanes=args.lanes, held_out=args.held_out, order=order,
-                               max_ticks=args.ticks, joint=args.joint, batch=not args.per_agent)
+                               max_ticks=args.ticks, joint=args.joint, batch=not args.per_agent,
+                               own_request=args.own_request)
             report["wall_seconds"] = round(time.perf_counter() - started, 1)
             report["bodies_batched"] = not args.per_agent and not args.joint
-            results["runs"][f"stack_{order}" + ("_joint" if args.joint else "")] = report
+            results["runs"][f"stack_{order}" + ("_joint" if args.joint else "") + ("_own_request" if args.own_request else "")] = report
             save()
     print(json.dumps(results["bars"], indent=1))
     return 0

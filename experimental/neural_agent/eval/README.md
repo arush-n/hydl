@@ -200,6 +200,11 @@ is 0.031):
 | held out | stack, joint requests | 0.938 | 0.969 | 0.875 | 0.906 | 1.000 | 0 |
 | held out | stack, joint, session order | 0.969 | 0.969 | 0.844 | 0.875 | 1.000 | 0 |
 
+Since 2026-10-25 the stack arm's bodies read their trained layout (`state_tick.V1_LAYOUT`: each module sees the agent's live
+request of the other verb, as it was trained; the skill layer's 3e65786), and that is the default; `--own-request` gives the
+rows above. Held out, 96 lanes, seed 77001: both held 0.750 -> 0.875, look held while walking 0.781 -> 0.906 (the reference's
+0.906), walk, look-only, pace and illegal (0) unchanged; `--own-request` reproduces the earlier report exactly.
+
 **Reading.**
 - The architecture carries the trained skills: with every live request visible to each body, the stack equals the
   reference on the seen episodes and is within one lane of it held out; walk-only and look-only match in every arm; no

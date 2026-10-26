@@ -217,8 +217,14 @@ def run(
             combat.agent_head_yaw,
             combat.agent_head_pitch,
         )
+        # Each body reads the agent's live requests of the verbs it was trained beside (V1_LAYOUT; run_architecture).
+        live = {
+            agent: {request.verb: request for request in document.requests.for_agent(agent)}
+            for agent in agents
+        }
         return state_tick.encode_contexts(
-            view, base, agents, poses=poses, ticks=tick, action_masks=facts.mask
+            view, base, agents, poses=poses, ticks=tick, action_masks=facts.mask,
+            live_requests=live,
         )
 
     def record(index: int, facts: Any, steps: Any) -> None:
