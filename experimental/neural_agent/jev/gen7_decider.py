@@ -34,13 +34,27 @@ Per tick ``t`` (``decide``):
    which the executor's correspondence reads as a rejected step (16 information requests in the first 300-tick run).
    Idle needs no request, so the adapter withholds it. Nothing else is rewritten.
 
+Events. Each tick the adapter keeps the legal observation of the previous tick and calls the ADK's
+``_legal_perceptual_events`` on (previous, current), which publishes LINE_OF_SIGHT_CHANGED, ATTACK_TELEGRAPH_BEGAN and
+DAMAGE_RECEIVED. The ADK function checks ``isinstance(..., LearnerCombatObservationV3)``; the gen-7 observation is the
+same fields plus ``perception_v2`` and is not a subclass, so the adapter re-wraps the v3 fields (``_make``) and drops
+the channel. The lifecycle events (ACTION_*, ABILITY_*) need the arsenal's action lifecycle, which the gen-7 runner does
+not publish, and the target and navigation events (TARGET_DIED, PATH_INVALID, NPC_STUCK, GOAL_IMPOSSIBLE,
+PROJECTILE_THREAT_ENTERED) are not computed by the ADK from legal observations either; all of these stay unknown. A
+lane is unknown on the first tick and on the tick its belief restarts (``Gen7DecisionFacts.done``). When any lane has an
+active event the adapter calls the executor on that tick too (the ADK's ``manager_decision_due`` treats a known event
+as critical).
+
 Stand-ins, and the executor's reads (``jev/programs.py`` ``ProgramExecutor.decide``, line numbers as written):
 
 - ``transition.hierarchy_step.belief_update.belief.features`` and ``.feature_known`` (lines 899 and 903).
 - ``transition.hierarchy_step.belief_update.state.target_memory`` through ``host_target_memory`` (line 988;
   ``belief/target_memory.py`` line 105).
-- ``transition.hierarchy_step.goal_runtime.emergency_interrupt`` (line 905), bool[B]. The belief has no events, so it
-  is all False: the gap the report names.
+- ``transition.hierarchy_step.goal_runtime.emergency_interrupt`` (line 905), bool[B]. Derived per lane as the ADK core
+  does (``adk/architecture/hierarchy.py`` lines 280-282): the lane's goal is valid and an event in the goal's emergency
+  mask is active (value and known). The events are the ADK's own ``_legal_perceptual_events`` on consecutive legal
+  observations (see "Events" below). Program interrupts do not read events: their predicates read the belief and the
+  legal target phase (``jev/programs.py`` ``_desired``), so the events reach the executor only through this flag.
 - ``transition.done`` (line 906).
 - ``transition.actor_input.legal_observation.base.target_i32`` (``_target_codes``, line 1111): read only when a program
   has a ``TargetPhase`` predicate; the adapter sets the legal observation there anyway.
@@ -67,6 +81,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from adk.architecture.decision_context import DecisionEvent, _legal_perceptual_events
 from adk.architecture.inputs import ActorPolicyInput
 from experimental.neural_agent.belief.target_memory import host_target_memory
 from experimental.neural_agent.contracts import (
@@ -83,6 +98,7 @@ from experimental.neural_agent.jev.programs import (
     choose_target,
 )
 from experimental.neural_agent.shared_state import RequestsSection, SharedState
+from hytalegym.jax.combat.observation.v3.types import LearnerCombatObservationV3
 
 POSITION_VERBS: tuple[str, ...] = ("walk_to", "look_at")
 #: Blocks above an entity's position (its feet) that look_at aims at: the eye. The 0.5.7 NPC ruleset's
@@ -136,6 +152,26 @@ class _HierarchyState(NamedTuple):
     goal_termination_requested: Any
     manager_age_seconds: Any
     carry: _Carry
+
+
+def _as_learner_observation(observation: Any) -> LearnerCombatObservationV3 | None:
+    """The observation as the ADK's LearnerCombatObservationV3: the v3 fields, re-wrapped; None when there is none.
+
+    The gen-7 observation has the v3 fields and ``perception_v2`` and is not a subclass of the v3 type. Its v3 fields are
+    the legal learner observation, so re-wrapping them keeps the channel out of the events and changes no value.
+    """
+
+    if observation is None or isinstance(observation, LearnerCombatObservationV3):
+        return observation
+    fields = LearnerCombatObservationV3._fields
+    missing = [
+        name for name in fields if name not in getattr(observation, "_fields", ())
+    ]
+    if missing:
+        raise TypeError(f"legal_observation lacks the v3 fields {missing}")
+    return LearnerCombatObservationV3._make(
+        getattr(observation, name) for name in fields
+    )
 
 
 def _lane_mask(mask: Any, leaf: Any) -> jax.Array:
@@ -222,9 +258,16 @@ class Gen7ProgramDecider:
         self._arrays_version: int | None = None
         self._status_tick = 0
         self._verb_of: dict[tuple[int, int], str] = {}
+        self._previous_legal: LearnerCombatObservationV3 | None = None
+        self.event_values = np.zeros((self.lanes, len(DecisionEvent)), np.bool_)
+        self.event_known = np.zeros((self.lanes, len(DecisionEvent)), np.bool_)
+        self.emergency_interrupt = np.zeros(self.lanes, np.bool_)
+        self._event_now = False
         self.executor_calls = 0
         self.goal_writes = 0
         self.goal_held = 0
+        self.emergency_writes = 0
+        self.event_lane_ticks = np.zeros(len(DecisionEvent), np.int64)
         self.terminations = 0
         self.positions_filled = 0
         self.positions_withheld = 0
@@ -267,6 +310,33 @@ class Gen7ProgramDecider:
         )
         self._belief_state = self._update.state
 
+    # ---------------------------------------------------------------- the events and the emergency flag
+
+    def _advance_events(self, facts: Gen7DecisionFacts) -> None:
+        """Publish the tick's events and the emergency flag, as the ADK core derives them (module docstring, Events)."""
+
+        current = _as_learner_observation(facts.legal_observation)
+        previous, self._previous_legal = self._previous_legal, current
+        reset = np.asarray(facts.done, dtype=np.bool_).reshape(self.lanes)
+        if current is None or previous is None:
+            values = np.zeros((self.lanes, len(DecisionEvent)), np.bool_)
+            known = np.zeros_like(values)
+        else:
+            perceptual_values, perceptual_known = _legal_perceptual_events(
+                ActorPolicyInput(None, None, current, None),
+                ActorPolicyInput(None, None, previous, None),
+                self.lanes,
+            )
+            values = np.asarray(jax.device_get(perceptual_values), dtype=np.bool_)
+            known = np.asarray(jax.device_get(perceptual_known), dtype=np.bool_)
+            known = known & ~reset[:, None]
+        self.event_values, self.event_known = values, known
+        active = values & known
+        self.event_lane_ticks += active.sum(axis=0)
+        mask = np.asarray(self.goal.control.emergency_interrupt_mask, dtype=np.bool_)
+        self.emergency_interrupt = self.goal_valid & np.any(active & mask, axis=-1)
+        self._event_now = bool(active.any())
+
     # ---------------------------------------------------------------- the goal clock and termination
 
     def _terminations(self, tick: int, document: SharedState) -> np.ndarray:
@@ -302,6 +372,7 @@ class Gen7ProgramDecider:
     ) -> None:
         gen7_facts = self.facts_for_decider(facts)
         self._advance_belief(tick, gen7_facts)
+        self._advance_events(gen7_facts)
         completed = self._terminations(tick, document)
         self.terminations += int(completed.sum())
         if self._last_tick is None:
@@ -311,7 +382,7 @@ class Gen7ProgramDecider:
                 (tick - self._last_tick) * self.tick_seconds
             )
         previous_tick, self._last_tick = self._last_tick, tick
-        if previous_tick is None or tick % self.cadence_ticks == 0:
+        if previous_tick is None or tick % self.cadence_ticks == 0 or self._event_now:
             self._executor_call(tick, document, gen7_facts, executive, completed)
 
     def _lowered(self, executive: ExecutiveState | None) -> Any:
@@ -348,7 +419,7 @@ class Gen7ProgramDecider:
             hierarchy_step=_HierarchyStep(
                 belief_update=update,
                 goal_runtime=_GoalRuntime(
-                    emergency_interrupt=jnp.zeros((self.lanes,), dtype=jnp.bool_)
+                    emergency_interrupt=jnp.asarray(self.emergency_interrupt)
                 ),
             ),
             actor_input=ActorPolicyInput(None, None, legal, None),
@@ -376,13 +447,16 @@ class Gen7ProgramDecider:
             | np.any(np.asarray(new.params) != np.asarray(current.params), axis=-1)
         )
         age = self.goal_age
-        allowed = (
+        emergency = self.emergency_interrupt
+        by_time = (
             ~self.goal_valid
             | (age >= self._minimum[skill])
             | (age >= self._maximum[skill])
-        )  # no emergency: the belief has no events (module docstring)
+        )
+        allowed = by_time | emergency
         apply = differs & allowed
         self.goal_held += int((differs & ~allowed).sum())
+        self.emergency_writes += int((apply & ~by_time).sum())
         if apply.any():
             mask = jnp.asarray(apply)
             self.goal = jax.tree.map(
@@ -444,6 +518,11 @@ class Gen7ProgramDecider:
             "executor_calls": self.executor_calls,
             "goal_writes": self.goal_writes,
             "goal_held": self.goal_held,
+            "emergency_writes": self.emergency_writes,
+            "event_lane_ticks": {
+                event.name: int(count)
+                for event, count in zip(DecisionEvent, self.event_lane_ticks)
+            },
             "terminations": self.terminations,
             "positions_filled": self.positions_filled,
             "positions_withheld": self.positions_withheld,
