@@ -1956,3 +1956,34 @@ result:
 - **Shortbow timing matches (FIDELITY-0.7.2.md corrected):** the release (the ammo drop) is press + 9, 15, 24, 33, 42 ticks in the sim and + 8, 15, 24, 32, 42 live (within live's +-1 jitter), and the hit lands on the live tick; only the spawn event's timestamp differs (live emits `projectile_spawned` a tick before its ammo drop; the sim's projectile appears a tick after the release). Moving the scheduler prelude moves spawn and hit together, so no constant changes.
 gate: read-only measurements (no code changed).
 verdict: COMMITTED (docs only); not pushed.
+
+## 2026-10-25 — skill_agent: bench/bodies_check.py, a skill module driven as a runtime body against its trainer's evaluation (no training)
+command: the owner, 2026-10-25: "Yes: seed-0 trunk, train the three", which includes assembling the five skills as bodies on one trunk and checking them through ModuleBody.
+result: Built by a Haiku subagent from a written spec, checked here.
+- **`bench/bodies_check.py`** (379 lines) drives a bodies folder's skills as `state_tick.ModuleBody` on each skill's own lanes (its `skill_dagger_v3` strategy: kinds, placement, movers):
+  - runtime requests lowered by each skill's own `lowering`, with the person's id as the handle;
+  - the skills beside it on their teachers;
+  - the state through `step_lanes` and `encode_contexts`, with a JointView of the live beside requests.
+- **The reference** is the trainer's rollout and `evaluate` on the same lanes and seed, with and without the slot cut.
+- **It reports, per skill and region:**
+  - lanes equal in every field;
+  - lowered requests against `build_requests`;
+  - handles resolved;
+  - `ModuleBatch` against the per-agent bodies;
+  - illegal actions.
+- **CLI:** `--bodies DIR --lanes 32 --seed 77001 --json OUT [--skills ...] [--max-ticks N]`.
+- **On the five-skill folder** (`scratchpad/people_bodies/s0/`: the people trunk 3b91e59d91f0 and walk_to, look_at, come_here, track, follow), every skill reproduces its evaluation exactly:
+  - 32 of 32 lanes equal, seen and held out;
+  - largest position gap 0.0;
+  - 0 lowering mismatches over 14,400 to 22,512 per run;
+  - every handle resolved;
+  - `ModuleBatch` equal on every sampled lane-tick;
+  - 0 illegal actions.
+- **Not exercised:** the combiner, admission and expiry, the session. That is the coordinator's stack.
+- **Tests (local `test_sa_bodies_check.py`, 6 passed with `SA_BODIES_DIR` set):** a tiny config per skill (equality, no mismatches, handles resolved, the module differs from the teacher somewhere), and come_here's body against the trainer's module on one decision.
+- **For the coordinator (the cross-session message may be held):**
+  - the five-skill folder is at the path above, in `v2_bodies/memory_s1`'s format, for `eval/run_architecture.py` and `eval/run_gen7_programs.py`;
+  - its results are in TRAINING_PLAN 8.15;
+  - track beside walk_to is the one weak spot (0.65 against its teacher's 0.87).
+gate: two passes, sharded, on 9fd687d with bench/bodies_check.py: pass 1 the step-9 baseline's 11 failing names, none new; the integration shard 7 passed; pass 2 1 failing name, a baseline one.
+verdict: COMMITTED; not pushed.
